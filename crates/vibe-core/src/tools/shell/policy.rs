@@ -132,6 +132,30 @@ struct ShellPolicyGuard {
 }
 
 impl ToolHandler for ShellPolicyGuard {
+    fn authorize<'a>(
+        &'a self,
+        invocation: &'a ToolInvocation,
+        approval: &'a dyn crate::policy::ApprovalAgent,
+    ) -> Option<crate::tools::AuthorizeFuture<'a>> {
+        Some(Box::pin(async move {
+            let analysis = self
+                .policy
+                .analysis(&invocation.arguments)
+                .map_err(|error| crate::policy::PolicyError::Approval(error.to_string()))?;
+            match analysis.mode {
+                PermissionMode::Always => Ok(self.guarded.allowed_outright()),
+                PermissionMode::Ask => match self.guarded.authorize(invocation, approval) {
+                    Some(decided) => decided.await,
+                    None => Ok(self.guarded.allowed_outright()),
+                },
+                PermissionMode::Never => Err(crate::policy::PolicyError::Denied(format!(
+                    "the command is refused by the shell policy: {}",
+                    analysis.rationale.join("; ")
+                ))),
+            }
+        }))
+    }
+
     fn invoke<'a>(
         &'a self,
         invocation: &'a ToolInvocation,

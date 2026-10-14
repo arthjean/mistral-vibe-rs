@@ -209,6 +209,11 @@ pub struct ToolExecutionOutput {
     /// appends at the end of the step.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_injection: Option<String>,
+    /// The `tools/call` result a proxied MCP or connector call came back
+    /// with, untouched, for a caller that keeps its content blocks rather
+    /// than the prose above. Never serialized.
+    #[serde(skip)]
+    pub remote_result: Option<Value>,
 }
 
 /// How a call's permission was settled. Reference `ToolResultEvent.decision`,
@@ -291,6 +296,7 @@ impl ToolExecutionOutput {
             approval: None,
             failure: None,
             pending_injection: None,
+            remote_result: None,
         }
     }
 
@@ -313,6 +319,7 @@ impl ToolExecutionOutput {
             approval: None,
             failure: None,
             pending_injection: None,
+            remote_result: None,
         }
     }
 
@@ -338,6 +345,13 @@ impl ToolExecutionOutput {
     #[must_use]
     pub fn projected(mut self, projected_result: Value) -> Self {
         self.projected_result = projected_result;
+        self
+    }
+
+    /// The same result, keeping the `tools/call` result it was read from.
+    #[must_use]
+    pub fn from_remote(mut self, result: Value) -> Self {
+        self.remote_result = Some(result);
         self
     }
 }
@@ -405,6 +419,27 @@ pub fn mark_call_started(approval: ToolApproval) {
     });
 }
 
+tokio::task_local! {
+    /// The decision a caller reached before running the call being polled,
+    /// which a guarded tool takes instead of asking again: the Unified Harness
+    /// gates a call to a server's or connector's tool itself, then runs it
+    /// through the session's registry.
+    static GATED: ToolApproval;
+}
+
+/// Polls `future`, a call [`ToolRegistry::invoke`] runs, as one its caller
+/// already let through under `approval`.
+pub async fn run_gated<F: std::future::Future>(approval: ToolApproval, future: F) -> F::Output {
+    GATED.scope(approval, future).await
+}
+
+/// The decision the caller of the call being polled already reached, if it
+/// reached one.
+#[must_use]
+pub fn gated_approval() -> Option<ToolApproval> {
+    GATED.try_with(|approval| *approval).ok()
+}
+
 /// Polls `future` with `progress` as what [`mark_call_started`] records into.
 pub async fn track_call_start<F: std::future::Future>(
     progress: Arc<CallProgress>,
@@ -413,12 +448,33 @@ pub async fn track_call_start<F: std::future::Future>(
     CALL_PROGRESS.scope(progress, future).await
 }
 
+/// What deciding a call without running it resolves to.
+pub type AuthorizeFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<ToolApproval, crate::policy::PolicyError>> + Send + 'a>>;
+
 pub trait ToolHandler: Send + Sync {
     fn invoke<'a>(
         &'a self,
         invocation: &'a ToolInvocation,
         output: ToolOutputSink,
     ) -> ToolHandlerFuture<'a>;
+
+    /// Decides whether `invocation` may run, asking `approval` when the policy
+    /// in front of the handler asks, without running it. `None` for a handler
+    /// that guards nothing of its own.
+    ///
+    /// A backend that executes the call elsewhere still decides it here, so
+    /// both backends answer an approval off the same rules and the same
+    /// session grants (reference `UnifiedPermissionResolver`, which binds each
+    /// tool's `resolve_permission` and the session's `PermissionStore` to the
+    /// unified harness).
+    fn authorize<'a>(
+        &'a self,
+        _invocation: &'a ToolInvocation,
+        _approval: &'a dyn crate::policy::ApprovalAgent,
+    ) -> Option<AuthorizeFuture<'a>> {
+        None
+    }
 }
 
 impl<F> ToolHandler for F
@@ -845,6 +901,33 @@ impl ToolRegistry {
             }
         }
         Ok(true)
+    }
+
+    /// Decides a call to `name` the way invoking it would, without running
+    /// it: `None` when the tool is not published, its arguments do not
+    /// validate, or nothing guards it.
+    pub async fn authorize(
+        &self,
+        name: &str,
+        mut invocation: ToolInvocation,
+        approval: &dyn crate::policy::ApprovalAgent,
+    ) -> Option<Result<ToolApproval, crate::policy::PolicyError>> {
+        let registered = {
+            let tools = self.tools.read().ok()?;
+            tools.get(name).cloned()?
+        };
+        if !registered.available() {
+            return None;
+        }
+        coerce_and_validate(
+            name,
+            &mut invocation.arguments,
+            &registered.spec.input_schema,
+        )
+        .ok()?;
+        apply_defaults(&mut invocation.arguments, &registered.spec.input_schema);
+        let decided = registered.handler.authorize(&invocation, approval)?;
+        Some(decided.await)
     }
 
     pub async fn invoke(
@@ -1302,6 +1385,7 @@ mod tests {
                         projected_result: serde_json::Value::Null,
                         chunks: vec![content.to_owned()],
                         pending_injection: None,
+                        remote_result: None,
                     })
                 })
             },

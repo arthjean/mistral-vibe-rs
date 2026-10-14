@@ -61,6 +61,7 @@ where
                 Some(launch),
                 experiments.exposures.clone(),
             )
+            .on_harness(self.harness.use_unified)
             .reporting_to(Arc::clone(&self.telemetry)),
         ))
     }

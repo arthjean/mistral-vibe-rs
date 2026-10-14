@@ -20,6 +20,10 @@
 //! exactly. Every other difference has to fall under a `LEDGER` entry, and
 //! every entry has to still reproduce, so row 13 of `docs/parity.md` is a
 //! reading of the summary this file prints.
+//!
+//! The script captures each backend apart: `corpus.json` holds the legacy one
+//! both sides reach through the escape hatch, `unified-corpus.json` the
+//! Unified Harness every session opens on by default (`--harness unified`).
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -30,8 +34,10 @@ use std::process::Command;
 use serde_json::Value;
 use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
 
-/// The corpus, compiled in so a moved file fails the build rather than the run.
+/// The corpora, compiled in so a moved file fails the build rather than the
+/// run.
 const CORPUS: &str = include_str!("programmatic-parity/corpus.json");
+const UNIFIED_CORPUS: &str = include_str!("programmatic-parity/unified-corpus.json");
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/programmatic.py";
 
@@ -138,7 +144,18 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 
 #[test]
 fn the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    replay(CORPUS, "legacy");
+}
+
+#[test]
+fn the_port_answers_every_unified_programmatic_scenario_as_the_corpus_records() {
+    replay(UNIFIED_CORPUS, "unified");
+}
+
+/// Drives this port's `vibe` through every scenario on `harness` and compares
+/// what it answers with `corpus`.
+fn replay(corpus: &str, harness: &str) {
+    let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     assert!(
         recorded.len() >= SCENARIO_FLOOR,
@@ -146,8 +163,11 @@ fn the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_
         recorded.len()
     );
 
-    let output_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("programmatic-port.json");
+    let output_path =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("programmatic-port-{harness}.json"));
     let output = capture(&[
+        "--harness".as_ref(),
+        harness.as_ref(),
         "--binary".as_ref(),
         env!("CARGO_BIN_EXE_vibe").as_ref(),
         "--output".as_ref(),
@@ -202,8 +222,8 @@ fn the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_
         .map(|(entry, _)| entry.pointer)
         .collect();
     println!(
-        "programmatic parity: {conformant}/{} scenarios conformant, {} ledgered differences \
-         across {} entries",
+        "programmatic parity ({harness}): {conformant}/{} scenarios conformant, {} ledgered \
+         differences across {} entries",
         recorded.len(),
         reproduced.iter().sum::<usize>(),
         LEDGER.len()
@@ -243,11 +263,19 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
         return;
     }
-    let output = capture(&["--check".as_ref(), "--reference".as_ref(), root.as_os_str()]);
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT}`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    for harness in ["legacy", "unified"] {
+        let output = capture(&[
+            "--check".as_ref(),
+            "--harness".as_ref(),
+            harness.as_ref(),
+            "--reference".as_ref(),
+            root.as_os_str(),
+        ]);
+        assert!(
+            output.status.success(),
+            "the pinned reference no longer answers what the {harness} corpus records; \
+             regenerate it with `{CAPTURE_SCRIPT} --harness {harness}`: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }

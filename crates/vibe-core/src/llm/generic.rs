@@ -272,7 +272,7 @@ impl GenericBackend {
         if reason.category == RetryCategory::RateLimited {
             self.pacer.on_rate_limited();
         }
-        retries.retrying(&reason);
+        retries.retrying_after(&reason, delay);
         self.clock().sleep(delay, SleepKind::Retry).await;
         true
     }

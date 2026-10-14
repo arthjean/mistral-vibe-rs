@@ -928,10 +928,12 @@ fn type_name(value: &Value) -> String {
 }
 
 fn sorted_keys(value: &Value) -> Vec<String> {
-    value
+    let mut keys: Vec<String> = value
         .as_object()
         .map(|object| object.keys().cloned().collect())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    keys.sort_unstable();
+    keys
 }
 
 /// Payload keys whose value is a clock reading or a generated identifier, which
@@ -2221,7 +2223,7 @@ impl PortSpan {
         };
         Self {
             name: Some(span.name.to_string()),
-            attribute_keys: attributes.keys().cloned().collect(),
+            attribute_keys: sorted_keys(&Value::Object(attributes.clone())),
             attributes: Value::Object(attributes),
             status_code,
             status_description,

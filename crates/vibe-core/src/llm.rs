@@ -173,6 +173,9 @@ pub struct ModelRequest<'a> {
     pub tool_choice: Option<&'a ToolChoice>,
     pub extra_headers: &'a [(String, String)],
     pub metadata: Option<&'a Map<String, Value>>,
+    /// Whether the Unified Harness runtime's client shapes the body
+    /// ([`crate::provider::RequestDialect::Unified`]).
+    pub unified: bool,
 }
 
 /// A backend for one provider entry.

@@ -135,9 +135,11 @@ async fn operational_resources_are_typed_and_transport_failures_are_canonical() 
         unreachable!("mcp_catalog/read answers");
     };
     assert_eq!(
-        result["mcp"]
-            .as_object()
-            .map(|state| state.keys().map(String::as_str).collect::<Vec<_>>()),
+        result["mcp"].as_object().map(|state| {
+            let mut keys = state.keys().map(String::as_str).collect::<Vec<_>>();
+            keys.sort_unstable();
+            keys
+        }),
         Some(vec![
             "connectorError",
             "discoveryErrors",

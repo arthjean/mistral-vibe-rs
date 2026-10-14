@@ -556,6 +556,18 @@ pub enum ProgrammaticUpdate {
         input_tokens: u64,
         output_tokens: u64,
     },
+    /// The accounting a Unified Harness session's `session/statsUpdated`
+    /// published, whole.
+    Accounting {
+        stats: Value,
+        context_window: u64,
+    },
+    /// A Unified Harness session's title or preview changed, as its
+    /// `session/updated` published them.
+    Renamed {
+        title: Option<String>,
+        preview: Option<String>,
+    },
 }
 
 const MAX_PROGRAMMATIC_UPDATES: usize = 1_024;
@@ -767,6 +779,10 @@ pub enum DriverError {
     Storage(vibe_core::storage::StorageError),
     #[error(transparent)]
     Engine(vibe_core::engine::EngineError),
+    /// A turn the Unified Harness settled as failed, with the error it
+    /// published (reference `AppServerTurnError`).
+    #[error("{}", .0.message)]
+    Published(PublicError),
 }
 
 fn request_bytes(id: RequestId, method: &str, params: Value) -> Result<Vec<u8>, ClientError> {
@@ -877,6 +893,11 @@ pub fn turn_error_code(error: &DriverError) -> TurnErrorCode {
         DriverError::Provider(provider) => provider_error_code(provider),
         DriverError::Engine(EngineError::Provider(provider)) => provider_error_code(provider),
         DriverError::Engine(EngineError::Compaction(_)) => TurnErrorCode::CompactionFailed,
+        DriverError::Published(error) => error
+            .code
+            .as_deref()
+            .and_then(|code| serde_json::from_value(Value::String(code.to_owned())).ok())
+            .unwrap_or(TurnErrorCode::InternalError),
         DriverError::StaleTurn(_)
         | DriverError::StatePoisoned
         | DriverError::UnsupportedControl(_)
@@ -915,6 +936,9 @@ fn provider_error_code(error: &ProviderError) -> TurnErrorCode {
 /// the details. Reference `public_error`.
 #[must_use]
 pub fn public_driver_error(error: &DriverError) -> PublicError {
+    if let DriverError::Published(error) = error {
+        return error.clone();
+    }
     PublicError {
         details: turn_error_details(error),
         ..public_turn_failure(turn_error_code(error), &error.to_string())
@@ -1023,6 +1047,7 @@ pub(crate) mod headless;
 pub(crate) mod in_process;
 pub(crate) mod interactive;
 pub(crate) mod live;
+pub(crate) mod unified;
 
 pub use headless::HeadlessService;
 pub use in_process::{InProcessClient, LiveNotificationListener, PendingPublicCall};

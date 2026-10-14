@@ -481,6 +481,7 @@ fn build_input(
         ),
     };
     ProviderInput {
+        dialect: Default::default(),
         turn_id: None,
         session_id: plan.session_id.clone(),
         model_override: plan.model.clone(),

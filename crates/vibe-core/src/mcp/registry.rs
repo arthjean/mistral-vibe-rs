@@ -1305,7 +1305,7 @@ fn register_remote_tools(
             spec,
             guarded,
             origin,
-            Some(crate::events::RemoteToolOrigin::mcp(&remote.name)),
+            Some(crate::events::RemoteToolOrigin::mcp(&remote.name).from_provider(alias)),
         ) {
             Ok(_) => registered.push((public_name, remote.name)),
             Err(error) => diagnostics.push(canonical_diagnostic(

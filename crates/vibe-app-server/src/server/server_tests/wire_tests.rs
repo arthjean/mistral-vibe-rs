@@ -300,12 +300,12 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
     assert!(params["emittedAt"].is_u64());
     assert!(params["contextWindow"].is_u64(), "a threshold is published");
     assert_eq!(
-        params["stats"]
-            .as_object()
-            .expect("the snapshot is an object")
-            .keys()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
+        sorted(
+            params["stats"]
+                .as_object()
+                .expect("the snapshot is an object")
+                .keys()
+        ),
         [
             "cachedInputPricePerMillion",
             "contextTokens",
@@ -587,7 +587,13 @@ fn config_read_reports_the_harness_a_launch_resolved() {
         .using_harness_selection(crate::harness::HarnessSelection::resolve(true, false));
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
-    start_session(&mut connection);
+    // A unified session publishes its snapshot through its own pump, so the
+    // batch carries the answer alone.
+    connection.dispatch(&request(
+        2,
+        "session/start",
+        json!({"sessionId": "session-1", "workingDirectory": "/workspace"}),
+    ));
 
     // The host's read, which names no session, is the one that reports the
     // harness decision (`_read_config` in `vibe/app_server/_host.py`).
@@ -698,11 +704,7 @@ fn runtime_read_reports_the_session_log_summary() {
     let answer = call(&mut connection, 10, "runtime/read");
     let log = &answer["sessionLog"];
     assert_eq!(
-        log.as_object()
-            .expect("the summary is an object")
-            .keys()
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
+        sorted(log.as_object().expect("the summary is an object").keys()),
         [
             "enabled",
             "needsInitialAutoTitle",
@@ -951,4 +953,12 @@ fn an_internal_method_is_answered_in_process_only() {
         unreachable!("an in-process client was refused an internal method");
     };
     assert!(success.result["sessions"].is_array());
+}
+
+/// The names `keys` holds, in byte order: a `serde_json` map keeps the order
+/// fields were written in, which says nothing about the wire contract.
+fn sorted<'a>(keys: impl Iterator<Item = &'a String>) -> Vec<&'a str> {
+    let mut names = keys.map(String::as_str).collect::<Vec<_>>();
+    names.sort_unstable();
+    names
 }

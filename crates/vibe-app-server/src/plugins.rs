@@ -202,7 +202,9 @@ pub fn reload_discovering(
     Some(plugins)
 }
 
-fn block_on_own_runtime<T: Send>(future: impl std::future::Future<Output = T> + Send) -> Option<T> {
+pub(crate) fn block_on_own_runtime<T: Send>(
+    future: impl std::future::Future<Output = T> + Send,
+) -> Option<T> {
     std::thread::scope(|scope| {
         scope
             .spawn(move || {
@@ -577,6 +579,24 @@ pub fn plugin_mcp_sources(
     sources
 }
 
+/// The configuration a session connects to each plugin MCP server with, by
+/// the catalog name a unified session's provided group is named after
+/// (reference `merge_plugin_mcp_into_catalog`, which runs each under that
+/// name).
+pub(crate) fn plugin_server_configs(
+    plugins: &SessionPlugins,
+) -> BTreeMap<String, vibe_core::mcp::McpServerConfig> {
+    catalog_names(plugins)
+        .into_iter()
+        .filter_map(|(definition, name)| {
+            Some((
+                name?,
+                plugin_mcp_config(&definition.private_alias, &definition.server)?,
+            ))
+        })
+        .collect()
+}
+
 /// Each plugin MCP server definition with its catalog name.
 fn catalog_names(
     plugins: &SessionPlugins,
@@ -625,6 +645,7 @@ async fn connect_plugin_servers(
             let unavailable = |error| PluginMcpConnection {
                 status: "unavailable",
                 tools: Vec::new(),
+                schemas: BTreeMap::new(),
                 error: Some(error),
             };
             let Some(config) = plugin_mcp_config(&definition.private_alias, &definition.server)
@@ -637,6 +658,7 @@ async fn connect_plugin_servers(
                     PluginMcpConnection {
                         status: "needs_auth",
                         tools: Vec::new(),
+                        schemas: BTreeMap::new(),
                         error: None,
                     },
                 );
@@ -645,6 +667,10 @@ async fn connect_plugin_servers(
             let connection = match discover_every_page(&config, &headers).await {
                 Ok(tools) => PluginMcpConnection {
                     status: "enabled",
+                    schemas: tools
+                        .iter()
+                        .map(|tool| (tool.name.clone(), tool.input_schema.clone()))
+                        .collect(),
                     tools: tools
                         .into_iter()
                         .map(|tool| (tool.name, tool.description))

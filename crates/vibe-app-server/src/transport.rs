@@ -250,7 +250,13 @@ where
                         if let Ok(Some(frame)) = server.open_session_connectors(&session_id).await {
                             batch.outbound.push(frame);
                         }
-                        if !forks && server.session_titles_itself(&session_id) {
+                        // A unified session titles itself with the model it
+                        // runs on unless one is configured, so it probes for
+                        // none (`derive_config` in `vibe/app_server/_runtime.py`).
+                        if !forks
+                            && server.unified_session(&session_id).is_none()
+                            && server.session_titles_itself(&session_id)
+                        {
                             let driver = Arc::clone(&driver);
                             let _ = tokio::task::spawn_blocking(move || {
                                 driver.probe_utility_models();
@@ -382,6 +388,38 @@ where
     D: TurnDriver + 'static,
 {
     match work {
+        DeferredWork::RunUnifiedTurn(work) => {
+            let events = events.clone();
+            tasks.spawn(async move {
+                let (frames, mut raised) = mpsc::unbounded_channel();
+                let forward = async {
+                    while let Some(frame) = raised.recv().await {
+                        let _ = events.send(ServeEvent::Frame(frame));
+                    }
+                };
+                tokio::join!(crate::server::drive_unified_turn(work, frames), forward);
+            });
+            Ok(Vec::new())
+        }
+        DeferredWork::ReleaseUnifiedCallback {
+            session_id,
+            callback_id,
+            cancel_turn,
+        } => {
+            server.release_unified_callback(&session_id, &callback_id, cancel_turn);
+            Ok(Vec::new())
+        }
+        DeferredWork::AttachUnified { session_id } => {
+            let (frames, mut raised) = mpsc::unbounded_channel();
+            let events = events.clone();
+            tokio::spawn(async move {
+                while let Some(frame) = raised.recv().await {
+                    let _ = events.send(ServeEvent::Frame(frame));
+                }
+            });
+            server.attach_unified(&session_id, frames);
+            Ok(Vec::new())
+        }
         work @ DeferredWork::RunTurn { .. } => {
             let reservation = server.reserve_turn(work).map_err(TransportError::Server)?;
             active.insert((reservation.session_id.clone(), reservation.turn_id.clone()));
@@ -839,7 +877,10 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             } => {
                 let _ = server.close_resource_session(session_id, *generation).await;
             }
-            DeferredWork::InterruptTurn { .. }
+            DeferredWork::RunUnifiedTurn(_)
+            | DeferredWork::AttachUnified { .. }
+            | DeferredWork::ReleaseUnifiedCallback { .. }
+            | DeferredWork::InterruptTurn { .. }
             | DeferredWork::SteerTurn { .. }
             | DeferredWork::InjectContext { .. }
             | DeferredWork::ResolveCallback { .. }

@@ -179,6 +179,13 @@ impl RetryReason {
 /// Told about every retry while the request still waits on it.
 pub trait RetryObserver: Send + Sync {
     fn retrying(&self, reason: &RetryReason);
+
+    /// A retry that waits `delay_seconds` before its next attempt, for an
+    /// observer that publishes when the attempt is due.
+    fn retrying_after(&self, reason: &RetryReason, delay_seconds: f64) {
+        let _ = delay_seconds;
+        self.retrying(reason);
+    }
 }
 
 /// An observer that listens to nothing.

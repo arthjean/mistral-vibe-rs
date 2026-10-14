@@ -630,6 +630,43 @@ impl AppServer {
         ))
     }
 
+    /// The reservation a client holds for a turn a unified session runs on
+    /// its own: what the session opened with, and the turn it started.
+    ///
+    /// # Errors
+    ///
+    /// Reports a session that has since closed.
+    pub(crate) fn unified_reservation(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        request: &crate::client::TurnRequest,
+    ) -> Result<TurnReservation, ServerError> {
+        let sessions = self.lock_sessions()?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        Ok(TurnReservation {
+            working_directory: session.working_directory.clone(),
+            intent: session.intent.clone(),
+            compaction: session.compaction.clone(),
+            tools: session.tools.clone(),
+            hooks: session.hooks.clone(),
+            system_prompt: None,
+            pricing: session.pricing,
+            session_id: session_id.to_owned(),
+            turn_id: turn_id.to_owned(),
+            prompt: request.prompt.clone(),
+            input: request.input.clone(),
+            prepared_images: None,
+            injected: request.injected,
+            client_user_message_id: request.client_user_message_id.clone(),
+            auto_title: request.auto_title.clone(),
+            user_display_content: request.user_display_content.clone(),
+            mention_stats: request.mention_stats.clone(),
+        })
+    }
+
     /// Turns the run a dispatch deferred into the reservation a driver executes.
     ///
     /// The working directory, the intent, the compaction settings and the tool

@@ -203,7 +203,7 @@ pub(super) fn authored_lines() -> Vec<String> {
 
 /// One command's line: every alias as a code span, the canonical `/name` first
 /// and the rest sorted, then the description the registry publishes.
-pub(super) fn command_line(command: &CommandDefinition) -> String {
+pub(super) fn command_line(command: &CommandDefinition, context: &CommandContext) -> String {
     let canonical = format!("/{}", command.name);
     let mut aliases = command.aliases.to_vec();
     aliases.sort_unstable_by(|left, right| {
@@ -214,7 +214,7 @@ pub(super) fn command_line(command: &CommandDefinition) -> String {
         .map(|alias| format!("`{alias}`"))
         .collect::<Vec<_>>()
         .join(", ");
-    format!("- {spans}: {}", command.description)
+    format!("- {spans}: {}", context.description(command))
 }
 
 /// The whole document, built once per invocation.
@@ -237,7 +237,11 @@ pub(super) fn document(context: &CommandContext) -> String {
     lines.push(String::new());
     lines.push(HEADINGS[2].to_owned());
     lines.push(String::new());
-    lines.extend(commands.into_iter().map(command_line));
+    lines.extend(
+        commands
+            .into_iter()
+            .map(|command| command_line(command, context)),
+    );
     lines.join("\n")
 }
 

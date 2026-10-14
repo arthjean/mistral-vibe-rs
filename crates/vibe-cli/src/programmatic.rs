@@ -100,6 +100,13 @@ pub(crate) async fn run(
             Some(crate::programmatic_launch_context()),
             telemetry.exposures(),
         )
+        .on_harness(
+            vibe_app_server::harness::HarnessSelection::resolve(
+                arguments.experimental_harness,
+                arguments.legacy_harness,
+            )
+            .use_unified,
+        )
         .reporting_to(telemetry.clone()),
     );
     let route = bootstrap::programmatic_route(&arguments, &workspace)?;
@@ -481,8 +488,8 @@ impl<D: TurnDriver> Run<'_, D> {
                 return Err(CliError::Client(error));
             }
         };
-        let driver = self.service.driver();
-        let run = driver.run_observed(&reservation, observer);
+        let runner = self.service.turn_runner();
+        let run = runner.run(&reservation, observer);
         tokio::pin!(run);
         let mut poll = tokio::time::interval(CALLBACK_POLL);
         poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);

@@ -1,0 +1,3786 @@
+{
+  "quietSeconds": 0.5,
+  "reference": {
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+  },
+  "scenarios": [
+    {
+      "name": "unified/inventory",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "List",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "List",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 38,
+                      "sha256": "e4255f8fae110625ea68b39564bfbbb35a61674c8220c0222bf2d875d841506c"
+                    },
+                    "id": "<id-2>",
+                    "name": "search_tool_functions"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 223,
+                  "sha256": "9459097405b294e74b51fb4d391126a0f7ff4430c78969fad4018e22246aac43"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "List",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 38,
+                      "sha256": "e4255f8fae110625ea68b39564bfbbb35a61674c8220c0222bf2d875d841506c"
+                    },
+                    "id": "<id-2>",
+                    "name": "search_tool_functions"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 223,
+                  "sha256": "9459097405b294e74b51fb4d391126a0f7ff4430c78969fad4018e22246aac43"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 41,
+                      "sha256": "22a00b2131c1796c357f10ad354e0ef8706dced0adbefcef77c39503f8c44183"
+                    },
+                    "id": "<id-3>",
+                    "name": "search_tool_functions"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 609,
+                  "sha256": "e209da36206bf78d53fda60889944368e58ed297b71409a6cb5236efea01779f"
+                },
+                "role": "tool",
+                "toolCallId": "<id-3>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": {
+                        "prose": 28,
+                        "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                      },
+                      "settledMessage": {
+                        "prose": 18,
+                        "sha256": "6ad4886f98c979345af7abc8aabea72e82ea192a6c0f4d1ce1e9f7697a984d5b"
+                      },
+                      "settledVerb": "Searched",
+                      "statusText": {
+                        "prose": 28,
+                        "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                      },
+                      "suffix": "",
+                      "summary": {
+                        "prose": 28,
+                        "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                      },
+                      "verb": "Searching"
+                    },
+                    "input": {
+                      "mode": "all_connector_capabilities"
+                    },
+                    "kind": "tool",
+                    "toolName": "search_tool_functions"
+                  },
+                  "generationStatus": "completed",
+                  "id": "<id-4>",
+                  "inputEntryId": "user-<id-5>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "approvalSource": null,
+                    "approvalType": null,
+                    "decision": null,
+                    "display": {
+                      "approvalNote": null,
+                      "message": {
+                        "prose": 18,
+                        "sha256": "6ad4886f98c979345af7abc8aabea72e82ea192a6c0f4d1ce1e9f7697a984d5b"
+                      },
+                      "success": true,
+                      "suffix": "",
+                      "verb": "Searched",
+                      "warnings": []
+                    },
+                    "durationMs": "<duration>",
+                    "output": {
+                      "connectorNoticeCount": 0,
+                      "mode": "all_connector_capabilities",
+                      "toolCount": 0
+                    },
+                    "outputText": "",
+                    "status": "completed"
+                  },
+                  "title": {
+                    "prose": 28,
+                    "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                  },
+                  "turnId": "<id-5>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": {
+                        "prose": 28,
+                        "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                      },
+                      "settledMessage": {
+                        "prose": 18,
+                        "sha256": "6ad4886f98c979345af7abc8aabea72e82ea192a6c0f4d1ce1e9f7697a984d5b"
+                      },
+                      "settledVerb": "Searched",
+                      "statusText": {
+                        "prose": 28,
+                        "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                      },
+                      "suffix": "",
+                      "summary": {
+                        "prose": 28,
+                        "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                      },
+                      "verb": "Searching"
+                    },
+                    "input": {
+                      "mode": "details"
+                    },
+                    "kind": "tool",
+                    "toolName": "search_tool_functions"
+                  },
+                  "generationStatus": "completed",
+                  "id": "<id-6>",
+                  "inputEntryId": "user-<id-5>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "approvalSource": null,
+                    "approvalType": null,
+                    "decision": null,
+                    "display": {
+                      "approvalNote": null,
+                      "message": {
+                        "prose": 18,
+                        "sha256": "6ad4886f98c979345af7abc8aabea72e82ea192a6c0f4d1ce1e9f7697a984d5b"
+                      },
+                      "success": true,
+                      "suffix": "",
+                      "verb": "Searched",
+                      "warnings": []
+                    },
+                    "durationMs": "<duration>",
+                    "output": {
+                      "connectorNoticeCount": 0,
+                      "mode": "details",
+                      "toolCount": 1
+                    },
+                    "outputText": "",
+                    "status": "completed"
+                  },
+                  "title": {
+                    "prose": 28,
+                    "sha256": "4d102eb800581e2fc4edf82b6ed8959886d2cb31874e503cbb50d08fe77dc895"
+                  },
+                  "turnId": "<id-5>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-7>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          },
+          {
+            "method": "runtime/read",
+            "notifications": [],
+            "response": {
+              "id": 4,
+              "result": {
+                "ready": true,
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionLog": {
+                  "enabled": true,
+                  "needsInitialAutoTitle": true,
+                  "path": "<vibe-home>/logs/session/unified/<id-1>",
+                  "persisted": true,
+                  "sessionId": "<id-1>",
+                  "title": null
+                }
+              }
+            }
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "mode": "all_connector_capabilities"
+                },
+                "id": "call_s1",
+                "name": "search_tool_functions"
+              }
+            ]
+          },
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "functions": [
+                    "connector_Drive.search"
+                  ]
+                },
+                "id": "call_s2",
+                "name": "search_tool_functions"
+              }
+            ]
+          },
+          {
+            "text": "Listed."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "name": "unified/inventory",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "List"
+          },
+          {
+            "send": {
+              "method": "runtime/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/success",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "notifications/initialized"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/call",
+            "params": {
+              "arguments": {
+                "query": "report"
+              },
+              "name": "search"
+            }
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/list"
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 18,
+                  "sha256": "a4c2c1d76e20a76921d364ac4199249d468e5b3581d7bf42ffe55c23c8e0cac7"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-3>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": "bypass"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": "always"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": "execute"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": "connector_Drive.search",
+                      "success": true,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "_meta": {
+                        "approval": {
+                          "approvalSource": "bypass",
+                          "approvalType": "always",
+                          "decision": "execute"
+                        }
+                      },
+                      "content": [
+                        {
+                          "text": "found report.pdf",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "success"
+                    }
+                  },
+                  {
+                    "op": "append",
+                    "path": "/state/outputText",
+                    "value": "found report.pdf"
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          },
+          {
+            "method": "runtime/read",
+            "notifications": [],
+            "response": {
+              "id": 4,
+              "result": {
+                "ready": true,
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionLog": {
+                  "enabled": true,
+                  "needsInitialAutoTitle": true,
+                  "path": "<vibe-home>/logs/session/unified/<id-1>",
+                  "persisted": true,
+                  "sessionId": "<id-1>",
+                  "title": null
+                }
+              }
+            }
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Found it."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive/search": {
+              "content": [
+                {
+                  "text": "found report.pdf",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "name": "unified/success",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          },
+          {
+            "send": {
+              "method": "runtime/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/implicit",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "notifications/initialized"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/call",
+            "params": {
+              "arguments": {
+                "query": "report"
+              },
+              "name": "search"
+            }
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/list"
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 18,
+                  "sha256": "a4c2c1d76e20a76921d364ac4199249d468e5b3581d7bf42ffe55c23c8e0cac7"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-3>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": "bypass"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": "always"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": "execute"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": "connector_Drive.search",
+                      "success": true,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "_meta": {
+                        "approval": {
+                          "approvalSource": "bypass",
+                          "approvalType": "always",
+                          "decision": "execute"
+                        }
+                      },
+                      "content": [
+                        {
+                          "text": "found report.pdf",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "success"
+                    }
+                  },
+                  {
+                    "op": "append",
+                    "path": "/state/outputText",
+                    "value": "found report.pdf"
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          },
+          {
+            "method": "runtime/read",
+            "notifications": [],
+            "response": {
+              "id": 4,
+              "result": {
+                "ready": true,
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionLog": {
+                  "enabled": true,
+                  "needsInitialAutoTitle": true,
+                  "path": "<vibe-home>/logs/session/unified/<id-1>",
+                  "persisted": true,
+                  "sessionId": "<id-1>",
+                  "title": null
+                }
+              }
+            }
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Found it."
+          }
+        ],
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive/search": {
+              "content": [
+                {
+                  "text": "found report.pdf",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "name": "unified/implicit",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          },
+          {
+            "send": {
+              "method": "runtime/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/tool-error",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "notifications/initialized"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/call",
+            "params": {
+              "arguments": {
+                "query": "report"
+              },
+              "name": "search"
+            }
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 182,
+                  "sha256": "f3f32edaa9e8491307e259a88a27aca93d5fc791d6f609699fbf14cce565b2be"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-3>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": "bypass"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": "always"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": "execute"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": {
+                        "prose": 36,
+                        "sha256": "b4a3d6cadaa40c22094b02329985914edc2a720026b68b5ddfbf51268c6376ac"
+                      },
+                      "success": false,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/error",
+                    "value": {
+                      "code": "connector_tool_error",
+                      "details": null,
+                      "message": {
+                        "prose": 36,
+                        "sha256": "b4a3d6cadaa40c22094b02329985914edc2a720026b68b5ddfbf51268c6376ac"
+                      }
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "_meta": {
+                        "approval": {
+                          "approvalSource": "bypass",
+                          "approvalType": "always",
+                          "decision": "execute"
+                        }
+                      },
+                      "content": [
+                        {
+                          "text": "quota exceeded",
+                          "type": "text"
+                        }
+                      ],
+                      "error": {
+                        "code": "connector_tool_error",
+                        "message": {
+                          "prose": 36,
+                          "sha256": "b4a3d6cadaa40c22094b02329985914edc2a720026b68b5ddfbf51268c6376ac"
+                        },
+                        "retryable": false
+                      },
+                      "type": "failure"
+                    }
+                  },
+                  {
+                    "op": "append",
+                    "path": "/state/outputText",
+                    "value": "quota exceeded"
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "failed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "It failed."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive/search": {
+              "content": [
+                {
+                  "text": "quota exceeded",
+                  "type": "text"
+                }
+              ],
+              "isError": true
+            }
+          }
+        },
+        "name": "unified/tool-error",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/structured",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "notifications/initialized"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/call",
+            "params": {
+              "arguments": {
+                "query": "report"
+              },
+              "name": "search"
+            }
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/list"
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": "{\"files\":[\"a.pdf\",\"b.pdf\"]}",
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-3>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": "bypass"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": "always"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": "execute"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": "connector_Drive.search",
+                      "success": true,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "_meta": {
+                        "approval": {
+                          "approvalSource": "bypass",
+                          "approvalType": "always",
+                          "decision": "execute"
+                        }
+                      },
+                      "content": [
+                        {
+                          "text": "two files",
+                          "type": "text"
+                        }
+                      ],
+                      "structured_content": {
+                        "files": [
+                          "a.pdf",
+                          "b.pdf"
+                        ]
+                      },
+                      "type": "success"
+                    }
+                  },
+                  {
+                    "op": "append",
+                    "path": "/state/outputText",
+                    "value": "two files"
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Two files."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive/search": {
+              "content": [
+                {
+                  "text": "two files",
+                  "type": "text"
+                }
+              ],
+              "structuredContent": {
+                "files": [
+                  "a.pdf",
+                  "b.pdf"
+                ]
+              }
+            }
+          }
+        },
+        "name": "unified/structured",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/gateway-401",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 460,
+                  "sha256": "8bdc475ff5bc9cd37dab853fe6e22822bbc1dc259be763ee5fbd521b2e5d5ca3"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-3>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": null
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": null
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": null
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": {
+                        "prose": 173,
+                        "sha256": "5e185df957fce96a4101abf5eb31f6da2f6774f81ed230a5089adc320555e61d"
+                      },
+                      "success": false,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/error",
+                    "value": {
+                      "code": "effect_recovery_failed",
+                      "details": null,
+                      "message": {
+                        "prose": 173,
+                        "sha256": "5e185df957fce96a4101abf5eb31f6da2f6774f81ed230a5089adc320555e61d"
+                      }
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "content": [],
+                      "error": {
+                        "code": "effect_recovery_failed",
+                        "message": {
+                          "prose": 173,
+                          "sha256": "5e185df957fce96a4101abf5eb31f6da2f6774f81ed230a5089adc320555e61d"
+                        },
+                        "retryable": false
+                      },
+                      "type": "failure"
+                    }
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "failed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Denied."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive": {
+              "body": {
+                "detail": "bad key"
+              },
+              "status": 401
+            }
+          }
+        },
+        "name": "unified/gateway-401",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/gateway-500",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 176,
+                  "sha256": "fcc91ea1c5b2574c3325ab484779d7931b1e9717f74865a653fa6c5eb8851260"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-3>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": "bypass"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": "always"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": "execute"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": {
+                        "prose": 29,
+                        "sha256": "b588f540d2d8a70a00146e38298353831362d2cae1a3ad27a3f8068f0d4bd7b4"
+                      },
+                      "success": false,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/error",
+                    "value": {
+                      "code": "connector_gateway_failed",
+                      "details": null,
+                      "message": {
+                        "prose": 29,
+                        "sha256": "b588f540d2d8a70a00146e38298353831362d2cae1a3ad27a3f8068f0d4bd7b4"
+                      }
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "_meta": {
+                        "approval": {
+                          "approvalSource": "bypass",
+                          "approvalType": "always",
+                          "decision": "execute"
+                        }
+                      },
+                      "content": [],
+                      "error": {
+                        "code": "connector_gateway_failed",
+                        "message": {
+                          "prose": 29,
+                          "sha256": "b588f540d2d8a70a00146e38298353831362d2cae1a3ad27a3f8068f0d4bd7b4"
+                        },
+                        "retryable": false
+                      },
+                      "type": "failure"
+                    }
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "failed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Broken."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive": {
+              "raw": "upstream exploded",
+              "status": 500
+            }
+          }
+        },
+        "name": "unified/gateway-500",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/ask-approval",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [
+          {
+            "choices": [
+              "approve",
+              "approve_for_session",
+              "approve_permanently",
+              "deny",
+              "cancel_turn"
+            ],
+            "effect": {
+              "display": {
+                "content": null,
+                "message": "connector_Drive.search",
+                "settledMessage": "connector_Drive.search",
+                "settledVerb": "Ran",
+                "statusText": {
+                  "prose": 50,
+                  "sha256": "202fce7f198dd1ca96187f2d4bbe7dc8aae13ae2e108835a2ff34ec3c69adbb7"
+                },
+                "suffix": "",
+                "summary": "connector_Drive.search",
+                "verb": "Run"
+              },
+              "input": {
+                "query": "report"
+              },
+              "kind": "tool",
+              "toolName": "connector_Drive.search"
+            },
+            "kind": "approval",
+            "pathScopeChoices": [],
+            "reason": null,
+            "relatedEntryId": "<id-2>",
+            "requiredPermissions": []
+          }
+        ],
+        "gateway": [
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "initialize"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "notifications/initialized"
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/call",
+            "params": {
+              "arguments": {
+                "query": "report"
+              },
+              "name": "search"
+            }
+          },
+          {
+            "authorized": true,
+            "connector": "c-drive",
+            "method": "tools/list"
+          }
+        ],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-3>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 18,
+                  "sha256": "a4c2c1d76e20a76921d364ac4199249d468e5b3581d7bf42ffe55c23c8e0cac7"
+                },
+                "role": "tool",
+                "toolCallId": "<id-3>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": true,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entry": {
+                  "createdAt": "<time>",
+                  "detail": {
+                    "display": {
+                      "content": null,
+                      "message": "connector_Drive.search",
+                      "settledMessage": "connector_Drive.search",
+                      "settledVerb": "Ran",
+                      "statusText": {
+                        "prose": 30,
+                        "sha256": "e2511a62ee4e0037fec3c20171e0149e9cac1ab334779d30b7295c1469163794"
+                      },
+                      "suffix": "",
+                      "summary": "connector_Drive.search",
+                      "verb": "Running"
+                    },
+                    "input": {
+                      "query": "report"
+                    },
+                    "kind": "tool",
+                    "toolName": "connector_Drive.search"
+                  },
+                  "generationStatus": "in_progress",
+                  "id": "<id-2>",
+                  "inputEntryId": "user-<id-4>-1",
+                  "relatedEntryId": null,
+                  "sessionId": "<id-1>",
+                  "state": {
+                    "outputText": "",
+                    "status": "running"
+                  },
+                  "title": "connector_Drive.search",
+                  "turnId": "<id-4>",
+                  "type": "effect",
+                  "updatedAt": "<time>"
+                },
+                "method": "history/entryAdded"
+              },
+              {
+                "entryId": "<id-5>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state",
+                    "value": {
+                      "output": {
+                        "decision": {
+                          "type": "approve"
+                        },
+                        "type": "approval"
+                      },
+                      "status": "answered"
+                    }
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-2>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalSource",
+                    "value": "user"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/approvalType",
+                    "value": "ask"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/decision",
+                    "value": "execute"
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/display",
+                    "value": {
+                      "approvalNote": null,
+                      "message": "connector_Drive.search",
+                      "success": true,
+                      "suffix": "",
+                      "verb": "",
+                      "warnings": []
+                    }
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/durationMs",
+                    "value": 0.0
+                  },
+                  {
+                    "op": "add",
+                    "path": "/state/output",
+                    "value": {
+                      "_meta": {
+                        "approval": {
+                          "approvalSource": "user",
+                          "approvalType": "ask",
+                          "decision": "execute"
+                        }
+                      },
+                      "content": [
+                        {
+                          "text": "found report.pdf",
+                          "type": "text"
+                        }
+                      ],
+                      "type": "success"
+                    }
+                  },
+                  {
+                    "op": "append",
+                    "path": "/state/outputText",
+                    "value": "found report.pdf"
+                  },
+                  {
+                    "op": "replace",
+                    "path": "/state/status",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "entryId": "<id-6>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Found it."
+          }
+        ],
+        "callbacks": [
+          {
+            "approve": true
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\n\n[[connectors]]\nname = \"Mail_box\"\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "gateway": {
+            "c-drive/search": {
+              "content": [
+                {
+                  "text": "found report.pdf",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "name": "unified/ask-approval",
+        "steps": [
+          {
+            "start": {
+              "agent": "ask"
+            }
+          },
+          {
+            "turn": "Find the report"
+          }
+        ]
+      }
+    },
+    {
+      "name": "unified/disabled-tool",
+      "observed": {
+        "authUrls": [],
+        "bootstraps": [
+          {
+            "authorized": true,
+            "query": [
+              [
+                "builtin_connectors",
+                "web_search"
+              ],
+              [
+                "include_auth_actionable_connectors",
+                "true"
+              ],
+              [
+                "supports_mcp",
+                "true"
+              ]
+            ]
+          }
+        ],
+        "callbacks": [],
+        "gateway": [],
+        "requests": [
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              }
+            ]
+          },
+          {
+            "connectorTools": [],
+            "conversation": [
+              {
+                "content": "Find the report",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 105,
+                      "sha256": "d108bda46500c279d6212e776617194df9eaaec6fbb388fec6452684e809fa06"
+                    },
+                    "id": "<id-2>",
+                    "name": "run_typescript"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 180,
+                  "sha256": "3528a248b7ffad6b29765f0e32aa4b69268fd8ea5c4ca99a63cb5ba90b0d7555"
+                },
+                "role": "tool",
+                "toolCallId": "<id-2>"
+              }
+            ]
+          }
+        ],
+        "steps": [
+          {
+            "method": "session/start",
+            "notifications": [],
+            "response": {
+              "started": true
+            }
+          },
+          {
+            "turn": [
+              {
+                "method": "runtime/updated",
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": false,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionId": "<id-1>"
+              },
+              {
+                "entryId": "<id-3>",
+                "method": "history/entryUpdated",
+                "patch": [
+                  {
+                    "op": "replace",
+                    "path": "/generationStatus",
+                    "value": "completed"
+                  }
+                ]
+              },
+              {
+                "method": "turn/completed",
+                "status": "completed"
+              }
+            ]
+          },
+          {
+            "method": "runtime/read",
+            "notifications": [],
+            "response": {
+              "id": 4,
+              "result": {
+                "ready": true,
+                "runtime": {
+                  "connectors": {
+                    "connected": 1,
+                    "total": 2
+                  },
+                  "mcp": {
+                    "connectorError": null,
+                    "discoveryErrors": {},
+                    "manageConnectorsUrl": null,
+                    "sources": [
+                      {
+                        "displayName": "Google Drive",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Drive",
+                        "pluginName": null,
+                        "status": "connected",
+                        "tools": [
+                          {
+                            "description": {
+                              "prose": 20,
+                              "sha256": "987a9819bccdb60b7c8fa934b1392234341b43bbc1a9961ac602da8d92766608"
+                            },
+                            "enabled": true,
+                            "name": "list"
+                          },
+                          {
+                            "description": "Search files",
+                            "enabled": false,
+                            "name": "search"
+                          }
+                        ],
+                        "transport": "connector"
+                      },
+                      {
+                        "displayName": "Mail box",
+                        "error": null,
+                        "kind": "connector",
+                        "name": "Mail_box",
+                        "pluginName": null,
+                        "status": "needs_auth",
+                        "tools": [
+                          {
+                            "description": "Send a mail",
+                            "enabled": false,
+                            "name": "send"
+                          }
+                        ],
+                        "transport": "connector"
+                      }
+                    ]
+                  },
+                  "tools": []
+                },
+                "sessionLog": {
+                  "enabled": true,
+                  "needsInitialAutoTitle": true,
+                  "path": "<vibe-home>/logs/session/unified/<id-1>",
+                  "persisted": true,
+                  "sessionId": "<id-1>",
+                  "title": null
+                }
+              }
+            }
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "code": "async function main() {\n  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+                },
+                "id": "call_c1",
+                "name": "run_typescript"
+              }
+            ]
+          },
+          {
+            "text": "Could not."
+          }
+        ],
+        "config": "[[connectors]]\nname = \"Drive\"\ndisabled_tools = [\"search\"]\n",
+        "connectors": {
+          "bootstrap": [
+            {
+              "connectors": [
+                {
+                  "display_name": "Google Drive",
+                  "id": "c-drive",
+                  "name": "Drive",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": true
+                  },
+                  "tools": [
+                    {
+                      "description": "Search files",
+                      "inputSchema": {
+                        "properties": {
+                          "query": {
+                            "description": "What to look for",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "query"
+                        ],
+                        "type": "object"
+                      },
+                      "name": "search"
+                    },
+                    {
+                      "name": "list"
+                    }
+                  ]
+                },
+                {
+                  "auth_action": {
+                    "type": "oauth"
+                  },
+                  "id": "c-mail",
+                  "name": "Mail box",
+                  "protocol": "mcp",
+                  "status": {
+                    "is_ready": false
+                  },
+                  "tools": [
+                    {
+                      "description": "Send a mail",
+                      "name": "send"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "name": "unified/disabled-tool",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "turn": "Find the report"
+          },
+          {
+            "send": {
+              "method": "runtime/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "schemaVersion": 1
+}

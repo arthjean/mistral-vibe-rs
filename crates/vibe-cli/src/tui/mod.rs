@@ -54,12 +54,14 @@ mod shell;
 mod shortcuts;
 pub mod startup;
 pub mod state;
+mod subagents;
 mod submission;
 mod switching;
 mod telemetry;
 mod teleport;
 pub mod terminal;
 pub mod themes;
+mod todos;
 pub mod transcript;
 pub mod transcript_view;
 #[cfg(test)]

@@ -26,11 +26,11 @@ struct RewindTarget {
 
 /// Reference `SessionRewindParams`, which `SessionRewindReadParams` is the
 /// first two fields of.
-struct RewindParams {
-    session_id: String,
-    entry_id: String,
-    restore_files: bool,
-    inplace: bool,
+pub(in crate::server) struct RewindParams {
+    pub(in crate::server) session_id: String,
+    pub(in crate::server) entry_id: String,
+    pub(in crate::server) restore_files: bool,
+    pub(in crate::server) inplace: bool,
 }
 
 impl ServerConnection {
@@ -290,7 +290,7 @@ fn absolute_paths(working_directory: &str, paths: Vec<String>) -> Vec<String> {
 /// Reads the parameters as the reference's pydantic model does: every field
 /// under its camelCase alias or its own name, booleans in lax mode, no other
 /// key, and every violation reported rather than the first.
-fn rewind_params(
+pub(in crate::server) fn rewind_params(
     params: &BTreeMap<String, Value>,
     with_options: bool,
 ) -> Result<RewindParams, ParamsRejection> {

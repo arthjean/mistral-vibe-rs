@@ -385,12 +385,9 @@ pub(crate) struct TurnSteerParams {
     /// Reference `TurnSteerParams.message` (`vibe/app_server/protocol.py:1945`).
     #[serde(rename = "message")]
     pub(crate) input: Vec<PublicContentBlock>,
-    /// Accepted for wire compatibility. Steering does not create a history
-    /// entry, so neither of these two reaches the engine yet.
-    #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
+    /// Read by a unified session, whose steering is a history entry.
     #[serde(default)]
     pub(crate) client_user_message_id: Option<String>,
-    #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
     #[serde(default)]
     pub(crate) user_display_content: Option<Value>,
     #[serde(default = "default_true")]

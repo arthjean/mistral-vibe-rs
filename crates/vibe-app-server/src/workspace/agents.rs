@@ -352,9 +352,10 @@ impl WorkspaceService {
             .with_agent_overlay(active.overrides.clone())
             .load()
             .ok();
-        let view = snapshot
-            .as_ref()
-            .map_or_else(|| Value::Object(Map::new()), ConfigSnapshot::config_view);
+        let view = snapshot.as_ref().map_or_else(
+            || Value::Object(Map::new()),
+            |snapshot| self.published_config_view(snapshot),
+        );
         let configured_bypass = snapshot
             .as_ref()
             .and_then(|snapshot| snapshot.effective.get("bypass_tool_permissions"))
@@ -369,13 +370,20 @@ impl WorkspaceService {
             bypass_tool_permissions: configured_bypass || agent_bypass,
             config: view,
             active_agent: agent_summary(&active),
-            agents: profiles.iter().map(agent_summary).collect(),
-            skills: catalog
-                .skills
-                .values()
-                .filter(|skill| !self.plugin_claims(skill))
-                .map(skill_summary)
+            agents: profiles
+                .iter()
+                .filter(|profile| !(self.unified_views && profile.name == "plan"))
+                .map(agent_summary)
                 .collect(),
+            skills: {
+                let mut skills = catalog
+                    .skills
+                    .values()
+                    .filter(|skill| !self.plugin_claims(skill))
+                    .collect::<Vec<_>>();
+                sort_builtins_first(&mut skills);
+                skills.into_iter().map(skill_summary).collect()
+            },
             issues: catalog
                 .issues
                 .iter()
@@ -528,9 +536,11 @@ impl WorkspaceService {
     /// them and the only shape this response accepts.
     pub(super) fn skills_list(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let catalog = self.catalog();
+        let mut skills = catalog.skills.values().collect::<Vec<_>>();
+        sort_builtins_first(&mut skills);
         Ok(WorkspaceDispatch::result([(
             "skills",
-            Value::Array(catalog.skills.values().map(skill_summary).collect()),
+            Value::Array(skills.into_iter().map(skill_summary).collect()),
         )]))
     }
 
@@ -576,6 +586,25 @@ impl WorkspaceService {
         seed.values()
             .filter_map(|plugin| plugin.path.as_ref())
             .any(|claimed| claimed.canonicalize().unwrap_or_else(|_| claimed.clone()) == resolved)
+    }
+
+    /// The skills a unified session takes from its own roots: everything
+    /// discovery found that neither ships with Vibe (those reach it through
+    /// the `vibe` plugin) nor sits where a plugin skill is configured.
+    /// Reference `discover_session_skills` (`vibe/app_server/_skills.py`).
+    #[must_use]
+    pub fn unified_root_skills(&self) -> Vec<vibe_core::extensions::SkillDefinition> {
+        self.catalog()
+            .skills
+            .into_values()
+            .filter(|skill| {
+                !matches!(
+                    skill.source,
+                    vibe_core::skills::SkillSource::Builtin
+                        | vibe_core::skills::SkillSource::Plugin
+                ) && !self.plugin_claims(skill)
+            })
+            .collect()
     }
 
     pub(super) fn catalog(&self) -> ExtensionCatalog {
@@ -717,4 +746,15 @@ impl WorkspaceService {
             })
             .collect()
     }
+}
+
+/// The catalog's order: the builtin skills first, as discovery registers
+/// them, then the rest by name.
+fn sort_builtins_first(skills: &mut [&vibe_core::extensions::SkillDefinition]) {
+    skills.sort_by_key(|skill| {
+        vibe_core::skills::builtins::BUILTIN_SKILL_ORDER
+            .iter()
+            .position(|name| *name == skill.name)
+            .unwrap_or(usize::MAX)
+    });
 }

@@ -13,6 +13,7 @@ mod markdown;
 mod overlays;
 mod palette;
 mod rewind;
+mod subagents;
 mod text;
 
 use super::chat_input::{InputMode, Safety, VoicePhase};
@@ -96,7 +97,19 @@ pub fn draw(
     theme: ResolvedTheme,
     context: UiContext<'_>,
 ) {
-    let requested_completion_height = completion_popup::requested_height(completion);
+    // Reference `_show_subagent_chat`: a viewed child hides the composer and
+    // the conversation's loading line, and the footer gauges its context.
+    let viewing = state.subagents.is_viewing();
+    let mut context = context;
+    if let Some(child) = state.subagents.viewed() {
+        context.tokens.current_tokens = child.context_tokens;
+    }
+    state.scroll_offset = state.subagents.settle_scroll(state.scroll_offset);
+    let requested_completion_height = if viewing {
+        0
+    } else {
+        completion_popup::requested_height(completion)
+    };
     let activity_height =
         u16::from(activity_text(state).is_some() || state.inline_notice.is_some());
     let queue_lines = state.prompt_queue.presentation_lines();
@@ -107,13 +120,21 @@ pub fn draw(
         frame.area().height,
         input_mode.prefix_len(),
     );
-    let input_height = composer.input_height();
+    let input_height = if viewing { 0 } else { composer.input_height() };
+    let list_height = subagents::list_height(&state.subagents);
+    let todo_summary = state
+        .todos
+        .as_ref()
+        .and_then(crate::tui::todos::TodoTracker::summary);
+    let todo_height = u16::from(todo_summary.is_some());
     let completion_height = requested_completion_height.min(
         frame
             .area()
             .height
             .saturating_sub(activity_height)
             .saturating_sub(input_height)
+            .saturating_sub(list_height)
+            .saturating_sub(todo_height)
             .saturating_sub(2),
     );
     let [
@@ -122,6 +143,8 @@ pub fn draw(
         activity_area,
         completion_area,
         input_area,
+        list_area,
+        todo_area,
         footer_area,
     ] = Layout::vertical([
         Constraint::Min(1),
@@ -129,10 +152,15 @@ pub fn draw(
         Constraint::Length(activity_height),
         Constraint::Length(completion_height),
         Constraint::Length(input_height),
+        Constraint::Length(list_height),
+        Constraint::Length(todo_height),
         Constraint::Length(1),
     ])
     .areas(frame.area());
-    draw_transcript(frame, transcript_area, state, theme, context.banner);
+    match state.subagents.view_entries() {
+        Some(entries) => draw_child_transcript(frame, transcript_area, state, theme, entries),
+        None => draw_transcript(frame, transcript_area, state, theme, Some(context.banner)),
+    }
     let selected = state
         .queue_selection
         .as_ref()
@@ -144,7 +172,41 @@ pub fn draw(
         (state.prompt_queue.scroll_offset(), selected),
         theme,
     );
-    draw_activity(frame, activity_area, state, theme);
+    match state.subagents.viewed() {
+        Some(child) => {
+            if let Some(status) = child.status.loading_status() {
+                frame.render_widget(
+                    Paragraph::new(truncate_width(
+                        &format!(
+                            "{} {status}",
+                            model_spinner_frame(state.animation_frame * 100)
+                        ),
+                        usize::from(activity_area.width),
+                    ))
+                    .style(theme.orange()),
+                    activity_area,
+                );
+            }
+        }
+        None => draw_activity(frame, activity_area, state, theme),
+    }
+    state.subagent_rows = subagents::draw_list(frame, list_area, &state.subagents, theme);
+    if viewing {
+        draw_footer(
+            frame,
+            footer_area,
+            context.cwd,
+            context.tokens,
+            theme,
+            state
+                .quit_confirmation
+                .pending_key()
+                .map(|key| crate::tui::exit::quit_prompt(key, state.prompt_queue.len()))
+                .as_deref(),
+        );
+        draw_modals(frame, state, theme);
+        return;
+    }
     completion_popup::draw(frame, completion_area, completion, theme);
     // Reference `_lock_input_for_selection`: a selected queued prompt hides the
     // caret of the draft it locked.
@@ -162,6 +224,21 @@ pub fn draw(
         context,
         (&composer, caret, ghost.as_deref()),
     );
+    // Reference `TodoStatusRow`: one muted line between the composer and the
+    // bottom bar, cut with an ellipsis rather than wrapped.
+    if let Some(summary) = &todo_summary {
+        frame.render_widget(
+            Paragraph::new(truncate_width(
+                &sanitize_inline(summary),
+                usize::from(todo_area.width),
+            ))
+            .style(theme.muted()),
+            todo_area,
+        );
+        state.todo_row = (todo_area.height > 0).then_some(todo_area);
+    } else {
+        state.todo_row = None;
+    }
     // Reference `QuitManager.request_confirmation` writes into the path display.
     let quit_prompt = state
         .quit_confirmation
@@ -175,6 +252,10 @@ pub fn draw(
         theme,
         quit_prompt.as_deref(),
     );
+    draw_modals(frame, state, theme);
+}
+
+fn draw_modals(frame: &mut Frame<'_>, state: &TuiState, theme: ResolvedTheme) {
     if let Some(overlay) = &state.overlay {
         draw_overlay(frame, overlay, state.session_delete.as_ref(), theme);
     }
@@ -184,6 +265,33 @@ pub fn draw(
     if let Some(callback) = &state.callback {
         draw_callback_overlay(frame, callback, state.callback_scroll_offset, theme);
     }
+}
+
+/// Reference `SubagentTranscripts`: the viewed child's history painted the way
+/// the conversation is, without the banner, the windowing or the todo deltas
+/// that belong to the conversation.
+fn draw_child_transcript(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    state: &mut TuiState,
+    theme: ResolvedTheme,
+    entries: Vec<TranscriptEntry>,
+) {
+    let running = state
+        .subagents
+        .viewed()
+        .is_some_and(|child| child.status.loading_status().is_some());
+    let entries = std::mem::replace(&mut state.entries, entries);
+    let first_visible = state.history_first_visible.take();
+    let cursor_before = state.cursor_before.take();
+    let todos = state.todos.take();
+    let waiting = std::mem::replace(&mut state.waiting, running);
+    draw_transcript(frame, area, state, theme, None);
+    state.entries = entries;
+    state.history_first_visible = first_visible;
+    state.cursor_before = cursor_before;
+    state.todos = todos;
+    state.waiting = waiting;
 }
 
 fn draw_queue(
@@ -240,7 +348,7 @@ fn draw_transcript(
     area: Rect,
     state: &mut TuiState,
     theme: ResolvedTheme,
-    banner: BannerContext<'_>,
+    banner: Option<BannerContext<'_>>,
 ) {
     let visible_height = usize::from(area.height).max(1);
     let mut newest_first = Vec::new();
@@ -279,10 +387,15 @@ fn draw_transcript(
             state.folds.entry(key).or_insert(collapsed);
         }
     }
+    let todo_deltas = state
+        .todos
+        .is_some()
+        .then(|| crate::tui::todos::todo_deltas(&state.entries));
     let folding = Folding {
         folds: &state.folds,
         frame: state.animation_frame,
         streams: &state.effect_streams,
+        todo_deltas: todo_deltas.as_ref(),
     };
     let block_count = blocks.len();
     'blocks: for (index, block) in blocks.iter().enumerate().rev() {
@@ -342,7 +455,7 @@ fn draw_transcript(
         ));
         newest_first.push(Line::default());
     }
-    if !history_truncated {
+    if !history_truncated && let Some(banner) = banner {
         for line in banner_lines(banner, state.banner_cat.frame(), theme)
             .into_iter()
             .rev()
@@ -650,7 +763,7 @@ pub fn format_context_progress(tokens: TokenState) -> String {
     )
 }
 
-fn format_token_count(tokens: u64) -> String {
+pub(super) fn format_token_count(tokens: u64) -> String {
     if tokens >= 1_000_000 {
         return format!("{:.1}M", tokens as f64 / 1_000_000.0);
     }

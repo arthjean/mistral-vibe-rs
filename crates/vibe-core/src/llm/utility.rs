@@ -357,6 +357,7 @@ pub async fn complete(
     let chunk = backend
         .complete(
             &ModelRequest {
+                unified: false,
                 model: &selection.model,
                 messages: &messages,
                 temperature: 0.0,

@@ -112,7 +112,8 @@ fn the_document_carries_the_three_sections_the_corpus_recorded() {
 
 #[test]
 fn the_command_section_is_sorted_by_registry_key_with_the_canonical_alias_first() {
-    let text = document(&full_context());
+    let context = full_context();
+    let text = document(&context);
     let lines = text.lines().collect::<Vec<_>>();
     let commands = lines[18..].to_vec();
 
@@ -129,7 +130,7 @@ fn the_command_section_is_sorted_by_registry_key_with_the_canonical_alias_first(
             .strip_prefix("- ")
             .and_then(|rest| rest.split_once(": "))
             .unwrap_or_else(|| panic!("{line} is not a command line"));
-        assert_eq!(description, command.description);
+        assert_eq!(description, context.description(command));
         let aliases = spans
             .split(", ")
             .map(|span| {

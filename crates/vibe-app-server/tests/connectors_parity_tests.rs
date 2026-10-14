@@ -303,3 +303,168 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// The Unified Harness family `--harness unified` captures: the same catalog
+/// and gateway reached from `run_typescript`, row 36's measure of the
+/// connector path.
+const UNIFIED_CORPUS: &str = include_str!("connectors-parity/unified-corpus.json");
+
+const UNIFIED_SCENARIO_FLOOR: usize = 9;
+
+/// The accepted divergence the unified entries below stand on.
+const REJECTED_MIDTURN: &str = "A connector the gateway rejects mid-turn keeps its turn";
+
+const UNIFIED_LEDGER: &[Divergence] = &[
+    Divergence {
+        scenarios: &["unified/gateway-401"],
+        pointer: "/requests/1/conversation/2/content",
+        row: "36",
+        reason: "the reference suspends the rejected connector by reconfiguring its core while \
+                 the turn runs, which its core refuses, so the program reads \
+                 `effect_recovery_failed`; this port reads the gateway's own failure",
+    },
+    Divergence {
+        scenarios: &["unified/gateway-401"],
+        pointer: "/steps/1/turn/2/patch",
+        row: "36",
+        reason: "the same failure, as the settled effect and its approval record",
+    },
+];
+
+#[test]
+fn the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    let corpus: Value = serde_json::from_str(UNIFIED_CORPUS).expect("the corpus parses");
+    let recorded = scenarios(&corpus);
+    assert!(
+        recorded.len() >= UNIFIED_SCENARIO_FLOOR,
+        "the unified corpus holds {} scenarios, below the floor of {UNIFIED_SCENARIO_FLOOR}",
+        recorded.len()
+    );
+    let output_path =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("connectors-unified-parity-port.json");
+    let output = capture(&[
+        "--harness".as_ref(),
+        "unified".as_ref(),
+        "--server".as_ref(),
+        env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture").as_ref(),
+        "--output".as_ref(),
+        output_path.as_os_str(),
+    ]);
+    assert!(
+        output.status.success(),
+        "the port capture failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let replayed: Value = serde_json::from_str(
+        &std::fs::read_to_string(&output_path).expect("the port capture is readable"),
+    )
+    .expect("the port capture parses");
+    let replayed = scenarios(&replayed);
+    assert_eq!(
+        recorded.keys().collect::<Vec<_>>(),
+        replayed.keys().collect::<Vec<_>>(),
+        "the capture script declares other unified scenarios than the corpus records; \
+         recapture the reference with `{CAPTURE_SCRIPT} --harness unified`"
+    );
+    let mut unexplained = Vec::new();
+    let mut reproduced = BTreeSet::new();
+    let mut conformant = 0;
+    for (name, reference) in &recorded {
+        let port = replayed[name];
+        assert_eq!(
+            reference["scenario"], port["scenario"],
+            "the capture script changed scenario {name} since the corpus was recorded"
+        );
+        let mut found = Vec::new();
+        differences(&reference["observed"], &port["observed"], "", &mut found);
+        // A prose field is each side's own wording, as the Unified Harness
+        // corpus accepts it (`FIELDS` in `unified_harness_parity_tests.rs`).
+        found.retain(|pointer| {
+            ![
+                "/system/0/prose",
+                "/system/0/sha256",
+                "/description/prose",
+                "/description/sha256",
+            ]
+            .iter()
+            .any(|suffix| pointer.ends_with(suffix))
+        });
+        if found.is_empty() {
+            conformant += 1;
+        }
+        for pointer in found {
+            match UNIFIED_LEDGER.iter().position(|entry| {
+                entry.scenarios.contains(&name.as_str()) && pointer.starts_with(entry.pointer)
+            }) {
+                Some(index) => {
+                    reproduced.insert(index);
+                }
+                None => unexplained.push(format!("{name} {pointer}")),
+            }
+        }
+    }
+    println!(
+        "unified connectors parity: {conformant}/{} scenarios conformant",
+        recorded.len()
+    );
+    assert!(
+        unexplained.is_empty(),
+        "the port departs from the unified corpus where no ledger entry says it may:\n{}",
+        unexplained.join("\n")
+    );
+    let stale: Vec<&str> = UNIFIED_LEDGER
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !reproduced.contains(index))
+        .map(|(_, entry)| entry.pointer)
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "these unified ledger entries no longer reproduce: {stale:?}"
+    );
+}
+
+#[test]
+fn every_unified_ledger_entry_stands_on_an_accepted_divergence() {
+    assert!(
+        SCORECARD.contains(&format!("| {REJECTED_MIDTURN} |")),
+        "docs/parity.md no longer accepts the divergence the unified ledger stands on"
+    );
+    let corpus: Value = serde_json::from_str(UNIFIED_CORPUS).expect("the corpus parses");
+    let recorded = scenarios(&corpus);
+    for entry in UNIFIED_LEDGER {
+        assert!(
+            entry.row == "36"
+                && entry
+                    .scenarios
+                    .iter()
+                    .all(|scenario| recorded.contains_key(*scenario))
+                && !entry.reason.is_empty(),
+            "the unified ledger entry for {} needs row 36, recorded scenarios and a reason",
+            entry.pointer
+        );
+    }
+}
+
+#[test]
+fn the_committed_unified_corpus_still_matches_the_pinned_reference() {
+    let root = reference_root();
+    if let Some(reason) = off_pin_reason(&root, "unified connectors") {
+        eprintln!("{reason}");
+        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+        return;
+    }
+    let output = capture(&[
+        "--harness".as_ref(),
+        "unified".as_ref(),
+        "--check".as_ref(),
+        "--reference".as_ref(),
+        root.as_os_str(),
+    ]);
+    assert!(
+        output.status.success(),
+        "the pinned reference no longer answers what the unified corpus records; regenerate \
+         it with `{CAPTURE_SCRIPT} --harness unified`: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

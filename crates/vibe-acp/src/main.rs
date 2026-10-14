@@ -127,6 +127,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         exposures.clone(),
         declared_launch.clone(),
         session_resets.clone(),
+        HarnessSelection::resolve(arguments.experimental_harness, arguments.legacy_harness)
+            .use_unified,
     );
     let experiments = telemetry.as_ref().map(|_| vibe_acp::AcpExperiments {
         exposures,
@@ -151,11 +153,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             })
         }
     });
-    let harness = HarnessSelection::for_launch(
-        arguments.experimental_harness,
-        arguments.legacy_harness,
-        &vibe_home,
-    );
+    let harness =
+        HarnessSelection::resolve(arguments.experimental_harness, arguments.legacy_harness);
     run_stdio(
         BufReader::new(tokio::io::stdin()),
         tokio::io::stdout(),
@@ -215,13 +214,14 @@ fn acp_telemetry_context(
     exposures: ExperimentExposures,
     declared_launch: vibe_core::telemetry::DeclaredLaunch,
     session_resets: vibe_core::telemetry::SessionResets,
+    use_unified: bool,
 ) -> TelemetryContext {
     TelemetryContext {
         launch: Some(acp_launch_context()),
         declared_launch,
         session_resets,
         experiments: exposures,
-        harness_backend: Some(vibe_core::telemetry::HARNESS_LEGACY.to_owned()),
+        harness_backend: Some(vibe_core::telemetry::harness_backend(use_unified).to_owned()),
         ..TelemetryContext::default()
     }
 }
@@ -240,6 +240,7 @@ fn acp_telemetry_observer(
     exposures: ExperimentExposures,
     declared_launch: vibe_core::telemetry::DeclaredLaunch,
     session_resets: vibe_core::telemetry::SessionResets,
+    use_unified: bool,
 ) -> Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>> {
     let configuration = ambient_workspace(vibe_home)?.layered_config();
     let environment = dotenv.environment();
@@ -255,7 +256,7 @@ fn acp_telemetry_observer(
     let transport = ReqwestTelemetryTransport::try_new().ok()?;
     Some(Arc::new(TelemetryEventObserver::new(
         TelemetryClient::new(config, transport),
-        acp_telemetry_context(exposures, declared_launch, session_resets),
+        acp_telemetry_context(exposures, declared_launch, session_resets, use_unified),
     )))
 }
 

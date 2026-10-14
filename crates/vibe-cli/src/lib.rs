@@ -137,26 +137,26 @@ pub struct Arguments {
         help = "Start the session under the agent called NAME"
     )]
     pub agent: Option<String>,
-    /// The Unified Harness is a backend this port does not ship, so asking for
-    /// it lands on the legacy harness with a startup notice, which is what the
-    /// reference does when its own backend cannot be loaded
-    /// (`vibe/app_server/_runtime.py:1149-1167`).
+    /// Reference `add_experimental_harness_argument`
+    /// (`vibe/_experimental_harness.py`): the Unified Harness is already the
+    /// default, so the flag only restates it.
     #[arg(
         long,
         conflicts_with = "legacy_harness",
-        help = "Ask for the Unified Harness backend. This build carries none, so the session \
-                runs on the legacy harness and reports the fallback when it starts."
+        help = "Run on the Unified Harness backend. Every session already does by default; \
+                the flag stays until the legacy harness is retired."
     )]
     pub experimental_harness: bool,
     #[arg(
         long,
-        help = "Keep the session on the legacy harness whatever the rollout selects"
+        help = "Run on the legacy harness instead of the Unified Harness. A temporary way \
+                out, kept until the legacy backend is removed."
     )]
     pub legacy_harness: bool,
     #[arg(
         long,
-        help = "Start in the smart-approve mode, which also asks for the Unified Harness. On \
-                the legacy harness, tool calls are approved the ordinary way."
+        help = "Sort each tool call by risk: run the safe ones on their own and ask only \
+                about the risky ones."
     )]
     pub smart_approve: bool,
     #[arg(
@@ -588,11 +588,12 @@ pub(crate) fn programmatic_launch_context() -> LaunchContext {
 fn cli_telemetry_context(
     launch: LaunchContext,
     exposures: ExperimentExposures,
+    use_unified: bool,
 ) -> TelemetryContext {
     TelemetryContext {
         launch: Some(launch),
         experiments: exposures,
-        harness_backend: Some(vibe_core::telemetry::HARNESS_LEGACY.to_owned()),
+        harness_backend: Some(vibe_core::telemetry::harness_backend(use_unified).to_owned()),
         ..TelemetryContext::default()
     }
 }
@@ -729,7 +730,15 @@ pub(crate) fn telemetry_observer_for(
     Ok(Arc::new(CliTelemetryObserver {
         events: TelemetryEventObserver::new(
             TelemetryClient::new(config, transport),
-            cli_telemetry_context(launch, exposures.clone()),
+            cli_telemetry_context(
+                launch,
+                exposures.clone(),
+                vibe_app_server::harness::HarnessSelection::resolve(
+                    arguments.experimental_harness,
+                    arguments.legacy_harness,
+                )
+                .use_unified,
+            ),
         ),
         exposures,
     }))
@@ -936,7 +945,8 @@ mod tests {
     /// vocabulary.
     #[test]
     fn the_launch_context_reports_the_cli_entrypoint() {
-        let context = cli_telemetry_context(cli_launch_context(), ExperimentExposures::default());
+        let context =
+            cli_telemetry_context(cli_launch_context(), ExperimentExposures::default(), true);
         let launch = context.launch.expect("the CLI declares a launch context");
         assert_eq!(launch.agent_entrypoint, "cli");
         assert_eq!(launch.client_name, "vibe_cli");
@@ -952,7 +962,7 @@ mod tests {
     #[test]
     fn a_rollout_resolved_after_the_client_reaches_the_next_event() {
         let exposures = ExperimentExposures::default();
-        let context = cli_telemetry_context(cli_launch_context(), exposures.clone());
+        let context = cli_telemetry_context(cli_launch_context(), exposures.clone(), true);
         assert!(
             !context
                 .base_metadata(None)

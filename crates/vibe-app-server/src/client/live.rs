@@ -671,6 +671,7 @@ impl LiveTurnDriver {
             .map_err(|_| DriverError::StatePoisoned)?
             .insert(reservation.session_id.clone(), session_tools.clone());
         let input = ProviderInput {
+            dialect: Default::default(),
             turn_id: Some(reservation.turn_id.clone()),
             session_id: None,
             model_override: reservation.intent.model.clone(),

@@ -39,6 +39,7 @@ pub(super) fn semantic_lines(
                 folds: &folds,
                 frame: 0,
                 streams: &streams,
+                todo_deltas: None,
             };
             effect_block(entry, &effect, true, folding, width, theme).lines
         }
@@ -144,6 +145,9 @@ pub(super) struct Folding<'a> {
     pub(super) frame: u64,
     /// What each running effect last appended to its output.
     pub(super) streams: &'a BTreeMap<String, String>,
+    /// What each todo result changed, on a backend that pins the list
+    /// (reference `todo_deltas`); `None` prints the full list instead.
+    pub(super) todo_deltas: Option<&'a BTreeMap<String, String>>,
 }
 
 impl Folding<'_> {
@@ -485,9 +489,20 @@ pub(super) fn effect_block(
         ),
         if dimmed { theme.muted() } else { theme.base() },
     ));
-    if !effect.suffix.is_empty() {
+    // Reference `_header_suffix`: a todo result's change rides in its header,
+    // which stays readable while the result is folded.
+    let delta = folding
+        .todo_deltas
+        .and_then(|deltas| deltas.get(&entry.id))
+        .map_or("", String::as_str);
+    let suffix = [effect.suffix.as_str(), delta]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !suffix.is_empty() {
         header.push(Span::styled(
-            format!(" {}", sanitize_inline(&effect.suffix)),
+            format!(" {}", sanitize_inline(&suffix)),
             theme.muted(),
         ));
     }

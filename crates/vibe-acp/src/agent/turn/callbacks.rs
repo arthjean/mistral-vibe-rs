@@ -130,6 +130,10 @@ where
         related: &str,
         callback: Option<&str>,
     ) {
+        // A Unified Harness session publishes its effects' states itself.
+        if harness.is_unified() {
+            return;
+        }
         let Some(previous) = harness.remembered_entry(turn, related) else {
             return;
         };

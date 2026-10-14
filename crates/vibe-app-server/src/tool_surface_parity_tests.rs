@@ -643,6 +643,7 @@ async fn the_published_surface_carries_the_registration_order_not_the_name_order
         }],
         enabled_tools: Vec::new(),
         disabled_tools: Vec::new(),
+        implicit: false,
     };
     crate::connector_catalog::SessionConnectors {
         accepted: Some((catalog, selection)),

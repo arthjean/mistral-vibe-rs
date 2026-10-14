@@ -48,6 +48,9 @@ pub(super) fn classify(
         return Submission::Teleport(target.to_owned());
     }
     if let Some(parsed) = parse_command_in(value, context) {
+        if context.forwards_to_model(parsed.id) {
+            return Submission::Prompt;
+        }
         return Submission::Command {
             side_channel: definition(parsed.id).is_some_and(|command| command.side_channel),
         };

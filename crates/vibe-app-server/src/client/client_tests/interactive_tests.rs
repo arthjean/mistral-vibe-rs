@@ -59,6 +59,7 @@ async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
         }),
     );
     let mut service = HeadlessService {
+        unified: None,
         client: InProcessClient::connect_with_server_and_client(
             server,
             ClientInfo {
@@ -275,6 +276,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
         }),
     );
     let mut service = HeadlessService {
+        unified: None,
         client: InProcessClient::connect_with_server_and_client(
             server,
             ClientInfo {

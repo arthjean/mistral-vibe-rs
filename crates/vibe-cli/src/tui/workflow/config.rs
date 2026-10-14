@@ -371,6 +371,9 @@ pub(in crate::tui) fn apply_render_preferences(
     {
         state.banner_cat.stop();
     }
+    state.subagents.enabled = configured_value(runtime, "show_subagent_status_list")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(true);
     state.autocopy_to_clipboard = configured_value(runtime, "autocopy_to_clipboard")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);

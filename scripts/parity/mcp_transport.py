@@ -590,6 +590,19 @@ class Scenario:
                 entry["envNames"] = sorted(set(entry["envNames"]) - INHERITED_NAMES)
                 entry["cwd"] = "__CWD__" if entry.get("cwd") == os.getcwd() else self.normalize(entry.get("cwd"))
             entries.append(self.normalize(entry))
+        # The reference's HTTP client opens its event stream concurrently with
+        # the `notifications/initialized` POST, so the two reach the fixture in
+        # either order. Record them in the order the client issues them.
+        for index in range(len(entries) - 1):
+            first, second = entries[index], entries[index + 1]
+            body = second.get("body")
+            if (
+                first.get("kind") == second.get("kind") == "http"
+                and first.get("method") == "GET"
+                and isinstance(body, dict)
+                and body.get("method") == "notifications/initialized"
+            ):
+                entries[index], entries[index + 1] = second, first
         return entries
 
     async def settle(self) -> None:

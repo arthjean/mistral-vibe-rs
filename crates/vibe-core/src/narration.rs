@@ -88,6 +88,7 @@ pub async fn summarize(
     let answer = backend
         .complete(
             &ModelRequest {
+                unified: false,
                 model: &model,
                 messages: &messages,
                 temperature: 0.0,

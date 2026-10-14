@@ -881,6 +881,7 @@ impl ChatInputState {
             return;
         }
         if !self.editor.history_loaded() {
+            effects.push(InputEffect::NavigateBelow);
             return;
         }
         effects.push(InputEffect::HistoryNext);

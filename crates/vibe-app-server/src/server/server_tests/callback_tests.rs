@@ -706,12 +706,13 @@ fn a_plan_review_becomes_a_notice_and_leaves_the_callback_detail_conformant() {
         })
         .expect("the callback is published");
     let wire = serde_json::to_value(detail).expect("the detail serializes");
-    let keys = wire
+    let mut keys = wire
         .as_object()
         .expect("an object")
         .keys()
         .cloned()
         .collect::<Vec<_>>();
+    keys.sort_unstable();
     assert_eq!(keys, ["kind", "relatedEntryId", "request"]);
 }
 

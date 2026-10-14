@@ -83,7 +83,7 @@ pub(super) fn apply_pending(
             if call_runtime(
                 runtime,
                 "session/agent/update",
-                json!({"sessionId": runtime.session_id, "name": agent}),
+                json!({"sessionId": runtime.session_id, "agentName": agent}),
                 state,
             )
             .is_some()

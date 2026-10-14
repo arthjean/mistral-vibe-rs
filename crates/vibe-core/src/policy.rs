@@ -536,6 +536,22 @@ impl PolicyGuardedTool {
 }
 
 impl ToolHandler for PolicyGuardedTool {
+    fn authorize<'a>(
+        &'a self,
+        invocation: &'a ToolInvocation,
+        approval: &'a dyn ApprovalAgent,
+    ) -> Option<crate::tools::AuthorizeFuture<'a>> {
+        Some(Box::pin(async move {
+            let mut context = (self.requirements)(invocation)
+                .map_err(|error| PolicyError::Approval(error.to_string()))?;
+            context.call_id = Some(invocation.call_id.clone()).filter(|id| !id.is_empty());
+            self.store
+                .authorize(&self.name, invocation.arguments.clone(), context, approval)
+                .await
+                .map(|lease| lease.approval)
+        }))
+    }
+
     fn invoke<'a>(
         &'a self,
         invocation: &'a ToolInvocation,
@@ -548,6 +564,13 @@ impl ToolHandler for PolicyGuardedTool {
         let requirements = self.requirements.clone();
         let inner = self.inner.clone();
         Box::pin(async move {
+            if let Some(approval) = crate::tools::gated_approval() {
+                crate::tools::mark_call_started(approval);
+                return inner.invoke(&invocation, output).await.map(|mut result| {
+                    result.approval.get_or_insert(approval);
+                    result
+                });
+            }
             let mut context = requirements(&invocation)?;
             context.call_id = Some(invocation.call_id.clone()).filter(|id| !id.is_empty());
             let lease = match store

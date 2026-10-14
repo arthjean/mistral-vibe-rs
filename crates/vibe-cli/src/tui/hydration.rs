@@ -83,6 +83,9 @@ pub(super) fn adopt_hydrated_session(
         audio_session_id.clone_from(&session_id);
     }
     sync_runtime_intent(runtime, None);
+    // Reference `_reset_subagent_views`: the list and its views start over
+    // with the session, under the preference already read.
+    replacement.subagents.enabled = state.subagents.enabled;
     *state = replacement;
     *controls = ControlState::new(session_id);
     sync_active_callbacks(runtime, state, controls);
@@ -150,6 +153,22 @@ pub(super) fn canonical_session_projection(
         ));
     };
     let mut state = tui_state_from_public_session(session_id, public_state)?;
+    // A unified session's state is its whole saved history, the latest page
+    // of it, and the entry that page stops at (reference
+    // `history_before_cursor`); the legacy transcript beside it is not its own.
+    if runtime.service.is_unified(session_id) {
+        // Reference `_reset_todo_presentation`: a session the terminal opens
+        // starts with an empty list, which only its next todo write fills.
+        state.todos = Some(super::todos::TodoTracker::default());
+        state.cursor_before = public_state
+            .get("historyBeforeCursor")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+        if include_saved_history {
+            state.window_history_tail();
+        }
+        return Ok(state);
+    }
     if include_saved_history {
         overlay_latest_saved_history(runtime, &mut state)?;
         state.window_history_tail();
@@ -225,7 +244,8 @@ fn overlay_latest_saved_history(
 /// Reveals the page above the oldest entry once the operator scrolls past it,
 /// leaving the projection ordered oldest-first.
 pub(super) fn page_older_history(runtime: Option<&mut InteractiveRuntime>, state: &mut TuiState) {
-    if state.needs_older_history() {
+    // A child's transcript is read whole; the conversation's pages wait.
+    if state.needs_older_history() && !state.subagents.is_viewing() {
         load_more_history(runtime, state);
     }
 }
@@ -243,6 +263,10 @@ pub(super) fn load_more_history(runtime: Option<&mut InteractiveRuntime>, state:
     let Some(before) = state.cursor_before.clone() else {
         return;
     };
+    if runtime.service.is_unified(&state.session_id) {
+        load_more_unified_history(runtime, state, before);
+        return;
+    }
     let Ok(before) = before.parse::<usize>() else {
         state.cursor_before = None;
         state.push_diagnostic("Saved-history cursor is invalid");
@@ -270,6 +294,47 @@ pub(super) fn load_more_history(runtime: Option<&mut InteractiveRuntime>, state:
     };
     let entries = transcript_entries_from_history(&state.session_id, offset, &history.history);
     if let Err(error) = state.prepend_history(entries, (offset > 0).then(|| offset.to_string())) {
+        state.push_diagnostic(format!("Older history is invalid: {error}"));
+        return;
+    }
+    state.scroll_to_oldest();
+}
+
+/// Reference `SessionResources.load_more_history`: the page of a unified
+/// session's history that ends at `before`.
+fn load_more_unified_history(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    before: String,
+) {
+    let result = runtime.service.public_call(
+        "session/history/list",
+        json!({
+            "sessionId": state.session_id,
+            "page": {"cursor": before, "limit": LOAD_MORE_BATCH_SIZE},
+        }),
+    );
+    let page = match result {
+        Ok(page) => page,
+        Err(error) => {
+            state.push_diagnostic(format!("Older history is unavailable: {error}"));
+            return;
+        }
+    };
+    let entries = match serde_json::from_value::<Vec<PublicHistoryEntry>>(
+        page.get("items").cloned().unwrap_or_else(|| json!([])),
+    ) {
+        Ok(entries) => entries.into_iter().map(history_entry).collect(),
+        Err(error) => {
+            state.push_diagnostic(format!("Older history is invalid: {error}"));
+            return;
+        }
+    };
+    let cursor = page
+        .get("nextCursor")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    if let Err(error) = state.prepend_history(entries, cursor) {
         state.push_diagnostic(format!("Older history is invalid: {error}"));
         return;
     }

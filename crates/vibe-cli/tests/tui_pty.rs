@@ -1030,10 +1030,23 @@ fn direct_resume_and_continue_hydrate_the_requested_saved_session() {
             vec![
                 "--trust",
                 "--continue",
+                "--legacy-harness",
                 "--api-base",
                 "http://127.0.0.1:9/v1",
             ],
             "continue marker",
+        ),
+        // The Unified Harness continues only the sessions it saved itself
+        // (reference `_sweep_unified_sessions`), so a legacy transcript is
+        // passed over and the fresh session stays open.
+        (
+            vec![
+                "--trust",
+                "--continue",
+                "--api-base",
+                "http://127.0.0.1:9/v1",
+            ],
+            "No previous sessions found.",
         ),
     ] {
         let temporary = tempfile::tempdir().expect("temporary TUI home");
@@ -1048,7 +1061,7 @@ fn direct_resume_and_continue_hydrate_the_requested_saved_session() {
         };
         seed_session(&home, &workspace, id, marker, 10);
         let mut process = PtyProcess::spawn(&workspace, &home, &arguments);
-        process.wait_for(marker.as_bytes(), STEP);
+        process.wait_for_visible(marker, STEP);
         let transcript = process.kill();
         assert!(
             transcript
@@ -1104,7 +1117,7 @@ command = "/must-not-run"
     )
     .expect("project MCP config");
     let mut process = PtyProcess::spawn(&workspace, &home, &["--trust"]);
-    let output = process.wait_for(b"must-not-run", STEP);
+    let output = process.wait_for_visible("must-not-run", STEP);
     assert!(
         output
             .windows(b"\x1b[?1049h".len())

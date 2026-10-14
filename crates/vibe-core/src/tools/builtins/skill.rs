@@ -202,6 +202,17 @@ impl crate::skills::InvokedSkillResolver for SkillInvocationResolver {
     }
 }
 
+/// What reading `skill` answers the model with, under `name`: the body the
+/// `skill` tool renders, for a backend that reads skills on its own.
+#[must_use]
+pub fn skill_payload(skill: &SkillDefinition, name: &str) -> String {
+    let named = SkillDefinition {
+        name: name.to_owned(),
+        ..skill.clone()
+    };
+    render_skill(&named, skill_directory(skill).as_deref())
+}
+
 /// The directory a skill's files sit in, or [`None`] when it has none on disk.
 ///
 /// A skill declared without a file on disk has no base directory, and the

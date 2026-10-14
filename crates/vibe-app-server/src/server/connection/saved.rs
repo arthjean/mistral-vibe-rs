@@ -19,7 +19,8 @@ use vibe_core::worktree::WorktreeRepository;
 
 /// Reference `_open_initial_session_locked`: what a method needing a root
 /// answers without one.
-pub(super) const NO_ROOT: &str = "Start, resume, or continue a session before using this method";
+pub(in crate::server) const NO_ROOT: &str =
+    "Start, resume, or continue a session before using this method";
 
 /// Reference `SessionListParams.limit` and `PageRequest.limit` bounds.
 const PAGE_BOUNDS: (i64, i64) = (1, 500);
@@ -92,8 +93,14 @@ impl ServerConnection {
             "session/log/read" => self.read_session_log(&request),
             "session/resume" => self.reopen_session(request, Reopen::Resume),
             "session/continue" => self.reopen_session(request, Reopen::Continue),
+            "session/fork" if self.server.harness_selection().use_unified => {
+                self.unified_fork(&request)
+            }
             "session/fork" => self.fork_session(&request),
             "session/delete" => self.delete_saved_session(&request),
+            "session/history/clear" if self.server.harness_selection().use_unified => {
+                self.unified_clear(&request)
+            }
             "session/history/clear" => self.clear_history(&request),
             _ => Err(ProtocolFault::plain(
                 ProtocolErrorCode::MethodNotFound,
@@ -103,8 +110,61 @@ impl ServerConnection {
         answered(id, outcome)
     }
 
+    /// Reference `LegacySessionStore.list_sessions`: the sessions an older
+    /// Vibe saved, as rows of a unified listing.
+    pub(in crate::server) fn legacy_rows(&self, cwd: Option<&str>) -> Vec<Value> {
+        let store = self.store();
+        self.resume_sessions(cwd)
+            .unwrap_or_default()
+            .iter()
+            .map(|session| {
+                let mut row = listed_session(&store, session, "");
+                row["rootSessionId"] = Value::Null;
+                row["harness"] = json!("legacy");
+                row["pinnedAt"] = json!(session.pinned_at.as_deref().and_then(parse_iso_millis));
+                if session.title.is_some() {
+                    row["preview"] = json!("");
+                }
+                row
+            })
+            .collect()
+    }
+
+    /// Reference `LegacySessionStore.read_session`: a legacy session not
+    /// yet imported, previewed from its transcript.
+    pub(in crate::server) fn legacy_state(
+        &self,
+        session_id: &str,
+        history_limit: Option<usize>,
+    ) -> Option<Value> {
+        let hydrated = self.load_saved(session_id).ok()?;
+        let id = hydrated.metadata.id.clone();
+        let mut state = stored_state(&id, &hydrated, history_limit.unwrap_or(usize::MAX));
+        let session = &mut state["session"];
+        session["rootSessionId"] = Value::Null;
+        session["harness"] = json!("legacy");
+        session["updatedAt"] = session["createdAt"].clone();
+        session["archivedAt"] = Value::Null;
+        session["pinnedAt"] = json!(
+            hydrated
+                .metadata
+                .pinned_at
+                .as_deref()
+                .and_then(parse_iso_millis)
+        );
+        if !session["title"].is_null() {
+            session["preview"] = json!("");
+        }
+        Some(state)
+    }
+
+    /// The transcript and settings of the legacy session `session_id`.
+    pub(in crate::server) fn legacy_session(&self, session_id: &str) -> Option<HydratedSession> {
+        self.load_saved(session_id).ok()
+    }
+
     /// The registry key of the session this connection is rooted in.
-    pub(super) fn root_key(&self) -> Option<String> {
+    pub(in crate::server) fn root_key(&self) -> Option<String> {
         let root = self.root.as_ref()?;
         let sessions = self.server.lock_sessions().ok()?;
         sessions
@@ -114,10 +174,17 @@ impl ServerConnection {
     }
 
     /// The identifier the root session answers to now.
-    pub(super) fn root_id(&self) -> Option<String> {
+    pub(in crate::server) fn root_id(&self) -> Option<String> {
         let root = self.root_key()?;
         let sessions = self.server.lock_sessions().ok()?;
         sessions.get(&root).map(|session| session.id.clone())
+    }
+
+    /// The identifier of the session this connection serves as its root,
+    /// which a rewind into a fork or a cleared history changes.
+    #[must_use]
+    pub fn root_session_id(&self) -> Option<String> {
+        self.root_id()
     }
 
     /// A method the host does not serve: the root answers it, and without one
@@ -394,6 +461,29 @@ impl ServerConnection {
         check.finish().map_err(rejected)?;
         let session_id = session_id.unwrap_or_default();
         let page = page.unwrap_or_default();
+        if self.server.harness_selection().use_unified {
+            let state = self.unified_state(&session_id, None)?;
+            let history = state["history"].as_array().cloned().unwrap_or_default();
+            let entries: Vec<&Value> = history
+                .iter()
+                .filter(|entry| {
+                    turn_id
+                        .as_ref()
+                        .is_none_or(|turn_id| entry["turnId"].as_str() == Some(turn_id))
+                })
+                .collect();
+            let (items, next, previous) = history_window(&entries, &page, |entry| {
+                entry["id"].as_str().unwrap_or_default().to_owned()
+            });
+            return Ok(success_batch(
+                request.id.clone(),
+                result_map([
+                    ("items", json!(items)),
+                    ("nextCursor", json!(next)),
+                    ("previousCursor", json!(previous)),
+                ]),
+            ));
+        }
         let live = (self.root_id().as_deref() == Some(session_id.as_str()))
             .then(|| {
                 self.server.lock_sessions().ok().and_then(|sessions| {
@@ -444,6 +534,28 @@ impl ServerConnection {
         check.finish().map_err(rejected)?;
         let session_id = session_id.unwrap_or_default();
         let page = page.unwrap_or_default();
+        if self.server.harness_selection().use_unified {
+            let state = self.unified_state(&session_id, None)?;
+            let turns = turns_from_history(
+                state["history"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+                &session_id,
+            );
+            let turns: Vec<&Value> = turns.iter().collect();
+            let (items, next, previous) = turns_window(&turns, &page, |turn| {
+                turn["id"].as_str().unwrap_or_default().to_owned()
+            });
+            return Ok(success_batch(
+                request.id.clone(),
+                result_map([
+                    ("items", json!(items)),
+                    ("nextCursor", json!(next)),
+                    ("previousCursor", json!(previous)),
+                ]),
+            ));
+        }
         let turns = match self.require_root(&session_id) {
             Ok(_) => {
                 let sessions = self.server.lock_sessions()?;
@@ -467,6 +579,12 @@ impl ServerConnection {
                 ("previousCursor", json!(previous)),
             ]),
         ))
+    }
+
+    /// Whether `id` names a subagent of the root's unified session.
+    pub(super) fn unified_child(&self, id: &str) -> bool {
+        self.root_id()
+            .is_some_and(|root| self.server.unified_child_of(&root, id))
     }
 
     /// The turns of a subagent the root session delegated to, read off the
@@ -1013,7 +1131,7 @@ impl ServerConnection {
 
     /// Lets the root go: the connection detaches from it and its lease is
     /// released, which is what adopting a replacement does upstream.
-    fn retire_root(&mut self) {
+    pub(in crate::server) fn retire_root(&mut self) {
         let Some(root) = self.root.take() else {
             return;
         };
@@ -1147,6 +1265,12 @@ impl ServerConnection {
         check.extras(&object, &["sessionId"], &[]);
         check.finish().map_err(rejected)?;
         let session_id = session_id.unwrap_or_default();
+        if self.server.harness_selection().use_unified
+            && let Some(deleted) = self.unified_delete(&session_id)
+        {
+            deleted?;
+            return Ok(success_batch(request.id.clone(), BTreeMap::new()));
+        }
         let held = self.root_id().as_deref() == Some(session_id.as_str())
             || self.server.lock_sessions().is_ok_and(|sessions| {
                 sessions.get(&session_id).is_some_and(|session| {
@@ -1162,16 +1286,31 @@ impl ServerConnection {
             ));
         }
         let store = self.store();
+        // Reference `delete` on the unified host looks for a legacy transcript
+        // only once the harness holds no such session, and reports a missing
+        // one; the legacy host deletes nothing quietly.
+        let unified = self.server.harness_selection().use_unified;
         crate::session_lifecycle::delete_session_transactionally(
             &self.server.projects,
             &session_id,
             || {
                 store
                     .delete(&session_id)
-                    .map(|_| ())
-                    .or_else(|error| match error {
-                        StorageError::SessionNotFound(_) | StorageError::InvalidSessionId(_) => {
+                    .and_then(|deleted| {
+                        if unified && !deleted {
+                            Err(StorageError::SessionNotFound(session_id.clone()))
+                        } else {
                             Ok(())
+                        }
+                    })
+                    .or_else(|error| match error {
+                        StorageError::SessionNotFound(_) | StorageError::InvalidSessionId(_)
+                            if !unified =>
+                        {
+                            Ok(())
+                        }
+                        StorageError::SessionNotFound(_) | StorageError::InvalidSessionId(_) => {
+                            Err(StorageError::SessionNotFound(session_id.clone()))
                         }
                         error => Err(error),
                     })
@@ -1181,6 +1320,12 @@ impl ServerConnection {
             crate::session_lifecycle::DeleteSessionError::Prepare(error) => {
                 ProtocolFault::from(error)
             }
+            crate::session_lifecycle::DeleteSessionError::Delete(
+                StorageError::SessionNotFound(missing),
+            ) => ProtocolFault::plain(
+                ProtocolErrorCode::NotFound,
+                format!("Session not found: {missing}"),
+            ),
             crate::session_lifecycle::DeleteSessionError::Delete(error) => storage_fault(error),
             crate::session_lifecycle::DeleteSessionError::Rollback { delete, rollback } => {
                 ProtocolFault::internal(format!(
@@ -1277,6 +1422,43 @@ fn history_window<'a, T>(
     }
 }
 
+/// Reference `_turns_from_history`: a unified session's turns as its history
+/// spells them, each one completed, spanning its first entry to its last.
+fn turns_from_history(history: &[Value], session_id: &str) -> Vec<Value> {
+    let mut turns: Vec<Value> = Vec::new();
+    for entry in history {
+        let Some(turn_id) = entry["turnId"].as_str() else {
+            continue;
+        };
+        let previous = turns.iter().position(|turn| turn["id"] == turn_id);
+        let input_entry_id = if entry["inputEntryId"].is_null() {
+            previous.map_or(Value::Null, |index| turns[index]["inputEntryId"].clone())
+        } else {
+            entry["inputEntryId"].clone()
+        };
+        let started_at = previous.map_or_else(
+            || entry["createdAt"].clone(),
+            |index| turns[index]["startedAt"].clone(),
+        );
+        let turn = json!({
+            "id": turn_id,
+            "sessionId": session_id,
+            "status": "completed",
+            "startedAt": started_at,
+            "completedAt": entry["updatedAt"],
+            "error": null,
+            "stopReason": null,
+            "queueItemId": null,
+            "inputEntryId": input_entry_id,
+        });
+        match previous {
+            Some(index) => turns[index] = turn,
+            None => turns.push(turn),
+        }
+    }
+    turns
+}
+
 /// Reference `_session_turns_list`: going backward, the latest turns or the
 /// ones before the cursor; going forward, the first turns or the ones after
 /// it.
@@ -1317,7 +1499,9 @@ fn turns_window<'a, T>(
 
 /// The start parameters a reopening's `agentConfig` spells, in the names the
 /// start path reads.
-pub(super) fn reopen_start_params(agent_config: &Map<String, Value>) -> BTreeMap<String, Value> {
+pub(in crate::server) fn reopen_start_params(
+    agent_config: &Map<String, Value>,
+) -> BTreeMap<String, Value> {
     const CARRIED: [&str; 12] = [
         "cwd",
         "workspaceRoots",

@@ -212,6 +212,9 @@ pub enum InputEffect {
     /// running job: the queue takes the key instead of the history.
     QueueSelectionRequested,
     HistoryNext,
+    /// Reference `ChatTextArea.NavigateBelow`: Down on the last line, with no
+    /// history to step through, moves the keyboard below the composer.
+    NavigateBelow,
     HistoryReset,
     CompletionReset,
     RequestCompletion {

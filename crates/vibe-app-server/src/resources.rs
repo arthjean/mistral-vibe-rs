@@ -193,6 +193,9 @@ pub struct PluginMcpConnection {
     pub status: &'static str,
     /// Every tool the server lists across its pages, with its description.
     pub tools: Vec<(String, Option<String>)>,
+    /// The input schema of each tool above, by name, which a unified
+    /// session's provided group offers the model.
+    pub schemas: BTreeMap<String, Value>,
     /// The code the runtime records when it could not discover the server.
     pub error: Option<&'static str>,
 }
@@ -422,6 +425,23 @@ impl ResourceService {
         self.ready = !self.policy_stores.is_empty();
     }
 
+    /// Files what `from` registered under `to`, for a session that changed
+    /// identifier for good.
+    pub(crate) fn rekey_session(&mut self, from: &str, to: &str) {
+        if let Some(state) = self.backend_integrations.remove(from) {
+            self.backend_integrations.insert(to.to_owned(), state);
+        }
+        if let Some(store) = self.policy_stores.remove(from) {
+            self.policy_stores.insert(to.to_owned(), store);
+        }
+        if let Some(tools) = self.tool_registries.remove(from) {
+            self.tool_registries.insert(to.to_owned(), tools);
+        }
+        if let Some(duration) = self.init_durations.remove(from) {
+            self.init_durations.insert(to.to_owned(), duration);
+        }
+    }
+
     pub fn open_session(
         &mut self,
         session_id: &str,
@@ -540,6 +560,11 @@ impl ResourceService {
     /// loaded from a `tool_paths` directory; this port loads none (see the
     /// accepted divergence on `tool_paths`), so every tool it publishes is a
     /// builtin, MCP or connector one and answers `false`.
+    /// The tools a session registered, which decide its calls.
+    pub(crate) fn session_tool_registry(&self, session_id: &str) -> Option<ToolRegistry> {
+        self.tool_registries.get(session_id).cloned()
+    }
+
     fn tool_list(&self, session_id: &str) -> Result<Value, ResourceError> {
         let registry = self.tool_registries.get(session_id).ok_or_else(|| {
             ResourceError::NotFound(format!("session `{session_id}` was not found"))

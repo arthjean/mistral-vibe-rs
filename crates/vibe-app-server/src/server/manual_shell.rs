@@ -707,6 +707,25 @@ impl AppServer {
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
         let content = manual_shell_context(&record, output_limit(session));
+        // Reference `_dispatch_shell_command` on the unified backend: the
+        // core reads the result as injected context, and its store keeps
+        // the settled entry rather than a legacy transcript.
+        if let Some(unified) = self.unified_session(session_id) {
+            let entry = session
+                .snapshot
+                .as_ref()
+                .and_then(|snapshot| {
+                    snapshot.history.iter().rev().find(|entry| {
+                        matches!(entry, PublicHistoryEntry::Effect { metadata, .. }
+                            if metadata.id == record.operation_id && metadata.turn_id.is_none())
+                    })
+                })
+                .map(|entry| json!(entry));
+            let watermark = session.event_watermark;
+            drop(sessions);
+            unified.record_host_effect(entry, content);
+            return Ok((watermark, None));
+        }
         session.context.push(content.clone());
         session.updated_at = now_millis();
         let persisted = self.persist_injected_message(session, &content, None, Some(record))?;

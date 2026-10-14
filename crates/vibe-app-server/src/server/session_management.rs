@@ -88,6 +88,12 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
     if request.method == "session/delete" {
         return delete_session(connection, request, target_session_id.as_deref());
     }
+    if request.method == "session/agent/update"
+        && let Some(session_id) = target_session_id.as_deref()
+        && connection.server.unified_session(session_id).is_some()
+    {
+        return switch_unified_agent(connection, request, session_id);
+    }
     let plan = plan(&request.method);
     let dispatched = dispatch_workspace(connection, &request, plan, target_session_id.as_deref());
     let mut dispatch = match dispatched {
@@ -425,6 +431,13 @@ fn enrich_active_agent(
     if let Some(summary) = summary {
         dispatch.result.insert("active".to_owned(), summary);
     }
+    // Reference `project_unified_agent_summaries`: a Unified Harness session
+    // keeps `plan` out of the picker it lists, whatever it runs.
+    if connection.server.unified_session(session_id).is_some()
+        && let Some(Value::Array(agents)) = dispatch.result.get_mut("agents")
+    {
+        agents.retain(|agent| agent["name"] != "plan");
+    }
 }
 
 /// Fills in the parts of a configuration answer only the server can compose.
@@ -475,6 +488,57 @@ pub(super) fn reset_checkpoint_log(
     review
         .reset_messages(message_count)
         .map_err(|error| ServerError::Resource(error.to_string()))
+}
+
+/// Reference `switch_agent` on a Unified Harness session, which keeps no
+/// legacy transcript to record the profile in: the profile is resolved from
+/// the session's catalog and the session's settings follow it, which the
+/// next turn's environment reads.
+fn switch_unified_agent(
+    connection: &ServerConnection,
+    request: ServerRequest,
+    session_id: &str,
+) -> DispatchBatch {
+    let Some(name) = request
+        .params
+        .get("agentName")
+        .or_else(|| request.params.get("name"))
+        .and_then(Value::as_str)
+    else {
+        return ProtocolFault::invalid_params("agentName is required").into_batch(request.id);
+    };
+    let switched = connection
+        .server
+        .lock_sessions()
+        .map_err(ProtocolFault::from)
+        .and_then(|mut sessions| {
+            let session = sessions.get_mut(session_id).ok_or_else(|| {
+                ProtocolFault::plain(
+                    ProtocolErrorCode::NotFound,
+                    format!("Session not found: {session_id}"),
+                )
+            })?;
+            if session.intent.agent.as_deref() == Some(name) {
+                return Ok(session.agent_summary.clone());
+            }
+            let profile = connection
+                .server
+                .agent_workspace(session)
+                .agent_profile(name)
+                .map_err(ProtocolFault::from)?;
+            super::attachment::apply_agent_profile_settings(&mut session.intent, &profile);
+            session.intent.agent = Some(name.to_owned());
+            session.agent_summary = Some(crate::workspace::agent_summary(&profile));
+            session.updated_at = now_millis();
+            Ok(session.agent_summary.clone())
+        });
+    match switched {
+        Ok(agent) => success_batch(
+            request.id,
+            result_map([("agent", agent.unwrap_or(Value::Null))]),
+        ),
+        Err(fault) => fault.into_batch(request.id),
+    }
 }
 
 fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) {

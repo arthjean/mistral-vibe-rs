@@ -21,12 +21,14 @@ mod session_management;
 mod titles;
 mod turn_queue;
 mod turns;
+mod unified;
 mod vibe_code_host;
 mod wire;
 
 pub(crate) use manual_shell::ShellOperation;
 pub use runtime::SessionView;
 pub(crate) use runtime::*;
+pub use unified::{UnifiedTurnWork, drive_unified_turn};
 pub use wire::SessionIntent;
 pub(crate) use wire::*;
 
@@ -129,6 +131,7 @@ pub const EMITTED_NOTIFICATIONS: &[&str] = &[
     "mcp_catalog/authRequired",
     "mcp_catalog/authUrl",
     "runtime/updated",
+    "session/childSessionUpdated",
     "session/compacted",
     "session/contextCleared",
     "session/snapshot",
@@ -449,6 +452,20 @@ pub enum ConnectionState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeferredWork {
+    /// A turn of a unified session, which the harness engine runs.
+    RunUnifiedTurn(unified::UnifiedTurnWork),
+    /// A unified session the connection now holds: frames the session raises
+    /// on its own reach the connection, and its scheduled loops run.
+    AttachUnified {
+        session_id: String,
+    },
+    /// A unified callback settled and published: its answer goes to the call
+    /// waiting on it.
+    ReleaseUnifiedCallback {
+        session_id: String,
+        callback_id: String,
+        cancel_turn: bool,
+    },
     RunTurn {
         session_id: String,
         turn_id: String,
@@ -633,6 +650,11 @@ pub struct AppServer {
     /// The plugins each unified session runs, by session. Empty under the
     /// legacy harness, which resolves none (row 35).
     session_plugins: Arc<Mutex<BTreeMap<String, Arc<crate::plugins::SessionPlugins>>>>,
+    /// The unified sessions imported from a legacy transcript, which open
+    /// with no plugins (reference `_import_legacy` binds none).
+    pluginless: Arc<Mutex<BTreeSet<String>>>,
+    /// The unified sessions this process holds open, by identifier.
+    unified: Arc<Mutex<BTreeMap<String, Arc<unified::UnifiedSession>>>>,
 }
 
 impl Default for AppServer {
@@ -680,6 +702,8 @@ impl Default for AppServer {
             connector_catalogs: Arc::new(Mutex::new(BTreeMap::new())),
             connector_auth_requests: Arc::new(Mutex::new(BTreeSet::new())),
             session_plugins: Arc::new(Mutex::new(BTreeMap::new())),
+            pluginless: Arc::new(Mutex::new(BTreeSet::new())),
+            unified: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -720,7 +744,8 @@ impl AppServer {
         // it here for the same reason, before any client asks.
         let _ = vibe_core::trust::TrustStore::for_vibe_home(service.vibe_home());
         let mut server = self.logging_to(log);
-        server.workspace = Arc::new(service);
+        let unified = server.harness.use_unified;
+        server.workspace = Arc::new(service.with_unified_views(unified));
         server
     }
 
@@ -765,6 +790,11 @@ impl AppServer {
     /// Installs the harness decision the launch resolved from its flags.
     #[must_use]
     pub fn using_harness_selection(mut self, harness: HarnessSelection) -> Self {
+        self.workspace = Arc::new(
+            (*self.workspace)
+                .clone()
+                .with_unified_views(harness.use_unified),
+        );
         self.harness = Arc::new(harness);
         self
     }
@@ -825,7 +855,12 @@ impl AppServer {
         add_directories: &[String],
         mcp_configs: &[vibe_core::mcp::McpServerConfig],
     ) {
-        if !self.harness_selection().use_unified {
+        if !self.harness_selection().use_unified
+            || self
+                .pluginless
+                .lock()
+                .is_ok_and(|pluginless| pluginless.contains(session_id))
+        {
             return;
         }
         let sources = self.workspace.plugin_sources(
@@ -839,6 +874,13 @@ impl AppServer {
         );
         if let Some(plugins) = crate::plugins::start_discovering(&sources, session_id) {
             self.set_session_plugins(session_id, plugins);
+        }
+    }
+
+    /// Marks `session_id` as a session that opens with no plugins.
+    pub(crate) fn bind_no_plugins(&self, session_id: &str) {
+        if let Ok(mut pluginless) = self.pluginless.lock() {
+            pluginless.insert(session_id.to_owned());
         }
     }
 

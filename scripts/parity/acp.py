@@ -49,6 +49,7 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/corpus.json"
+UNIFIED_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/unified-corpus.json"
 SCHEMA_VERSION = 1
 
 #: How long the agent must stay silent before a step is considered settled.
@@ -1670,7 +1671,14 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--agent", type=Path, default=None, help="drive this binary instead")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--harness",
+        choices=["legacy", "unified"],
+        default="legacy",
+        help="the backend both sides run: the legacy one through the escape hatch, or the "
+        "Unified Harness every session opens on by default",
+    )
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw messages")
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
@@ -1686,6 +1694,9 @@ def rendered(payload: dict[str, Any]) -> str:
 
 def main() -> int:
     arguments = parse_arguments()
+    flags = HARNESS_FLAGS if arguments.harness == "legacy" else ()
+    if arguments.output is None:
+        arguments.output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
     try:
         if arguments.agent is not None:
             command = [str(arguments.agent.resolve())]
@@ -1703,7 +1714,7 @@ def main() -> int:
         ]
         def capture(scenario: dict[str, Any]) -> dict[str, Any]:
             started = time.monotonic()
-            run = run_scenario(scenario, [*command, *HARNESS_FLAGS], arguments.quiet)
+            run = run_scenario(scenario, [*command, *flags], arguments.quiet)
             entry = {
                 "name": scenario["name"],
                 "scenario": scenario,

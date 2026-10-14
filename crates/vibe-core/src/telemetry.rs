@@ -403,9 +403,24 @@ pub struct ExperimentAssignment {
     pub feature_id: Option<String>,
 }
 
-/// Reference `ExperimentSurface.LEGACY`: the backend every session of this
-/// port runs on.
+/// Reference `ExperimentSurface.LEGACY`: the backend `--legacy-harness`
+/// keeps a session on.
 pub const HARNESS_LEGACY: &str = "legacy";
+
+/// Reference `ExperimentSurface.UNIFIED`: the backend every other session
+/// runs on.
+pub const HARNESS_UNIFIED: &str = "unified";
+
+/// The `harness_backend` a client reports for sessions on the selected
+/// backend.
+#[must_use]
+pub fn harness_backend(use_unified: bool) -> &'static str {
+    if use_unified {
+        HARNESS_UNIFIED
+    } else {
+        HARNESS_LEGACY
+    }
+}
 
 impl TelemetryBaseMetadata {
     /// The census as the properties an envelope carries.

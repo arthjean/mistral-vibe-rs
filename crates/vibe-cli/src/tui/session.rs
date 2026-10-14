@@ -23,7 +23,7 @@ use super::{
 };
 
 pub(super) fn start_runtime(
-    arguments: &Arguments,
+    arguments: &mut Arguments,
     working_directory: &Path,
     workspace: WorkspaceService,
     credential: String,
@@ -40,6 +40,13 @@ pub(super) fn start_runtime(
             crate::cli_credentials(arguments),
             Some(crate::tui_launch_context()),
             telemetry.exposures(),
+        )
+        .on_harness(
+            vibe_app_server::harness::HarnessSelection::resolve(
+                arguments.experimental_harness,
+                arguments.legacy_harness,
+            )
+            .use_unified,
         )
         .reporting_to(telemetry.clone()),
     );
@@ -64,14 +71,29 @@ pub(super) fn start_runtime(
     let mut service =
         HeadlessService::new_interactive_shared_with_server(Arc::new(driver), server)?;
     let session_start = std::time::Instant::now();
-    let session_id = service.start_session(&bootstrap::session_options(
-        arguments,
-        working_directory,
-        preferences.model.clone(),
-        Some(preferences.mode.clone()),
-        preferences.reasoning_effort.clone(),
-        bootstrap::Launch::Interactive,
-    ))?;
+    let options = |arguments: &Arguments| {
+        bootstrap::session_options(
+            arguments,
+            working_directory,
+            preferences.model.clone(),
+            Some(preferences.mode.clone()),
+            preferences.reasoning_effort.clone(),
+            bootstrap::Launch::Interactive,
+        )
+    };
+    let session_id = match service.start_session(&options(arguments)) {
+        // Reference `_auto_resume_on_startup`: the session is open before
+        // `--continue` resolves, and finding nothing to continue keeps it.
+        // The caller reads the cleared flag as that miss.
+        Err(vibe_app_server::client::ClientError::Protocol(
+            vibe_app_server::client::ProtocolErrorCode::NotFound,
+            message,
+        )) if arguments.continue_session && message == "No session to continue" => {
+            arguments.continue_session = false;
+            service.start_session(&options(arguments))?
+        }
+        started => started?,
+    };
     let session_init_duration_ms =
         u64::try_from(session_start.elapsed().as_millis()).unwrap_or(u64::MAX);
     // Reference `start_initialize_experiments`: the lookup is detached the

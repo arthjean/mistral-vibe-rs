@@ -45,7 +45,7 @@ use vibe_core::identity::{
     CachedIdentity, IdentityCache, IdentityFuture, IdentityResolver, IdentityResult,
 };
 use vibe_core::storage::SessionStore;
-use vibe_core::telemetry::{ClientTelemetry, ExperimentExposures, HARNESS_LEGACY, LaunchContext};
+use vibe_core::telemetry::{ClientTelemetry, ExperimentExposures, LaunchContext};
 use vibe_core::whoami::{WhoAmICache, WhoAmIResolver};
 
 use crate::workspace::WorkspaceService;
@@ -100,6 +100,9 @@ pub struct SessionExperiments {
     followed: Mutex<Option<FollowedSession>>,
     /// This enrollment, held weakly so a reset can detach work onto it.
     this: std::sync::OnceLock<std::sync::Weak<Self>>,
+    /// Whether the session runs on the Unified Harness, the surface its
+    /// rollout is evaluated for (reference `ExperimentSurface`).
+    unified: bool,
 }
 
 /// The session a reset replaces, and what its census is read against.
@@ -183,7 +186,17 @@ impl SessionExperiments {
             workspace: service.clone(),
             followed: Mutex::new(None),
             this: std::sync::OnceLock::new(),
+            unified: false,
         }
+    }
+
+    /// Evaluates the rollout for the backend the session runs on: the
+    /// unified adapter asks for the `unified` surface, the legacy loop for
+    /// the `legacy` one.
+    #[must_use]
+    pub fn on_harness(mut self, use_unified: bool) -> Self {
+        self.unified = use_unified;
+        self
     }
 
     /// Reports the admin-config outcome through `telemetry`, which is what
@@ -238,7 +251,7 @@ impl SessionExperiments {
         let sources = PlanSources {
             identity: self.identity.as_ref(),
             whoami: self.whoami.as_ref(),
-            harness: HARNESS_LEGACY,
+            harness: vibe_core::telemetry::harness_backend(self.unified),
         };
         let (changed, user_plan) = initialize_experiments(
             &effective,

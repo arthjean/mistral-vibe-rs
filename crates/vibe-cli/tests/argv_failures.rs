@@ -98,12 +98,12 @@ fn the_help_and_the_version_exit_zero_on_standard_output() {
     }
 }
 
-/// A budget the reference parses and finds already spent stops the run before
-/// its first request, with the limit's stop event and exit 1: a turn budget of
-/// zero or less, or a token or price budget below zero
-/// (`vibe/core/middleware.py:48-96`, `vibe/cli/cli.py:214-216`). The provider
-/// address is a closed port, so a run that did reach the model would fail on
-/// the connection instead.
+/// On the legacy harness, a budget the reference parses and finds already
+/// spent stops the run before its first request, with the limit's stop event
+/// and exit 1: a turn budget of zero or less, or a token or price budget below
+/// zero (`vibe/core/middleware.py:48-96`, `vibe/cli/cli.py:214-216`). The
+/// provider address is a closed port, so a run that did reach the model would
+/// fail on the connection instead.
 #[test]
 fn a_budget_already_spent_stops_the_run_before_its_first_request() {
     for (budget, answer) in [
@@ -121,6 +121,7 @@ fn a_budget_already_spent_stops_the_run_before_its_first_request() {
             "--trust",
             "--api-base",
             "http://127.0.0.1:9/v1",
+            "--legacy-harness",
         ];
         argv.extend(budget);
         let output = launch_with_key(&argv);
@@ -134,13 +135,42 @@ fn a_budget_already_spent_stops_the_run_before_its_first_request() {
     }
 }
 
-/// `--smart-approve` and both harness flags start a programmatic run: the
-/// Unified Harness is not here, so each lands on the legacy one.
+/// On the Unified Harness, a negative turn budget becomes the core's iteration
+/// limit, which must be positive, so `session/start` refuses it before any
+/// request (`vibe/app_server/_runtime.py:1643`, `vibe/cli/cli.py`). `0` is no
+/// budget there and reaches the model instead.
 #[test]
-fn the_harness_flags_start_a_programmatic_run() {
+fn a_negative_turn_budget_is_refused_by_the_unified_session() {
     for flags in [
+        [].as_slice(),
         ["--smart-approve"].as_slice(),
         ["--experimental-harness"].as_slice(),
+    ] {
+        let mut argv = vec![
+            "-p",
+            "hello",
+            "--trust",
+            "--api-base",
+            "http://127.0.0.1:9/v1",
+            "--max-turns",
+            "-5",
+        ];
+        argv.extend(flags);
+        let output = launch_with_key(&argv);
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert_eq!(output.status.code(), Some(1), "{flags:?} stderr: {stderr}");
+        assert_eq!(
+            stderr.lines().next_back(),
+            Some("Error: Invalid request parameters"),
+            "{flags:?} stderr: {stderr}"
+        );
+    }
+}
+
+/// `--legacy-harness` keeps the legacy loop, with or without `--smart-approve`.
+#[test]
+fn the_legacy_harness_flag_starts_a_legacy_programmatic_run() {
+    for flags in [
         ["--legacy-harness"].as_slice(),
         ["--smart-approve", "--legacy-harness"].as_slice(),
     ] {

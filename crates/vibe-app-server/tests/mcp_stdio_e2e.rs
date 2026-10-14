@@ -227,7 +227,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
     // `echo`.
     assert_eq!(
         tools.remote_origin("fixture_echo"),
-        Some(RemoteToolOrigin::mcp("echo"))
+        Some(RemoteToolOrigin::mcp("echo").from_provider("fixture"))
     );
     let provider = Arc::new(ModelSelectsMcp::default());
     let observed = Arc::new(RecordsEvents::default());
@@ -286,7 +286,10 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
     else {
         unreachable!("a tool a stdio server published carries its origin")
     };
-    assert_eq!(*origin, RemoteToolOrigin::mcp("echo"));
+    assert_eq!(
+        *origin,
+        RemoteToolOrigin::mcp("echo").from_provider("fixture")
+    );
     let mut reducer = ProjectionReducer::new("session-1");
     reducer
         .apply(&EventEnvelope {

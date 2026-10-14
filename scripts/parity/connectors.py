@@ -40,6 +40,13 @@ Usage::
     python3 scripts/parity/connectors.py --check          # recapture and compare
     python3 scripts/parity/connectors.py --server target/debug/vibe-app-server-stdio-fixture \\
         --output /tmp/port.json
+    python3 scripts/parity/connectors.py --harness unified   # the Unified Harness family
+
+The legacy family runs every session with ``--legacy-harness``, which is what
+row 21 measures. ``--harness unified`` runs its own scenarios on the default
+backend, where a connector is a ``connector_<alias>`` group a
+``run_typescript`` program reaches, into ``unified-corpus.json`` beside the
+legacy corpus: that is row 36's measure of the connector path.
 """
 
 from __future__ import annotations
@@ -71,6 +78,8 @@ import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/connectors-parity/corpus.json"
+#: Where ``--harness unified`` writes its family.
+UNIFIED_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/connectors-parity/unified-corpus.json"
 SCHEMA_VERSION = 1
 
 QUIET_SECONDS = 0.5
@@ -1239,11 +1248,137 @@ def scenarios() -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
+#: A program that calls the Drive connector's search from ``run_typescript``,
+#: the only way the Unified Harness offers a connector tool.
+UNIFIED_SEARCH = (
+    "async function main() {\n"
+    "  return await tools.connector_Drive.search({query: 'report'});\n}\n"
+)
+FOUND = {"c-drive/search": {"content": [{"type": "text", "text": "found report.pdf"}]}}
+
+
+def program(identifier: str) -> dict[str, Any]:
+    return {"toolCalls": [call("run_typescript", {"code": UNIFIED_SEARCH}, identifier)]}
+
+
+def unified_scenarios() -> list[dict[str, Any]]:
+    """The same catalog and gateway under the Unified Harness, where each
+    connector is a ``connector_<alias>`` group a program reaches."""
+
+    return [
+        {
+            "name": "unified/inventory",
+            "config": OPT_IN,
+            "connectors": {"bootstrap": [CATALOG]},
+            "backend": [
+                {"toolCalls": [call("search_tool_functions",
+                                    {"mode": "all_connector_capabilities"}, "call_s1")]},
+                {"toolCalls": [call("search_tool_functions",
+                                    {"functions": ["connector_Drive.search"]}, "call_s2")]},
+                {"text": "Listed."},
+            ],
+            "steps": [{"start": {}}, {"turn": "List"}, runtime()],
+        },
+        {
+            "name": "unified/success",
+            "config": OPT_IN,
+            "connectors": {"bootstrap": [CATALOG], "gateway": FOUND},
+            "backend": [program("call_c1"), {"text": "Found it."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}, runtime()],
+        },
+        {
+            "name": "unified/implicit",
+            "connectors": {"bootstrap": [CATALOG], "gateway": FOUND},
+            "backend": [program("call_c1"), {"text": "Found it."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}, runtime()],
+        },
+        {
+            "name": "unified/tool-error",
+            "config": OPT_IN,
+            "connectors": {
+                "bootstrap": [CATALOG],
+                "gateway": {"c-drive/search": {"content": [{"type": "text", "text": "quota exceeded"}],
+                                               "isError": True}},
+            },
+            "backend": [program("call_c1"), {"text": "It failed."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}],
+        },
+        {
+            "name": "unified/structured",
+            "config": OPT_IN,
+            "connectors": {
+                "bootstrap": [CATALOG],
+                "gateway": {"c-drive/search": {
+                    "content": [{"type": "text", "text": "two files"}],
+                    "structuredContent": {"files": ["a.pdf", "b.pdf"]},
+                }},
+            },
+            "backend": [program("call_c1"), {"text": "Two files."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}],
+        },
+        {
+            "name": "unified/gateway-401",
+            "config": OPT_IN,
+            "connectors": {"bootstrap": [CATALOG],
+                           "gateway": {"c-drive": {"status": 401, "body": {"detail": "bad key"}}}},
+            "backend": [program("call_c1"), {"text": "Denied."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}],
+        },
+        {
+            "name": "unified/gateway-500",
+            "config": OPT_IN,
+            "connectors": {"bootstrap": [CATALOG],
+                           "gateway": {"c-drive": {"status": 500, "raw": "upstream exploded"}}},
+            "backend": [program("call_c1"), {"text": "Broken."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}],
+        },
+        {
+            "name": "unified/ask-approval",
+            "config": OPT_IN,
+            "connectors": {"bootstrap": [CATALOG], "gateway": FOUND},
+            "backend": [program("call_c1"), {"text": "Found it."}],
+            "callbacks": [{"approve": True}],
+            "steps": [{"start": {"agent": "ask"}}, {"turn": "Find the report"}],
+        },
+        {
+            "name": "unified/disabled-tool",
+            "config": '[[connectors]]\nname = "Drive"\ndisabled_tools = ["search"]\n',
+            "connectors": {"bootstrap": [CATALOG]},
+            "backend": [program("call_c1"), {"text": "Could not."}],
+            "steps": [{"start": {}}, {"turn": "Find the report"}, runtime()],
+        },
+    ]
+
+
+def unified_view(run: dict[str, Any]) -> dict[str, Any]:
+    """A unified run as ``unified_harness.py`` reads one: patches by path with
+    the clock's operations dropped, and a program's failure without the frames
+    that name lines of each side's own sandbox."""
+
+    import unified_harness  # noqa: PLC0415 - only the unified family reads it
+
+    for step in run["steps"]:
+        for key in ("turn", "notifications"):
+            if isinstance(step.get(key), list):
+                step[key] = unified_harness.reduce_patches(step[key])
+    for body in run["requests"]:
+        for message in (body.get("messages") or []) if isinstance(body, dict) else []:
+            if (message.get("role") == "tool" and message.get("name") == "run_typescript"
+                    and isinstance(message.get("content"), str)):
+                message["content"] = unified_harness.program_failure_view(message["content"])
+            elif (message.get("role") == "tool" and message.get("name") == "search_tool_functions"
+                    and isinstance(message.get("content"), str)):
+                message["content"] = unified_harness.search_view(message["content"])
+    return run
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--server", type=Path, default=None, help="drive this binary instead")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--harness", choices=("legacy", "unified"), default="legacy",
+                        help="the backend the sessions run on, each with its own scenarios")
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw answers")
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
@@ -1255,25 +1390,31 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
+    unified = arguments.harness == "unified"
+    if arguments.output is None:
+        arguments.output = UNIFIED_OUTPUT if unified else DEFAULT_OUTPUT
+    flags = () if unified else HARNESS_FLAGS
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve()), *flags]
             reference = {"commit": "server-override"}
         else:
             reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            command = [str(binary), *flags]
         selected = [
             scenario
-            for scenario in scenarios()
+            for scenario in (unified_scenarios() if unified else scenarios())
             if not arguments.only or any(name in scenario["name"] for name in arguments.only)
         ]
 
         def capture(scenario: dict[str, Any]) -> dict[str, Any]:
             started = time.monotonic()
             run = run_scenario(scenario, command, arguments.quiet)
+            if unified:
+                run = unified_view(run)
             entry = {
                 "name": scenario["name"],
                 "scenario": scenario,

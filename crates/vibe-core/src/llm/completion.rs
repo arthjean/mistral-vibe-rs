@@ -19,7 +19,7 @@ use super::call::{self, Answered, Failed, StreamingCall};
 use super::error::{LocalFailure, LocalKind};
 use super::pump::ChunkStream;
 use super::retry::RetryObserver;
-use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
+use super::types::{Chunk, ContentPart, Image, Message, Role, Tool, ToolCall, ToolChoice};
 use super::{Backend, BackendContext, ModelRequest};
 use crate::engine::{CompletionProvider, ProviderFuture, ProviderStreamFuture};
 use crate::events::{ModelMessage, ModelToolCall};
@@ -103,6 +103,7 @@ struct Prepared {
     headers: Vec<(String, String)>,
     metadata: Option<Map<String, Value>>,
     max_tokens: Option<u64>,
+    unified: bool,
 }
 
 impl Prepared {
@@ -169,6 +170,7 @@ impl Prepared {
             headers,
             metadata,
             max_tokens: input.limits.max_tokens.map(u64::from),
+            unified: input.dialect == crate::provider::RequestDialect::Unified,
         }
     }
 
@@ -182,6 +184,7 @@ impl Prepared {
             tool_choice: self.tool_choice.as_ref(),
             extra_headers: &self.headers,
             metadata: self.metadata.as_ref(),
+            unified: self.unified,
         }
     }
 }
@@ -195,10 +198,16 @@ fn history(input: &ProviderInput) -> Vec<Message> {
         let converted = match message {
             ModelMessage::System { content } => Message::system(content.clone()),
             ModelMessage::User {
-                content, injected, ..
+                content,
+                injected,
+                attachments,
+                ..
             } => {
                 let mut user = Message::user(content.clone());
                 user.injected = *injected;
+                if input.dialect == crate::provider::RequestDialect::Unified {
+                    user.parts = unified_parts(attachments);
+                }
                 user
             }
             ModelMessage::Assistant {
@@ -261,6 +270,33 @@ fn history(input: &ProviderInput) -> Vec<Message> {
             .collect();
     }
     messages
+}
+
+/// The chunks of a Unified Harness user message whose blocks carry an
+/// image: its text and its images, in block order. None without an image,
+/// which the dialect sends as one string.
+fn unified_parts(blocks: &[crate::events::PublicContentBlock]) -> Vec<ContentPart> {
+    use crate::events::PublicContentBlock;
+    if !blocks
+        .iter()
+        .any(|block| matches!(block, PublicContentBlock::Image { .. }))
+    {
+        return Vec::new();
+    }
+    blocks
+        .iter()
+        .filter_map(|block| match block {
+            PublicContentBlock::Text { text } => Some(ContentPart::Text(text.clone())),
+            PublicContentBlock::Image { attachment } => Some(ContentPart::Image(Image {
+                mime_type: attachment["mimeType"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_owned(),
+                data: attachment["data"].as_str().unwrap_or_default().to_owned(),
+            })),
+            PublicContentBlock::Resource { .. } => None,
+        })
+        .collect()
 }
 
 /// The URL a streamed call to `model` is sent to.

@@ -41,9 +41,9 @@ fn the_view_carries_every_field_the_wire_declares() {
         .expect("the view is an object")
         .keys()
         .map(String::as_str)
-        .collect::<Vec<_>>();
+        .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(
-        keys,
+        keys.into_iter().collect::<Vec<_>>(),
         [
             "activeModel",
             "activeModelPinned",

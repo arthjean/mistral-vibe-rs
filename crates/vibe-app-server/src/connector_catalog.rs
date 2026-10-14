@@ -84,6 +84,10 @@ pub(crate) struct ConnectorSelection {
     pub(crate) settings: Vec<ConnectorSetting>,
     pub(crate) enabled_tools: Vec<String>,
     pub(crate) disabled_tools: Vec<String>,
+    /// Whether a connector no entry names is on: reference
+    /// `implicit_source_enabled`, which only a Unified Harness session sets
+    /// (`vibe/app_server/_runtime.py`).
+    pub(crate) implicit: bool,
 }
 
 /// The catalog a session accepted and how its routes stand.
@@ -109,6 +113,13 @@ pub(crate) struct SessionConnectors {
     /// Why a unified session's catalog could not be loaded, which its MCP
     /// view reports as `connectorError` until a catalog is accepted.
     pub(crate) load_error: Option<String>,
+    /// Whether a unified session accepted its opening catalog unannounced.
+    /// The reference resolves it in the background and parks the session's
+    /// reconfiguration until the next turn starts, which then publishes
+    /// `runtime/updated` (`_resolve_connectors_background` and
+    /// `_announce_runtime` in
+    /// `vibe/app_server/_unified_harness_backend_adapter.py`).
+    pub(crate) announce: bool,
 }
 
 /// Where a read found the catalog.
@@ -754,15 +765,15 @@ pub(crate) fn connector_settings(snapshot: &ConfigSnapshot) -> Vec<ConnectorSett
 }
 
 impl ConnectorSelection {
-    /// Reference `connector_source_enabled`, for the legacy backend, whose
-    /// connectors no entry names are off.
+    /// Reference `connector_source_enabled`: a connector no entry names is
+    /// off on the legacy backend and on under the Unified Harness.
     pub(crate) fn source_enabled(&self, alias: &str) -> bool {
         self.enable_connectors
             && self
                 .settings
                 .iter()
                 .find(|setting| setting.alias == alias)
-                .is_some_and(|setting| !setting.disabled)
+                .map_or(self.implicit, |setting| !setting.disabled)
     }
 
     /// Reference `connector_tool_enabled`.
@@ -801,6 +812,7 @@ pub(crate) fn resolve_selection(
         settings: connector_settings(snapshot),
         enabled_tools: snapshot.enabled_tools(),
         disabled_tools: snapshot.disabled_tools(),
+        implicit: false,
     };
     selection.revision = selection_revision(&selection, &catalog_sources(catalog));
     selection
@@ -1066,6 +1078,70 @@ impl SessionConnectors {
                 )
             });
         json!({"connected": connected, "total": total})
+    }
+
+    /// Reference `_update_connector_projection` on a Unified Harness session:
+    /// one row per connector of the accepted catalog, in alias order, with
+    /// the core's own status (reference `_source_status` in
+    /// `_connector_naming.py`) and each tool in name order, enabled when the
+    /// connector is connected and the selection keeps it. Answers the rows
+    /// with the counts over them.
+    pub(crate) fn unified_sources(&self) -> (Vec<Value>, Value) {
+        let Some((catalog, selection)) = &self.accepted else {
+            return (Vec::new(), json!({"connected": 0, "total": 0}));
+        };
+        let mut connectors = catalog.connectors.iter().collect::<Vec<_>>();
+        connectors
+            .sort_by(|left, right| (&left.alias, &left.raw_id).cmp(&(&right.alias, &right.raw_id)));
+        let rows = connectors
+            .into_iter()
+            .map(|connector| {
+                let status = if !selection.source_enabled(&connector.alias) {
+                    "disabled"
+                } else if connector.ready {
+                    "connected"
+                } else {
+                    match connector.auth_action {
+                        "oauth" => "needs_auth",
+                        "credentials_setup" => "needs_setup",
+                        _ => "unavailable",
+                    }
+                };
+                let mut tools = connector.tools.iter().collect::<Vec<_>>();
+                tools.sort_by(|left, right| left.raw_name.cmp(&right.raw_name));
+                let tools = tools
+                    .into_iter()
+                    .map(|tool| {
+                        json!({
+                            "name": tool.raw_name,
+                            "description": tool
+                                .description
+                                .clone()
+                                .filter(|description| !description.is_empty())
+                                .unwrap_or_else(|| format!("Connector tool {}.", tool.raw_name)),
+                            "enabled": status == "connected"
+                                && selection.tool_enabled(&connector.alias, &tool.raw_name),
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                json!({
+                    "name": connector.alias,
+                    "displayName": connector.display_name,
+                    "kind": "connector",
+                    "transport": "connector",
+                    "status": status,
+                    "tools": tools,
+                    "error": (!connector.diagnostics.is_empty()).then(|| connector.diagnostics.join("; ")),
+                    "pluginName": null,
+                })
+            })
+            .collect::<Vec<_>>();
+        let connected = rows
+            .iter()
+            .filter(|row| row["status"] == "connected")
+            .count();
+        let total = rows.len();
+        (rows, json!({"connected": connected, "total": total}))
     }
 
     /// Reference `_project_mcp_connectors` once the legacy backend handed the

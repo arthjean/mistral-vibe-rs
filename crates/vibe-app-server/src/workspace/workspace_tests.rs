@@ -1418,7 +1418,7 @@ fn skill_paths_is_read_from_the_merged_document() {
     .expect("user fixture");
     assert_eq!(
         listed_skills(&service),
-        vec!["from-user", "skill-creator", "vibe"],
+        vec!["vibe", "skill-creator", "from-user"],
         "the key is re-read per build, so the next one publishes what it names"
     );
 
@@ -1429,7 +1429,7 @@ fn skill_paths_is_read_from_the_merged_document() {
     .expect("project fixture");
     assert_eq!(
         listed_skills(&service),
-        vec!["from-project", "from-user", "skill-creator", "vibe"],
+        vec!["vibe", "skill-creator", "from-project", "from-user"],
         "the trusted project's entry is concatenated after the user's"
     );
 }
@@ -1461,7 +1461,7 @@ fn the_skill_filters_narrow_what_the_wire_publishes() {
 
     assert_eq!(
         published("disabled_skills = [\"beta\"]\n"),
-        vec!["alpha", "skill-creator", "vibe"],
+        vec!["vibe", "skill-creator", "alpha"],
         "the denylist withholds its match and leaves the seeded builtins published"
     );
     assert_eq!(
@@ -1576,7 +1576,7 @@ fn an_unloadable_skill_is_published_as_an_issue() {
     assert!(!issues[0].1.is_empty(), "the issue carries a reason");
     assert_eq!(
         listed_skills(&service),
-        vec!["skill-creator", "vibe"],
+        vec!["vibe", "skill-creator"],
         "the unloadable skill is absent from the catalog and the builtins remain"
     );
 }
@@ -1731,7 +1731,7 @@ fn registry_pins_are_published_only_under_the_experimental_flag() {
     let service = registry_service(temporary.path(), true);
     assert_eq!(
         listed_skills(&service),
-        vec!["deploy", "skill-creator", "vibe"],
+        vec!["vibe", "skill-creator", "deploy"],
         "the pinned version is discovered beside the builtins"
     );
     let installed = service.skills_installed();
@@ -1751,7 +1751,7 @@ fn registry_pins_are_published_only_under_the_experimental_flag() {
     let service = registry_service(temporary.path(), false);
     assert_eq!(
         listed_skills(&service),
-        vec!["skill-creator", "vibe"],
+        vec!["vibe", "skill-creator"],
         "the flag off hides every registry pin"
     );
 }
@@ -1783,5 +1783,5 @@ async fn a_pin_mutation_republishes_the_ledger() {
         ledger::union(&vibe_home).is_empty(),
         "the removed pin leaves the ledger"
     );
-    assert_eq!(listed_skills(&service), vec!["skill-creator", "vibe"]);
+    assert_eq!(listed_skills(&service), vec!["vibe", "skill-creator"]);
 }

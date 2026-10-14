@@ -29,10 +29,9 @@ fn a_detail_carries_neither_the_call_id_nor_the_raw_arguments() {
     let object = wire.as_object().expect("an object");
     assert!(!object.contains_key("toolCallId"), "{wire}");
     assert!(!object.contains_key("arguments"), "{wire}");
-    assert_eq!(
-        object.keys().collect::<Vec<_>>(),
-        ["display", "input", "kind", "toolName"]
-    );
+    let mut keys = object.keys().map(String::as_str).collect::<Vec<_>>();
+    keys.sort_unstable();
+    assert_eq!(keys, ["display", "input", "kind", "toolName"]);
     // The shell input model declares `command` and nothing else, so the
     // surplus argument is dropped rather than forwarded.
     assert_eq!(wire["input"], json!({"command": "ls"}));

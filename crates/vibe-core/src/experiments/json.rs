@@ -7,19 +7,19 @@
 //! that serialization are load-bearing and neither survives a round trip
 //! through [`serde_json::Value`]:
 //!
-//! - **Key order.** `serde_json::Map` is a [`std::collections::BTreeMap`] here,
-//!   so decoding and re-encoding sorts every object. Python keeps the order the
-//!   document carried, which is the order the GrowthBook proxy wrote. A sorted
-//!   re-encode would hand the configuration layer, the session metadata and the
-//!   telemetry label a different string than the reference produces for the
-//!   same response.
+//! - **Key order.** Python keeps the order the document carried, which is the
+//!   order the GrowthBook proxy wrote. A reordered re-encode would hand the
+//!   configuration layer, the session metadata and the telemetry label a
+//!   different string than the reference produces for the same response, so
+//!   this type keeps the order itself rather than through how
+//!   [`serde_json::Map`] is built.
 //! - **Separators and escaping.** `json.dumps` writes `", "` between items and
 //!   `": "` after a key, and escapes every non-ASCII character as `\uXXXX`.
 //!   [`serde_json::to_string`] writes neither space and emits non-ASCII raw.
 //!
-//! Enabling `serde_json`'s `preserve_order` feature would fix the first
-//! property for the whole workspace and none of the second, so the value lives
-//! here instead, private to the one boundary that needs it.
+//! `serde_json`'s `preserve_order` covers the first property and none of the
+//! second, so the value lives here, private to the one boundary that needs
+//! both.
 //!
 //! Reference: `vibe/core/experiments/manager.py` at the pinned commit, where
 //! `get_variant_or_none`, `_forced_variant_or_none` and `_variant_label` each

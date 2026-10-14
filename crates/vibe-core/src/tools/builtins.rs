@@ -32,6 +32,7 @@ use crate::tools::{
 
 /// The redirect budget the security NFR sets for `web_fetch`.
 mod skill;
+pub use skill::skill_payload;
 mod todo;
 mod web_fetch;
 mod web_search;

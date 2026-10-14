@@ -25,7 +25,9 @@ use super::retry::{
     mistral_retry_after_millis,
 };
 use super::transport::{HttpClient, HttpResponse, HttpSettings};
-use super::types::{Chunk, Message, Role, StopInfo, Tool, ToolCall, ToolChoice, Usage};
+use super::types::{
+    Chunk, ContentPart, Message, Role, StopInfo, Tool, ToolCall, ToolChoice, Usage,
+};
 use super::{BackendContext, ModelRequest};
 use crate::provider::config::ProviderConfig;
 
@@ -184,34 +186,39 @@ impl MistralBackend {
         let mut attempt: u32 = 0;
         loop {
             let outcome = self.client.post(&url, &headers, body.clone()).await;
-            let retry_after = match outcome {
+            let delay = match outcome {
                 Ok(mut response) => {
                     if !MISTRAL_RETRYABLE_STATUSES.contains(&response.status) {
                         return Ok((response, None));
                     }
                     let read = response.read_all().await.ok();
-                    retries.retrying(&RetryReason::for_status(response.status));
+                    let retry_after = response
+                        .header("retry-after")
+                        .and_then(|value| mistral_retry_after_millis(value, self.clock().now()));
+                    let delay = mistral_delay(retry_after, attempt, self.clock().jitter());
+                    retries.retrying_after(&RetryReason::for_status(response.status), delay);
                     let over = millis(self.clock().monotonic()) - started > self.budget_millis;
                     if over {
                         return Ok((response, Some(read.unwrap_or_default())));
                     }
-                    response
-                        .header("retry-after")
-                        .and_then(|value| mistral_retry_after_millis(value, self.clock().now()))
+                    delay
                 }
                 Err(failure) => {
                     let retryable = failure.kind.is_network() || failure.kind.is_timeout();
                     if !retryable {
                         return Err(facts.request_error(&failure));
                     }
-                    retries.retrying(&RetryReason::for_failure(&facts.request_error(&failure)));
+                    let delay = mistral_delay(None, attempt, self.clock().jitter());
+                    retries.retrying_after(
+                        &RetryReason::for_failure(&facts.request_error(&failure)),
+                        delay,
+                    );
                     if millis(self.clock().monotonic()) - started > self.budget_millis {
                         return Err(facts.request_error(&failure));
                     }
-                    None
+                    delay
                 }
             };
-            let delay = mistral_delay(retry_after, attempt, self.clock().jitter());
             self.clock().sleep(delay, SleepKind::Retry).await;
             attempt += 1;
         }
@@ -389,6 +396,9 @@ fn effort(thinking: &str) -> Option<&'static str> {
 
 /// The request body as the client's request model serializes it.
 fn body(request: &ModelRequest<'_>, streaming: bool) -> Value {
+    if request.unified {
+        return unified_body(request, streaming);
+    }
     let include_reasoning = request.model.thinking != "off";
     let mut body = Map::new();
     body.insert("model".to_owned(), json!(request.model.name));
@@ -436,6 +446,126 @@ fn body(request: &ModelRequest<'_>, streaming: bool) -> Value {
         json!(effort(&request.model.thinking)),
     );
     Value::Object(body)
+}
+
+/// The body the Unified Harness runtime's adapter hands the same client
+/// (`vibe/adapters/mistral.py` under `harness/runtimes/python/python/mistralai_vibe_local_harness/`):
+/// only the fields it sets reach the wire, `parallel_tool_calls` rides with
+/// the tools, and the metadata goes out only when there is some.
+fn unified_body(request: &ModelRequest<'_>, streaming: bool) -> Value {
+    let mut body = Map::new();
+    body.insert("model".to_owned(), json!(request.model.name));
+    body.insert(
+        "messages".to_owned(),
+        Value::Array(request.messages.iter().map(unified_message).collect()),
+    );
+    body.insert("temperature".to_owned(), json!(request.temperature));
+    if let Some(effort) = effort(&request.model.thinking) {
+        body.insert("reasoning_effort".to_owned(), json!(effort));
+    }
+    if let Some(max_tokens) = request.max_tokens {
+        body.insert("max_tokens".to_owned(), json!(max_tokens));
+    }
+    if let Some(metadata) = request.metadata.filter(|metadata| !metadata.is_empty()) {
+        body.insert("metadata".to_owned(), Value::Object(metadata.clone()));
+    }
+    if let Some(tools) = request.tools.filter(|tools| !tools.is_empty()) {
+        body.insert(
+            "tools".to_owned(),
+            Value::Array(tools.iter().map(Tool::chat_declaration).collect()),
+        );
+        body.insert("parallel_tool_calls".to_owned(), Value::Bool(true));
+    }
+    body.insert("stream".to_owned(), Value::Bool(streaming));
+    Value::Object(body)
+}
+
+/// One message as the unified adapter writes it and the client's models
+/// then serialize it: an assistant turn gains `prefix`, a tool call its
+/// `index`.
+fn unified_message(message: &Message) -> Value {
+    let content =
+        |message: &Message| -> Value {
+            if !message.parts.is_empty() {
+                return Value::Array(
+                message
+                    .parts
+                    .iter()
+                    .map(|part| match part {
+                        ContentPart::Text(text) => json!({"type": "text", "text": text}),
+                        ContentPart::Image(picture) => {
+                            json!({"type": "image_url", "image_url": {"url": picture.data_uri()}})
+                        }
+                    })
+                    .collect(),
+            );
+            }
+            if message.images.is_empty() {
+                return json!(message.text());
+            }
+            let mut parts = Vec::new();
+            if !message.text().is_empty() {
+                parts.push(json!({"type": "text", "text": message.text()}));
+            }
+            parts.extend(message.images.iter().map(
+                |picture| json!({"type": "image_url", "image_url": {"url": picture.data_uri()}}),
+            ));
+            Value::Array(parts)
+        };
+    match message.role {
+        Role::System => json!({"role": "system", "content": content(message)}),
+        Role::User => json!({"role": "user", "content": content(message)}),
+        Role::Assistant => {
+            let reasoning = message
+                .reasoning_content
+                .as_deref()
+                .filter(|reasoning| !reasoning.is_empty());
+            let mut payload = Map::new();
+            payload.insert("role".to_owned(), json!("assistant"));
+            let body = match reasoning {
+                Some(reasoning) => {
+                    let mut chunks = vec![json!({
+                        "type": "thinking",
+                        "thinking": [{"type": "text", "text": reasoning}],
+                    })];
+                    if !message.text().is_empty() {
+                        chunks.push(json!({"type": "text", "text": message.text()}));
+                    }
+                    Value::Array(chunks)
+                }
+                None if message.text().is_empty() => Value::Null,
+                None => json!(message.text()),
+            };
+            payload.insert("content".to_owned(), body);
+            let calls: Vec<Value> = message
+                .tool_calls
+                .iter()
+                .flatten()
+                .map(|call| {
+                    json!({
+                        "id": call.id.as_deref().unwrap_or_default(),
+                        "type": "function",
+                        "function": {
+                            "name": call.name.as_deref().unwrap_or_default(),
+                            "arguments": call.arguments.as_deref().unwrap_or_default(),
+                        },
+                        "index": 0,
+                    })
+                })
+                .collect();
+            if !calls.is_empty() {
+                payload.insert("tool_calls".to_owned(), Value::Array(calls));
+            }
+            payload.insert("prefix".to_owned(), Value::Bool(false));
+            Value::Object(payload)
+        }
+        Role::Tool => json!({
+            "role": "tool",
+            "tool_call_id": message.tool_call_id,
+            "name": message.name,
+            "content": message.content,
+        }),
+    }
 }
 
 fn mistral_message(message: &Message, include_reasoning: bool) -> Value {

@@ -8,9 +8,11 @@
 mod plugins;
 mod queue;
 mod review_request;
-mod rewind;
+pub(in crate::server) mod rewind;
 mod route;
 mod saved;
+pub(in crate::server) use saved::NO_ROOT;
+pub(in crate::server) use saved::reopen_start_params as reopen_params;
 mod session;
 mod trust;
 mod turn;
@@ -435,7 +437,22 @@ impl ServerConnection {
             return self.workspace_request(request);
         }
         if self.transport == TransportKind::InProcess {
-            return self.port_request(request);
+            if !self.server.harness_selection().use_unified {
+                return self.port_request(request);
+            }
+            // Reference `LocalHarness`: the terminal and editor clients reach
+            // a unified session over the same routing a stdio client takes.
+            // The start keeps this port's shape, which also carries the
+            // model and mode a launch picked; a method the reference does not
+            // declare is one of this port's own.
+            if request.method == "session/start" {
+                let id = request.id.clone();
+                return answered(id, self.unified_session_start(request));
+            }
+            if !is_server_method(&request.method) {
+                return self.port_request(request);
+            }
+            return self.reference_request(request, None);
         }
         if !is_server_method(&request.method) {
             let id = request.id.clone();
@@ -857,13 +874,27 @@ impl ServerConnection {
     ) -> Option<DispatchBatch> {
         let result = match request.method.as_str() {
             "runtime/read" => {
-                let Some(runtime) = self.server.runtime_snapshot(session_id) else {
+                let Some(mut runtime) = self.server.runtime_snapshot(session_id) else {
                     return Some(error_batch(
                         request.id.clone(),
                         ProtocolErrorCode::NotFound,
                         "Session was not found",
                     ));
                 };
+                // A Unified Harness session keeps its accounting beside the
+                // translator that publishes it.
+                if let Some((stats, context_window)) =
+                    self.server.unified_session(session_id).and_then(|unified| {
+                        let host = unified.host.lock().ok()?;
+                        Some((
+                            host.translator.stats.to_json(),
+                            host.translator.context_window,
+                        ))
+                    })
+                {
+                    runtime["stats"] = stats;
+                    runtime["contextWindow"] = json!(context_window);
+                }
                 let ready = match self.server.resources.lock() {
                     Ok(resources) => resources.is_ready(),
                     Err(_) => false,
@@ -873,6 +904,24 @@ impl ServerConnection {
                     ("sessionLog", self.server.session_log_summary(session_id)),
                     ("ready", json!(ready)),
                 ])
+            }
+            // Reference `_tools_list` and `runtime/read` both read
+            // `project_tools`, so the list is the one the runtime publishes.
+            "tools/list" => {
+                let tools = self
+                    .server
+                    .runtime_snapshot(session_id)?
+                    .get("tools")?
+                    .clone();
+                result_map([("tools", tools)])
+            }
+            // Reference `dispatch_extension` on a Unified Harness session
+            // serves no statistics read: its client follows
+            // `session/statsUpdated` instead.
+            "stats/read" if self.server.unified_session(session_id).is_some() => {
+                return Some(
+                    route::method_not_found(&request.method).into_batch(request.id.clone()),
+                );
             }
             "stats/read" => {
                 let (stats, context_window) = match self.server.lock_sessions() {

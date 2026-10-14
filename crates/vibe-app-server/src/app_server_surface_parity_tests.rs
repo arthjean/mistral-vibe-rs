@@ -78,13 +78,11 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[];
 
 /// Reference notifications this build does not emit yet.
 ///
-/// US-085 emptied the list; the v2.25.7 re-pin added seven notifications; the one
-/// below is still not emitted by this port. A notification that stops being
-/// emitted has to earn an entry here before the replay accepts it.
-const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[(
-    "session/childSessionUpdated",
-    "v2.25.7 sequences it (vibe/app_server/events.py:662) and emits it for child sessions (vibe/app_server/_unified_harness_backend_adapter.py:8011 at 376f6a3); this port emits nothing under this name",
-)];
+/// US-085 emptied the list; the v2.25.7 re-pin added seven notifications, and
+/// the last of them, `session/childSessionUpdated`, came with the Unified
+/// Harness subagents. A notification that stops being emitted has to earn an
+/// entry here before the replay accepts it.
+const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Notification names this build emits that the reference does not declare.
 ///

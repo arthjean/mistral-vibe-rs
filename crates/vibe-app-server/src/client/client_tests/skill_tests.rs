@@ -57,6 +57,7 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
                 projected_result: serde_json::Value::Null,
                 chunks: Vec::new(),
                 pending_injection: None,
+                remote_result: None,
             },
             already_loaded: ToolExecutionOutput {
                 skip: None,
@@ -69,6 +70,7 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
                 projected_result: serde_json::Value::Null,
                 chunks: Vec::new(),
                 pending_injection: None,
+                remote_result: None,
             },
         })
     }

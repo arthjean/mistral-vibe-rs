@@ -251,13 +251,67 @@ impl ConfigSnapshot {
             .map_or_else(empty_model_view, |entry| model_view(&entry, ""))
     }
 
-    fn model_views(&self) -> JsonValue {
-        match self.effective.get("models") {
-            Some(Value::Table(models)) => {
-                // The merged map is keyed; reference `models` is a dictionary
-                // that keeps the order the layers declared the aliases in.
-                // Reference `available_models` narrows it to what
-                // `allowed_models` admits.
+    /// The `ConfigView` a unified session publishes: a model that cannot read
+    /// images still receives them as a link to the file, and the session reads
+    /// images whenever a vision model can describe them (reference
+    /// `project_config_view` with `image_fallback=True`).
+    #[must_use]
+    pub fn unified_config_view(&self) -> JsonValue {
+        let mut view = self.config_view();
+        let describable = self.vision_fallback_model().is_some();
+        let Some(fields) = view.as_object_mut() else {
+            return view;
+        };
+        let linked = |model: &mut JsonValue| {
+            if let Some(model) = model.as_object_mut()
+                && model.get("imageDelivery").is_some_and(JsonValue::is_null)
+            {
+                model.insert("imageDelivery".to_owned(), json!("resource_link"));
+            }
+        };
+        if let Some(active) = fields.get_mut("activeModel") {
+            linked(active);
+        }
+        if let Some(JsonValue::Array(models)) = fields.get_mut("models") {
+            models.iter_mut().for_each(linked);
+        }
+        if describable {
+            fields.insert("imagesSupported".to_owned(), json!(true));
+        }
+        view
+    }
+
+    /// The model that describes images to a blind active model (reference
+    /// `get_vision_fallback_model`): none when the active model reads them,
+    /// else the configured `vision_model`, else the first available model of
+    /// the active model's provider that reads images.
+    #[must_use]
+    pub fn vision_fallback_model(&self) -> Option<Table> {
+        let vision_model = self.effective.get("vision_model").and_then(Value::as_table);
+        let Some(active) = self.active_model() else {
+            return vision_model.cloned();
+        };
+        if supports_images(&active) {
+            return None;
+        }
+        if let Some(vision_model) = vision_model {
+            return Some(vision_model.clone());
+        }
+        let provider = active.get("provider").and_then(Value::as_str);
+        self.available_models().into_iter().find(|entry| {
+            supports_images(entry) && entry.get("provider").and_then(Value::as_str) == provider
+        })
+    }
+
+    /// The available model entries, each carrying its alias, in the order the
+    /// layers declared the aliases in (reference `available_models`, which
+    /// narrows the declared dictionary to what `allowed_models` admits).
+    fn available_models(&self) -> Vec<Table> {
+        let Some(models) = self.effective.get("models") else {
+            return Vec::new();
+        };
+        match models {
+            Value::Table(models) => {
                 let order = super::effective::model_order(&self.layer_values);
                 let rank = |alias: &str| {
                     order
@@ -271,24 +325,29 @@ impl ConfigSnapshot {
                     .filter(|(alias, _)| available.contains(&alias.as_str()))
                     .collect::<Vec<_>>();
                 entries.sort_by_key(|(alias, _)| rank(alias));
-                JsonValue::Array(
-                    entries
-                        .into_iter()
-                        .filter_map(|(alias, entry)| {
-                            entry.as_table().map(|entry| model_view(entry, alias))
-                        })
-                        .collect(),
-                )
+                entries
+                    .into_iter()
+                    .filter_map(|(alias, entry)| {
+                        let mut entry = entry.as_table()?.clone();
+                        entry
+                            .entry("alias".to_owned())
+                            .or_insert_with(|| Value::String(alias.clone()));
+                        Some(entry)
+                    })
+                    .collect()
             }
-            Some(Value::Array(models)) => JsonValue::Array(
-                models
-                    .iter()
-                    .filter_map(Value::as_table)
-                    .map(|entry| model_view(entry, ""))
-                    .collect(),
-            ),
-            _ => JsonValue::Array(Vec::new()),
+            Value::Array(models) => models.iter().filter_map(Value::as_table).cloned().collect(),
+            _ => Vec::new(),
         }
+    }
+
+    fn model_views(&self) -> JsonValue {
+        JsonValue::Array(
+            self.available_models()
+                .iter()
+                .map(|entry| model_view(entry, ""))
+                .collect(),
+        )
     }
 
     /// The aliases of an audio model list, which is what a client offers as
@@ -406,13 +465,17 @@ impl ConfigSnapshot {
     }
 }
 
+fn supports_images(entry: &Table) -> bool {
+    entry
+        .get("supports_images")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
 fn model_view(entry: &Table, alias: &str) -> JsonValue {
     let declared = table_str(entry, "alias", alias);
     let thinking = table_str(entry, "thinking", "off");
-    let supports_images = entry
-        .get("supports_images")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    let supports_images = supports_images(entry);
     let display_name = entry
         .get("display_name")
         .and_then(Value::as_str)

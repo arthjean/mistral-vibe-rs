@@ -34,7 +34,7 @@ impl WorkspaceService {
             })
             .count();
         Ok(WorkspaceDispatch::result([
-            ("config", snapshot.config_view()),
+            ("config", self.published_config_view(&snapshot)),
             ("startupIssue", Value::Null),
             ("strippedHistoryImages", json!(0)),
             ("skillsCount", json!(skills)),

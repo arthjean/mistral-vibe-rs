@@ -288,14 +288,18 @@ impl ManagedSession {
 /// Writes one manifest the way reference `_save_manifest` writes it:
 /// `json.dumps(metadata, indent=2, sort_keys=True)`, no trailing newline.
 ///
-/// This workspace builds `serde_json` without `preserve_order`, so a map is
-/// sorted by key and the pretty writer indents by two spaces with `": "`
-/// between a key and its value, which is what Python emits for those two
-/// arguments. The one difference is escaping: Python's default `ensure_ascii`
-/// writes a non-ASCII character as `\uXXXX` where this writes it as UTF-8, and
-/// both parse back to the same string.
+/// The fields are sorted here, since this workspace's maps keep insertion
+/// order, and the pretty writer indents by two spaces with `": "` between a
+/// key and its value, which is what Python emits for those two arguments. The
+/// one difference is escaping: Python's default `ensure_ascii` writes a
+/// non-ASCII character as `\uXXXX` where this writes it as UTF-8, and both
+/// parse back to the same string.
 fn write_manifest(path: &Path, metadata: &Value) -> Result<(), String> {
-    let rendered = serde_json::to_vec_pretty(metadata).map_err(|error| error.to_string())?;
+    let mut sorted = metadata.clone();
+    if let Value::Object(fields) = &mut sorted {
+        fields.sort_keys();
+    }
+    let rendered = serde_json::to_vec_pretty(&sorted).map_err(|error| error.to_string())?;
     std::fs::write(path, rendered).map_err(|error| error.to_string())
 }
 

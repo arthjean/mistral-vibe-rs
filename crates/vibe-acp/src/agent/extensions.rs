@@ -16,7 +16,7 @@ use vibe_core::observability::{
 use vibe_protocol::ProtocolErrorCode;
 
 use crate::agent::{AcpAgent, voice};
-use crate::projection::iso_timestamp;
+use crate::projection::{iso_timestamp, session_info_update};
 use crate::protocol::AcpError;
 
 impl<D> AcpAgent<D>
@@ -111,45 +111,83 @@ where
             .get("title")
             .and_then(Value::as_str)
             .map_or(title.clone(), ToOwned::to_owned);
+        // A Unified Harness rename answers no time, which the reference then
+        // leaves off the update.
         let updated_at = match renamed.get("updatedAt") {
             Some(Value::Number(millis)) => millis.as_u64().map(iso_timestamp),
             Some(Value::String(stamp)) => Some(stamp.clone()),
-            _ => None,
-        }
-        .unwrap_or_else(|| iso_timestamp(crate::agent::turn::now_millis()));
+            Some(Value::Null) => None,
+            _ => Some(iso_timestamp(crate::agent::turn::now_millis())),
+        };
         if let Some(harness) = &live {
+            // Reference `_forward_unsolicited_events`: the session update the
+            // rename published reaches the client before the answer's own.
+            let published = harness
+                .service
+                .lock()
+                .await
+                .unified_state(&harness.canonical_id())
+                .map(|state| state["session"].clone());
+            if let Some(session) = published {
+                let name = |key: &str| session[key].as_str().map(ToOwned::to_owned);
+                if let Some(shown) =
+                    harness.observe_names(name("title").as_deref(), name("preview").as_deref())
+                {
+                    self.session_update(
+                        &harness.session_id,
+                        session_info_update(
+                            Some(&shown),
+                            session["updatedAt"].as_u64().unwrap_or(0),
+                        ),
+                    );
+                }
+            }
             harness.set_display_title(&title);
         }
         let target = live
             .as_ref()
             .map_or(session_id, |harness| harness.session_id.clone());
-        self.session_update(
-            &target,
-            json!({
-                "sessionUpdate": "session_info_update",
-                "title": title,
-                "updatedAt": updated_at,
-            }),
-        );
+        let mut update = json!({
+            "sessionUpdate": "session_info_update",
+            "title": title,
+        });
+        if let Some(updated_at) = updated_at {
+            update["updatedAt"] = json!(updated_at);
+        }
+        self.session_update(&target, update);
         Ok(json!({}))
     }
 
     /// Reference `_delete_session`: a live session is closed first and its
     /// saved transcript deleted after.
     async fn delete_session(&self, session_id: &str) -> Result<(), AcpError> {
+        // The Unified Harness host refuses a session it does not hold, which
+        // the reference lets escape as an unanticipated failure.
+        let unified = self.harness.use_unified;
+        let missing = move |error: AcpError| {
+            if !unified {
+                return ignore_missing(error);
+            }
+            match protocol_code(&error) {
+                Some(ProtocolErrorCode::NotFound) => {
+                    Err(AcpError::Unexpected(error_message(&error)))
+                }
+                _ => Err(error),
+            }
+        };
         let Some(harness) = self.find_live_session(session_id)? else {
             return self
                 .host_call("session/delete", json!({"sessionId": session_id}))
                 .await
                 .map(|_| ())
-                .or_else(ignore_missing);
+                .or_else(missing);
         };
         let saved = harness.canonical_id();
         self.close_session(&harness.session_id).await?;
         self.host_call("session/delete", json!({"sessionId": saved}))
             .await
             .map(|_| ())
-            .or_else(ignore_missing)
+            .or_else(missing)
     }
 
     /// Reference `_trust_extension`.

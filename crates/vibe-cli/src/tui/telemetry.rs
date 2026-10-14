@@ -115,10 +115,9 @@ pub(super) fn report_startup(
         // compiled binary has no bytecode cache to compare against.
         is_cold_start: None,
         harness_selection_source: Some(
-            vibe_app_server::harness::HarnessSelection::for_launch(
+            vibe_app_server::harness::HarnessSelection::resolve(
                 arguments.experimental_harness,
                 arguments.legacy_harness,
-                runtime.workspace.vibe_home(),
             )
             .source
             .as_str()

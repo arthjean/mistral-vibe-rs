@@ -400,7 +400,8 @@ impl ServerPeer {
         );
         Ok(ToolExecutionOutput::new(result.model_text())
             .displayed_as(json!({"kind": "mcp", "isError": false}))
-            .typed(result.typed()))
+            .typed(result.typed())
+            .from_remote(answer.result))
     }
 }
 
@@ -571,7 +572,8 @@ pub async fn call_connector_gateway(
     );
     Ok(ToolExecutionOutput::new(result.model_text())
         .displayed_as(json!({"kind": "mcp", "isError": false}))
-        .typed(result.typed()))
+        .typed(result.typed())
+        .from_remote(answer.result))
 }
 
 /// The JSON-RPC answer to one `sampling/createMessage` request.

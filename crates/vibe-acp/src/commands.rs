@@ -288,15 +288,10 @@ where
     /// The user-invocable skills that no built-in command shadows, as
     /// `(name, description)` sorted by name.
     async fn invocable_skills(&self, harness: &AcpHarness<D>) -> Vec<(String, String)> {
-        let listing = self
-            .call(harness, "skills/list", json!({}))
+        let mut skills = self
+            .session_skills(harness)
             .await
-            .unwrap_or_default();
-        let mut skills = listing
-            .get("skills")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
+            .iter()
             .filter(|skill| skill.get("userInvocable").and_then(Value::as_bool) == Some(true))
             .filter_map(|skill| {
                 let name = skill.get("name")?.as_str()?;
@@ -343,14 +338,34 @@ where
         }
     }
 
-    async fn invocable_skills_with_builtins(&self, harness: &AcpHarness<D>) -> Vec<String> {
-        self.call(harness, "skills/list", json!({}))
+    /// The skills the session's runtime holds, as reference
+    /// `resources.runtime.skills` reads them: a Unified Harness session
+    /// answers them from `runtime/read`, a legacy one lists them.
+    async fn session_skills(&self, harness: &AcpHarness<D>) -> Vec<Value> {
+        let unified = harness
+            .service
+            .lock()
             .await
+            .is_unified(&harness.canonical_id());
+        let (method, pointer) = if unified {
+            ("runtime/read", "/runtime/skills")
+        } else {
+            ("skills/list", "/skills")
+        };
+        let answer = self
+            .call(harness, method, json!({}))
+            .await
+            .unwrap_or_default();
+        serde_json::to_value(answer)
+            .ok()
+            .and_then(|answer| answer.pointer(pointer).and_then(Value::as_array).cloned())
             .unwrap_or_default()
-            .get("skills")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
+    }
+
+    async fn invocable_skills_with_builtins(&self, harness: &AcpHarness<D>) -> Vec<String> {
+        self.session_skills(harness)
+            .await
+            .iter()
             .filter(|skill| skill.get("userInvocable").and_then(Value::as_bool) == Some(true))
             .filter_map(|skill| skill.get("name")?.as_str().map(ToOwned::to_owned))
             .collect()

@@ -323,6 +323,15 @@ pub struct TuiState {
     pub value_edit: Option<super::interaction::ValueEdit>,
     /// The `/log-level` picker's draft, while it is open.
     pub(in crate::tui) log_level_picker: Option<super::command_handlers::log_level::Picker>,
+    /// Reference `TodoTracker`, which only a Unified Harness session keeps.
+    pub(in crate::tui) todos: Option<super::todos::TodoTracker>,
+    /// Where the last frame painted the pinned todo line, which a click opens.
+    pub(in crate::tui) todo_row: Option<ratatui::layout::Rect>,
+    /// Reference `SubagentList` and the child transcripts it opens.
+    pub(in crate::tui) subagents: super::subagents::Subagents,
+    /// Where the last frame painted the subagent list's rows, and which row
+    /// the first of them is.
+    pub(in crate::tui) subagent_rows: Option<(ratatui::layout::Rect, usize)>,
     turn_started_ms: Option<u64>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
@@ -383,6 +392,10 @@ impl TuiState {
             retry_offered: false,
             value_edit: None,
             log_level_picker: None,
+            todos: None,
+            todo_row: None,
+            subagents: super::subagents::Subagents::default(),
+            subagent_rows: None,
             turn_started_ms: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
@@ -442,6 +455,10 @@ impl TuiState {
                 self.entry_indexes
                     .insert(entry.id.clone(), self.entries.len());
                 let title = session_title_update(&entry).map(ToOwned::to_owned);
+                if let Some(todos) = self.todos.as_mut() {
+                    todos.follow(&entry);
+                }
+                self.subagents.remember_parent_instruction(&entry);
                 self.entries.push(entry);
                 if let Some(title) = title {
                     self.retitle(&title);
@@ -477,6 +494,10 @@ impl TuiState {
                 }
                 self.watermark = event_id;
                 self.track_stream(index, &entry);
+                if let Some(todos) = self.todos.as_mut() {
+                    todos.follow(&entry);
+                }
+                self.subagents.remember_parent_instruction(&entry);
                 self.entries[index] = entry;
                 Ok(ApplyResult::Applied)
             }
@@ -691,9 +712,13 @@ impl TuiState {
         replacement.notifier = std::mem::take(&mut self.notifier);
         replacement.narrator = std::mem::take(&mut self.narrator);
         replacement.file_watcher_for_autocomplete = self.file_watcher_for_autocomplete;
+        replacement.todos = self.todos.take();
+        replacement.subagents = std::mem::take(&mut self.subagents);
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;
         replacement.local_entries = self.local_entries.clone();
+        // Entries written before any server entry keep their place at the top.
+        let mut leading = 0;
         for position in &self.local_entries {
             let Some(entry) = self
                 .entry_indexes
@@ -710,16 +735,17 @@ impl TuiState {
             {
                 return Err(StateError::DuplicateEntry(entry.id));
             }
-            let insertion_index = position
-                .after_entry_id
-                .as_ref()
-                .and_then(|anchor| {
-                    replacement
-                        .entries
-                        .iter()
-                        .position(|candidate| candidate.id == *anchor)
-                })
-                .map_or(replacement.entries.len(), |index| index.saturating_add(1));
+            let insertion_index = match position.after_entry_id.as_ref() {
+                None => {
+                    leading += 1;
+                    leading - 1
+                }
+                Some(anchor) => replacement
+                    .entries
+                    .iter()
+                    .position(|candidate| candidate.id == *anchor)
+                    .map_or(replacement.entries.len(), |index| index.saturating_add(1)),
+            };
             replacement.entries.insert(insertion_index, entry);
         }
         replacement.reindex();

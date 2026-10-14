@@ -175,6 +175,28 @@ async fn handle_mouse(kind: MouseEventKind, column: u16, row: u16, context: &mut
         MouseEventKind::ScrollDown => {
             context.state.scroll_down(3);
         }
+        // Reference `SubagentList`: a click selects the row under it.
+        MouseEventKind::Down(MouseButton::Left)
+            if context.state.overlay.is_none()
+                && context.state.subagent_rows.is_some_and(|(area, _)| {
+                    area.contains(ratatui::layout::Position::new(column, row))
+                }) =>
+        {
+            if let Some((area, first)) = context.state.subagent_rows {
+                let target = first + usize::from(row - area.y);
+                context.state.subagents.focus_first();
+                context.state.subagents.select_row(target);
+            }
+        }
+        // Reference `TodoStatusRow.on_click`, which opens the todo overlay.
+        MouseEventKind::Down(MouseButton::Left)
+            if context.state.overlay.is_none()
+                && context.state.todo_row.is_some_and(|area| {
+                    area.contains(ratatui::layout::Position::new(column, row))
+                }) =>
+        {
+            context.state.overlay = Some(super::workflow::todos_overlay(context.state));
+        }
         MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Drag(MouseButton::Left) => {
             let screen = Rect::new(0, 0, context.state.viewport.0, context.state.viewport.1);
             let editor_cell = render::editor_mouse_cell(
@@ -256,6 +278,10 @@ pub(super) async fn handle_key(
         return Ok(false);
     }
     if handle_modal_key(key, context).await {
+        return Ok(false);
+    }
+    // Reference `SubagentList` holds the keyboard while it has the focus.
+    if context.state.subagents.handle_key(key) != super::subagents::ListKey::Ignored {
         return Ok(false);
     }
     context.state.last_keystroke_ms = unix_millis();
@@ -427,6 +453,20 @@ fn copy_selection(context: &mut KeyContext<'_>) {
 /// Reference `action_interrupt_or_quit`: an active turn, then a shell, then a
 /// draft, then narration, then queued intent, and only an idle session quits.
 async fn interrupt_or_quit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, CliError> {
+    // Reference `action_interrupt_or_quit`: a child's transcript is read only,
+    // so Ctrl+C says so and asks to be pressed again to quit.
+    if context.state.subagents.is_viewing() {
+        let quit = exit::resolve_quit(
+            "Ctrl+C",
+            context.state.ask_confirmation_on_exit,
+            &mut context.state.quit_confirmation,
+            unix_millis(),
+        );
+        if !quit {
+            context.state.subagents.refuse_input();
+        }
+        return Ok(quit);
+    }
     if request_active_turn_interrupt(
         context.runtime,
         context.active,
@@ -566,6 +606,13 @@ async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, C
             {
                 enter_queue_selection(context.input, context.state);
             }
+            // Reference `on_chat_text_area_navigate_below`.
+            if effects
+                .iter()
+                .any(|effect| matches!(effect, InputEffect::NavigateBelow))
+            {
+                context.state.subagents.focus_first();
+            }
             feedback::handle_effects(&effects, context.runtime, context.input, context.state).await;
             context
                 .path_normalization
@@ -578,6 +625,11 @@ async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, C
 }
 
 async fn escape(key: KeyEvent, context: &mut KeyContext<'_>) {
+    // Reference `_try_interrupt`: Esc first leaves a subagent's transcript.
+    if context.state.subagents.is_viewing() {
+        context.state.subagents.show_main(true);
+        return;
+    }
     // Reference `check_action`: queue mode turns the interrupt off, and Esc
     // drops the edit instead.
     if leave_queue_edit(context.input, context.state) {

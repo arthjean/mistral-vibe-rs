@@ -304,10 +304,15 @@ class Session(agents.Session):
     def __init__(self, root: Path) -> None:
         super().__init__(root)
         self.turns: list[str] = []
+        #: Whether the last turn that started has settled.
+        self.settled = False
 
     def learn(self, message: dict[str, Any]) -> None:
         super().learn(message)
+        if rewind.settles({})(message):
+            self.settled = True
         if message.get("method") == "turn/started":
+            self.settled = False
             turn = ((message.get("params") or {}).get("turn") or {}).get("id")
             if isinstance(turn, str) and turn not in self.turns:
                 self.turns.append(turn)
@@ -456,7 +461,7 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             params = rewind.render_turn("reference", target, step["turn"])
-            params.update(step.get("params", {}))
+            params.update(session.substitute(step.get("params", {})))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
                          "params": params})
             if step.get("background"):
@@ -496,8 +501,9 @@ def run_steps(
             pending = []
             continue
         if "wait" in step:
-            # A background turn settles on its own.
-            observed = pending + server.wait_for(rewind.settles({}))
+            # A background turn settles on its own, possibly while an earlier
+            # step was still collecting.
+            observed = pending + ([] if session.settled else server.wait_for(rewind.settles({})))
             observed += server.collect(None, quiet)
             for message in observed:
                 session.learn(message)

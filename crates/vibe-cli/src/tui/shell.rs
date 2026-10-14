@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use vibe_app_server::client::PublicHistoryEntry;
+use vibe_app_server::client::{ClientError, PublicDispatch, PublicHistoryEntry};
 
 use super::hydration::history_entry;
 use super::state::{TranscriptEntry, TuiState};
@@ -32,6 +32,10 @@ pub(super) struct ActiveShell {
     started: Instant,
     last_poll: Instant,
     timed_out: bool,
+    /// The `session/shellCommand` a unified session runs the command
+    /// under, which answers once the command settled. The server then
+    /// publishes the entry and hands the result to the model itself.
+    unified: Option<tokio::task::JoinHandle<Result<PublicDispatch, ClientError>>>,
 }
 
 impl ActiveShell {
@@ -51,6 +55,7 @@ impl ActiveShell {
             started: Instant::now(),
             last_poll: Instant::now(),
             timed_out: false,
+            unified: None,
         }
     }
 }
@@ -128,13 +133,36 @@ pub(super) async fn start_shell(
         return Ok(true);
     }
     let operation_id = format!("manual-shell-{}", vibe_core::clock::now_nanos());
-    let params = shell_params(&runtime.session_id, &operation_id, command);
-    if let Err(error) = runtime.service.public_call_async("shell/run", params).await {
-        state.push_diagnostic(format!("Command failed: {error}"));
-        return Ok(true);
-    }
+    let unified = if runtime.service.is_unified(&runtime.session_id) {
+        // Reference `ShellResources.run` on either backend.
+        let params = json!({
+            "sessionId": runtime.session_id,
+            "command": command,
+            "operationId": operation_id,
+            "action": "run",
+            "timeoutSeconds": MANUAL_SHELL_TIMEOUT.as_secs_f64(),
+        });
+        match runtime
+            .service
+            .begin_public_call("session/shellCommand", params)
+        {
+            Ok(pending) => Some(tokio::spawn(pending.complete())),
+            Err(error) => {
+                state.push_diagnostic(format!("Command failed: {error}"));
+                return Ok(true);
+            }
+        }
+    } else {
+        let params = shell_params(&runtime.session_id, &operation_id, command);
+        if let Err(error) = runtime.service.public_call_async("shell/run", params).await {
+            state.push_diagnostic(format!("Command failed: {error}"));
+            return Ok(true);
+        }
+        None
+    };
     state.waiting = true;
     let mut shell = ActiveShell::new(command, operation_id, String::new(), working_directory);
+    shell.unified = unified;
     let Some(entry) = shell_entry(&runtime.session_id, &shell, &ShellState::Running) else {
         state.push_diagnostic("Command failed: the shell entry could not be projected");
         return Ok(true);
@@ -153,6 +181,10 @@ pub(super) async fn finish_shell(runtime: Option<&mut InteractiveRuntime>, state
     };
     if shell.last_poll.elapsed() < SHELL_POLL_INTERVAL {
         runtime.shell = Some(shell);
+        return;
+    }
+    if shell.unified.is_some() {
+        follow_unified_shell(runtime, state, shell).await;
         return;
     }
     if shell.started.elapsed() >= MANUAL_SHELL_TIMEOUT {
@@ -177,6 +209,39 @@ pub(super) async fn finish_shell(runtime: Option<&mut InteractiveRuntime>, state
     settle_read(runtime, state, shell, read);
 }
 
+/// Draws the entry a unified session publishes for the command, and lets
+/// the command go once its request answered.
+async fn follow_unified_shell(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+    mut shell: ActiveShell,
+) {
+    let published = runtime
+        .service
+        .unified_state(&runtime.session_id)
+        .and_then(|published| {
+            published["history"]
+                .as_array()?
+                .iter()
+                .find(|entry| entry["id"] == shell.operation_id.as_str())
+                .cloned()
+        })
+        .and_then(|entry| serde_json::from_value::<PublicHistoryEntry>(entry).ok());
+    if let Some(entry) = published {
+        let _ = state.replace_local(&shell.transcript_id, history_entry(entry));
+    }
+    let Some(request) = shell.unified.take_if(|request| request.is_finished()) else {
+        retain_shell(&mut runtime.shell, state, shell);
+        return;
+    };
+    state.waiting = false;
+    match request.await {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => state.push_diagnostic(format!("Command failed: {error}")),
+        Err(error) => state.push_diagnostic(format!("Command failed: {error}")),
+    }
+}
+
 pub(super) async fn interrupt_shell(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     stop_shell(runtime, state, false).await;
 }
@@ -187,6 +252,26 @@ async fn stop_shell(runtime: &mut InteractiveRuntime, state: &mut TuiState, time
     let Some(mut shell) = runtime.shell.take() else {
         return;
     };
+    if shell.unified.is_some() {
+        // The run answers once the interrupt settled it.
+        let result = runtime
+            .service
+            .public_call_async(
+                "session/shellCommand",
+                json!({
+                    "sessionId": runtime.session_id,
+                    "operationId": shell.operation_id,
+                    "action": "interrupt",
+                }),
+            )
+            .await;
+        state.prompt_queue.pause();
+        if let Err(error) = result {
+            state.push_diagnostic(format!("Shell interruption failed: {error}"));
+        }
+        retain_shell(&mut runtime.shell, state, shell);
+        return;
+    }
     shell.timed_out |= timed_out;
     let result = runtime
         .service

@@ -3513,6 +3513,7 @@ mod tests {
 
     fn provider_input() -> ProviderInput {
         ProviderInput {
+            dialect: Default::default(),
             turn_id: None,
             session_id: None,
             model_override: None,

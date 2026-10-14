@@ -869,7 +869,7 @@ pub(crate) fn prompt_candidates_in(
                 kind: CompletionKind::SlashCommand,
                 label: command.to_owned(),
                 insertion: command.to_owned(),
-                description: command_description(command).to_owned(),
+                description: command_description(command, command_context).to_owned(),
             })
             .collect());
     }

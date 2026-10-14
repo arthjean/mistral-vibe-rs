@@ -133,7 +133,12 @@ fn the_attributes_omit_what_is_absent_and_keep_what_is_false() {
     let encoded = serde_json::to_value(&attributes).expect("the attributes serialize");
     let object = encoded.as_object().expect("the attributes are an object");
     assert_eq!(
-        object.keys().map(String::as_str).collect::<Vec<_>>(),
+        object
+            .keys()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>(),
         [
             "agent_version",
             "arch",

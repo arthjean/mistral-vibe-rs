@@ -104,8 +104,11 @@ where
         )
         .await;
         if let ActivePhase::Running(turn_id) = harness.request_cancel()? {
-            let driver = harness.service.lock().await.driver();
-            let _ = driver.interrupt(&harness.canonical_id(), &turn_id);
+            let _ = harness
+                .service
+                .lock()
+                .await
+                .interrupt_driver(&harness.canonical_id(), &turn_id);
         }
         Ok(())
     }
@@ -165,6 +168,23 @@ where
         update: ProgrammaticUpdate,
         usage_pending: &mut bool,
     ) {
+        // A Unified Harness session reports each accounting it publishes, as
+        // reference `_forward_event` answers every `StatsUpdated`.
+        if let ProgrammaticUpdate::Accounting {
+            stats,
+            context_window,
+        } = &update
+        {
+            self.session_update(
+                &harness.session_id,
+                super::surface::usage_update_of(stats, *context_window),
+            );
+            *usage_pending = false;
+            return;
+        }
+        if matches!(update, ProgrammaticUpdate::Stats { .. }) && harness.is_unified() {
+            return;
+        }
         if matches!(update, ProgrammaticUpdate::Stats { .. }) {
             *usage_pending = true;
             return;
@@ -229,15 +249,22 @@ where
             mention_stats: None,
         };
         // Reference `_announce_turn_started` publishes the statistics as the
-        // turn opens, before the turn counts as a step.
-        let opening_usage = self.usage_update(harness).await;
+        // turn opens, before the turn counts as a step; a Unified Harness
+        // session publishes its own once the turn has started.
+        let opening_usage = if harness.is_unified() {
+            None
+        } else {
+            Some(self.usage_update(harness).await)
+        };
         let (reservation, driver, observer, mut updates) = {
             let mut service = harness.service.lock().await;
             let reservation = service
                 .reserve_prompt(&session_id, &request)
                 .await
                 .map_err(|error| TurnFailure::Other(reserve_error(error)))?;
-            self.session_update(&harness.session_id, opening_usage);
+            if let Some(opening_usage) = opening_usage {
+                self.session_update(&harness.session_id, opening_usage);
+            }
             let channel = service.interactive_update_channel_after(
                 &reservation.session_id,
                 &reservation.turn_id,
@@ -254,17 +281,21 @@ where
                     return Err(TurnFailure::Other(error.into()));
                 }
             };
-            (reservation, service.driver(), observer, updates)
+            (reservation, service.turn_runner(), observer, updates)
         };
         harness
             .set_phase(ActivePhase::Running(reservation.turn_id.clone()))
             .map_err(TurnFailure::Other)?;
         if harness.is_cancelled() {
-            let _ = driver.interrupt(&reservation.session_id, &reservation.turn_id);
+            let _ = harness
+                .service
+                .lock()
+                .await
+                .interrupt_driver(&reservation.session_id, &reservation.turn_id);
         }
         let mut callback_poll = tokio::time::interval(CALLBACK_POLL);
         callback_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-        let run = driver.run_observed(&reservation, observer);
+        let run = driver.run(&reservation, observer);
         tokio::pin!(run);
         // Reference `_forward_event` answers `StatsUpdated` with a usage update
         // from a task of its own, which reads the statistics only once the
@@ -294,8 +325,9 @@ where
                         self.route_update(harness, update, &mut usage_pending).await;
                     }
                     if let Err(error) = self.route_pending_callbacks(harness).await {
-                        let _ = driver.interrupt(&reservation.session_id, &reservation.turn_id);
-                        let _ = harness.service.lock().await.fail_reserved(
+                        let mut service = harness.service.lock().await;
+                        let _ = service.interrupt_driver(&reservation.session_id, &reservation.turn_id);
+                        let _ = service.fail_reserved(
                             &reservation,
                             &error.to_string(),
                             TurnErrorCode::InternalError,
@@ -305,8 +337,10 @@ where
                 }
             }
         };
+        // What the turn raised before it ended still reaches the client the
+        // way the loop routes it, accounting included.
         while let Ok(update) = updates.try_recv() {
-            self.forward_update(harness, update);
+            self.route_update(harness, update, &mut usage_pending).await;
         }
         let cancelled = harness.is_cancelled();
         match outcome {
@@ -412,6 +446,15 @@ where
 
     /// Projects one update the app server published while a turn ran.
     pub(crate) fn forward_update(&self, harness: &AcpHarness<D>, update: ProgrammaticUpdate) {
+        if let ProgrammaticUpdate::Renamed { title, preview } = &update {
+            if let Some(shown) = harness.observe_names(title.as_deref(), preview.as_deref()) {
+                self.session_update(
+                    &harness.session_id,
+                    session_info_update(Some(&shown), now_millis()),
+                );
+            }
+            return;
+        }
         let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
             return;
         };

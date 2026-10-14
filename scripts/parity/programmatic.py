@@ -57,6 +57,9 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/programmatic-parity/corpus.json"
+#: The same scenarios on the Unified Harness, which every session opens on by
+#: default since v2.26.0.
+UNIFIED_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/programmatic-parity/unified-corpus.json"
 SCHEMA_VERSION = 1
 RUN_TIMEOUT = 120.0
 
@@ -902,7 +905,14 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--binary", type=Path, default=None, help="drive this port's `vibe` instead")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument(
+        "--harness",
+        choices=["legacy", "unified"],
+        default="legacy",
+        help="the backend both sides run: the legacy one through the escape hatch, or the "
+        "Unified Harness every session opens on by default",
+    )
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--raw", action="store_true")
@@ -911,9 +921,12 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
+    flags = HARNESS_FLAGS if arguments.harness == "legacy" else []
+    if arguments.output is None:
+        arguments.output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
     try:
         if arguments.binary is not None:
-            command = [str(arguments.binary.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.binary.resolve()), *flags]
             reference = {"commit": "binary-override"}
             dialect = "port"
         else:
@@ -921,7 +934,7 @@ def main() -> int:
             binary = arguments.reference / ".venv/bin/vibe"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            command = [str(binary), *flags]
             dialect = "reference"
         selected = [
             s for s in scenarios() if not arguments.only or any(name in s["name"] for name in arguments.only)

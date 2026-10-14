@@ -672,6 +672,7 @@ pub(super) fn question_tool_output(
             projected_result: serde_json::Value::Null,
             chunks: Vec::new(),
             pending_injection: None,
+            remote_result: None,
         });
     }
     if answers.len() != questions.len() {
@@ -722,6 +723,7 @@ pub(super) fn question_tool_output(
         projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
         pending_injection: None,
+        remote_result: None,
     })
 }
 
@@ -973,6 +975,7 @@ pub(super) async fn run_interactive_plan_review(
         projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
         pending_injection,
+        remote_result: None,
     })
 }
 

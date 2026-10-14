@@ -201,6 +201,9 @@ pub struct WorkspaceService {
     /// The skills that seed discovery in place of the legacy builtins: a
     /// unified session's plugin skills. `None` seeds the builtins.
     seeded_skills: Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>>,
+    /// Whether the views this service publishes promise the unified harness's
+    /// image fallback and hide the agents its picker leaves out.
+    unified_views: bool,
 }
 
 /// The `VIBE_*` variables the environment layer composes: the process
@@ -393,6 +396,7 @@ impl WorkspaceService {
             identity_cache: Arc::default(),
             stored_keys: Arc::default(),
             seeded_skills: None,
+            unified_views: false,
         }
     }
 
@@ -560,6 +564,28 @@ impl WorkspaceService {
     /// also reach every configuration snapshot afterward.
     pub fn migrate_configuration(&self) -> Result<Vec<String>, WorkspaceServiceError> {
         self.config.migrate_sources().map_err(config_error)
+    }
+
+    /// Publishes the views a unified harness serves: models that cannot read
+    /// images receive them as links and `plan` leaves the agent picker (reference
+    /// `project_config_view(image_fallback=True)` and
+    /// `project_unified_agent_summaries`).
+    #[must_use]
+    pub fn with_unified_views(mut self, unified_views: bool) -> Self {
+        self.unified_views = unified_views;
+        self
+    }
+
+    /// The `ConfigView` of `snapshot` as this service publishes it.
+    pub(crate) fn published_config_view(
+        &self,
+        snapshot: &vibe_core::config::ConfigSnapshot,
+    ) -> Value {
+        if self.unified_views {
+            snapshot.unified_config_view()
+        } else {
+            snapshot.config_view()
+        }
     }
 
     #[must_use]

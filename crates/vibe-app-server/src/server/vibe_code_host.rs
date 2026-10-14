@@ -164,6 +164,7 @@ impl Host for SessionHost {
                 .clone()
                 .ok_or_else(|| "no model is available to summarize with".to_owned())?;
             let input = ProviderInput {
+                dialect: Default::default(),
                 turn_id: None,
                 session_id: Some(self.session_id()),
                 model_override: self.server.workspace.compaction_settings().compaction_model,

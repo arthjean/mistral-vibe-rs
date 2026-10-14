@@ -4,6 +4,7 @@ members = [
     "crates/vibe-app-server",
     "crates/vibe-cli",
     "crates/vibe-core",
+    "crates/vibe-harness",
     "crates/vibe-protocol",
     "crates/vibe-voice",
 ]
@@ -49,7 +50,11 @@ reqwest = { version = "0.13.4", default-features = false, features = ["form", "j
 rustls-native-certs = "0.8.4"
 secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+# `preserve_order`: a JSON object keeps the order its keys were written in,
+# as Python's `dict` and the reference's harness core both do, so what this
+# port re-emits (a tool result, a program's value, a model's arguments) keeps
+# the order the reference would.
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
 serde_path_to_error = "0.1.20"
 serde-saphyr = "1.0.1"
 sha1 = "0.11.0"
@@ -83,6 +88,7 @@ unwrap_in_result = "warn"
 [workspace.metadata.vibe]
 dependency-layers = [
     ["vibe-protocol", "vibe-core"],
+    ["vibe-harness"],
     ["vibe-app-server", "vibe-voice"],
     ["vibe-cli", "vibe-acp"],
 ]

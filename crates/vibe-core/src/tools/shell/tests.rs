@@ -1743,12 +1743,13 @@ async fn the_windows_families_stay_absent_under_the_legacy_rollout() {
 fn the_legacy_windows_variant_publishes_the_reference_override_set() {
     for family in [ShellFamily::GitBash, ShellFamily::PowerShell] {
         let spec = command_spec(family, false);
-        let properties = spec.input_schema["properties"]
+        let mut properties = spec.input_schema["properties"]
             .as_object()
             .expect("properties")
             .keys()
             .cloned()
             .collect::<Vec<_>>();
+        properties.sort_unstable();
         assert_eq!(
             properties,
             [

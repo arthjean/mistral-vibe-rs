@@ -142,9 +142,11 @@ impl AppServer {
                 Err(_) => return Ok(None),
             },
         };
-        let selection = catalog::resolve_selection(&snapshot, Some(&resolved));
+        let mut selection = catalog::resolve_selection(&snapshot, Some(&resolved));
+        selection.implicit = unified;
         if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
             session.connectors.accept(resolved, selection);
+            session.connectors.announce = unified;
             // A registry the session cannot publish into is a session whose
             // tool surface is gone, which nothing here can repair.
             let _ = session.connectors.publish_tools(&session.tools);
@@ -369,7 +371,8 @@ impl AppServer {
             .resolve_connector_catalog(&provider, true)
             .await
             .map_err(|error| ProtocolFault::plain(ProtocolErrorCode::InternalError, error.0))?;
-        let selection = catalog::resolve_selection(&snapshot, Some(&resolved));
+        let mut selection = catalog::resolve_selection(&snapshot, Some(&resolved));
+        selection.implicit = self.harness_selection().use_unified;
         let catalog_revision = resolved.revision.clone();
         let selection_revision = selection.revision.clone();
         let Some(session_id) = session_id else {
@@ -442,7 +445,8 @@ impl AppServer {
                 "The host connector catalog does not match the target session",
             ));
         }
-        let current = catalog::resolve_selection(&snapshot, resolved.as_ref());
+        let mut current = catalog::resolve_selection(&snapshot, resolved.as_ref());
+        current.implicit = self.harness_selection().use_unified;
         let candidate = catalog::toggled_selection(
             &current,
             alias,

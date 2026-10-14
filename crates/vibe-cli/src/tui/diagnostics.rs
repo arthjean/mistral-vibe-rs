@@ -207,6 +207,18 @@ pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option
             Some("server")
         }
         DriverError::StaleTurn(_) => Some("cancelled"),
+        // A unified turn's failure carries the code it was published with.
+        DriverError::Published(error) => match error.code.as_deref() {
+            Some("rate_limit") => Some("rate_limit"),
+            Some("context_too_long") => Some("context_too_long"),
+            Some("response_too_long") => Some("response_too_long"),
+            Some("refusal") => Some("refusal"),
+            Some("invalid_api_key") => Some("auth"),
+            Some("incomplete_stream" | "invalid_model" | "backend_error" | "internal_error") => {
+                Some("model")
+            }
+            _ => None,
+        },
         DriverError::StatePoisoned
         | DriverError::UnsupportedControl(_)
         | DriverError::ImageAttachment(_)

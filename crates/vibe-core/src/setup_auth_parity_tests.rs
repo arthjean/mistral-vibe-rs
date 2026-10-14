@@ -1285,7 +1285,8 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
         Ok(line) => line,
         Err(error) => format!("error {}", error.code.as_str()),
     };
-    let requests = Value::Array(gateway.into_client().requests);
+    // The capture writes each request with sorted keys.
+    let requests = sorted(Value::Array(gateway.into_client().requests));
     let observed = format!("requests={requests} outcome={outcome_line}");
     let expected_outcome = if let Some(code) = &case.error_code {
         format!("error {code}")
@@ -1306,7 +1307,7 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
     } else {
         "<unrecorded>".to_owned()
     };
-    let expected_requests = Value::Array(case.requests.clone().unwrap_or_default());
+    let expected_requests = sorted(Value::Array(case.requests.clone().unwrap_or_default()));
     let expected = format!("requests={expected_requests} outcome={expected_outcome}");
     (expected, observed)
 }
@@ -1793,4 +1794,22 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate \
          it with `{CAPTURE_SCRIPT}`"
     );
+}
+
+/// `value` with every object's keys in sorted order.
+fn sorted(value: Value) -> Value {
+    match value {
+        Value::Object(object) => {
+            let mut entries: Vec<(String, Value)> = object.into_iter().collect();
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            Value::Object(
+                entries
+                    .into_iter()
+                    .map(|(key, value)| (key, sorted(value)))
+                    .collect(),
+            )
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
+        other => other,
+    }
 }

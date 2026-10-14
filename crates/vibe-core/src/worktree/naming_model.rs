@@ -117,6 +117,7 @@ async fn complete(
     launch: Option<&LaunchContext>,
 ) -> Option<String> {
     let input = ProviderInput {
+        dialect: Default::default(),
         turn_id: None,
         session_id: None,
         model_override: None,

@@ -189,7 +189,37 @@ impl ServerConnection {
                 ..request
             }));
         }
-        match route(method) {
+        // A unified root serves its background processes.
+        if unified && method.starts_with("session/backgroundProcess/") {
+            if !rooted {
+                return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
+            }
+            let validated = wire_validation::validate_method(method, params)
+                .map_err(|issues| self.rejected(method, &issues))?;
+            let named = validated
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            self.require_named_root(named.as_deref())?;
+            return self.unified_background_process(method, request.id, &validated);
+        }
+        // The marks a unified host keeps beside each session are its own
+        // methods, served for any session it stores.
+        let routed = match route(method) {
+            Route::Unserved
+                if unified
+                    && matches!(
+                        method,
+                        "session/pin" | "session/archive" | "session/markAsSeen"
+                    ) =>
+            {
+                Route::Host
+            }
+            // A unified session folds a queued turn into the running one.
+            Route::RootDeclined if unified && method == "session/turn/queue/steer" => Route::Root,
+            routed => routed,
+        };
+        match routed {
             _ if unified_plugins => {}
             Route::Unserved => return Err(method_not_found(method)),
             Route::RootUnserved | Route::RootDeclined | Route::Root if !rooted => {
@@ -233,7 +263,7 @@ impl ServerConnection {
             };
             return Ok(self.plugin_request(request));
         }
-        match route(method) {
+        match routed {
             Route::Events => {
                 return Ok(success_batch(
                     request.id,
@@ -256,6 +286,11 @@ impl ServerConnection {
                     && named
                         .as_deref()
                         .is_some_and(|id| matches!(self.child_turns(id), Ok(Some(_)))) => {}
+            // A callback a subagent opened is answered under the
+            // subagent's session (`_callback_events` on a child event).
+            Route::Root
+                if method == "callback/result"
+                    && named.as_deref().is_some_and(|id| self.unified_child(id)) => {}
             Route::Catalog | Route::Root | Route::SessionOptional => {
                 self.require_named_root(named.as_deref())?;
             }
@@ -284,6 +319,56 @@ impl ServerConnection {
         }
         if method == "session/start" {
             return self.reference_session_start(request);
+        }
+        if (method == "session/rewind" || method == "session/rewind/read")
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return if method == "session/rewind" {
+                self.unified_rewind(&request, unified)
+            } else {
+                self.unified_rewind_read(&request, &unified)
+            };
+        }
+        if method == "session/compact"
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return self.unified_compact(&request, unified);
+        }
+        if (method == "session/turn/enqueue" || method.starts_with("session/turn/queue/"))
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return self.unified_queue(request, unified);
+        }
+        if method.starts_with("loops/")
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return self.unified_loops(&request, &unified);
+        }
+        if method == "session/context/inject"
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return self.unified_context_inject(&request, &unified);
+        }
+        if matches!(method, "turn/interrupt" | "turn/steer" | "callback/result")
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return match method {
+                "turn/interrupt" => self.unified_turn_interrupt(request, unified),
+                "turn/steer" => self.unified_turn_steer(request, unified),
+                _ => self.unified_callback_result(request, unified),
+            };
         }
         if matches!(method, "turn/interrupt" | "turn/steer") {
             let expected = request
@@ -354,6 +439,36 @@ impl ServerConnection {
             "session/agent/update" | "agents/install" | "agents/uninstall"
         ) {
             return self.reference_runtime_mutation(request);
+        }
+        if method == "turn/start"
+            && let Some(unified) = self
+                .root_id()
+                .and_then(|root| self.server.unified_session(&root))
+        {
+            return self.unified_turn_start(request, unified);
+        }
+        // Reference `dispatch_extension` on a Unified Harness session serves
+        // no review: the edits a turn made are not tracked there.
+        if method.starts_with("review/")
+            && request
+                .params
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .is_some_and(|session_id| self.server.unified_session(session_id).is_some())
+        {
+            return Err(method_not_found(method));
+        }
+        if self.server.harness_selection().use_unified {
+            match method {
+                "session/list" => return self.unified_list(&request),
+                "session/resume" => return self.unified_resume(request),
+                "session/continue" => return self.unified_continue(request),
+                "session/read" => return self.unified_read(&request),
+                "session/rename" | "session/pin" | "session/archive" | "session/markAsSeen" => {
+                    return self.unified_mark(&request);
+                }
+                _ => {}
+            }
         }
         Ok(self.port_request(request))
     }
@@ -723,7 +838,7 @@ impl ServerConnection {
     /// The refusal of parameters that did not validate, which the reference
     /// also records in its log (`_dispatch_or_error`), where
     /// `diagnostics/logs/read` finds it.
-    pub(super) fn rejected(
+    pub(in crate::server) fn rejected(
         &self,
         method: &str,
         issues: &[wire_validation::Issue],
@@ -793,6 +908,9 @@ impl ServerConnection {
         let mut params = reopen_start_params(&agent_config);
         if let Some(limit) = request.params.get("historyLimit") {
             params.insert("historyLimit".to_owned(), limit.clone());
+        }
+        if self.server.harness_selection().use_unified {
+            return self.unified_session_start(ServerRequest { params, ..request });
         }
         self.open_reopened(ServerRequest { params, ..request }, false)
     }

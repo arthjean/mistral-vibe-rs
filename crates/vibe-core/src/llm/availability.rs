@@ -445,6 +445,7 @@ async fn probe(
         backend
             .complete(
                 &ModelRequest {
+                    unified: false,
                     model,
                     messages: &messages,
                     temperature: 0.0,

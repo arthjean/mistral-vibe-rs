@@ -275,6 +275,28 @@ fn config_origin(snapshot: &Value, path: &str, configured: bool) -> String {
 /// `offset` is where this page starts in it. Whether each point would change
 /// files is filled in by the caller, which is the only one that can ask.
 #[must_use]
+/// The rewind points of a unified session: every message its operator
+/// wrote, addressed by its entry identity, oldest first.
+pub fn unified_rewind_targets(entries: &[Value]) -> Vec<RewindTarget> {
+    entries
+        .iter()
+        .filter(|entry| entry["type"] == "message" && entry["role"] == "user")
+        .filter_map(|entry| {
+            let message = entry["content"]
+                .as_array()?
+                .iter()
+                .filter_map(|block| block["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("");
+            Some(RewindTarget {
+                entry_id: entry["id"].as_str()?.to_owned(),
+                message,
+                has_file_changes: false,
+            })
+        })
+        .collect()
+}
+
 pub fn rewind_targets(history: &Value, offset: usize) -> Vec<RewindTarget> {
     let messages = history
         .get("history")
@@ -374,6 +396,61 @@ pub fn theme_overlay(current: &str) -> Overlay {
 }
 
 #[must_use]
+/// The resume picker over a unified `session/list`: each session named by
+/// its title or else its preview, and dated by its last update the way
+/// reference `_format_relative_time` reads it.
+pub fn unified_sessions_overlay(result: &Value, current_session_id: &str, now: u64) -> Overlay {
+    let items = result
+        .get("items")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|session| {
+            let id = session.get("id").and_then(Value::as_str)?;
+            let text = |key: &str| {
+                session
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .filter(|text| !text.is_empty())
+            };
+            let title = text("title").or_else(|| text("preview")).unwrap_or(id);
+            let updated = session
+                .get("updatedAt")
+                .and_then(Value::as_u64)
+                .map_or_else(
+                    || "unknown".to_owned(),
+                    |millis| relative_time(now, millis / 1000),
+                );
+            let current = id == current_session_id;
+            Some(OverlayItem::new(
+                id,
+                title,
+                format!("{updated}{}", if current { " · current" } else { "" }),
+                false,
+            ))
+        })
+        .collect();
+    Overlay::new(OverlayKind::Sessions, "Saved sessions", items)
+}
+
+/// Reference `_format_relative_time`, from the coarsest unit that fits.
+fn relative_time(now: u64, then: u64) -> String {
+    let seconds = now.saturating_sub(then);
+    if seconds < 60 {
+        return "just now".to_owned();
+    }
+    let (divisor, unit) = if seconds < 3_600 {
+        (60, "m")
+    } else if seconds < 86_400 {
+        (3_600, "h")
+    } else if seconds < 604_800 {
+        (86_400, "d")
+    } else {
+        (604_800, "w")
+    };
+    format!("{}{unit} ago", seconds / divisor)
+}
+
 pub fn sessions_overlay(result: &Value, current_session_id: &str) -> Overlay {
     let items = result
         .get("sessions")

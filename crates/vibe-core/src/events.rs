@@ -15,8 +15,9 @@ pub mod detail;
 pub use detail::{
     ApprovalDecision, ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectCallDisplay,
     EffectDetail, EffectResultDisplay, HookNotice, HookScope, HookSeverity, NoticeDetail,
-    QuestionChoice, RemoteSettlement, RemoteToolOrigin, TodoEffectPriority, TodoEffectStatus,
-    ToolEffectKind, UserAnswer, UserQuestion, UserQuestionRequest, UserQuestionResult,
+    QuestionChoice, RemoteSettlement, RemoteToolKind, RemoteToolOrigin, TodoEffectPriority,
+    TodoEffectStatus, ToolEffectKind, UserAnswer, UserQuestion, UserQuestionRequest,
+    UserQuestionResult,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -511,7 +512,7 @@ pub enum PublicEffectState {
         output: Value,
         #[serde(default)]
         output_text: String,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "whole_millis")]
         duration_ms: u64,
         display: EffectResultDisplay,
         #[serde(flatten)]
@@ -524,7 +525,7 @@ pub enum PublicEffectState {
         output: Value,
         #[serde(default)]
         output_text: String,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "whole_millis")]
         duration_ms: u64,
         display: EffectResultDisplay,
         #[serde(flatten)]
@@ -534,7 +535,7 @@ pub enum PublicEffectState {
         reason: String,
         #[serde(default)]
         output_text: String,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "whole_millis")]
         duration_ms: u64,
         /// A cancellation that produced no result carries no display, which is
         /// the one settled state the reference lets publish a null one.
@@ -809,6 +810,14 @@ pub struct ManualShellRecord {
 
 fn zero_duration() -> serde_json::Number {
     serde_json::Number::from(0)
+}
+
+/// A duration in milliseconds, which the Unified Harness publishes as a
+/// float; this port keeps whole milliseconds.
+fn whole_millis<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
+    let millis = f64::deserialize(deserializer)?;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    Ok(millis.max(0.0).round() as u64)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -2184,5 +2193,19 @@ mod tests {
         let structured = settled_display(&structured);
         assert!(structured.success);
         assert_eq!(structured.message, "search");
+    }
+
+    /// The Unified Harness publishes an effect's duration as a float.
+    #[test]
+    fn a_unified_effect_reads_with_a_fractional_duration() {
+        let entry: PublicHistoryEntry = serde_json::from_value(json!({"createdAt": 1, "detail": {"display": {"content": null, "message": "quotes.txt", "settledMessage": "quotes.txt", "settledVerb": "Edited", "statusText": "Editing quotes", "suffix": "", "summary": "Edit quotes.txt", "verb": "Editing"}, "input": {"changes": [{"newString": "say \"hi\"\tnow", "oldString": "say 'hi'", "replaceAll": false}], "filePath": "quotes.txt"}, "kind": "file_edit", "toolName": "file_system.search_replace"}, "generationStatus": "completed", "id": "e1", "inputEntryId": "u1", "relatedEntryId": null, "sessionId": "s1", "state": {"approvalSource": "config", "approvalType": "always", "decision": "execute", "display": {"approvalNote": null, "message": "/w/quotes.txt", "success": true, "suffix": "", "verb": "Edited", "warnings": []}, "durationMs": 12.6, "output": {"file": "/w/quotes.txt", "newString": null, "occurrences": [{"newText": "say \"hi\"\tnow", "oldText": "say 'hi'", "startLine": 1}], "oldString": null}, "outputText": "", "status": "completed"}, "title": "file_system.search_replace", "turnId": "t1", "type": "effect", "updatedAt": 2})).unwrap();
+        let PublicHistoryEntry::Effect {
+            state: PublicEffectState::Completed { duration_ms, .. },
+            ..
+        } = entry
+        else {
+            panic!("an effect entry");
+        };
+        assert_eq!(duration_ms, 13);
     }
 }

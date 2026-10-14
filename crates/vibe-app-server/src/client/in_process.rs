@@ -260,9 +260,28 @@ pub struct PendingPublicCall {
     outbound: Vec<Vec<u8>>,
     deferred: Vec<DeferredWork>,
     listener: Option<LiveNotificationListener>,
+    /// Where a unified session gives the answer it owes once its work ends.
+    later: Option<tokio::sync::oneshot::Receiver<Vec<u8>>>,
 }
 
 impl PendingPublicCall {
+    /// A call a unified session's connection took.
+    pub(super) fn unified(
+        server: &AppServer,
+        method: &str,
+        dispatched: super::unified::Dispatched,
+    ) -> Self {
+        Self {
+            server: server.clone(),
+            request_id: dispatched.request_id,
+            method: method.to_owned(),
+            outbound: dispatched.outbound,
+            deferred: dispatched.deferred,
+            listener: None,
+            later: dispatched.later,
+        }
+    }
+
     /// The same call, with what it publishes mid-flight also handed to
     /// `listener` as it happens, which is how a sign-in's URL reaches a user
     /// before the sign-in answers.
@@ -356,6 +375,12 @@ impl PendingPublicCall {
                 self.outbound.append(&mut early);
             }
             self.outbound.extend(completed.outbound);
+        }
+        if let Some(later) = self.later {
+            let frame = later.await.map_err(|_| {
+                ClientError::InvalidResponse(format!("`{}` was never answered", self.method))
+            })?;
+            self.outbound.push(frame);
         }
         decode_public_dispatch(self.outbound, &self.request_id, &self.method)
     }
@@ -835,6 +860,7 @@ impl InProcessClient {
             outbound: batch.outbound,
             deferred: batch.deferred,
             listener: None,
+            later: None,
         })
     }
 

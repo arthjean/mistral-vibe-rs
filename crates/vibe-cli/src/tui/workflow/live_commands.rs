@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::PublicDispatch;
-use vibe_core::events::{PublicHistoryEntry, PublicNoticeLevel};
+use vibe_core::events::PublicNoticeLevel;
 use vibe_core::identity::{HttpIdentityGateway, IdentityCache};
 use vibe_core::observability::{LogLevel, LogLevelChain, log_level_chain, set_session_log_level};
 use vibe_core::telemetry::TelemetryRecord;
@@ -26,7 +26,9 @@ use super::super::command_handlers::{
 use super::super::commands::{CommandContext, parse_command_in};
 use super::super::controls::ControlState;
 use super::super::interaction::{IntegrationKind, Overlay, OverlayItem, OverlayKind};
-use super::super::pickers::{mcp_overlay, sessions_overlay, theme_overlay, thinking_overlay};
+use super::super::pickers::{
+    mcp_overlay, sessions_overlay, theme_overlay, thinking_overlay, unified_sessions_overlay,
+};
 use super::super::plugins::{PluginCatalog, PluginsPanel, PluginsPort};
 use super::super::remote_project_workflow::{handle_teleport_command, open_project_picker};
 use super::super::setup::ResolvedTheme;
@@ -104,6 +106,15 @@ impl<'a> LiveBackend<'a> {
         }
     }
 
+    /// Whether the session runs on the Unified Harness, which answers the
+    /// reference's own session methods rather than this port's `internal/`
+    /// ones over the legacy store.
+    fn unified(&self) -> bool {
+        self.runtime
+            .as_ref()
+            .is_some_and(|runtime| runtime.service.is_unified(&runtime.session_id))
+    }
+
     fn runtime(&mut self) -> Result<&mut InteractiveRuntime, String> {
         self.runtime
             .as_mut()
@@ -120,6 +131,15 @@ impl<'a> LiveBackend<'a> {
                 .or_insert_with(|| json!(runtime.session_id));
         }
         runtime
+            .service
+            .public_call(method, params)
+            .map(|result| Value::Object(result.into_iter().collect()))
+            .map_err(|error| error.to_string())
+    }
+
+    /// [`Self::call`] for a method that names no session of its own.
+    fn call_unscoped(&mut self, method: &str, params: Value) -> Result<Value, String> {
+        self.runtime()?
             .service
             .public_call(method, params)
             .map(|result| Value::Object(result.into_iter().collect()))
@@ -358,13 +378,21 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn clear_history(&mut self) -> Result<(), String> {
-        let result = self.call("internal/session/history/clear", json!({}))?;
-        let result = result
-            .as_object()
-            .map(|fields| fields.clone().into_iter().collect())
-            .unwrap_or_default();
-        let session_id = metadata_session_id(&result)
-            .ok_or_else(|| "the cleared session published no identifier".to_owned())?;
+        let session_id = if self.unified() {
+            let result = self.call("session/history/clear", json!({}))?;
+            result
+                .pointer("/state/session/id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        } else {
+            let result = self.call("internal/session/history/clear", json!({}))?;
+            let result = result
+                .as_object()
+                .map(|fields| fields.clone().into_iter().collect())
+                .unwrap_or_default();
+            metadata_session_id(&result)
+        }
+        .ok_or_else(|| "the cleared session published no identifier".to_owned())?;
         let Some(runtime) = self.runtime.as_mut() else {
             return Err(SETUP_REQUIRED.to_owned());
         };
@@ -420,7 +448,12 @@ impl CommandBackend for LiveBackend<'_> {
         let Some(runtime) = self.runtime.as_mut() else {
             return Err(SETUP_REQUIRED.to_owned());
         };
+        // A compaction keeps the todo list it summarized.
+        let todos = self.state.todos.clone();
         if adopt_hydrated_session(runtime, self.state, self.controls, compacted) {
+            if todos.is_some() {
+                self.state.todos = todos;
+            }
             Ok(())
         } else {
             Err("the compacted session could not be opened".to_owned())
@@ -429,10 +462,9 @@ impl CommandBackend for LiveBackend<'_> {
 
     fn stats(&mut self) -> Stats {
         let stats = self
-            .call("stats/read", json!({}))
-            .ok()
-            .and_then(|result| result.get("stats").cloned())
-            .unwrap_or(Value::Null);
+            .runtime
+            .as_mut()
+            .map_or(Value::Null, |runtime| runtime.session_stats());
         let count = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or_default();
         let price = |key: &str| stats.get(key).and_then(Value::as_f64);
         let (prompt, completion, cached) = (
@@ -553,20 +585,38 @@ impl CommandBackend for LiveBackend<'_> {
 
     async fn saved_sessions(&mut self) -> usize {
         let cwd = self.working_directory.to_string_lossy().into_owned();
-        let Ok(result) = self.call(
-            "internal/session/list",
-            json!({"cwd": cwd, "offset": 0, "limit": 100}),
-        ) else {
+        let unified = self.unified();
+        let result = if unified {
+            self.call_unscoped("session/list", json!({"cwd": cwd, "limit": 100}))
+        } else {
+            self.call(
+                "internal/session/list",
+                json!({"cwd": cwd, "offset": 0, "limit": 100}),
+            )
+        };
+        let Ok(result) = result else {
             return 0;
         };
         let current = self.session_id();
-        let overlay = sessions_overlay(&result, &current);
+        let overlay = if unified {
+            unified_sessions_overlay(&result, &current, unix_seconds())
+        } else {
+            sessions_overlay(&result, &current)
+        };
         let count = overlay.items.len();
         self.sessions = Some(overlay);
         count
     }
 
     async fn rename(&mut self, title: &str) -> Result<String, String> {
+        if self.unified() {
+            let result = self.call("session/rename", json!({"title": title}))?;
+            return Ok(result
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or(title)
+                .to_owned());
+        }
         self.call("internal/session/title/update", json!({"title": title}))?;
         Ok(title.to_owned())
     }
@@ -691,7 +741,10 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     fn has_todos(&self) -> bool {
-        !current_todos(self.state).is_empty()
+        self.state
+            .todos
+            .as_ref()
+            .is_some_and(|todos| !todos.todos().is_empty())
     }
 
     async fn agent_names(&mut self) -> Vec<String> {
@@ -724,6 +777,19 @@ impl CommandBackend for LiveBackend<'_> {
 
     async fn fork(&mut self) -> Result<String, String> {
         let source = self.session_id();
+        if self.unified() {
+            // Reference `_branch_session`: a detached copy the operator
+            // resumes later.
+            let result = self.call_unscoped(
+                "session/fork",
+                json!({"sourceSessionId": source, "attach": false}),
+            )?;
+            return result
+                .pointer("/state/session/id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| "the copy published no identifier".to_owned());
+        }
         let result = self.call(
             "internal/session/fork",
             json!({"newSessionId": vibe_core::session_id::rotate_session_id(&source)}),
@@ -834,58 +900,31 @@ pub(in crate::tui) async fn run_command(
 // Todos and skills
 // --------------------------------------------------------------------------
 
-/// The todo list the agent last wrote. Reference `TodoTracker.todos`, which
-/// follows the `todo` tool's results and empties when the conversation does.
-fn current_todos(state: &TuiState) -> Vec<(String, String)> {
-    state
-        .entries
-        .iter()
-        .rev()
-        .find_map(|entry| match entry.source.server() {
-            Some(PublicHistoryEntry::Effect {
-                detail,
-                state: vibe_core::events::PublicEffectState::Completed { output, .. },
-                ..
-            }) if detail.kind == vibe_core::events::ToolEffectKind::Todo => Some(output.clone()),
-            _ => None,
-        })
-        .and_then(|output| output.get("todos").and_then(Value::as_array).cloned())
-        .unwrap_or_default()
-        .iter()
-        .filter_map(|todo| {
-            Some((
-                todo.get("status")?.as_str()?.to_owned(),
-                todo.get("content")?.as_str()?.to_owned(),
-            ))
-        })
-        .collect()
-}
-
-/// Reference `TodoOverlayScreen`: the list grouped by status, in the order the
-/// transcript renders it.
-fn todos_overlay(state: &TuiState) -> Overlay {
-    let todos = current_todos(state);
+/// Reference `TodoOverlayScreen`: the tracked list grouped by status, under a
+/// title that counts what is done.
+pub(in crate::tui) fn todos_overlay(state: &TuiState) -> Overlay {
+    let todos = state
+        .todos
+        .as_ref()
+        .map(crate::tui::todos::TodoTracker::todos)
+        .unwrap_or_default();
     let mut items = Vec::new();
-    for status in ["in_progress", "pending", "completed", "cancelled"] {
-        for (index, (_, content)) in todos
+    for status in crate::tui::todos::OVERLAY_ORDER {
+        for (index, todo) in todos
             .iter()
             .enumerate()
-            .filter(|(_, (todo_status, _))| todo_status == status)
+            .filter(|(_, todo)| todo.status == status)
         {
-            let icon = match status {
-                "completed" => "☑",
-                "cancelled" => "☒",
-                _ => "☐",
-            };
             items.push(OverlayItem::new(
                 format!("todo-{index}"),
-                format!("{icon} {content}"),
+                format!("{} {}", status.icon(), todo.content),
                 "",
                 false,
             ));
         }
     }
-    Overlay::new(OverlayKind::Todos, "Todos", items)
+    let title = format!("Todos · {} done", crate::tui::todos::progress_label(todos));
+    Overlay::new(OverlayKind::Todos, title, items)
 }
 
 /// The skills this session loaded, which is what the browser lists.

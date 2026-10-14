@@ -224,7 +224,9 @@ pub(super) async fn start_prompt_with_client_id(
 /// Reference `_record_mentions`, raised where the turn is submitted: a prompt
 /// that mentioned nothing reports nothing, and the message the mentions belong
 /// to travels with them. Then reference `_send_skill_telemetry`: a prompt whose
-/// first word names a published skill is a slash command of type `skill`.
+/// first word names a published skill is a slash command of type `skill`, and
+/// one the registry forwards to the model is a built-in command reported under
+/// its registry key (`_enqueue_prompt` in `vibe/cli/textual_ui/app.py`).
 pub(super) fn report_prompt_telemetry(
     runtime: &InteractiveRuntime,
     prompt: &str,
@@ -234,6 +236,15 @@ pub(super) fn report_prompt_telemetry(
     report_mentions(runtime, stats, message_id);
     if invoked_skill(runtime, prompt).is_some() {
         super::report_slash_command(runtime, prompt, TelemetryCommandKind::Skill);
+    }
+    let context = super::runtime::command_context(Some(runtime));
+    if let Some(parsed) = super::commands::parse_command_in(prompt, &context)
+        && context.forwards_to_model(parsed.id)
+    {
+        runtime.report(&TelemetryRecord::SlashCommandUsed {
+            command: super::commands::command_name(parsed.id).to_owned(),
+            kind: TelemetryCommandKind::Builtin,
+        });
     }
 }
 

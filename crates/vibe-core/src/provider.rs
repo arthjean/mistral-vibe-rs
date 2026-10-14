@@ -54,6 +54,20 @@ pub struct ProviderInput {
     pub limits: RequestLimits,
     #[serde(default)]
     pub metadata: BTreeMap<String, String>,
+    /// The request shape the call takes on the wire.
+    #[serde(skip)]
+    pub dialect: RequestDialect,
+}
+
+/// Which client shapes a request: the legacy backend's, or the Unified
+/// Harness runtime's (`harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/adapters/`),
+/// which leaves unset fields out, sends `parallel_tool_calls` beside tools and
+/// carries an assistant's tool calls only when it made some.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum RequestDialect {
+    #[default]
+    Legacy,
+    Unified,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

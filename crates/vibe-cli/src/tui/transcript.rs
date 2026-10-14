@@ -1004,7 +1004,7 @@ fn shell_transcript(output: &Value) -> String {
     if !stdout.is_empty() && !stderr.is_empty() && !stdout.ends_with('\n') {
         return format!("{stdout}\n{stderr}");
     }
-    stdout + &stderr
+    stdout + stderr.as_str()
 }
 
 /// Reference `ToolResultWidget._yield_text`: captured output is cleaned for
@@ -1763,7 +1763,7 @@ mod tests {
         assert_eq!(unknown.kind, EffectKind::Tool);
         assert_eq!(
             unknown.header_text(),
-            "Ran mcp__thing__do(count=2, target='x')"
+            "Ran mcp__thing__do(target='x', count=2)"
         );
         assert_eq!(unknown.body[0].text, "ok: true");
 

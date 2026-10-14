@@ -51,6 +51,9 @@ where
     title: Mutex<DisplayTitle>,
     /// What orders a delegated tool request behind the updates before it.
     pub(crate) barrier: UpdateBarrier,
+    /// Whether the session runs on the Unified Harness, which publishes its
+    /// own accounting and names.
+    unified: bool,
 }
 
 #[derive(Debug, Default)]
@@ -69,7 +72,9 @@ where
         session_id: &str,
     ) -> Result<Self, AcpError> {
         let view = service.session(session_id)?;
+        let unified = service.is_unified(session_id);
         Ok(Self {
+            unified,
             service: tokio::sync::Mutex::new(service),
             session_id: session_id.to_owned(),
             cwd: view.working_directory,
@@ -81,6 +86,11 @@ where
             title: Mutex::new(DisplayTitle::default()),
             experiments: None,
         })
+    }
+
+    /// Whether the session runs on the Unified Harness.
+    pub(crate) fn is_unified(&self) -> bool {
+        self.unified
     }
 
     /// The identity the app server knows the session by, which is the one
@@ -138,6 +148,35 @@ where
             title.preview = text("preview");
             title.shown = title.title.clone().or_else(|| title.preview.clone());
         }
+    }
+
+    /// Takes the title and preview a Unified Harness session published, and
+    /// returns the label when it changed.
+    /// The title and preview the session last published, which a listing
+    /// prefers to the stored ones while the session is open.
+    pub(crate) fn names(&self) -> (Option<String>, Option<String>) {
+        self.title
+            .lock()
+            .map(|title| (title.title.clone(), title.preview.clone()))
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn observe_names(
+        &self,
+        published_title: Option<&str>,
+        published_preview: Option<&str>,
+    ) -> Option<String> {
+        let mut title = self.title.lock().ok()?;
+        let text =
+            |value: Option<&str>| value.filter(|text| !text.is_empty()).map(ToOwned::to_owned);
+        title.title = text(published_title);
+        title.preview = text(published_preview);
+        let shown = title.title.clone().or_else(|| title.preview.clone());
+        if shown == title.shown {
+            return None;
+        }
+        title.shown.clone_from(&shown);
+        shown
     }
 
     /// Folds `entry` into the session's label, and returns the label when it

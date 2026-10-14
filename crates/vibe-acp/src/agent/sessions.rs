@@ -58,15 +58,22 @@ where
         self: &Arc<Self>,
         request: AcpLoadSession,
     ) -> Result<Value, AcpError> {
-        if self
+        let live = self
             .lock_state()?
             .sessions
-            .contains_key(&request.session_id)
-        {
-            return Err(AcpError::Configuration(format!(
-                "session `{}` is already open",
-                request.session_id
-            )));
+            .get(&request.session_id)
+            .cloned();
+        if let Some(live) = live {
+            // The Unified Harness reopens a session from its store whoever
+            // holds it, and the client then follows the reopened one.
+            if !self.harness.use_unified {
+                return Err(AcpError::Configuration(format!(
+                    "session `{}` is already open",
+                    request.session_id
+                )));
+            }
+            self.lock_state()?.sessions.remove(&request.session_id);
+            stop_session(&live).await;
         }
         let harness = self
             .create_session(
@@ -133,20 +140,39 @@ where
         request: AcpForkSession,
     ) -> Result<Value, AcpError> {
         let source = self.session_harness(&request.session_id)?;
-        let mut params = json!({});
-        if let Some(message_id) = &request.message_id {
-            params["messageId"] = json!(message_id);
+        let fork_id = if source.is_unified() {
+            // Reference `sessions.fork(message_id, attach=False)`.
+            let fork = self
+                .call_unscoped(
+                    &source,
+                    "session/fork",
+                    json!({
+                        "sourceSessionId": source.canonical_id(),
+                        "entryId": request.message_id,
+                        "attach": false,
+                    }),
+                )
+                .await
+                .map_err(invalid_request)?;
+            fork.get("state")
+                .and_then(|state| state.pointer("/session/id"))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        } else {
+            let mut params = json!({});
+            if let Some(message_id) = &request.message_id {
+                params["messageId"] = json!(message_id);
+            }
+            let fork = self
+                .call(&source, "internal/session/fork", params)
+                .await
+                .map_err(invalid_request)?;
+            fork.get("metadata")
+                .and_then(|metadata| metadata.get("session_id").or_else(|| metadata.get("id")))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
         }
-        let fork = self
-            .call(&source, "internal/session/fork", params)
-            .await
-            .map_err(invalid_request)?;
-        let fork_id = fork
-            .get("metadata")
-            .and_then(|metadata| metadata.get("session_id").or_else(|| metadata.get("id")))
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-            .ok_or_else(|| AcpError::InvalidResponse("the fork named no session".to_owned()))?;
+        .ok_or_else(|| AcpError::InvalidResponse("the fork named no session".to_owned()))?;
         let child = self
             .create_session(
                 &request.cwd,
@@ -195,6 +221,9 @@ where
         let mut params = json!({});
         if let Some(cwd) = cwd {
             params["cwd"] = json!(cwd);
+        }
+        if self.harness.use_unified {
+            return self.list_unified_sessions(&working_directory, params);
         }
         let listed = self.with_probe(&working_directory, &[], |probe| {
             Ok(probe.public_call("internal/session/list", params)?)
@@ -245,6 +274,69 @@ where
         Ok(json!({"sessions": sessions}))
     }
 
+    /// [`Self::list_sessions`] on the Unified Harness: reference
+    /// `HostResources.list_sessions` pages through `session/list`, and an
+    /// untitled session reads as its preview.
+    fn list_unified_sessions(
+        &self,
+        working_directory: &str,
+        params: Value,
+    ) -> Result<Value, AcpError> {
+        let items = self.with_probe(working_directory, &[], |probe| {
+            let mut items = Vec::new();
+            let mut params = params;
+            loop {
+                let page = probe.public_call("session/list", params.clone())?;
+                items.extend(
+                    page.get("items")
+                        .and_then(Value::as_array)
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+                match page.get("nextCursor").and_then(Value::as_str) {
+                    Some(cursor) => params["cursor"] = json!(cursor),
+                    None => break,
+                }
+            }
+            Ok(items)
+        })?;
+        let text = |item: &Value, key: &str| {
+            item.get(key)
+                .and_then(Value::as_str)
+                .filter(|text| !text.is_empty())
+                .map(ToOwned::to_owned)
+        };
+        let sessions = items
+            .iter()
+            .map(|item| {
+                let mut info = json!({
+                    "sessionId": item.get("id").cloned().unwrap_or(Value::Null),
+                    "cwd": text(item, "cwd").unwrap_or_default(),
+                    "updatedAt": crate::projection::iso_timestamp(
+                        item.get("updatedAt").and_then(Value::as_u64).unwrap_or(0),
+                    ),
+                });
+                // Reference `_live_listed_sessions`: one host serves every
+                // session there, so an open one is listed as it stands.
+                let live = item
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .and_then(|id| self.find_live_session(id).ok().flatten())
+                    .filter(|harness| harness.is_unified())
+                    .map(|harness| harness.names());
+                let title = match live {
+                    Some((title, preview)) => title.or(preview),
+                    None => text(item, "title").or_else(|| text(item, "preview")),
+                };
+                if let Some(title) = title {
+                    info["title"] = json!(title);
+                }
+                info
+            })
+            .collect::<Vec<_>>();
+        Ok(json!({"sessions": sessions}))
+    }
+
     /// Reference `set_session_mode`: a mode the session does not offer is
     /// ignored rather than refused.
     pub async fn set_mode(&self, session_id: &str, mode_id: &str) -> Result<(), AcpError> {
@@ -252,8 +344,12 @@ where
         if !self.is_primary_mode(&harness, mode_id).await? {
             return Ok(());
         }
-        self.call(&harness, "session/agent/update", json!({"name": mode_id}))
-            .await?;
+        self.call(
+            &harness,
+            "session/agent/update",
+            json!({"agentName": mode_id}),
+        )
+        .await?;
         Ok(())
     }
 
@@ -271,7 +367,7 @@ where
         let text = value.as_str();
         match (config_id, text) {
             ("mode", Some(mode)) if self.is_primary_mode(&harness, mode).await? => {
-                self.call(&harness, "session/agent/update", json!({"name": mode}))
+                self.call(&harness, "session/agent/update", json!({"agentName": mode}))
                     .await
                     .map_err(invalid_request)?;
             }

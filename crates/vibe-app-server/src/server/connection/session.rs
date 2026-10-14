@@ -151,7 +151,7 @@ impl ServerConnection {
     /// A removal that fails is published on `diagnostics/list` rather than
     /// replacing the error the client is owed, which is the one that failed the
     /// start (`vibe/core/session/worktrees.py:153-181`).
-    pub(super) fn undo_worktree(&self, resolution: &WorktreeResolution) {
+    pub(in crate::server) fn undo_worktree(&self, resolution: &WorktreeResolution) {
         let Some(note) = self.session_worktrees().cleanup(
             resolution.prepared.as_ref(),
             resolution.pending_hold.as_ref(),
@@ -184,7 +184,7 @@ impl ServerConnection {
     /// Registers the session a start resolved, and answers its identifier, its
     /// state and the MCP servers it still has to connect. The first session a
     /// connection opens becomes its root.
-    pub(super) fn open_resolved_session(
+    pub(in crate::server) fn open_resolved_session(
         &mut self,
         params: &SessionStartParams,
         resolution: &mut WorktreeResolution,
@@ -263,7 +263,11 @@ impl ServerConnection {
             .map_err(ProtocolFault::internal)?;
         self.record_tool_surface_diagnostics(&intent, &tools);
         self.record_skill_diagnostics();
-        if persisted.is_none() && self.server.workspace.persists_runtime_sessions() {
+        // A unified session keeps its own store, written once it takes a turn.
+        if persisted.is_none()
+            && self.server.workspace.persists_runtime_sessions()
+            && !self.server.harness_selection().use_unified
+        {
             persisted = Some(self.server.workspace.create_runtime_session(
                 &session_id,
                 &working_directory,
@@ -271,6 +275,7 @@ impl ServerConnection {
             )?);
         }
         if should_persist_agent
+            && !self.server.harness_selection().use_unified
             && let Some(hydrated) = self
                 .server
                 .workspace
@@ -394,6 +399,18 @@ impl ServerConnection {
                 })?,
             None => params.max_price_micros,
         };
+        // Reference `_build_unified_runtime`: a negative turn budget becomes the
+        // core's `max_iterations`, whose model requires a positive value.
+        if self.server.harness_selection().use_unified
+            && params.max_turns.is_some_and(|turns| turns < 0)
+        {
+            return Err(ProtocolFault::from(ParamsRejection::with_issues(vec![
+                InvalidParamsIssue {
+                    path: vec![PathSegment::Field("max_iterations".to_owned())],
+                    message: "Input should be greater than 0".to_owned(),
+                },
+            ])));
+        }
         let requested_working_directory = params
             .working_directory
             .clone()
@@ -753,10 +770,16 @@ impl ServerConnection {
             session.id.clone()
         };
         let approval_changed = params.auto_approve.is_some();
-        let persisted = self
-            .server
-            .workspace
-            .update_runtime_settings(&canonical_session_id, &params.entries())?;
+        // Reference `UnifiedSessionSettings` lives with the session's runtime
+        // and is never written to a transcript, which a Unified Harness
+        // session does not keep.
+        let persisted = if self.server.unified_session(&canonical_session_id).is_some() {
+            None
+        } else {
+            self.server
+                .workspace
+                .update_runtime_settings(&canonical_session_id, &params.entries())?
+        };
         let mut sessions = self.server.lock_sessions()?;
         let session = sessions
             .get_mut(&params.session_id)

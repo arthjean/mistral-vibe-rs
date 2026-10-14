@@ -64,6 +64,7 @@ pub mod tools;
 pub mod tracing;
 pub mod trust;
 pub mod updates;
+pub mod vision;
 pub mod whoami;
 pub mod workspace;
 pub mod worktree;

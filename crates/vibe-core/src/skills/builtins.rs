@@ -24,6 +24,11 @@ use crate::skills::{SkillScope, SkillSource};
 const VIBE_BODY: &str = include_str!("assets/vibe.md");
 const SKILL_CREATOR_BODY: &str = include_str!("assets/skill_creator.md");
 
+/// The builtin names in the order the reference declares them, which is the
+/// order a catalog listing puts them in, ahead of every discovered skill
+/// (reference `BUILTIN_SKILLS`, seeded first by `_discover_skills`).
+pub const BUILTIN_SKILL_ORDER: [&str; 2] = ["vibe", "skill-creator"];
+
 /// The builtin catalog, keyed by name, in the shape `discover_extensions`
 /// seeds ahead of the disk walk. Both entries carry `source: builtin`, the
 /// `global` scope the reference publishes for them, and no path.

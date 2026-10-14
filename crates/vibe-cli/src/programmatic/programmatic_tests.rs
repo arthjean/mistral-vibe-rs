@@ -6,9 +6,9 @@ use super::pyjson::Ordered;
 #[test]
 fn an_effect_names_its_input_and_output_keys_in_declared_order() {
     let mut entry = Ordered::of(&json!({
-        "type": "effect",
-        "detail": {"kind": "file_read", "input": {"filePath": "a", "limit": 2000, "offset": null}},
+        "detail": {"input": {"filePath": "a", "limit": 2000, "offset": null}, "kind": "file_read"},
         "state": {"output": {"content": "x", "filePath": "a", "numLines": 1, "startLine": 1}},
+        "type": "effect",
     }))
     .expect("entry");
     layout::arrange(&mut entry);

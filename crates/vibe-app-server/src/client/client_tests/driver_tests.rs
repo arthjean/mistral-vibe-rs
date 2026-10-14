@@ -602,6 +602,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
                             projected_result: serde_json::Value::Null,
                             chunks: Vec::new(),
                             pending_injection: None,
+                            remote_result: None,
                         })
                     })
                 },

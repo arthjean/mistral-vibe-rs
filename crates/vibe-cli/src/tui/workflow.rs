@@ -24,9 +24,9 @@ use super::interaction::{
 };
 use super::pickers::{
     VOICE_MODEL_FIELDS, audio_model_aliases, config_overlay, model_overlay, proxy_overlay,
-    rewind_targets, voice_model_overlay, voice_overlay,
+    rewind_targets, unified_rewind_targets, voice_model_overlay, voice_overlay,
 };
-use super::rewind::{RewindEffect, RewindState, reduce_key as reduce_rewind_key};
+use super::rewind::{RewindEffect, RewindState, RewindTarget, reduce_key as reduce_rewind_key};
 use super::session_picker::SessionDeleteState;
 use super::state::{EntryStatus, TuiState};
 use super::switching::{self, SwitchRequest};
@@ -46,7 +46,7 @@ pub(in crate::tui) use keys::handle_overlay_key;
 pub(in crate::tui) use keys::handle_remote_project_create_key;
 #[cfg(test)]
 pub(in crate::tui) use live_commands::scheduled_loop;
-pub(in crate::tui) use live_commands::{FollowUp, LiveBackend, run_command};
+pub(in crate::tui) use live_commands::{FollowUp, LiveBackend, run_command, todos_overlay};
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
 #[cfg(test)]
@@ -259,6 +259,52 @@ fn show_model(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
 pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
     // Every page is read, so the latest messages of a long session are points
     // too, as the reference reaches older ones by loading more history.
+    let targets = if runtime.service.is_unified(&runtime.session_id) {
+        let mut entries: Vec<Value> = Vec::new();
+        let mut cursor = Value::Null;
+        loop {
+            let Some(page) = call_runtime(
+                runtime,
+                "session/history/list",
+                json!({
+                    "sessionId": runtime.session_id,
+                    "page": {"cursor": cursor, "limit": REWIND_HISTORY_LIMIT},
+                }),
+                state,
+            ) else {
+                return;
+            };
+            let page = map_value(page);
+            let mut older = page
+                .get("items")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            older.append(&mut entries);
+            entries = older;
+            cursor = page.get("nextCursor").cloned().unwrap_or(Value::Null);
+            if cursor.is_null() {
+                break;
+            }
+        }
+        unified_rewind_targets(&entries)
+    } else {
+        legacy_rewind_targets(runtime, state)
+    };
+    // Reference `action_rewind_prev`: with no message to rewind to, nothing
+    // opens and nothing is said.
+    if let Some(rewind) = RewindState::new(targets) {
+        state.overlay = None;
+        state.rewind = Some(rewind);
+        probe_rewind_target(runtime, state);
+    }
+}
+
+/// The rewind points of a legacy session's stored transcript.
+fn legacy_rewind_targets(
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) -> Vec<RewindTarget> {
     let mut targets = Vec::new();
     let mut offset = 0;
     loop {
@@ -272,7 +318,7 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
             }),
             state,
         ) else {
-            return;
+            return Vec::new();
         };
         let history = map_value(history);
         let read = history
@@ -285,13 +331,7 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
         }
         offset += read;
     }
-    // Reference `action_rewind_prev`: with no message to rewind to, nothing
-    // opens and nothing is said.
-    if let Some(rewind) = RewindState::new(targets) {
-        state.overlay = None;
-        state.rewind = Some(rewind);
-        probe_rewind_target(runtime, state);
-    }
+    targets
 }
 
 fn show_voice(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
@@ -407,9 +447,15 @@ fn resume_selected_session(
     // first, and a refused resume is an error in the transcript.
     state.overlay = None;
     state.session_delete = None;
+    let unified = runtime.service.is_unified(&runtime.session_id);
+    let method = if unified {
+        "session/resume"
+    } else {
+        "internal/session/resume"
+    };
     let result = match runtime
         .service
-        .public_call("internal/session/resume", json!({"sessionId": session_id}))
+        .public_call(method, json!({"sessionId": session_id}))
     {
         Ok(result) => result,
         Err(error) => {
@@ -417,7 +463,16 @@ fn resume_selected_session(
             return;
         }
     };
-    let Some(session_id) = metadata_session_id(&result) else {
+    let resumed = if unified {
+        result
+            .get("state")
+            .and_then(|state| state.pointer("/session/id"))
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+    } else {
+        metadata_session_id(&result)
+    };
+    let Some(session_id) = resumed else {
         return;
     };
     let notice = hydration::resumed_session_notice(&session_id);
@@ -434,9 +489,14 @@ fn delete_selected_session(
     let Some(runtime) = runtime.as_mut() else {
         return;
     };
+    let method = if runtime.service.is_unified(&runtime.session_id) {
+        "session/delete"
+    } else {
+        "internal/session/delete"
+    };
     if let Err(error) = runtime
         .service
-        .public_call("internal/session/delete", json!({"sessionId": session_id}))
+        .public_call(method, json!({"sessionId": session_id}))
     {
         state.session_delete = Some(SessionDeleteState::failure(session_id, error.to_string()));
         return;

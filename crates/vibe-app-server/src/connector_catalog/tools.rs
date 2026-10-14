@@ -90,7 +90,9 @@ impl SessionConnectors {
                     spec,
                     guarded,
                     format!("connector `{}` tool `{}`", connector.alias, tool.raw_name),
-                    Some(RemoteToolOrigin::connector(&tool.raw_name)),
+                    Some(
+                        RemoteToolOrigin::connector(&tool.raw_name).from_provider(&connector.alias),
+                    ),
                 );
             }
         }

@@ -11,8 +11,16 @@ use vibe_app_server::client::{
     CompactionDriverFuture, DriverError, DriverFuture, EventObserver, TitleFuture, TurnDriver,
     TurnReservation,
 };
+use vibe_core::engine::{CompletionProvider, ProviderFuture, ProviderStreamFuture};
+use vibe_core::llm::retry::RetryObserver;
+use vibe_core::provider::{ModelCallDescriptor, ProviderError, ProviderInput};
 
 pub(crate) struct DeferredTurnDriver<D> {
+    lazy: Arc<Lazy<D>>,
+}
+
+/// The driver once built, and how to build it.
+struct Lazy<D> {
     driver: OnceLock<Arc<D>>,
     initialize: Mutex<()>,
     factory: Box<dyn Fn() -> Result<D, DriverError> + Send + Sync>,
@@ -23,12 +31,20 @@ impl<D> DeferredTurnDriver<D> {
         factory: impl Fn() -> Result<D, DriverError> + Send + Sync + 'static,
     ) -> Self {
         Self {
-            driver: OnceLock::new(),
-            initialize: Mutex::new(()),
-            factory: Box::new(factory),
+            lazy: Arc::new(Lazy {
+                driver: OnceLock::new(),
+                initialize: Mutex::new(()),
+                factory: Box::new(factory),
+            }),
         }
     }
 
+    fn resolve(&self) -> Result<&Arc<D>, DriverError> {
+        self.lazy.resolve()
+    }
+}
+
+impl<D> Lazy<D> {
     /// The built driver, building it if this is the first call. The mutex is
     /// what [`OnceLock`] cannot express on its own: a fallible initialization
     /// that stores nothing when it fails, so a later call can try again.
@@ -47,6 +63,71 @@ impl<D> DeferredTurnDriver<D> {
                 .map_err(|_| DriverError::StatePoisoned)?;
         }
         self.driver.get().ok_or(DriverError::StatePoisoned)
+    }
+}
+
+/// The driver's own model, reached on first use like the driver itself: the
+/// Unified Harness answers every turn through it.
+struct DeferredProvider<D> {
+    lazy: Arc<Lazy<D>>,
+    provider: OnceLock<Arc<dyn CompletionProvider>>,
+}
+
+impl<D: TurnDriver> DeferredProvider<D> {
+    fn provider(&self) -> Result<&Arc<dyn CompletionProvider>, ProviderError> {
+        if let Some(provider) = self.provider.get() {
+            return Ok(provider);
+        }
+        let built = self
+            .lazy
+            .resolve()
+            .map_err(|error| ProviderError::InvalidRequest(error.to_string()))?
+            .summary_provider()
+            .ok_or_else(|| ProviderError::InvalidRequest("no model provider".to_owned()))?;
+        let _ = self.provider.set(built);
+        self.provider
+            .get()
+            .ok_or_else(|| ProviderError::InvalidRequest("no model provider".to_owned()))
+    }
+}
+
+impl<D: TurnDriver> CompletionProvider for DeferredProvider<D> {
+    fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a> {
+        match self.provider() {
+            Ok(provider) => provider.complete(input),
+            Err(error) => Box::pin(async move { Err(error) }),
+        }
+    }
+
+    fn model(&self) -> Option<&str> {
+        self.provider().ok()?.model()
+    }
+
+    fn call_descriptor(&self) -> Option<ModelCallDescriptor> {
+        self.provider().ok()?.call_descriptor()
+    }
+
+    fn traces_model_calls(&self) -> bool {
+        self.provider()
+            .map_or(true, |provider| provider.traces_model_calls())
+    }
+
+    fn stream_observed<'a>(
+        &'a self,
+        input: &'a ProviderInput,
+        retries: &'a (dyn RetryObserver + 'a),
+    ) -> ProviderStreamFuture<'a> {
+        match self.provider() {
+            Ok(provider) => provider.stream_observed(input, retries),
+            Err(error) => Box::pin(async move { Err(error) }),
+        }
+    }
+
+    fn stream<'a>(&'a self, input: &'a ProviderInput) -> ProviderStreamFuture<'a> {
+        match self.provider() {
+            Ok(provider) => provider.stream(input),
+            Err(error) => Box::pin(async move { Err(error) }),
+        }
     }
 }
 
@@ -118,6 +199,13 @@ where
                 .compact(session_id, working_directory, extra_instructions)
                 .await
         })
+    }
+
+    fn summary_provider(&self) -> Option<Arc<dyn CompletionProvider>> {
+        Some(Arc::new(DeferredProvider {
+            lazy: Arc::clone(&self.lazy),
+            provider: OnceLock::new(),
+        }))
     }
 
     fn title_model_is_fast(&self) -> Option<bool> {

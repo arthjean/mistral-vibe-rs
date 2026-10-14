@@ -312,6 +312,23 @@ pub(super) fn apply_ui_operation_completion(
 }
 
 impl InteractiveRuntime {
+    /// The session's accounting, as `stats/read` spells it. A unified
+    /// session answers no `stats/read`: its client keeps what the session
+    /// last published instead (reference `usage_since_baseline`).
+    pub(super) fn session_stats(&mut self) -> Value {
+        if self.service.is_unified(&self.session_id) {
+            return self
+                .service
+                .unified_accounting(&self.session_id)
+                .map_or(Value::Null, |(stats, _)| stats);
+        }
+        self.service
+            .public_call("stats/read", json!({"sessionId": self.session_id}))
+            .ok()
+            .and_then(|result| result.get("stats").cloned())
+            .unwrap_or(Value::Null)
+    }
+
     /// The events this runtime was handed since the last call, oldest first.
     ///
     /// Draining is what lets one fixture walk a whole command registry and

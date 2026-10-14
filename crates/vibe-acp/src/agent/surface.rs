@@ -242,6 +242,32 @@ where
     }
 
     async fn stats(&self, harness: &AcpHarness<D>) -> (Value, u64) {
+        // Reference `runtime.stats`: a Unified Harness session's client holds
+        // the accounting its last `session/statsUpdated` carried, and the
+        // runtime it opened with before that.
+        if harness.is_unified() {
+            let published = harness
+                .service
+                .lock()
+                .await
+                .unified_accounting(&harness.canonical_id());
+            if let Some(accounting) = published {
+                return accounting;
+            }
+            return match self.call(harness, "runtime/read", json!({})).await {
+                Ok(mut result) => {
+                    let runtime = result.remove("runtime").unwrap_or(Value::Null);
+                    (
+                        runtime.get("stats").cloned().unwrap_or(Value::Null),
+                        runtime
+                            .get("contextWindow")
+                            .and_then(Value::as_u64)
+                            .unwrap_or(0),
+                    )
+                }
+                Err(_) => (Value::Null, 0),
+            };
+        }
         match self.call(harness, "stats/read", json!({})).await {
             Ok(mut result) => (
                 result.remove("stats").unwrap_or(Value::Null),
@@ -257,41 +283,7 @@ where
     /// The `usage_update` the session's statistics read as now.
     pub(crate) async fn usage_update(&self, harness: &AcpHarness<D>) -> Value {
         let (stats, context_window) = self.stats(harness).await;
-        let number = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or(0);
-        let float = |key: &str| stats.get(key).and_then(Value::as_f64).unwrap_or(0.0);
-        let prompt = number("sessionPromptTokens");
-        let completion = number("sessionCompletionTokens");
-        let cached = number("sessionCachedTokens");
-        let cost = session_cost(
-            prompt,
-            completion,
-            cached,
-            float("inputPricePerMillion"),
-            float("outputPricePerMillion"),
-            stats
-                .get("cachedInputPricePerMillion")
-                .and_then(Value::as_f64),
-        );
-        let mut update = json!({
-            "sessionUpdate": "usage_update",
-            "used": number("contextTokens"),
-            "size": context_window,
-            "_meta": {
-                "steps": number("steps"),
-                "promptTokens": prompt,
-                "completionTokens": completion,
-                "cachedTokens": cached,
-                "totalTokens": prompt.saturating_add(completion),
-                "tokensPerSecond": stats.get("tokensPerSecond").cloned().unwrap_or(json!(0.0)),
-                "lastTurnDuration": stats.get("lastTurnDuration").cloned().unwrap_or(json!(0.0)),
-                "lastTurnTotalTokens": number("lastTurnPromptTokens")
-                    .saturating_add(number("lastTurnCompletionTokens")),
-            },
-        });
-        if cost > 0.0 {
-            update["cost"] = json!({"amount": cost, "currency": "USD"});
-        }
-        update
+        usage_update_of(&stats, context_window)
     }
 
     /// Announces the session's usage from a task of its own, the way the
@@ -319,6 +311,45 @@ where
         );
         Ok(())
     }
+}
+
+/// The `usage_update` `stats` and `context_window` read as.
+pub(crate) fn usage_update_of(stats: &Value, context_window: u64) -> Value {
+    let number = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or(0);
+    let float = |key: &str| stats.get(key).and_then(Value::as_f64).unwrap_or(0.0);
+    let prompt = number("sessionPromptTokens");
+    let completion = number("sessionCompletionTokens");
+    let cached = number("sessionCachedTokens");
+    let cost = session_cost(
+        prompt,
+        completion,
+        cached,
+        float("inputPricePerMillion"),
+        float("outputPricePerMillion"),
+        stats
+            .get("cachedInputPricePerMillion")
+            .and_then(Value::as_f64),
+    );
+    let mut update = json!({
+        "sessionUpdate": "usage_update",
+        "used": number("contextTokens"),
+        "size": context_window,
+        "_meta": {
+            "steps": number("steps"),
+            "promptTokens": prompt,
+            "completionTokens": completion,
+            "cachedTokens": cached,
+            "totalTokens": prompt.saturating_add(completion),
+            "tokensPerSecond": stats.get("tokensPerSecond").cloned().unwrap_or(json!(0.0)),
+            "lastTurnDuration": stats.get("lastTurnDuration").cloned().unwrap_or(json!(0.0)),
+            "lastTurnTotalTokens": number("lastTurnPromptTokens")
+                .saturating_add(number("lastTurnCompletionTokens")),
+        },
+    });
+    if cost > 0.0 {
+        update["cost"] = json!({"amount": cost, "currency": "USD"});
+    }
+    update
 }
 
 /// Reference `session_token_cost`: cached tokens, clamped to the prompt, are

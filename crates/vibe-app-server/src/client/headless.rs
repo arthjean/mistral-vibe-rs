@@ -23,6 +23,64 @@ pub struct HeadlessService<D> {
         Option<tokio::sync::mpsc::Receiver<InteractiveCallbackRequest>>,
     pub(super) interactive_backlog: VecDeque<InteractiveCallbackRequest>,
     pub(super) pending_interactive_callbacks: HashMap<String, PendingInteractiveCallback>,
+    /// The sessions the Unified Harness serves, when the server selected it.
+    pub(super) unified: Option<super::unified::UnifiedLink>,
+}
+
+/// Runs a reserved turn to its end, off the service: the driver runs a turn
+/// of a legacy session, and a unified session runs its own, which is waited
+/// on.
+pub struct TurnRunner<D> {
+    driver: Arc<D>,
+    unified: Option<Arc<super::unified::Shared>>,
+}
+
+impl<D> Clone for TurnRunner<D> {
+    fn clone(&self) -> Self {
+        Self {
+            driver: Arc::clone(&self.driver),
+            unified: self.unified.clone(),
+        }
+    }
+}
+
+impl<D> TurnRunner<D>
+where
+    D: TurnDriver,
+{
+    /// The turn `reservation` holds, run to its end.
+    ///
+    /// # Errors
+    ///
+    /// The turn failed, or its driver did.
+    pub async fn run(
+        &self,
+        reservation: &TurnReservation,
+        observer: Arc<dyn EventObserver>,
+    ) -> Result<TurnOutcome, DriverError> {
+        if let Some(shared) = self
+            .unified
+            .as_ref()
+            .filter(|shared| shared.serves(&reservation.session_id))
+        {
+            return super::unified::settled_turn(
+                Arc::clone(shared),
+                reservation.session_id.clone(),
+                reservation.turn_id.clone(),
+            )
+            .await;
+        }
+        self.driver.run_observed(reservation, observer).await
+    }
+}
+
+/// An observer for a turn nothing engine-side reports on.
+struct Unobserved;
+
+impl EventObserver for Unobserved {
+    fn observe(&self, _event: &vibe_core::events::EventEnvelope) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 impl<D> HeadlessService<D>
@@ -59,6 +117,10 @@ where
         capabilities: ClientCapabilities,
     ) -> Result<Self, ClientError> {
         let server = server.defaulting_secondary_provider(driver.summary_provider());
+        let unified = server
+            .harness_selection()
+            .use_unified
+            .then(|| super::unified::UnifiedLink::new(client_info.clone(), capabilities.clone()));
         Ok(Self {
             client: InProcessClient::connect_with_server_and_client(
                 server,
@@ -69,6 +131,7 @@ where
             interactive_callbacks: None,
             interactive_backlog: VecDeque::new(),
             pending_interactive_callbacks: HashMap::new(),
+            unified,
         })
     }
 
@@ -121,6 +184,10 @@ where
                     plan_directory,
                 }),
             );
+        let unified = server
+            .harness_selection()
+            .use_unified
+            .then(|| super::unified::UnifiedLink::new(client_info.clone(), capabilities.clone()));
         Ok(Self {
             client: InProcessClient::connect_with_server_and_client(
                 server,
@@ -131,10 +198,18 @@ where
             interactive_callbacks: Some(receiver),
             interactive_backlog: VecDeque::new(),
             pending_interactive_callbacks: HashMap::new(),
+            unified,
         })
     }
 
     pub fn start_session(&mut self, options: &SessionOptions) -> Result<String, ClientError> {
+        if let Some(link) = self.unified.as_mut() {
+            let (session_id, mcp) = link.start(&self.client.server, options)?;
+            if !mcp.is_empty() {
+                self.client.pending_mcp.insert(session_id.clone(), mcp);
+            }
+            return Ok(session_id);
+        }
         let session_id = self.client.start_session(options)?;
         self.probe_for_titles(&session_id);
         Ok(session_id)
@@ -223,8 +298,112 @@ where
         self.driver.clone()
     }
 
+    /// What runs a reserved turn to its end, off this service.
+    #[must_use]
+    pub fn turn_runner(&self) -> TurnRunner<D> {
+        TurnRunner {
+            driver: Arc::clone(&self.driver),
+            unified: self.unified.as_ref().map(|link| Arc::clone(&link.shared)),
+        }
+    }
+
+    /// Whether the Unified Harness serves `session_id`.
+    #[must_use]
+    pub fn is_unified(&self, session_id: &str) -> bool {
+        self.unified
+            .as_ref()
+            .is_some_and(|link| link.holds(session_id))
+    }
+
+    /// The unified session a call's parameters name, when they name one.
+    fn unified_target(&self, method: &str, params: &Value) -> Option<String> {
+        self.unified.as_ref()?;
+        let named = params.get("sessionId").and_then(Value::as_str);
+        match named {
+            Some(session_id) if self.is_unified(session_id) => Some(session_id.to_owned()),
+            // A session-optional read reaches the connection of the session
+            // this client opened, as the reference's single host answers it.
+            None if !matches!(method, "session/resume" | "session/continue") => self
+                .unified
+                .as_ref()
+                .and_then(super::unified::UnifiedLink::any_session),
+            _ => None,
+        }
+    }
+
+    /// The accounting the Unified Harness last published for `session_id`,
+    /// with its context window.
+    #[must_use]
+    pub fn unified_accounting(&self, session_id: &str) -> Option<(Value, u64)> {
+        self.unified.as_ref()?.accounting(session_id)
+    }
+
+    /// The state the Unified Harness last published for `session_id`.
+    #[must_use]
+    pub fn unified_state(&self, session_id: &str) -> Option<Value> {
+        self.unified.as_ref()?.state(session_id)
+    }
+
+    /// The child sessions the Unified Harness last published for `session_id`.
+    #[must_use]
+    pub fn unified_children(&self, session_id: &str) -> Option<Value> {
+        self.unified
+            .as_ref()?
+            .state_field(session_id, "childSessions")
+    }
+
     pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
+        if let Some(link) = self.unified.as_ref().filter(|link| link.holds(session_id)) {
+            let history = link.history(session_id)?;
+            let mut view = self.client.server.session(session_id)?;
+            view.snapshot = Some(vibe_core::events::ProjectionSnapshot {
+                session_id: session_id.to_owned(),
+                turn_id: None,
+                handoff_cause: None,
+                watermark: 0,
+                lifecycle: vibe_core::events::LifecycleState::Idle,
+                title: None,
+                history,
+            });
+            return Ok(view);
+        }
         self.client.session(session_id)
+    }
+
+    /// Opens a saved session on the Unified Harness with `method`, a
+    /// `session/resume` or a `session/continue`.
+    fn open_unified(
+        &mut self,
+        method: &str,
+        params: Value,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        let Some(link) = self.unified.as_mut() else {
+            return Err(ClientError::InvalidResponse(
+                "the Unified Harness is not selected".to_owned(),
+            ));
+        };
+        let (session_id, result, deferred) = link.open(&self.client.server, method, params)?;
+        for work in deferred {
+            if let DeferredWork::ConfigureMcp { configs, .. } = work {
+                self.client.pending_mcp.insert(session_id.clone(), configs);
+            }
+        }
+        Ok(result)
+    }
+
+    /// Dispatches `method` on a unified session's connection, its answer
+    /// required now.
+    fn unified_call(
+        &mut self,
+        session_id: &str,
+        method: &str,
+        params: Value,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        let link = self.unified.as_mut().ok_or_else(|| {
+            ClientError::InvalidResponse("the Unified Harness is not selected".to_owned())
+        })?;
+        link.dispatch(&self.client.server, session_id, method, params)?
+            .now()
     }
 
     pub fn public_call(
@@ -232,6 +411,12 @@ where
         method: &str,
         params: Value,
     ) -> Result<BTreeMap<String, Value>, ClientError> {
+        if self.unified.is_some() && matches!(method, "session/resume" | "session/continue") {
+            return self.open_unified(method, params);
+        }
+        if let Some(session_id) = self.unified_target(method, &params) {
+            return self.unified_call(&session_id, method, params);
+        }
         let requested = params
             .get("sessionId")
             .and_then(Value::as_str)
@@ -262,7 +447,14 @@ where
         method: &str,
         params: Value,
     ) -> Result<PublicDispatch, ClientError> {
-        self.client.public_call_async(method, params).await
+        if self.unified.is_some() && matches!(method, "session/resume" | "session/continue") {
+            let result = self.open_unified(method, params)?;
+            return Ok(PublicDispatch {
+                result,
+                notifications: Vec::new(),
+            });
+        }
+        self.begin_public_call(method, params)?.complete().await
     }
 
     pub fn begin_public_call(
@@ -270,6 +462,16 @@ where
         method: &str,
         params: Value,
     ) -> Result<PendingPublicCall, ClientError> {
+        if let Some(session_id) = self.unified_target(method, &params)
+            && let Some(link) = self.unified.as_mut()
+        {
+            let dispatched = link.dispatch(&self.client.server, &session_id, method, params)?;
+            return Ok(PendingPublicCall::unified(
+                &self.client.server,
+                method,
+                dispatched,
+            ));
+        }
         self.client.begin_public_call(method, params)
     }
 
@@ -285,6 +487,9 @@ where
         ),
         ClientError,
     > {
+        if let Some(link) = self.unified.as_ref().filter(|link| link.holds(session_id)) {
+            return Ok((Arc::new(Unobserved), link.updates(turn_id)?));
+        }
         let seed = self
             .client
             .server
@@ -388,6 +593,16 @@ where
     }
 
     pub fn drain_callbacks(&mut self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
+        let unified = match self.unified.as_ref() {
+            Some(link) => link.drain_callbacks()?,
+            None => Vec::new(),
+        };
+        let mut entries = self.drain_interactive_callbacks()?;
+        entries.extend(unified);
+        Ok(entries)
+    }
+
+    fn drain_interactive_callbacks(&mut self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
         let mut requests = std::mem::take(&mut self.interactive_backlog);
         if let Some(receiver) = self.interactive_callbacks.as_mut() {
             while let Ok(request) = receiver.try_recv() {
@@ -547,6 +762,24 @@ where
         let output = params.get("output").cloned().ok_or_else(|| {
             ClientError::InvalidResponse("callback response omitted output".to_owned())
         })?;
+        // Reference `AppServerSession.respond_to_callback` and
+        // `reject_callback`: a unified session takes the answer as a
+        // `callback/result`.
+        if let Some(session_id) = self
+            .unified
+            .as_ref()
+            .and_then(|link| link.callback_session(&callback_id))
+        {
+            let result = match rejection {
+                Some(message) => json!({"callbackId": callback_id, "error": {"message": message}}),
+                None => json!({"callbackId": callback_id, "output": output}),
+            };
+            return self.unified_call(
+                &session_id,
+                "callback/result",
+                json!({"sessionId": session_id, "result": result}),
+            );
+        }
         let request_id = self.client.take_request_id();
         let request = request_bytes(request_id.clone(), "callback/respond", params)?;
         let batch = self.client.connection.dispatch(&request);
@@ -617,6 +850,19 @@ where
         session_id: &str,
         extra_instructions: &str,
     ) -> Result<BTreeMap<String, Value>, ClientError> {
+        if self.is_unified(session_id)
+            && let Some(link) = self.unified.as_mut()
+        {
+            return link
+                .dispatch(
+                    &self.client.server,
+                    session_id,
+                    "session/compact",
+                    json!({"sessionId": session_id, "extraInstructions": extra_instructions}),
+                )?
+                .result()
+                .await;
+        }
         let (request_id, canonical_session_id, working_directory) = self
             .client
             .reserve_compaction(session_id, extra_instructions)?;
@@ -740,9 +986,47 @@ where
     ) -> Result<TurnReservation, ClientError> {
         validate_prepared_images(turn, &images)?;
         self.client.configure_pending_mcp(session_id).await?;
+        if self.is_unified(session_id) {
+            return self.reserve_unified(session_id, turn);
+        }
         let mut reservation = self.client.reserve_turn_request(session_id, turn)?;
         reservation.prepared_images = Some(images);
         Ok(reservation)
+    }
+
+    /// Reference `AppServerSession.act` up to its first event: `turn/start`
+    /// on a unified session, which runs the turn on its own.
+    fn reserve_unified(
+        &mut self,
+        session_id: &str,
+        turn: &TurnRequest,
+    ) -> Result<TurnReservation, ClientError> {
+        let result = self.unified_call(
+            session_id,
+            "turn/start",
+            json!({
+                "sessionId": session_id,
+                "message": turn.input,
+                "injected": turn.injected,
+                "clientUserMessageId": turn.client_user_message_id,
+                "autoTitle": turn.auto_title,
+                "userDisplayContent": turn.user_display_content,
+                "mentionStats": turn.mention_stats,
+            }),
+        )?;
+        let turn_id = result
+            .get("turn")
+            .and_then(|started| started.get("id"))
+            .and_then(Value::as_str)
+            .ok_or_else(|| ClientError::InvalidResponse("missing turnId".to_owned()))?
+            .to_owned();
+        if let Some(link) = self.unified.as_ref() {
+            link.listen(&turn_id)?;
+        }
+        Ok(self
+            .client
+            .server
+            .unified_reservation(session_id, &turn_id, turn)?)
     }
 
     pub async fn reserve_due_loop(
@@ -750,6 +1034,10 @@ where
         session_id: &str,
         now_seconds: u64,
     ) -> Result<Option<ScheduledTurn>, ClientError> {
+        // A unified session fires its loops on its own.
+        if self.is_unified(session_id) {
+            return Ok(None);
+        }
         self.client.configure_pending_mcp(session_id).await?;
         let Some(mut scheduled) = self.client.reserve_due_loop(session_id, now_seconds)? else {
             return Ok(None);
@@ -797,6 +1085,12 @@ where
         reservation: &TurnReservation,
         error: PublicError,
     ) -> Result<(), ClientError> {
+        // A unified session settles its own turns; one the client gave up on
+        // before it ended is interrupted.
+        if self.is_unified(&reservation.session_id) {
+            let _ = self.interrupt(&reservation.session_id, &reservation.turn_id);
+            return Ok(());
+        }
         let message = error.message.clone();
         let result = self.client.fail_turn_with(reservation, error);
         self.fail_interactive_callbacks(
@@ -856,12 +1150,34 @@ where
         session_id: &str,
         turn_id: &str,
     ) -> Result<InterruptOutcome, ClientError> {
+        if self.is_unified(session_id) {
+            self.unified_call(
+                session_id,
+                "turn/interrupt",
+                json!({"sessionId": session_id, "expectedTurnId": turn_id}),
+            )?;
+            return Ok(InterruptOutcome::Complete);
+        }
         self.driver.interrupt(session_id, turn_id)?;
         if let Err(canonical_error) = self.client.interrupt(session_id, turn_id) {
             return Ok(InterruptOutcome::DriverOnly { canonical_error });
         }
         self.fail_interactive_callbacks(Some(session_id), Some(turn_id), "turn was interrupted");
         Ok(InterruptOutcome::Complete)
+    }
+
+    /// Stops the turn that runs `turn_id` where it runs: the driver of a
+    /// legacy session, which settles the canonical turn itself, and the
+    /// unified session that runs its own.
+    ///
+    /// # Errors
+    ///
+    /// The driver or the session refused.
+    pub fn interrupt_driver(&mut self, session_id: &str, turn_id: &str) -> Result<(), ClientError> {
+        if self.is_unified(session_id) {
+            return self.interrupt(session_id, turn_id).map(drop);
+        }
+        Ok(self.driver.interrupt(session_id, turn_id)?)
     }
 
     /// Delivers `input` into the running turn: the canonical turn accepts it
@@ -873,6 +1189,19 @@ where
         input: &[PublicContentBlock],
         client_user_message_id: Option<&str>,
     ) -> Result<(), ClientError> {
+        if self.is_unified(session_id) {
+            self.unified_call(
+                session_id,
+                "turn/steer",
+                json!({
+                    "sessionId": session_id,
+                    "expectedTurnId": turn_id,
+                    "message": input,
+                    "clientUserMessageId": client_user_message_id,
+                }),
+            )?;
+            return Ok(());
+        }
         let (content, inject_invoked_skill) =
             self.client
                 .steer(session_id, turn_id, input, client_user_message_id)?;
@@ -884,6 +1213,14 @@ where
     /// Hands `text` to the model as context for the next turn of an idle
     /// session, without a user message of its own.
     pub fn inject_context(&mut self, session_id: &str, text: &str) -> Result<(), ClientError> {
+        if self.is_unified(session_id) {
+            self.unified_call(
+                session_id,
+                "session/context/inject",
+                json!({"sessionId": session_id, "input": [{"type": "text", "text": text}]}),
+            )?;
+            return Ok(());
+        }
         if let Some((content, as_message, inject_invoked_skill)) =
             self.client.inject_context(session_id, text)?
         {
@@ -894,6 +1231,12 @@ where
     }
 
     pub async fn close_session(&mut self, session_id: &str) -> Result<(), ClientError> {
+        if self.is_unified(session_id)
+            && let Some(link) = self.unified.as_mut()
+        {
+            link.close(&self.client.server, session_id).await;
+            return Ok(());
+        }
         let interrupt = self.client.close_session(session_id).await?;
         self.fail_interactive_callbacks(Some(session_id), None, "session was closed");
         if let Some((canonical_session_id, turn_id)) = interrupt {
@@ -922,6 +1265,12 @@ where
         reservation: &TurnReservation,
         outcome: TurnOutcome,
     ) -> Result<ProgrammaticTurn, ClientError> {
+        if self.is_unified(&reservation.session_id) {
+            return Ok(super::unified::settled_programmatic_turn(
+                reservation,
+                outcome,
+            ));
+        }
         let result = self.client.finish_turn(reservation, outcome);
         self.fail_interactive_callbacks(
             Some(&reservation.session_id),

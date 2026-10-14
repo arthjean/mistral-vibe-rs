@@ -534,10 +534,10 @@ pub(super) fn traits(case: &Map<String, Value>, field: &str) -> Option<Value> {
     match field {
         "sideChannel" => Some(Value::Bool(command.side_channel)),
         "exits" => Some(Value::Bool(command.exits)),
-        // Reference `Command.forwards_to_model`: this port forwards no command
-        // line to the model, since the one the reference forwards needs the
-        // unified core to interpret it (`DIVERGENCES`, `traits/forwardsToModel/loop`).
-        "forwardsToModel" => Some(Value::Bool(false)),
+        // The capture reads the traits off its fully open registry.
+        "forwardsToModel" => Some(Value::Bool(
+            scenario_context(None).forwards_to_model(command.id),
+        )),
         _ => None,
     }
 }

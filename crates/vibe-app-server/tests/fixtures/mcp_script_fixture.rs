@@ -374,7 +374,7 @@ impl Fixture {
                 || reaction.get("notify").is_some()
                 || reaction.get("serverRequest").is_some();
             if !streamed {
-                let payload = serde_json::to_vec(&answer)?;
+                let payload = serde_json::to_vec(&sorted(answer.clone()))?;
                 write_head(&mut writer, 200, "application/json", &extra, Some(&payload))?;
                 continue;
             }
@@ -581,13 +581,13 @@ fn write_chunk(writer: &mut TcpStream, bytes: &[u8]) -> Result<(), Failure> {
 fn write_event(writer: &mut TcpStream, message: &Value) -> Result<(), Failure> {
     let event = format!(
         "event: message\ndata: {}\n\n",
-        serde_json::to_string(message)?
+        serde_json::to_string(&sorted(message.clone()))?
     );
     write_chunk(writer, event.as_bytes())
 }
 
 fn write_line(stdout: &mut impl Write, message: &Value) -> Result<(), Failure> {
-    let mut line = serde_json::to_vec(message)?;
+    let mut line = serde_json::to_vec(&sorted(message.clone()))?;
     line.push(b'\n');
     stdout.write_all(&line)?;
     stdout.flush()?;
@@ -650,4 +650,23 @@ fn entry<const N: usize>(fields: [(&str, Value); N]) -> Map<String, Value> {
         .into_iter()
         .map(|(key, value)| (key.to_owned(), value))
         .collect()
+}
+
+/// `value` with every object's keys sorted. Every message this server writes
+/// goes through it, so what a client reads keeps the order the committed
+/// corpus was captured with rather than the order a script spells.
+fn sorted(value: Value) -> Value {
+    match value {
+        Value::Object(mut object) => {
+            object.sort_keys();
+            Value::Object(
+                object
+                    .into_iter()
+                    .map(|(key, value)| (key, sorted(value)))
+                    .collect(),
+            )
+        }
+        Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
+        other => other,
+    }
 }

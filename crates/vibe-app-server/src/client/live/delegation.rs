@@ -283,6 +283,7 @@ pub(crate) fn task_handler(
                     projected_result: serde_json::Value::Null,
                     chunks: Vec::new(),
                     pending_injection: None,
+                    remote_result: None,
                 })
             })
         },
@@ -425,6 +426,7 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .as_ref()
                 .and_then(|resolve| resolve(&context.agent));
             let input = ProviderInput {
+                dialect: Default::default(),
                 turn_id: Some(format!("{}-turn", context.child_session_id)),
                 session_id: None,
                 model_override: settings.model,
@@ -549,6 +551,7 @@ impl SamplingHandler for ProviderSamplingHandler {
     fn complete<'a>(&'a self, request: SamplingRequest) -> McpFuture<'a, SamplingResponse> {
         Box::pin(async move {
             let input = ProviderInput {
+                dialect: Default::default(),
                 turn_id: None,
                 session_id: None,
                 model_override: None,

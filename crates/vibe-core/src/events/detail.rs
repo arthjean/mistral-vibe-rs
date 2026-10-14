@@ -358,6 +358,11 @@ pub struct RemoteToolOrigin {
     /// The name the server publishes the tool under, which the alias prefix is
     /// absent from.
     pub remote_name: String,
+    /// The alias of the server or connector that publishes it, as configured,
+    /// which the Unified Harness names the tool's group after. Empty when the
+    /// registration did not record one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub provider: String,
 }
 
 impl RemoteToolOrigin {
@@ -367,6 +372,7 @@ impl RemoteToolOrigin {
         Self {
             kind: RemoteToolKind::Mcp,
             remote_name: remote_name.into(),
+            provider: String::new(),
         }
     }
 
@@ -376,7 +382,15 @@ impl RemoteToolOrigin {
         Self {
             kind: RemoteToolKind::Connector,
             remote_name: remote_name.into(),
+            provider: String::new(),
         }
+    }
+
+    /// The same origin, naming `provider` as the alias that publishes it.
+    #[must_use]
+    pub fn from_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = provider.into();
+        self
     }
 
     /// What the loading indicator says while a proxied call runs.
@@ -844,12 +858,9 @@ fn decode_arguments(arguments: &str) -> Value {
 ///
 /// The reference interpolates the `dict` its model was called with, which keeps
 /// insertion order, so the fallback summary names the first three arguments as
-/// the caller wrote them. Decoding into a [`serde_json::Map`] loses that: this
-/// port does not build `serde_json` with `preserve_order`, and turning it on
-/// would reorder every object it serializes, including the ones a measured
-/// parity claim compares byte for byte. Reading the keys back off the same text
-/// keeps the order where it is needed and nowhere else. Arguments that never
-/// decoded name no order, and the summary falls back to the map's own.
+/// the caller wrote them. Reading the keys back off the text states that order
+/// here rather than leaning on how [`serde_json::Map`] is built. Arguments that
+/// never decoded name no order, and the summary falls back to the map's own.
 fn wire_key_order(arguments: &str) -> Vec<String> {
     serde_json::from_str::<KeyOrder>(arguments).map_or_else(|_| Vec::new(), |order| order.0)
 }

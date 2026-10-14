@@ -326,11 +326,8 @@ pub(crate) fn resource_server(
         .with_config(workspace.layered_config())
         .with_mcp_factory(production_mcp_factory(sampling))
         .with_mcp_authentication(production_mcp_authentication());
-    let harness = HarnessSelection::for_launch(
-        arguments.experimental_harness,
-        arguments.legacy_harness,
-        workspace.vibe_home(),
-    );
+    let harness =
+        HarnessSelection::resolve(arguments.experimental_harness, arguments.legacy_harness);
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
         .using_workspace_service(workspace)
         .using_web_search_access(Some(web_search_access(arguments, credential)))

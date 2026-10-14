@@ -188,6 +188,9 @@ impl Session {
             &mut self.controls,
         );
         drain_callback_requests(self.runtime.as_mut(), &mut self.state, &mut self.controls);
+        if let Some(runtime) = self.runtime.as_mut() {
+            super::subagents::poll(runtime, &mut self.state);
+        }
         super::turn::report_slow_interrupt(
             self.runtime.as_ref(),
             self.active.as_mut(),
@@ -437,7 +440,7 @@ pub async fn run_interactive(
     invocation: startup::InteractiveInvocation,
 ) -> Result<InteractiveExit, CliError> {
     let startup::ReadyStartup {
-        arguments,
+        mut arguments,
         working_directory,
         workspace,
         credential,
@@ -453,9 +456,10 @@ pub async fn run_interactive(
     // moment it exists, so it is opened before the session rather than patched
     // in afterward.
     let (ui_operation_sender, mut ui_operation_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let continuing = arguments.continue_session;
     let mut runtime = match credential {
         Some(credential) => Some(start_runtime(
-            &arguments,
+            &mut arguments,
             &working_directory,
             workspace,
             credential,
@@ -467,7 +471,17 @@ pub async fn run_interactive(
         .as_ref()
         .map_or_else(|| "setup".to_owned(), |runtime| runtime.session_id.clone());
     let mut state = match runtime.as_mut() {
-        Some(runtime) => hydrate_initial_state(runtime, &arguments, &working_directory)?,
+        Some(runtime) => {
+            let mut state = hydrate_initial_state(runtime, &arguments, &working_directory)?;
+            if continuing && !arguments.continue_session {
+                push_local_notice(
+                    &mut state,
+                    "No previous sessions found.",
+                    EntryStatus::Completed,
+                );
+            }
+            state
+        }
         None => {
             let mut state = TuiState::new(session_id.clone());
             state.ready = true;
@@ -843,15 +857,7 @@ async fn shut_down(
 /// Reference `AppServerSession.exit_summary`: the session identity plus the
 /// tokens spent since the session baseline.
 fn session_exit_summary(runtime: &mut InteractiveRuntime) -> exit::SessionExitSummary {
-    let stats = runtime
-        .service
-        .public_call(
-            "stats/read",
-            serde_json::json!({"sessionId": runtime.session_id}),
-        )
-        .ok()
-        .and_then(|result| result.get("stats").cloned())
-        .unwrap_or(Value::Null);
+    let stats = runtime.session_stats();
     let tokens = |key: &str| {
         stats
             .get(key)

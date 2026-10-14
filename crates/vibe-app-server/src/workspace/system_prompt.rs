@@ -245,6 +245,95 @@ impl WorkspaceService {
             .or_else(|| routing.active_alias.as_deref().and_then(find)))
     }
 
+    /// Reference `get_vision_fallback_model` for the model `scope` runs:
+    /// none when it reads images, else the configured `vision_model`, else
+    /// the first model of its provider that reads them; with the provider
+    /// that serves it and the API settings a call to it runs under.
+    pub fn session_vision(
+        &self,
+        scope: &SessionPromptScope,
+    ) -> Option<(
+        ModelConfig,
+        vibe_core::provider::config::ProviderConfig,
+        vibe_core::provider::config::ApiSettings,
+    )> {
+        let active = self.session_model(scope).ok().flatten();
+        let snapshot = self.session_prompt_config(scope).ok()?.load().ok()?;
+        let routing =
+            ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias());
+        let configured = snapshot
+            .effective
+            .get("vision_model")
+            .and_then(TomlValue::as_table)
+            .and_then(|table| ModelConfig::from_table(table, None));
+        let model = match &active {
+            Some(active) if active.supports_images => return None,
+            Some(active) => configured.or_else(|| {
+                routing
+                    .models
+                    .iter()
+                    .find(|model| model.supports_images && model.provider == active.provider)
+                    .cloned()
+            }),
+            None => configured,
+        }?;
+        let provider = routing.provider_for(&model).ok()?;
+        Some((
+            model,
+            provider,
+            vibe_core::provider::config::ApiSettings::from_table(&snapshot.effective),
+        ))
+    }
+
+    /// Reference `select_utility_model` for `feature` under `scope`'s
+    /// configuration, once `ensure_utility_models_probed` has learned
+    /// whether a fast model is served when `probe` asks it to.
+    pub fn session_utility(
+        &self,
+        scope: &SessionPromptScope,
+        feature: vibe_core::llm::utility::UtilityFeature,
+        probe: bool,
+    ) -> Option<vibe_core::llm::utility::UtilitySelection> {
+        use vibe_core::llm::availability::ModelAvailability;
+        let snapshot = self.session_prompt_config(scope).ok()?.load().ok()?;
+        let routing =
+            ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias());
+        let context = vibe_core::llm::BackendContext::ambient(
+            vibe_core::provider::config::ApiSettings::from_table(&snapshot.effective),
+            self.credentials(),
+        );
+        if probe {
+            crate::plugins::block_on_own_runtime(vibe_core::llm::utility::ensure_probed(
+                &routing,
+                &[feature],
+                None,
+                ModelAvailability::global(),
+                &context,
+            ));
+        }
+        vibe_core::llm::utility::select(
+            &routing,
+            context.credentials.as_ref(),
+            ModelAvailability::global(),
+            Some(feature),
+        )
+        .ok()
+    }
+
+    /// The model `[utility_models]` names for `feature` in `scope`, when it
+    /// names one. Reference `VibeConfigSchema.get_utility_model`.
+    pub fn session_utility_override(
+        &self,
+        scope: &SessionPromptScope,
+        feature: vibe_core::llm::utility::UtilityFeature,
+    ) -> Option<ModelConfig> {
+        let snapshot = self.session_prompt_config(scope).ok()?.load().ok()?;
+        ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias())
+            .utility_model(feature)
+            .ok()
+            .flatten()
+    }
+
     /// The layered configuration of `scope`: its directory, trust and roots,
     /// with its agent's overrides applied.
     fn session_prompt_config(

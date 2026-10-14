@@ -16,9 +16,14 @@
 //! The corpus also records how the entry point answers argument vectors that
 //! exit before it serves anything, which is compared with no ledger at all.
 //!
+//! The script captures each harness backend into its own corpus: `corpus.json`
+//! runs both sides on the legacy backend through the escape hatch, and
+//! `unified-corpus.json` on the Unified Harness every session opens on by
+//! default. Both replay against the same ledger.
+//!
 //! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 8 of `docs/parity.md` is a
-//! reading of the summary this file prints.
+//! every entry has to still reproduce on each backend, so rows 8 and 36 of
+//! `docs/parity.md` are readings of the summaries this file prints.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -29,8 +34,15 @@ use std::process::Command;
 use serde_json::Value;
 use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
 
-/// The corpus, compiled in so a moved file fails the build rather than the run.
+/// The corpora, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("acp-parity/corpus.json");
+const UNIFIED_CORPUS: &str = include_str!("acp-parity/unified-corpus.json");
+
+/// Each backend the capture script drives, with the corpus it recorded there.
+const HARNESSES: [(&str, &str, &str); 2] = [
+    ("legacy", CORPUS, "acp-parity/corpus.json"),
+    ("unified", UNIFIED_CORPUS, "acp-parity/unified-corpus.json"),
+];
 
 /// The scorecard the ledger's `row` values point into.
 const SCORECARD: &str = include_str!("../../../docs/parity.md");
@@ -155,8 +167,17 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 }
 
 #[test]
-fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+fn the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    replay(CORPUS, "legacy");
+}
+
+#[test]
+fn the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    replay(UNIFIED_CORPUS, "unified");
+}
+
+fn replay(corpus: &str, harness: &str) {
+    let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     assert!(
         recorded.len() >= SCENARIO_FLOOR,
@@ -164,8 +185,11 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
         recorded.len()
     );
 
-    let output_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("acp-parity-port.json");
+    let output_path =
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("acp-parity-port-{harness}.json"));
     let output = capture(&[
+        "--harness".as_ref(),
+        harness.as_ref(),
         "--agent".as_ref(),
         env!("CARGO_BIN_EXE_vibe-acp").as_ref(),
         "--output".as_ref(),
@@ -241,8 +265,8 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
         .map(|(entry, _)| format!("{} {}", entry.scenario, entry.pointer))
         .collect();
     println!(
-        "acp parity: {}/{} argument vectors and {conformant}/{} scenarios conformant, {} \
-         ledgered differences across {} entries",
+        "acp parity ({harness}): {}/{} argument vectors and {conformant}/{} scenarios \
+         conformant, {} ledgered differences across {} entries",
         argv.len(),
         argv.len(),
         recorded.len(),
@@ -269,19 +293,23 @@ fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
         .map(|(number, _)| number.trim())
         .filter(|number| number.parse::<u32>().is_ok())
         .collect();
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    let recorded = scenarios(&corpus);
+    for (_, corpus, _) in HARNESSES {
+        let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
+        let recorded = scenarios(&corpus);
+        for entry in LEDGER {
+            assert!(
+                recorded.contains_key(entry.scenario),
+                "the ledger entry names {}, which a corpus does not record",
+                entry.scenario
+            );
+        }
+    }
     for entry in LEDGER {
         assert!(
             rows.contains(entry.row),
             "the ledger entry for {} names row {}, which docs/parity.md does not carry",
             entry.scenario,
             entry.row
-        );
-        assert!(
-            recorded.contains_key(entry.scenario),
-            "the ledger entry names {}, which the corpus does not record",
-            entry.scenario
         );
         assert!(
             entry.pointer.starts_with('/') && !entry.reason.is_empty(),
@@ -291,8 +319,8 @@ fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
     }
 }
 
-/// Recaptures the pinned reference and asserts the committed corpus is still
-/// what it answers. The replay above runs regardless, which is what keeps a
+/// Recaptures the pinned reference on each backend and asserts the committed
+/// corpora are still what it answers. The replay above runs regardless, which is what keeps a
 /// missing checkout from failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
@@ -302,11 +330,19 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
         return;
     }
-    let output = capture(&["--check".as_ref(), "--reference".as_ref(), root.as_os_str()]);
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT}`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    for (harness, _, corpus) in HARNESSES {
+        let output = capture(&[
+            "--check".as_ref(),
+            "--harness".as_ref(),
+            harness.as_ref(),
+            "--reference".as_ref(),
+            root.as_os_str(),
+        ]);
+        assert!(
+            output.status.success(),
+            "the pinned reference no longer answers what {corpus} records; regenerate it with \
+             `{CAPTURE_SCRIPT} --harness {harness}`: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }

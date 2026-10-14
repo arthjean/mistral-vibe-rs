@@ -58,6 +58,7 @@ tokio = { workspace = true, features = ["net"] }
 toml.workspace = true
 url.workspace = true
 vibe-core = { path = "../vibe-core" }
+vibe-harness = { path = "../vibe-harness" }
 vibe-protocol = { path = "../vibe-protocol" }
 zstd.workspace = true
 

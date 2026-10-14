@@ -49,13 +49,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .ok_or("VIBE_HOME must name the fixture's vibe home")?;
     let working_directory = std::env::current_dir()?;
-    // Reference `vibe-app-server --experimental-harness | --legacy-harness`,
-    // resolved against the rollout the vibe home's eval cache holds.
+    // Reference `vibe-app-server --experimental-harness | --legacy-harness`.
     let flags: Vec<String> = std::env::args().skip(1).collect();
-    let harness = HarnessSelection::for_launch(
+    let harness = HarnessSelection::resolve(
         flags.iter().any(|flag| flag == "--experimental-harness"),
         flags.iter().any(|flag| flag == "--legacy-harness"),
-        &vibe_home,
     );
     // The workspace resolves `session_logging` from the configuration, so the
     // driver writes turns where the workspace lists and resumes them.

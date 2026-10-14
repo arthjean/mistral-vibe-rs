@@ -94,6 +94,14 @@ impl ClientToolBridge {
         true
     }
 
+    /// Registers a request someone else put on the wire, so the client's
+    /// acknowledgment of it is ours rather than a protocol fault. Nothing
+    /// waits on the answer.
+    pub fn expect(&self, id: RequestId) {
+        let (sender, _receiver) = oneshot::channel();
+        self.lock().pending.insert(id, sender);
+    }
+
     /// The delegation one session's tools use, or `None` when the client hosts
     /// nothing for us to delegate to.
     ///

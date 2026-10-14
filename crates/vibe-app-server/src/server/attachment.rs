@@ -40,6 +40,36 @@ pub(super) fn apply_persisted_session_settings(
     }
 }
 
+/// Narrows a `runtime/read` tool list to what the session publishes.
+///
+/// Reference `project_tools` reads `ToolManager.available_tools`, which the
+/// agent profile and the session's lists already filtered, and which holds
+/// `task` from the start. Here `task` joins the registry only once a turn
+/// builds the live client, so it is placed by name before the first turn.
+pub(super) fn publish_session_tools(
+    tools: &mut Vec<Value>,
+    enabled: &[String],
+    disabled: &[String],
+) {
+    let enabled = (!enabled.is_empty()).then(|| NameFilter::new(enabled));
+    let disabled = NameFilter::new(disabled);
+    let published = |name: &str| {
+        enabled.as_ref().is_none_or(|enabled| enabled.matches(name)) && !disabled.matches(name)
+    };
+    let name_of = |tool: &Value| tool.get("name").and_then(Value::as_str).map(str::to_owned);
+    if !tools
+        .iter()
+        .any(|tool| name_of(tool).as_deref() == Some("task"))
+    {
+        let at = tools
+            .iter()
+            .position(|tool| name_of(tool).is_some_and(|name| name.as_str() > "task"))
+            .unwrap_or(tools.len());
+        tools.insert(at, json!({"name": "task", "isCustom": false}));
+    }
+    tools.retain(|tool| name_of(tool).is_none_or(|name| published(&name)));
+}
+
 pub(super) fn apply_agent_profile_settings(intent: &mut SessionIntent, profile: &AgentProfile) {
     let settings = profile.runtime_settings();
     intent.enabled_tools = if settings.enabled_tools.is_empty() {
@@ -571,14 +601,19 @@ impl AppServer {
             .config_snapshot()
             .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
             .unwrap_or_default();
+        let unified = self.unified_session(session_id).is_some();
         let (connector_sources, counts, load_error) = {
             let sessions = self.lock_sessions().ok()?;
             let session = sessions.get(session_id)?;
-            (
-                session.connectors.mcp_sources(&settings),
-                session.connectors.runtime_counts(),
-                session.connectors.load_error.clone(),
-            )
+            let (sources, counts) = if unified {
+                session.connectors.unified_sources()
+            } else {
+                (
+                    session.connectors.mcp_sources(&settings),
+                    session.connectors.runtime_counts(),
+                )
+            };
+            (sources, counts, session.connectors.load_error.clone())
         };
         if let Some(Value::Object(mcp)) = mcp {
             if let Some(error) = load_error {
@@ -602,9 +637,62 @@ impl AppServer {
         Some(counts)
     }
 
+    /// What a unified session's runtime lists differently: its servers' and
+    /// connectors' tools run inside the core, so the session's own tool rows
+    /// leave them out, and a server lists its tools in the order it published
+    /// them (reference `project_mcp_sources` over the harness runtime's
+    /// `SessionMCPSourceState`, where the legacy projection sorts them).
+    fn unified_tool_rows(&self, session_id: &str, snapshot: &mut serde_json::Map<String, Value>) {
+        let Some(registry) = self
+            .resources
+            .lock()
+            .ok()
+            .and_then(|resources| resources.session_tool_registry(session_id))
+        else {
+            return;
+        };
+        let specs = registry.list().unwrap_or_default();
+        if let Some(Value::Array(tools)) = snapshot.get_mut("tools") {
+            tools.retain(|tool| {
+                specs
+                    .iter()
+                    .find(|spec| tool["name"] == spec.name.as_str())
+                    .is_none_or(|spec| spec.source == vibe_core::tools::ToolSource::BuiltIn)
+            });
+        }
+        let published: Vec<(String, String)> = specs
+            .iter()
+            .filter(|spec| spec.source == vibe_core::tools::ToolSource::Mcp)
+            .filter_map(|spec| registry.remote_origin(&spec.name))
+            .map(|origin| (origin.provider, origin.remote_name))
+            .collect();
+        let Some(Value::Array(sources)) = snapshot
+            .get_mut("mcp")
+            .and_then(|mcp| mcp.get_mut("sources"))
+        else {
+            return;
+        };
+        for source in sources
+            .iter_mut()
+            .filter(|source| source["kind"] == "server" && source["pluginName"].is_null())
+        {
+            let name = source["name"].as_str().unwrap_or_default().to_owned();
+            if let Some(Value::Array(rows)) = source.get_mut("tools") {
+                rows.sort_by_key(|row| {
+                    published
+                        .iter()
+                        .position(|(provider, remote)| {
+                            *provider == name && row["name"] == remote.as_str()
+                        })
+                        .unwrap_or(usize::MAX)
+                });
+            }
+        }
+    }
+
     pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
         let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
-        let (agents, active_agent, stats, context_window, pinned, hooks, plugins) =
+        let (agents, active_agent, stats, context_window, pinned, hooks, plugins, tool_filters) =
             match self.lock_sessions() {
                 Ok(sessions) => {
                     let session = sessions.get(session_id);
@@ -618,6 +706,12 @@ impl AppServer {
                             .map(|session| session.hooks.clone())
                             .unwrap_or_default(),
                         session.and_then(|session| self.plugins_of(session)),
+                        session.map(|session| {
+                            (
+                                session.intent.enabled_tools.clone(),
+                                session.intent.disabled_tools.clone(),
+                            )
+                        }),
                     )
                 }
                 Err(_) => (
@@ -628,10 +722,19 @@ impl AppServer {
                     false,
                     Default::default(),
                     None,
+                    None,
                 ),
             };
+        if let (Some((enabled, disabled)), Some(Value::Array(tools))) =
+            (&tool_filters, snapshot.get_mut("tools"))
+        {
+            publish_session_tools(tools, enabled, disabled);
+        }
         if let (Some(plugins), Some(mcp)) = (&plugins, snapshot.get_mut("mcp")) {
             crate::resources::overlay_plugin_sources(mcp, &plugins.mcp_sources);
+        }
+        if self.unified_session(session_id).is_some() {
+            self.unified_tool_rows(session_id, &mut snapshot);
         }
         if let Some(counts) = self.overlay_session_connectors(session_id, snapshot.get_mut("mcp")) {
             snapshot.insert("connectors".to_owned(), counts);
@@ -742,6 +845,9 @@ impl AppServer {
     /// record is on disk, which is also when it has a path.
     pub(crate) fn session_log_summary(&self, session_id: &str) -> Value {
         let enabled = self.workspace.session_logging_enabled();
+        if let Some(unified) = self.unified_session(session_id) {
+            return unified.session_log(enabled);
+        }
         let store = self.workspace.session_store();
         let (held, snapshot_title) = self
             .lock_sessions()

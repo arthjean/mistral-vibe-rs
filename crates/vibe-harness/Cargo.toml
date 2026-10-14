@@ -1,0 +1,35 @@
+[package]
+name = "vibe-harness"
+description = "The Unified Harness: the session engine a session runs on by default"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+base64.workspace = true
+# The code mode sandbox: the transpiler and the V8 build the reference's
+# harness core runs, at the versions its lock file pins, so a program behaves
+# and fails the same way on both. V8 is driven directly: the sandbox needs an
+# isolate, a context and two scripts, none of `deno_core`'s runtime.
+deno_ast = { version = "=0.53.3", features = ["transpiling"] }
+futures-util.workspace = true
+getrandom.workspace = true
+jiff.workspace = true
+jsonschema = { version = "=0.49.1", default-features = false }
+portable-pty.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+v8 = "=150.3.0"
+vibe-core = { path = "../vibe-core" }
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
+
+[lints]
+workspace = true

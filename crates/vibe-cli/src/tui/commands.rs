@@ -153,7 +153,31 @@ impl CommandContext {
     pub fn is_available(&self, id: CommandId) -> bool {
         definition(id).is_some_and(|command| command_available_in(command, self))
     }
+
+    /// Reference `Command.forwards_to_model` (`vibe/cli/commands.py:232-242`):
+    /// under the Unified Harness `/loop` is a prompt the unified core reads,
+    /// which wraps it in loop instructions and offers the model its `cron`
+    /// tool, rather than a command the client schedules.
+    #[must_use]
+    pub fn forwards_to_model(&self, id: CommandId) -> bool {
+        id == CommandId::Loop && self.experimental_harness
+    }
+
+    /// The description the registry publishes for `command` in this context,
+    /// which differs from the table's only for the `/loop` the model reads.
+    #[must_use]
+    pub fn description(&self, command: &CommandDefinition) -> &'static str {
+        if self.forwards_to_model(command.id) {
+            UNIFIED_LOOP_DESCRIPTION
+        } else {
+            command.description
+        }
+    }
 }
+
+/// What `/loop` says of itself when the model reads it.
+const UNIFIED_LOOP_DESCRIPTION: &str =
+    "Schedule a recurring prompt in natural language: `/loop [schedule] [prompt]`";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CommandDefinition {
@@ -509,11 +533,11 @@ pub fn command_aliases_in(context: &CommandContext) -> impl Iterator<Item = &'st
 }
 
 #[must_use]
-pub fn command_description(alias: &str) -> &'static str {
+pub fn command_description(alias: &str, context: &CommandContext) -> &'static str {
     COMMANDS
         .iter()
         .find(|command| command.aliases.contains(&alias))
-        .map_or("", |command| command.description)
+        .map_or("", |command| context.description(command))
 }
 
 #[must_use]

@@ -106,8 +106,9 @@ layering. No test enforces it, so check any new dependency edge by hand: a
 crate never depends on a crate in a later layer.
 
 1. `vibe-protocol`, `vibe-core`
-2. `vibe-app-server`, `vibe-voice`
-3. `vibe-cli`, `vibe-acp`
+2. `vibe-harness`
+3. `vibe-app-server`, `vibe-voice`
+4. `vibe-cli`, `vibe-acp`
 
 - `vibe-protocol` owns the JSON-RPC envelopes, the routed method inventory, and
   the `initialize` payloads, and nothing else. Every envelope struct denies
@@ -115,6 +116,10 @@ crate never depends on a crate in a later layer.
   variants; relaxing that makes variant declaration order silently load-bearing.
 - `vibe-core` owns provider-neutral contracts: engine, tools, config, storage,
   policy, process, and platform.
+- `vibe-harness` owns the Unified Harness core a unified session runs on: its
+  state and projection, the turn engine, the code-mode sandbox, the approval
+  gate contract, and the session store. What a host provides (MCP servers,
+  connectors, approvals) reaches it through traits, never a crate edge.
 - `vibe-app-server` owns session lifecycle and method dispatch.
 - `vibe-voice` owns the audio stack both adapters drive: the recorder, the
   player, the realtime transcription and speech clients, and the voice and

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Open every session on the Unified Harness, as the reference does since
+  v2.26.0; `--legacy-harness` keeps the previous backend. The new
+  `vibe-harness` crate is the core a unified session runs on: its own prompt,
+  `run_typescript` and `search_tool_functions` beside the direct tools, smart
+  approve, todos, child sessions, background processes, scheduled loops,
+  compaction, rewind, titles and the unified session store. A configured MCP
+  server, a plugin's MCP server and a connector each become a group a
+  `run_typescript` program calls (`tools.mcp_<server>.<tool>`,
+  `tools.connector_<alias>.<tool>`), every call held to the tool's configured
+  permission. The terminal client pins the todo list under the composer, lists
+  the running subagents with their read-only transcripts, and forwards `/loop`
+  to the model. As in the reference, a unified session refuses a negative
+  `--max-turns` with `Invalid request parameters`, and treats `0` as no
+  budget.
+
+- `vibe-acp` no longer drops the usage updates a turn raised just before it
+  ended: they reach the client the way the ones raised mid-turn do.
+
 - Run plugins as the reference does since v2.26.0 under the unified mode
   (`--experimental-harness`). `/mcp` lists a plugin MCP server through the
   session's own connection to it: `enabled` with every tool its paginated

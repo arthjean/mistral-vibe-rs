@@ -13,8 +13,7 @@ use serde_json::json;
 use tokio::task::JoinHandle;
 use vibe_app_server::client::{
     DriverError, HeadlessService, InterruptOutcome, LiveTurnDriver, ProgrammaticUpdate,
-    PublicNoticeLevel, PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnReservation,
-    turn_error_code,
+    PublicNoticeLevel, PublicTurnOutcome, TurnErrorCode, TurnReservation, turn_error_code,
 };
 use vibe_core::engine::{CompositeEventObserver, EventObserver};
 
@@ -113,10 +112,10 @@ pub(super) fn start_active_turn(
         observer,
         service.title_scheduler(),
     ));
-    let driver = service.driver();
+    let runner = service.turn_runner();
     let turn_id = reservation.turn_id.clone();
     let task = tokio::spawn(async move {
-        let outcome = driver.run_observed(&reservation, observer).await;
+        let outcome = runner.run(&reservation, observer).await;
         (reservation, outcome)
     });
     Ok(ActiveTurn {
@@ -294,6 +293,7 @@ pub(super) fn drain_update_receiver(
                 *live_context_tokens = Some(context_tokens);
                 continue;
             }
+            ProgrammaticUpdate::Renamed { .. } | ProgrammaticUpdate::Accounting { .. } => continue,
             ProgrammaticUpdate::HistoryEntry {
                 event_id, entry, ..
             } => {

@@ -85,6 +85,23 @@ impl SessionRegistry {
         Ok(())
     }
 
+    /// Files a session under a new identifier and forgets every one it
+    /// answered to before, so the old identifier names a separate session
+    /// again: reference `clear` on the unified host leaves the session it
+    /// replaced saved and reopenable.
+    pub(super) fn rekey(&mut self, session_id: &str, new_id: &str) -> Result<(), ServerError> {
+        if self.key(new_id).is_some() {
+            return Err(ServerError::SessionConflict(new_id.to_owned()));
+        }
+        let mut session = self
+            .remove(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        new_id.clone_into(&mut session.id);
+        session.aliases.clear();
+        self.insert(session);
+        Ok(())
+    }
+
     /// Records an extra identifier that resolves to an existing session.
     pub(super) fn alias(&mut self, session_id: &str, alias: &str) {
         let Some(key) = self.key(session_id).map(ToOwned::to_owned) else {

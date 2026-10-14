@@ -68,12 +68,22 @@ impl Image {
     }
 }
 
+/// One block of a message that carries images, in the order it was written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ContentPart {
+    Text(String),
+    Image(Image),
+}
+
 /// One message of a conversation as a backend sees it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Message {
     pub role: Role,
     pub content: Option<String>,
     pub images: Vec<Image>,
+    /// The blocks of a Unified Harness message that carries images, each
+    /// sent as its own chunk in order. Empty otherwise.
+    pub parts: Vec<ContentPart>,
     /// A message the harness added rather than the operator typed.
     pub injected: bool,
     pub reasoning_content: Option<String>,
@@ -94,6 +104,7 @@ impl Message {
             role,
             content: None,
             images: Vec::new(),
+            parts: Vec::new(),
             injected: false,
             reasoning_content: None,
             reasoning_payloads: None,
@@ -186,6 +197,11 @@ impl Message {
                 other.images
             } else {
                 self.images
+            },
+            parts: if self.parts.is_empty() {
+                other.parts
+            } else {
+                self.parts
             },
             injected: self.injected,
             reasoning_content: concatenated(self.reasoning_content, other.reasoning_content),

@@ -693,6 +693,7 @@ async fn run_call(scenario: &Scenario<'_>, entry: &Value) -> Value {
     let headers = call::extra_headers(scenario.provider, SESSION_ID);
     let messages = call::messages_for_backend(history, scenario.model.supports_images);
     let request = ModelRequest {
+        unified: false,
         model: scenario.model,
         messages: &messages,
         temperature: scenario.model.temperature,
