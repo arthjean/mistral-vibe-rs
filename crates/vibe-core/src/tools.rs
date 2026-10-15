@@ -64,12 +64,15 @@ impl ToolOutputSink {
     pub fn emit(&self, chunk: impl Into<String>) -> Result<(), ToolError> {
         let chunk = chunk.into();
         let chunk_bytes = u64::try_from(chunk.len()).unwrap_or(u64::MAX);
-        let previous = self
-            .streamed_bytes
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-                Some(current.saturating_add(chunk_bytes))
-            })
-            .unwrap_or(u64::MAX);
+        let mut previous = self.streamed_bytes.load(Ordering::Acquire);
+        while let Err(current) = self.streamed_bytes.compare_exchange_weak(
+            previous,
+            previous.saturating_add(chunk_bytes),
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            previous = current;
+        }
         let actual = previous.saturating_add(chunk_bytes);
         let limit = u64::try_from(self.max_output_bytes).unwrap_or(u64::MAX);
         if actual > limit {
