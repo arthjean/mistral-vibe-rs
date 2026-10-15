@@ -53,7 +53,7 @@ pub(super) fn read_table_optional(path: &Path) -> Result<Table, ConfigError> {
         .parse::<Table>()
         .map_err(|source| ConfigError::InvalidToml {
             path: path.to_path_buf(),
-            source,
+            source: Box::new(source),
         })
 }
 
