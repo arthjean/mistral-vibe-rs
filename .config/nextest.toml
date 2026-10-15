@@ -18,9 +18,3 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 [[profile.ci.overrides]]
 filter = "package(vibe-core) & test(/^tools::shell::/)"
 slow-timeout = { period = "30s", terminate-after = 2 }
-
-# This case gives `cmd.exe` two seconds to answer, which the start of a run,
-# when every test binary launches at once, can take from it.
-[[profile.ci.overrides]]
-filter = "test(=resources::resources_tests::core_backend_runs_trusted_shell_and_cleans_the_owned_process)"
-threads-required = "num-test-threads"
