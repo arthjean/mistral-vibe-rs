@@ -712,8 +712,11 @@ pub(crate) fn write_cache(
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    // Windows refuses `LockFileEx` on a handle opened for appending alone, so
+    // the lock file is opened for writing.
     let lock = std::fs::OpenOptions::new()
-        .append(true)
+        .write(true)
+        .truncate(false)
         .create(true)
         .open(path.with_file_name(format!(".{CACHE_FILE}.lock")))?;
     fs2::FileExt::lock_exclusive(&lock)?;
