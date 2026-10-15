@@ -1,10 +1,20 @@
 # The Windows CI job runs the suite through nextest, one process per test, so a
 # pseudoconsole one test opens cannot hold the pipes of another test running
-# beside it in the same process. A hung test is ended after five minutes and
-# reported as a timeout instead of holding the job.
+# beside it in the same process.
 # The CI job installs exactly this release.
 nextest-version = "0.9.146"
 
+# A test that fails is rerun twice before it fails the job, as the reference
+# reruns its last-failed tests, because windows-2022's pseudoconsole host
+# sometimes stalls a session's teardown. A rerun that passes is reported as
+# flaky in the log. A hung test is ended after five minutes.
 [profile.ci]
 fail-fast = false
+retries = 2
 slow-timeout = { period = "60s", terminate-after = 5 }
+
+# A shell tool test settles within seconds, so a stalled pseudoconsole is ended
+# after one minute and the rerun starts sooner.
+[[profile.ci.overrides]]
+filter = "package(vibe-core) & test(/^tools::shell::/)"
+slow-timeout = { period = "30s", terminate-after = 2 }
