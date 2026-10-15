@@ -188,9 +188,9 @@ def seed_cache_home(base: Path, event: dict) -> None:
     if event.get("blockWrite"):
         cache_path.mkdir()
     elif event.get("document") is not None:
-        cache_path.write_text(pad_document(event["document"], event.get("padBytes", 0)))
+        cache_path.write_text(pad_document(event["document"], event.get("padBytes", 0)), newline="")
     if event.get("legacy") is not None:
-        (base / "update_cache.json").write_text(event["legacy"])
+        (base / "update_cache.json").write_text(event["legacy"], newline="")
 
 
 def encode_document_value(value) -> str:
@@ -267,7 +267,7 @@ async def observe_update_cache_roundtrip(event: dict) -> str:
         first = encode_cache(await repository.get())
         await repository.set(decode_cache(event["cache"]))
         if event.get("rewrite") is not None:
-            (base / "cache.toml").write_text(event["rewrite"])
+            (base / "cache.toml").write_text(event["rewrite"], newline="")
         second = encode_cache(await repository.get())
         fresh = encode_cache(await FileSystemUpdateCacheRepository(base).get())
         return f"cachestore|roundtrip|{first}|{second}|fresh={fresh}"

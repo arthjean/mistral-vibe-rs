@@ -1965,7 +1965,7 @@ async def run_probe_case(entry: dict[str, Any], home: Path) -> dict[str, Any]:
             from vibe.core.paths import UTILITY_MODEL_CACHE_FILE
 
             UTILITY_MODEL_CACHE_FILE.path.parent.mkdir(parents=True, exist_ok=True)
-            UTILITY_MODEL_CACHE_FILE.path.write_text(entry["rawFile"], encoding="utf-8")
+            UTILITY_MODEL_CACHE_FILE.path.write_text(entry["rawFile"], encoding="utf-8", newline="")
         if entry["seed"]:
             write_seed(config, entry["seed"], clock.wall)
         rounds = []
@@ -2229,7 +2229,7 @@ def main() -> int:
         sys.stdout.write(rendered)
         return 0
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(rendered, encoding="utf-8")
+    target.write_text(rendered, encoding="utf-8", newline="")
     print(f"captured {len(corpus['scenarios'])} scenarios from {reference['commit'][:12]} into {target}")
     print(f"python {platform.python_version()}")
     return 0

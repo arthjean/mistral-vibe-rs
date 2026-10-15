@@ -46,6 +46,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+import host_env  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/skills/corpus.json")
@@ -635,7 +636,7 @@ def _materialize_case(scratch: Path, scenario: dict[str, Any]) -> dict[str, Path
         for relative, content in files.items():
             target = roots[label] / relative
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+            target.write_text(content, encoding="utf-8", newline="")
     for link in scenario.get("symlinks", []):
         (case_root / link["link"]).symlink_to(roots[link["target"]])
     return roots
@@ -1393,14 +1394,14 @@ def capture_manifest(scratch: Path) -> list[dict[str, Any]]:
     })
 
     malformed = workdir / "bad.toml"
-    malformed.write_text("this is = = not valid toml [[[", encoding="utf-8")
+    malformed.write_text("this is = = not valid toml [[[", encoding="utf-8", newline="")
     captured.append({
         "case": "load-malformed-returns-empty",
         "skills": dump(_manifest._load(malformed)),
     })
 
     wrong_shape = workdir / "wrong-shape.toml"
-    wrong_shape.write_text('[[skills]]\nname = "only-a-name"\n', encoding="utf-8")
+    wrong_shape.write_text('[[skills]]\nname = "only-a-name"\n', encoding="utf-8", newline="")
     captured.append({
         "case": "load-invalid-entry-returns-empty",
         "toml": wrong_shape.read_text(encoding="utf-8"),
@@ -1411,6 +1412,7 @@ def capture_manifest(scratch: Path) -> list[dict[str, Any]]:
     extra_keys.write_text(
         '[[skills]]\nname = "a"\nskill_id = "x"\nversion = 2\nsurplus = "ignored"\n',
         encoding="utf-8",
+        newline="",
     )
     captured.append({
         "case": "load-ignores-unknown-keys",
@@ -1743,7 +1745,7 @@ def _reset_vibe_home() -> Path:
     for name in ("skills-registry-cache", "skills.toml", "cache.toml", "skills"):
         target = vibe_home / name
         if target.is_dir():
-            shutil.rmtree(target)
+            host_env.remove_tree(target)
         elif target.exists():
             target.unlink()
     return vibe_home
@@ -2527,7 +2529,7 @@ def capture_service(scratch: Path) -> list[dict[str, Any]]:
         if scenario.get("localSkill"):
             local = vibe_home / "skills" / scenario["localSkill"]
             local.mkdir(parents=True)
-            (local / "SKILL.md").write_text(skill_file(scenario["localSkill"], "Already local"), encoding="utf-8")
+            (local / "SKILL.md").write_text(skill_file(scenario["localSkill"], "Already local"), encoding="utf-8", newline="")
         registry = FakeRegistry(scenario.get("registry", {}))
         roots = [project] if scenario.get("trusted", True) else []
         args = scenario.get("args", {})
@@ -2651,8 +2653,8 @@ def capture_ledger(scratch: Path) -> list[dict[str, Any]]:
         "files": sorted(path.name for path in _ledger.ledger_root().iterdir()),
         "union": sorted([list(item) for item in _ledger.union()]),
     })
-    (_ledger.ledger_root() / "k3.txt").write_text("d@4\njunk\nb@x\n@3\n e@2 \nf@@6\ng@-1\n", encoding="utf-8")
-    (_ledger.ledger_root() / "ignored.json").write_text("z@1\n", encoding="utf-8")
+    (_ledger.ledger_root() / "k3.txt").write_text("d@4\njunk\nb@x\n@3\n e@2 \nf@@6\ng@-1\n", encoding="utf-8", newline="")
+    (_ledger.ledger_root() / "ignored.json").write_text("z@1\n", encoding="utf-8", newline="")
     captured.append({
         "case": "union-skips-malformed-lines",
         "union": sorted([list(item) for item in _ledger.union()]),
@@ -2758,6 +2760,7 @@ def main() -> int:
     staged.write_text(
         json.dumps(corpus, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, arguments.output)
 

@@ -777,7 +777,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (OracleError, acp.OracleError, rewind.OracleError) as error:

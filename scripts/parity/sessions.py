@@ -60,6 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -145,6 +146,7 @@ def environment(world: acp.World, backend: acp.Backend) -> dict[str, str]:
     return {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(world.home),
+        **host_env.windows_base(str(world.home)),
         "VIBE_HOME": str(world.vibe_home),
         "MISTRAL_API_KEY": "oracle-key",
         "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -242,7 +244,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], dialect: str, qui
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", TURN_BACKEND)))
         config = session.substitute(scenario.get("config", ""))
         (world.vibe_home / "config.toml").write_text(
-            rewind.base_config(backend, config), encoding="utf-8"
+            rewind.base_config(backend, config), encoding="utf-8", newline=""
         )
         acp.write_tree(world.workspace, scenario.get("files", {}))
         env = environment(world, backend)
@@ -364,10 +366,11 @@ def seed(world: acp.World, spec: dict[str, Any]) -> None:
         .replace("$WS", str(world.workspace))
         .replace("$ROOT", str(world.root))
     )
-    (directory / "meta.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    (directory / "meta.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8", newline="")
     (directory / "messages.jsonl").write_text(
         "".join(json.dumps(message) + "\n" for message in spec.get("messages", [])),
         encoding="utf-8",
+        newline="",
     )
 
 
@@ -1009,7 +1012,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (OracleError, acp.OracleError, rewind.OracleError) as error:

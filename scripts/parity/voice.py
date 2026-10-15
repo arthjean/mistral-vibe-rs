@@ -1234,6 +1234,7 @@ def _write(path: Path, document: dict[str, Any]) -> None:
     staged.write_text(
         json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, path)
 

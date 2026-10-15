@@ -921,6 +921,7 @@ def main() -> int:
         staged.write_text(
             json.dumps(corpus, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="",
         )
         os.replace(staged, output)
         # Written only on request: the Rust runner recaptures the corpus on
@@ -931,6 +932,7 @@ def main() -> int:
             arguments.digest.write_text(
                 rendered(build_digest(corpus)),
                 encoding="utf-8",
+                newline="",
             )
         # Written on request for the same reason as the digest: the fixtures are
         # a conformance target, and recapturing them on every run would let a
@@ -940,6 +942,7 @@ def main() -> int:
             arguments.fixtures.write_text(
                 rendered(build_fixtures(corpus)),
                 encoding="utf-8",
+                newline="",
             )
         # Written on request for the same reason: the gate corpus is what the
         # filter is held to, so it is regenerated deliberately rather than by
@@ -949,6 +952,7 @@ def main() -> int:
             arguments.gates.write_text(
                 rendered(build_gates(corpus)),
                 encoding="utf-8",
+                newline="",
             )
         # Written on request for the same reason as the gates: the quadrants
         # are what the publication gate is held to, and the fourth one is a
@@ -959,6 +963,7 @@ def main() -> int:
             arguments.quadrants.write_text(
                 rendered(build_quadrants(corpus)),
                 encoding="utf-8",
+                newline="",
             )
     except OracleError as error:
         print(f"tool-surface capture failed: {error}", file=sys.stderr)

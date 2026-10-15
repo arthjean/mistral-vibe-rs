@@ -1131,6 +1131,7 @@ def main() -> int:
     staged.write_text(
         json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, arguments.output)
     families = [
@@ -1154,6 +1155,7 @@ def main() -> int:
             )
             + "\n",
             encoding="utf-8",
+            newline="",
         )
     print(
         f"captured {total} scenarios across {len(families)} families and "

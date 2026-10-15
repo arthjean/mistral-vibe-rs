@@ -1844,6 +1844,7 @@ def main() -> int:
     staged.write_text(
         json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, arguments.output)
 
@@ -1855,6 +1856,7 @@ def main() -> int:
         staged.write_text(
             json.dumps(corpus, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="",
         )
         os.replace(staged, arguments.corpus)
 

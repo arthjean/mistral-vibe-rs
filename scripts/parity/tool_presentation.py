@@ -848,12 +848,13 @@ def main() -> int:
         staged.write_text(
             json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="",
         )
         os.replace(staged, arguments.output)
         if arguments.corpus is not None:
             arguments.corpus.parent.mkdir(parents=True, exist_ok=True)
             arguments.corpus.write_text(
-                rendered_corpus(records, reference), encoding="utf-8"
+                rendered_corpus(records, reference), encoding="utf-8", newline=""
             )
     except OracleError as error:
         print(f"tool-presentation capture failed: {error}", file=sys.stderr)

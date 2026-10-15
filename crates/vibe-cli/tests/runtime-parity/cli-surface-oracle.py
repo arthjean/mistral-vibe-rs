@@ -1290,7 +1290,7 @@ def main() -> int:
             return 0
         arguments.corpus.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.corpus.with_name(f"{arguments.corpus.name}.{os.getpid()}.tmp")
-        staged.write_text(rendered(corpus), encoding="utf-8")
+        staged.write_text(rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.corpus)
     except OracleError as error:
         print(f"cli-surface capture failed: {error}", file=sys.stderr)

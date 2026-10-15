@@ -464,7 +464,7 @@ class Scenario:
         self.root = root
         self.redirect = free_port()
         script = json.loads(json.dumps(spec["script"]).replace("{redirect}", str(self.redirect)))
-        (root / "script.json").write_text(json.dumps(script), encoding="utf-8")
+        (root / "script.json").write_text(json.dumps(script), encoding="utf-8", newline="")
         self.log = root / "log.jsonl"
         port_file = root / "port"
         environment = {
@@ -692,7 +692,7 @@ def capture(reference: dict[str, str], fixture: Path) -> dict[str, Any]:
         second = asyncio.run(run_scenario(spec, fixture))
         if first != second:
             if os.environ.get("VIBE_OAUTH_PARITY_DUMP"):
-                Path(os.environ["VIBE_OAUTH_PARITY_DUMP"]).write_text(json.dumps([first, second], indent=1, sort_keys=True), encoding="utf-8")
+                Path(os.environ["VIBE_OAUTH_PARITY_DUMP"]).write_text(json.dumps([first, second], indent=1, sort_keys=True), encoding="utf-8", newline="")
             raise OracleError(f"scenario {spec['name']} is not deterministic across two captures")
         scenarios.append({"name": spec["name"], "spec": copy.deepcopy(spec), "observed": first})
     return {
@@ -777,7 +777,7 @@ def main() -> int:
         return 0
     target = target if target.is_absolute() else REPOSITORY / target
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(rendered, encoding="utf-8")
+    target.write_text(rendered, encoding="utf-8", newline="")
     print(f"captured {len(corpus['scenarios'])} scenarios from {reference['commit'][:12]} into {target}")
     print(f"python {platform.python_version()}")
     return 0

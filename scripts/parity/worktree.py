@@ -104,6 +104,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+import host_env  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path(".parity/worktree-corpus.json")
@@ -271,7 +272,7 @@ def install_hermetic_git_environment(root: Path) -> None:
     """
 
     configuration = root / "gitconfig"
-    configuration.write_text("", encoding="utf-8")
+    configuration.write_text("", encoding="utf-8", newline="")
     os.environ.update(
         {
             "GIT_CONFIG_GLOBAL": str(configuration),
@@ -308,7 +309,7 @@ def run_git(cwd: Path, *arguments: str) -> str:
 
 def write_file(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8", newline="")
 
 
 def commit_all(checkout: Path, message: str) -> None:
@@ -440,7 +441,7 @@ def build_setup(worktree_module: Any, setup: str, root: Path) -> None:
             str(linked / "gamma"),
         )
         run_git(checkout, "worktree", "add", "--quiet", "-b", "delta", str(linked / "delta"))
-        shutil.rmtree(linked / "delta")
+        host_env.remove_tree(linked / "delta")
         return
     raise OracleError(f"unknown setup {setup!r}")
 
@@ -1221,7 +1222,7 @@ def apply_lifecycle_step(worktree_module: Any, prepared: Any, step: str) -> None
     elif verb == "forget":
         claim_of(worktree_module, prepared.path).forget()
     elif verb == "delete-directory":
-        shutil.rmtree(prepared.root)
+        host_env.remove_tree(prepared.root)
     elif verb == "prune":
         worktree_module.ManagedWorktree.prune(0)
     else:
@@ -1601,11 +1602,12 @@ def main() -> int:
         staged.write_text(
             json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="",
         )
         os.replace(staged, arguments.output)
         if arguments.corpus is not None:
             arguments.corpus.parent.mkdir(parents=True, exist_ok=True)
-            arguments.corpus.write_text(rendered_corpus(records, reference), encoding="utf-8")
+            arguments.corpus.write_text(rendered_corpus(records, reference), encoding="utf-8", newline="")
     except OracleError as error:
         print(f"worktree capture failed: {error}", file=sys.stderr)
         return 1

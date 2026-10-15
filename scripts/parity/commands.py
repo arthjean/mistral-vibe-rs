@@ -1775,7 +1775,7 @@ def main() -> int:
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(
-        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline=""
     )
     counts = {entry["id"]: entry["count"] for entry in corpus["counts"]}
     print(

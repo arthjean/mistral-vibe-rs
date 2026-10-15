@@ -43,12 +43,10 @@ from __future__ import annotations
 
 import argparse
 import copy
-import fcntl
 import http.server
 import json
 import os
 from pathlib import Path
-import pty
 import queue
 import re
 import select
@@ -57,7 +55,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-import termios
 import threading
 import time
 from typing import Any
@@ -66,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/telemetry-session/corpus.json"
@@ -683,6 +681,7 @@ def environment(world: World, scenario: dict[str, Any], stand: Stand) -> dict[st
     env = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(world.home),
+        **host_env.windows_base(str(world.home)),
         "VIBE_HOME": str(world.vibe_home),
         "MISTRAL_API_KEY": "oracle-key",
         "VIBE_API_BASE": f"{stand.base}/v1/chat/completions",
@@ -775,6 +774,12 @@ class Terminal:
     never blocks on a full screen."""
 
     def __init__(self, command: list[str], env: dict[str, str], cwd: Path) -> None:
+        # POSIX-only, so imported here: the driver itself must import on
+        # Windows, where only the scenarios that need a terminal are lost.
+        import fcntl
+        import pty
+        import termios
+
         self.master, slave = pty.openpty()
         rows, columns = TUI_SIZE
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
@@ -872,7 +877,7 @@ def run_scenario(scenario: dict[str, Any], commands: dict[str, list[str]]) -> di
     try:
         for name, value in scenario.get("stand", {}).items():
             setattr(stand, name, copy.deepcopy(value))
-        (world.vibe_home / "config.toml").write_text(compose_config(scenario, stand.base), encoding="utf-8")
+        (world.vibe_home / "config.toml").write_text(compose_config(scenario, stand.base), encoding="utf-8", newline="")
         acp.write_tree(world.workspace, scenario.get("files", {}))
         env = environment(world, scenario, stand)
         surface = scenario["surface"]
@@ -1136,7 +1141,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
     except (OracleError, acp.OracleError, subprocess.TimeoutExpired) as error:

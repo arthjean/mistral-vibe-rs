@@ -61,12 +61,13 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import queue
 import re
-import select
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -74,6 +75,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 FIXTURES = REPOSITORY / "crates/vibe-core/tests/plugins-parity/fixtures.json"
@@ -155,7 +157,7 @@ def write_case(home: Path, files: dict[str, str]) -> None:
     for relative, content in files.items():
         target = home / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_text(content, encoding="utf-8", newline="")
 
 
 def resolve_case(case: dict[str, Any], home: Path) -> dict[str, Any]:
@@ -575,7 +577,16 @@ class Server:
             cwd=cwd,
         )
         self.next_id = 0
-        self.buffer = b""
+        # Lines arrive through a reader thread: `select` takes only sockets on
+        # Windows, never a pipe.
+        self.inbox: queue.Queue[bytes | None] = queue.Queue()
+        threading.Thread(target=self._pump, daemon=True).start()
+
+    def _pump(self) -> None:
+        assert self.process.stdout is not None
+        for line in iter(self.process.stdout.readline, b""):
+            self.inbox.put(line)
+        self.inbox.put(None)
 
     def send(self, message: dict[str, Any]) -> None:
         assert self.process.stdin is not None
@@ -583,17 +594,18 @@ class Server:
         self.process.stdin.flush()
 
     def _lines(self, timeout: float) -> list[dict[str, Any]]:
-        assert self.process.stdout is not None
-        ready, _, _ = select.select([self.process.stdout], [], [], timeout)
-        if not ready:
-            return []
-        chunk = os.read(self.process.stdout.fileno(), 1 << 16)
-        if not chunk:
-            raise OracleError("the server closed its output")
-        self.buffer += chunk
+        """Every line already read, waiting up to `timeout` for the first."""
+        lines: list[bytes | None] = []
+        try:
+            lines.append(self.inbox.get(timeout=timeout))
+            while True:
+                lines.append(self.inbox.get_nowait())
+        except queue.Empty:
+            pass
         messages = []
-        while b"\n" in self.buffer:
-            line, self.buffer = self.buffer.split(b"\n", 1)
+        for line in lines:
+            if line is None:
+                raise OracleError("the server closed its output")
             if line.strip():
                 messages.append(json.loads(line))
         return messages
@@ -645,10 +657,10 @@ def write_tree(root: Path, files: dict[str, str | None]) -> None:
         target = root / relative
         if content is None:
             relax(target)
-            shutil.rmtree(target)
+            host_env.remove_tree(target)
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content.replace("<now>", str(int(time.time()))), encoding="utf-8")
+        target.write_text(content.replace("<now>", str(int(time.time()))), encoding="utf-8", newline="")
 
 
 def run_scenario(
@@ -666,11 +678,12 @@ def run_scenario(
         os.chmod(vibe_home / relative, 0o755)
     trusted = [json.dumps(str(workspace))] if scenario.get("trusted") else []
     (vibe_home / "trusted_folders.toml").write_text(
-        f"trusted = [{', '.join(trusted)}]\nuntrusted = []\n", encoding="utf-8"
+        f"trusted = [{', '.join(trusted)}]\nuntrusted = []\n", encoding="utf-8", newline=""
     )
     env = {
-        "PATH": f"{fixture_dir}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "PATH": f"{fixture_dir}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}",
         "HOME": str(home),
+        **host_env.windows_base(str(home)),
         "VIBE_HOME": str(vibe_home),
         "MISTRAL_API_KEY": "oracle-key",
         "VIBE_API_BASE": "http://127.0.0.1:9/v1/chat/completions",
@@ -848,7 +861,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def write_json(path: Path, document: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="")
 
 
 def emit(path: Path, document: Any, key: str, check: bool) -> None:

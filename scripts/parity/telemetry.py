@@ -2096,7 +2096,7 @@ def capture_log_pagination() -> list[dict[str, Any]]:
             if index in PAGINATION_NOISE:
                 lines.append(PAGINATION_NOISE[index])
             lines.append(line)
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
 
         records: list[dict[str, Any]] = []
         for limit, offset in PAGINATION_CASES:
@@ -2127,7 +2127,7 @@ def capture_log_pagination() -> list[dict[str, Any]]:
         })
 
         empty = Path(scratch) / "empty.log"
-        empty.write_text("", encoding="utf-8")
+        empty.write_text("", encoding="utf-8", newline="")
         page = LogReader(log_file=empty).get_logs()
         records.append({
             "case": "file-empty",
@@ -2151,12 +2151,12 @@ def _capture_shrink(scratch: Path) -> dict[str, Any]:
     from vibe.core.log_reader import LogReader
 
     path = scratch / "rotating.log"
-    path.write_text("\n".join(PAGINATION_LINES) + "\n", encoding="utf-8")
+    path.write_text("\n".join(PAGINATION_LINES) + "\n", encoding="utf-8", newline="")
     consumed: list[str] = []
     reader = LogReader(log_file=path, consumer=lambda entry: consumed.append(entry.message))
     reader._last_position = path.stat().st_size
     reader._new_lines_count = len(PAGINATION_LINES)
-    path.write_text(PAGINATION_LINES[0] + "\n", encoding="utf-8")
+    path.write_text(PAGINATION_LINES[0] + "\n", encoding="utf-8", newline="")
     reader._process_new_content()
     return {
         "case": "file-shrank-between-polls",
@@ -2354,6 +2354,7 @@ def write_json(path: Path, document: dict[str, Any]) -> None:
     staged.write_text(
         json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, path)
 

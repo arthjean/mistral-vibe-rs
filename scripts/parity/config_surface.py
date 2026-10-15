@@ -1053,11 +1053,11 @@ def _stack_root_layout(root: Path, scenario: dict[str, Any]) -> tuple[Path, Path
     home = root / ".vibe"
     home.mkdir(parents=True)
     if scenario["user"] is not None:
-        (home / "config.toml").write_text(scenario["user"], encoding="utf-8")
+        (home / "config.toml").write_text(scenario["user"], encoding="utf-8", newline="")
     for directory, document in scenario["projects"].items():
         target = root / directory / ".vibe"
         target.mkdir(parents=True, exist_ok=True)
-        (target / "config.toml").write_text(document, encoding="utf-8")
+        (target / "config.toml").write_text(document, encoding="utf-8", newline="")
     cwd = root / scenario["cwd"]
     cwd.mkdir(parents=True, exist_ok=True)
     return home, cwd
@@ -1335,7 +1335,7 @@ def capture_dotenv(reference: Path) -> list[dict[str, Any]]:
     for scenario in DOTENV_SCENARIOS:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"
-            path.write_text(scenario["file"], encoding="utf-8")
+            path.write_text(scenario["file"], encoding="utf-8", newline="")
             environ = dict(scenario["environ"])
             load_dotenv_values(env_path=path, environ=environ)
         captured.append({**scenario, "result": dict(sorted(environ.items()))})
@@ -2184,7 +2184,7 @@ def main() -> int:
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(
-        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline=""
     )
     print(
         f"wrote {arguments.output} "

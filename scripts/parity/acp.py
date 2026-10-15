@@ -29,6 +29,7 @@ import concurrent.futures
 import copy
 import hashlib
 import http.server
+import errno
 import json
 import os
 from pathlib import Path
@@ -46,6 +47,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/corpus.json"
@@ -328,6 +330,11 @@ class Agent:
                 self.process.stdin.flush()
             except (BrokenPipeError, ValueError):
                 pass
+            except OSError as error:
+                # Windows reports a write to an exited child as `EINVAL`
+                # where POSIX raises `BrokenPipeError`: the same event.
+                if error.errno != errno.EINVAL:
+                    raise
 
     def collect(self, request_id: Any, quiet: float) -> list[dict[str, Any]]:
         """Everything the agent writes until the response and then silence."""
@@ -364,6 +371,11 @@ class Agent:
                 self.process.stdin.close()
             except (BrokenPipeError, ValueError):
                 pass
+            except OSError as error:
+                # Windows reports a write to an exited child as `EINVAL`
+                # where POSIX raises `BrokenPipeError`: the same event.
+                if error.errno != errno.EINVAL:
+                    raise
         try:
             return self.process.wait(timeout=15)
         except subprocess.TimeoutExpired:
@@ -476,7 +488,7 @@ def answer_client_request(
     if method == "fs/write_text_file" and answer is None:
         path = Path(params.get("path", ""))
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(params.get("content", ""), encoding="utf-8")
+        path.write_text(params.get("content", ""), encoding="utf-8", newline="")
         return {"jsonrpc": "2.0", "id": request["id"], "result": None}
     if method.startswith("terminal/") and answer is None:
         return {"jsonrpc": "2.0", "id": request["id"], "result": world.terminal(method, params)}
@@ -500,7 +512,7 @@ def write_tree(root: Path, files: dict[str, str]) -> None:
     for relative, content in files.items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="")
 
 
 def base_config(backend: Backend) -> str:
@@ -527,13 +539,14 @@ def run_scenario(
     try:
         backend.responses = world.substitute(copy.deepcopy(scenario.get("backend", [])))
         config = base_config(backend) + scenario.get("config", "")
-        (world.vibe_home / "config.toml").write_text(config, encoding="utf-8")
+        (world.vibe_home / "config.toml").write_text(config, encoding="utf-8", newline="")
         write_tree(world.workspace, scenario.get("files", {}))
         write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
         write_tree(world.home, scenario.get("homeFiles", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -646,15 +659,20 @@ class Normalizer:
         self.authored = authored_strings(scenario)
         self.paths = sorted(
             (
-                (paths["workspace"], "<ws>"),
-                (paths["vibeHome"], "<vibe-home>"),
-                (paths["home"], "<home>"),
-                (paths["root"], "<root>"),
-                # The directory the agent was launched from, which the
-                # terminal sign-in method names.
-                (paths["bin"], "<bin>"),
-                # A provider error names the endpoint, whose port is ephemeral.
-                (paths["backend"], "<backend>"),
+                (spelling, placeholder)
+                for path, placeholder in (
+                    (paths["workspace"], "<ws>"),
+                    (paths["vibeHome"], "<vibe-home>"),
+                    (paths["home"], "<home>"),
+                    (paths["root"], "<root>"),
+                    # The directory the agent was launched from, which the
+                    # terminal sign-in method names.
+                    (paths["bin"], "<bin>"),
+                    # A provider error names the endpoint, whose port is
+                    # ephemeral.
+                    (paths["backend"], "<backend>"),
+                )
+                for spelling in host_env.path_spellings(path)
             ),
             key=lambda item: -len(item[0]),
         )
@@ -668,6 +686,7 @@ class Normalizer:
     def text(self, value: str) -> str:
         for path, placeholder in self.paths:
             value = value.replace(path, placeholder)
+        value = host_env.posix_tails(value, ["<ws>", "<vibe-home>", "<home>", "<root>", "<bin>"])
         # Short identifiers are scenario words that also occur inside prose.
         for original, placeholder in sorted(self.ids.items(), key=lambda item: -len(item[0])):
             if len(original) >= 8:
@@ -1621,6 +1640,7 @@ def run_argv(command: list[str], args: list[str]) -> dict[str, Any]:
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(root / "home"),
+            **host_env.windows_base(str(root / "home")),
             "VIBE_HOME": str(root / "vibe-home"),
             "LANG": "C.UTF-8",
             "TERM": "dumb",
@@ -1758,7 +1778,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(rendered(corpus), encoding="utf-8")
+        staged.write_text(rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except OracleError as error:

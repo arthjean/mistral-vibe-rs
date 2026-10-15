@@ -500,7 +500,7 @@ def capture_file_tool_labels(reference: Path) -> dict[str, Any]:
                     "directory": "folder",
                 }[target]
                 if target == "file":
-                    path.write_text("secret", encoding="utf-8")
+                    path.write_text("secret", encoding="utf-8", newline="")
                 elif target == "directory":
                     path.mkdir()
                 escaping = resolve_file_tool_permission(
@@ -903,7 +903,7 @@ def main() -> int:
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(
-        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline=""
     )
     counts = corpus["counts"]
     print(

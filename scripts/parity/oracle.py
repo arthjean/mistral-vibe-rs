@@ -121,7 +121,7 @@ def build_workspace(root: Path, name: str) -> None:
     for relative, content in files.items():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content or "", encoding="utf-8")
+        target.write_text(content or "", encoding="utf-8", newline="")
 
 
 # --------------------------------------------------------------------------
@@ -167,6 +167,7 @@ def write_corpus(
             (trace_directory / name).write_text(
                 json.dumps(trace, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
                 encoding="utf-8",
+                newline="",
             )
             entries.append(
                 {
@@ -186,7 +187,7 @@ def write_corpus(
             "unavailable": sorted(unavailable, key=lambda entry: entry["id"]),
         }
         (staging / "manifest.json").write_text(
-            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline=""
         )
         previous = output.with_name(f"{output.name}.previous")
         shutil.rmtree(previous, ignore_errors=True)
