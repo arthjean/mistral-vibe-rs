@@ -6,6 +6,10 @@
   macOS, as the reference does: the whole process group is killed, where only
   the shell that launched the hook command was before.
 
+- A unified session publishes the end of a background process only after the
+  call that started it, as the reference does, so a process that exits at
+  once no longer shows as ended ahead of its own start.
+
 - Windows fixes found while bringing the test suite up on Windows: `vibe-acp`
   names itself `vibe-acp` in usage and errors instead of `vibe-acp.exe`; a
   lock another process holds reads as busy instead of as an I/O failure; the

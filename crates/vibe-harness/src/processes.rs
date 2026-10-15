@@ -129,6 +129,10 @@ pub struct ProcessManager {
     /// The notifications of processes that ended, waiting for the model.
     notifications: Mutex<Vec<Value>>,
     listener: Mutex<Option<Listener>>,
+    /// The starts the session has not yet moved past, each with whether its
+    /// process already ended: an end is announced only once its start is
+    /// acknowledged (see [`ProcessManager::acknowledge_start`]).
+    unacknowledged: Mutex<BTreeMap<String, bool>>,
 }
 
 impl std::fmt::Debug for ProcessManager {
@@ -331,6 +335,24 @@ impl ProcessManager {
         }
     }
 
+    /// Lets the end of the process `process_id` be published.
+    ///
+    /// Reference `_commit_terminal_snapshot` holds a process's end behind the
+    /// barrier its start opens once the engine has applied the start's result
+    /// (`_acknowledge_process_result_applied`), so a process that ends at once
+    /// is still published after the call that started it. An end held here is
+    /// announced now; an unknown or already acknowledged start is a no-op.
+    pub fn acknowledge_start(&self, process_id: &str) {
+        let ended = self
+            .unacknowledged
+            .lock()
+            .ok()
+            .and_then(|mut pending| pending.remove(process_id));
+        if ended == Some(true) {
+            self.announce();
+        }
+    }
+
     fn announce(&self) {
         let listener = self.listener.lock().ok().and_then(|slot| slot.clone());
         if let Some(listener) = listener {
@@ -513,6 +535,9 @@ impl ProcessManager {
         if let Ok(mut processes) = self.processes.lock() {
             processes.push(Arc::clone(&process));
         }
+        if let Ok(mut pending) = self.unacknowledged.lock() {
+            pending.insert(process_id.clone(), false);
+        }
         // The reader keeps every byte; the waiter settles the process once
         // its root exits and its terminal has drained.
         {
@@ -616,6 +641,12 @@ impl ProcessManager {
                 "level": level,
                 "message": message,
             }));
+        }
+        if let Ok(mut pending) = self.unacknowledged.lock()
+            && let Some(ended) = pending.get_mut(&process.id)
+        {
+            *ended = true;
+            return;
         }
         self.announce();
     }
