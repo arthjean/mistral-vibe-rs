@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Interrupting a turn while a hook runs now stops the hook on Linux and
+  macOS, as the reference does: the whole process group is killed, where only
+  the shell that launched the hook command was before.
+
 - Windows fixes found while bringing the test suite up on Windows: `vibe-acp`
   names itself `vibe-acp` in usage and errors instead of `vibe-acp.exe`; a
   lock another process holds reads as busy instead of as an I/O failure; the

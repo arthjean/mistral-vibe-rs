@@ -210,6 +210,12 @@ impl ChildGroup {
         }
     }
 
+    /// The process group the child leads, when one was created.
+    #[cfg(unix)]
+    pub(crate) fn group(&self) -> Option<i32> {
+        self.group
+    }
+
     /// Signals the whole group, falling back to the leader when no group is owned.
     #[cfg(unix)]
     pub(crate) fn signal(&mut self, force: bool) -> Result<(), TerminationError> {

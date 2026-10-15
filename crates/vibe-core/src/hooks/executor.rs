@@ -45,6 +45,8 @@ pub(crate) async fn run_hook(hook: &HookConfig, stdin: &[u8], cwd: &Path) -> Hoo
     };
     let stdout = pipes.stdout;
     let stderr = pipes.stderr;
+    #[cfg(unix)]
+    let mut abandoned = AbandonedGroup(child.group());
     let exchange = async {
         let written = async {
             child_stdin.write_all(stdin).await?;
@@ -69,6 +71,8 @@ pub(crate) async fn run_hook(hook: &HookConfig, stdin: &[u8], cwd: &Path) -> Hoo
         Some(deadline) => tokio::time::timeout(deadline, exchange).await.ok(),
         None => Some(exchange.await),
     };
+    #[cfg(unix)]
+    abandoned.0.take();
     match outcome {
         Some(Ok((stdout, stderr, status))) => HookExecutionResult {
             hook_name: hook.name.clone(),
@@ -93,6 +97,25 @@ pub(crate) async fn run_hook(hook: &HookConfig, stdin: &[u8], cwd: &Path) -> Hoo
                 stderr: String::new(),
                 timed_out: true,
             }
+        }
+    }
+}
+
+/// Kills the hook's process group when its run is dropped before it settles.
+///
+/// Reference `HookExecutor.run` kills the process on any `BaseException`, a
+/// canceled turn included. Tokio's `kill_on_drop` reaches only the shell it
+/// started, and `dash` forks the hook command rather than replacing itself
+/// with it, so without this the hook would outlive the turn that canceled it.
+/// On Windows the job object already takes the whole tree down on drop.
+#[cfg(unix)]
+struct AbandonedGroup(Option<i32>);
+
+#[cfg(unix)]
+impl Drop for AbandonedGroup {
+    fn drop(&mut self) {
+        if let Some(group) = self.0 {
+            let _ = crate::child::signal_group(group, true);
         }
     }
 }
