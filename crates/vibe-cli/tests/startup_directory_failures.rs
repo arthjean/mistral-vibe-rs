@@ -51,7 +51,9 @@ fn a_tilde_workdir_expands_before_the_existence_check() {
     let output = launch(root.path(), root.path(), &["--workdir", "~/missing"]);
 
     let stdout = report(&output);
-    let home = canonical(&root.path().join("home"));
+    // The home is joined as the environment spells it, unresolved: a runner
+    // whose temporary directory carries an 8.3 short name reports that name.
+    let home = root.path().join("home");
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     assert!(
         stdout.contains(&home.join("missing").display().to_string()),
