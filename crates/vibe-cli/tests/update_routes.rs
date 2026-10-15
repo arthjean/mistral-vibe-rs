@@ -11,10 +11,15 @@
 )]
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+mod support;
+use support::FixtureEnvironment;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -24,9 +29,8 @@ fn launch(root: &Path, base_url: &str, arguments: &[&str]) -> Output {
     fs::create_dir_all(home.join(".vibe")).expect("vibe home");
     fs::create_dir_all(&workspace).expect("workspace");
     Command::new(env!("CARGO_BIN_EXE_vibe"))
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .env("HOME", &home)
+        .env_clear_keeping_base()
+        .env_home(&home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("VIBE_UPDATE_BASE_URL", base_url)
         .env("TERM", "dumb")
@@ -37,15 +41,41 @@ fn launch(root: &Path, base_url: &str, arguments: &[&str]) -> Output {
         .expect("vibe launched")
 }
 
-/// Serves one GitHub releases answer naming `tag`, then stops.
-fn serve_release(tag: &str) -> (String, std::thread::JoinHandle<()>) {
+/// How long the release server waits for the binary to connect. A launch that
+/// never reaches it (a child environment Winsock cannot start in, a route that
+/// skipped the gateway) fails the test after this, instead of blocking it.
+const CONNECTION_DEADLINE: Duration = Duration::from_secs(30);
+
+/// Serves one GitHub releases answer naming `tag`, then stops. The handle
+/// yields an error naming the server when no connection arrived in time.
+fn serve_release(tag: &str) -> (String, JoinHandle<Result<(), String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind a local port");
     let address = listener.local_addr().expect("local address");
+    listener.set_nonblocking(true).expect("a pollable listener");
     let body = format!(
         r#"[{{"tag_name":"{tag}","published_at":"2026-09-22T00:00:00Z","prerelease":false,"draft":false}}]"#
     );
     let handle = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().expect("one request");
+        let started = Instant::now();
+        let mut stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    if started.elapsed() >= CONNECTION_DEADLINE {
+                        return Err(format!(
+                            "vibe never connected to the release server at {address} within {}s",
+                            CONNECTION_DEADLINE.as_secs()
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(error) => return Err(format!("the release server failed to accept: {error}")),
+            }
+        };
+        // An accepted socket inherits the listener's mode on some platforms.
+        stream
+            .set_nonblocking(false)
+            .map_err(|error| format!("the accepted connection stays non-blocking: {error}"))?;
         let mut request = [0_u8; 4096];
         let _ = stream.read(&mut request);
         let response = format!(
@@ -55,7 +85,7 @@ fn serve_release(tag: &str) -> (String, std::thread::JoinHandle<()>) {
         );
         stream
             .write_all(response.as_bytes())
-            .expect("write the response");
+            .map_err(|error| format!("the release server failed to answer: {error}"))
     });
     (format!("http://{address}"), handle)
 }
@@ -65,7 +95,10 @@ fn update_is_the_check_upgrade_command() {
     let root = tempfile::tempdir().expect("fixture root");
     let (base_url, server) = serve_release(&format!("v{VERSION}"));
     let output = launch(root.path(), &base_url, &["update"]);
-    server.join().expect("the server answered");
+    server
+        .join()
+        .expect("the release server thread finished")
+        .expect("the release server answered vibe");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(output.status.code(), Some(0), "stdout: {stdout}");
     assert_eq!(

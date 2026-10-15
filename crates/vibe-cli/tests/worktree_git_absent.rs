@@ -16,6 +16,9 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
+mod support;
+use support::FixtureEnvironment;
+
 /// The launch fails before any provider work, so no credential is needed and
 /// the git-absent sentence is the whole output that matters.
 #[test]
@@ -31,9 +34,9 @@ fn a_launch_that_cannot_find_git_says_so_instead_of_leaking_the_spawn_error() {
     fs::create_dir_all(&home).expect("home directory");
 
     let output = Command::new(env!("CARGO_BIN_EXE_vibe"))
-        .env_clear()
+        .env_clear_keeping_base()
         .env("PATH", &empty_path)
-        .env("HOME", &home)
+        .env_home(&home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("TERM", "dumb")
         .args(["--workdir"])

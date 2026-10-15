@@ -15,9 +15,16 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
+mod support;
+use support::FixtureEnvironment;
+
 /// Preparation narrates the requested name, then the resolved path, both on
 /// standard error, leaving standard output for the run's own result.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn preparation_narrates_on_standard_error_in_the_reference_order() {
     let Some(root) = scripted_repository() else {
         eprintln!("skipping: git is unavailable to build the fixture repository");
@@ -106,9 +113,8 @@ fn launch(home_root: &Path, workspace: &Path) -> Output {
     let home = home_root.join("home");
     fs::create_dir_all(&home).expect("home directory");
     Command::new(env!("CARGO_BIN_EXE_vibe"))
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .env("HOME", &home)
+        .env_clear_keeping_base()
+        .env_home(&home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("TERM", "dumb")
         .arg("--workdir")
