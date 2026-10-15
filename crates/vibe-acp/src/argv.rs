@@ -45,9 +45,19 @@ pub(crate) fn parse(argv: impl IntoIterator<Item = OsString>) -> Result<Argument
     let prog = argv
         .next()
         .and_then(|first| {
-            std::path::Path::new(&first)
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
+            let path = std::path::Path::new(&first);
+            // A Windows launch names the binary with its `.exe` suffix, which
+            // the reference's launcher never shows in its usage or version.
+            let executable = cfg!(windows)
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"));
+            let name = if executable {
+                path.file_stem()
+            } else {
+                path.file_name()
+            };
+            name.map(|name| name.to_string_lossy().into_owned())
         })
         .unwrap_or_else(|| "vibe-acp".to_owned());
     let mut arguments = Arguments::default();
