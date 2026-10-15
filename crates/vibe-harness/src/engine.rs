@@ -2193,6 +2193,15 @@ async fn run_program(
     let tools = crate::programmatic::namespaces(&environment.callables);
     let now = now_millis();
     let mut record: Vec<Recorded> = Vec::new();
+    let mut barriers = StartBarriers {
+        manager: core.lock().ok().map(|core| Arc::clone(&core.processes)),
+        session_id: core
+            .lock()
+            .map(|core| core.projector.state.session.id.clone())
+            .unwrap_or_default(),
+        started: Vec::new(),
+        applied: Vec::new(),
+    };
     for round in 0usize.. {
         let facts = Facts {
             tools: tools.clone(),
@@ -2269,9 +2278,13 @@ async fn run_program(
                 "typescript:{message_count}:{call_id}:{round}:tool:{}",
                 record.len() + index
             );
+            barriers.started(&action, &operation);
             started.push((slots.len(), operation, action));
             slots.push(None);
         }
+        // The calls this round started are published, which is the step the
+        // reference's engine takes together with applying the last results.
+        barriers.open_applied();
         let mut running: FuturesUnordered<_> = started
             .into_iter()
             .map(|(slot, operation, action)| async move {
@@ -2300,6 +2313,7 @@ async fn run_program(
                 now_millis(),
             );
             sink(core.publication(advance, None));
+            barriers.applied(&action);
         }
         drop(running);
         for (call, slot) in calls.into_iter().zip(slots) {
@@ -2313,6 +2327,63 @@ async fn run_program(
         }
     }
     CallOutcome::FailTurn("run_typescript never settled".to_owned())
+}
+
+/// The background processes a program started, held until it moves past them.
+///
+/// The reference's engine applies a call's result and starts the program's
+/// next calls in one step, and only then opens the barrier that lets the
+/// started process's end be published; a process that ends at once therefore
+/// shows after both. Here a result is committed and the next calls start in
+/// two publications, so a start is acknowledged after the second. A program
+/// that ends, fails or is dropped acknowledges every start it made.
+struct StartBarriers {
+    manager: Option<Arc<crate::processes::ProcessManager>>,
+    session_id: String,
+    /// Each `process.start` action started, with the process it names.
+    started: Vec<(String, String)>,
+    applied: Vec<String>,
+}
+
+impl StartBarriers {
+    /// `operation` is the call identifier the action runs under, which
+    /// [`crate::processes::process_id`] reads.
+    fn started(&mut self, action: &ToolAction, operation: &str) {
+        if action.tool_name == "process.start" {
+            let process_id =
+                crate::processes::process_id(&self.session_id, &action.action_id, operation);
+            self.started.push((action.action_id.clone(), process_id));
+        }
+    }
+
+    fn applied(&mut self, action: &ToolAction) {
+        if let Some((_, process_id)) = self
+            .started
+            .iter()
+            .find(|(action_id, _)| *action_id == action.action_id)
+        {
+            self.applied.push(process_id.clone());
+        }
+    }
+
+    fn open_applied(&mut self) {
+        if let Some(manager) = &self.manager {
+            for process_id in self.applied.drain(..) {
+                manager.acknowledge_start(&process_id);
+            }
+        }
+    }
+}
+
+impl Drop for StartBarriers {
+    fn drop(&mut self) {
+        self.open_applied();
+        if let Some(manager) = &self.manager {
+            for (_, process_id) in self.started.drain(..) {
+                manager.acknowledge_start(&process_id);
+            }
+        }
+    }
 }
 
 /// The logs a program wrote, as the blocks after its result.
