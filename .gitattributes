@@ -1,0 +1,11 @@
+# Every text file is checked out with LF, whatever `core.autocrlf` says, so
+# embedded prompts (`include_str!`) and committed corpora are byte-identical on
+# Windows and Linux. Binary files are still detected and left untouched.
+* text=auto eol=lf
+
+# The tool-execution fixture tree records how the port reads a file whose lines
+# end in CRLF, so this file keeps its CRLF bytes on every platform.
+crates/vibe-app-server/tests/tool-execution/tree/crlf.txt -text
+
+# Binary fixture of the same tree: never converted.
+crates/vibe-app-server/tests/tool-execution/tree/nested/delta.bin binary

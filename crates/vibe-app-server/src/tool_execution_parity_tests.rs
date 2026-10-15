@@ -1959,11 +1959,15 @@ fn the_fixture_tree_is_committed_and_deterministic() {
                 if path.is_dir() {
                     pending.push(path);
                 } else {
+                    // Keyed with `/` on every platform, as the corpus names
+                    // the fixtures.
                     let relative = path
                         .strip_prefix(root)
                         .expect("under the root")
-                        .display()
-                        .to_string();
+                        .components()
+                        .map(|component| component.as_os_str().to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("/");
                     found.insert(relative, fs::read(&path).expect("readable"));
                 }
             }
