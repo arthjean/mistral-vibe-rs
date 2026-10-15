@@ -54,9 +54,11 @@ fn agent_profile_keeps_requested_denials_and_explicit_auto_approval() {
     apply_agent_profile_settings(&mut intent, &profile);
 
     assert_eq!(intent.disabled_tools, ["shell"]);
+    // The plans directory is a path on the host, spelled with its separator.
+    let plans = format!("{0}plans{0}*", std::path::MAIN_SEPARATOR);
     assert!(intent.agent_permission_rules.iter().any(|rule| {
         rule.tool == "edit"
-            && rule.pattern.ends_with("/plans/*")
+            && rule.pattern.ends_with(&plans)
             && rule.mode == vibe_core::policy::PermissionMode::Always
     }));
     assert!(intent.auto_approve);

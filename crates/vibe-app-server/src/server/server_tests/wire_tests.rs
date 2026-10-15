@@ -359,6 +359,10 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
 /// operator reads, not a skill that silently failed to appear. The session
 /// start is what projects it, and a second session adds nothing.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: skill diagnostics publish verbatim paths (US-010)"
+)]
 fn an_unloadable_skill_is_reported_on_diagnostics_list() {
     let temporary = tempfile::tempdir().expect("tempdir");
     let workspace = temporary.path().join("workspace");

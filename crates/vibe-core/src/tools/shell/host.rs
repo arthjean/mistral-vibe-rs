@@ -223,6 +223,20 @@ impl HostShells {
 /// a Git for Windows install is then found through `git.exe`, and finally at
 /// the usual install roots.
 pub(super) fn find_git_bash(directories: &[PathBuf]) -> Option<PathBuf> {
+    let install_roots = ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(PathBuf::from)
+        .collect::<Vec<_>>();
+    find_git_bash_under(directories, &install_roots)
+}
+
+/// [`find_git_bash`] with the install roots given rather than read from the
+/// environment.
+pub(super) fn find_git_bash_under(
+    directories: &[PathBuf],
+    install_roots: &[PathBuf],
+) -> Option<PathBuf> {
     let scanned = directories
         .iter()
         .map(|directory| directory.join("bash.exe"))
@@ -247,12 +261,10 @@ pub(super) fn find_git_bash(directories: &[PathBuf]) -> Option<PathBuf> {
             return sibling;
         }
     }
-    ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"]
-        .into_iter()
-        .filter_map(std::env::var_os)
+    install_roots
+        .iter()
         .flat_map(|base| {
-            ["Git/bin/bash.exe", "Programs/Git/bin/bash.exe"]
-                .map(|relative| PathBuf::from(&base).join(relative))
+            ["Git/bin/bash.exe", "Programs/Git/bin/bash.exe"].map(|relative| base.join(relative))
         })
         .find(|candidate| candidate.is_file())
 }

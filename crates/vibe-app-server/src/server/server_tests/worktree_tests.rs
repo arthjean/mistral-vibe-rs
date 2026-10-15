@@ -172,6 +172,10 @@ fn connected(root: &Path) -> ServerConnection {
 // --------------------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn the_listing_answers_one_entry_per_linked_worktree() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -206,6 +210,10 @@ fn the_listing_answers_one_entry_per_linked_worktree() {
 /// The details cost a merge base per branch, so they are paid only when a
 /// caller asks: the lines each branch changed and the main checkout's branch.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn the_listing_reports_details_only_when_asked() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -308,6 +316,10 @@ fn the_worktree_methods_are_declared_and_the_retired_listing_is_not() {
 // --------------------------------------------------------------------------
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn an_existing_request_opens_the_session_in_the_linked_worktree() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -334,6 +346,10 @@ fn an_existing_request_opens_the_session_in_the_linked_worktree() {
 /// Moving into a worktree replaces the checkout root, not the other
 /// directories the client authorized.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_moved_session_keeps_the_extra_roots_it_was_given() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -406,6 +422,10 @@ fn an_empty_request_field_is_refused() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_create_request_mints_the_named_worktree_on_the_named_branch() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -441,6 +461,10 @@ fn a_create_request_mints_the_named_worktree_on_the_named_branch() {
 /// An `auto` request with no model to ask names the worktree after its prompt,
 /// on a `vibe/` branch.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn an_auto_request_names_the_worktree_after_its_prompt() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -470,6 +494,10 @@ fn an_auto_request_names_the_worktree_after_its_prompt() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_session_started_in_a_managed_worktree_holds_it() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -569,6 +597,10 @@ fn a_start_without_a_request_keeps_the_directory_it_was_given() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_resolved_request_is_cleared_from_the_options() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -653,6 +685,10 @@ fn a_request_is_refused_on_resume_and_on_continue() {
 /// resolved after the request and before anything else, so the failure lands
 /// exactly in the span the cleanup covers.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_failed_start_takes_back_the_worktree_and_the_branch_it_created() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -698,6 +734,10 @@ fn a_failed_start_leaves_a_branch_it_did_not_create() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_failed_start_leaves_a_worktree_it_only_selected() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -760,6 +800,10 @@ fn a_removal_that_fails_is_reported_rather_than_raised() {
 /// A session that created its worktree and closes before any turn ran takes
 /// the worktree and its branch back, so an abandoned start leaves nothing.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn closing_an_unstarted_session_takes_back_the_worktree_it_created() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -790,6 +834,10 @@ fn closing_an_unstarted_session_takes_back_the_worktree_it_created() {
 
 /// Closing a session in a worktree it did not create only drops its holder.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn closing_a_session_releases_a_worktree_it_did_not_create() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -885,6 +933,10 @@ fn the_limit_update_writes_the_configuration_and_answers_the_new_limit() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn the_prune_removes_inactive_worktrees_beyond_the_limit() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -908,6 +960,10 @@ fn the_prune_removes_inactive_worktrees_beyond_the_limit() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn the_remove_answers_every_outcome_as_a_result() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -949,6 +1005,10 @@ fn the_remove_answers_every_outcome_as_a_result() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn an_inspected_removal_changes_nothing_and_a_forced_one_drops_the_work() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
@@ -977,6 +1037,10 @@ fn an_inspected_removal_changes_nothing_and_a_forced_one_drops_the_work() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_reap_removes_an_unheld_worktree_and_a_cancelled_request_keeps_it() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);

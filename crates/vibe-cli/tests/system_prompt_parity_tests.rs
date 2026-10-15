@@ -439,6 +439,12 @@ fn replay_compose(scenario: &Value) -> Value {
     let name = scenario["name"].as_str().expect("a name");
     let temporary = tempfile::tempdir().expect("a scenario root");
     let root = temporary.path().canonicalize().expect("the root resolves");
+    // The trust file records the root as typed; a Windows verbatim root would
+    // never match the workspace the port resolves.
+    let root = root
+        .to_str()
+        .and_then(|root| root.strip_prefix(r"\\?\"))
+        .map_or(root.clone(), PathBuf::from);
     let output = capture(&[
         "--materialize".as_ref(),
         name.as_ref(),
@@ -575,6 +581,10 @@ fn replay_live() -> BTreeMap<String, Value> {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows by design: the corpus was captured on Linux, and the reference prompt names the Windows platform and spells paths with backslashes"
+)]
 fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);

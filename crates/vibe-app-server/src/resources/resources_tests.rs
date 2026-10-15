@@ -340,6 +340,10 @@ fn session_scoped_resource_state_is_bounded_and_released() {
         .expect("released capacity");
 }
 
+/// A command the host's default allowlist grants outright: a Windows host
+/// analyzes the manual shell as PowerShell, whose list holds no `pwd`.
+const ALLOWED_COMMAND: &str = if cfg!(windows) { "echo vibe" } else { "pwd" };
+
 #[tokio::test]
 async fn core_backend_runs_trusted_shell_and_cleans_the_owned_process() {
     let workspace = tempfile::tempdir().expect("workspace");
@@ -369,7 +373,7 @@ async fn core_backend_runs_trusted_shell_and_cleans_the_owned_process() {
             params(json!({
                 "sessionId": "s1",
                 "operationId": "shell-1",
-                "command": "pwd"
+                "command": ALLOWED_COMMAND
             })),
         ))
         .await
@@ -385,7 +389,7 @@ async fn core_backend_runs_trusted_shell_and_cleans_the_owned_process() {
                     params(json!({
                         "sessionId": "s1",
                         "operationId": "shell-1",
-                        "command": "pwd"
+                        "command": ALLOWED_COMMAND
                     })),
                 ))
                 .await

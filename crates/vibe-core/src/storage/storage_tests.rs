@@ -995,7 +995,7 @@ fn legacy_migration_isolates_bad_entries_and_is_retryable() {
     fs::write(temporary.path().join("broken.json"), b"{").expect("broken legacy fixture");
 
     let report = store.migrate_legacy().expect("migration completes");
-    assert_eq!(report.migrated, 1);
+    assert_eq!(report.migrated, 1, "{:?}", report.issues);
     assert_eq!(report.issues.len(), 1);
     assert_eq!(report.issues[0].path, temporary.path().join("broken.json"));
     let migrated = store

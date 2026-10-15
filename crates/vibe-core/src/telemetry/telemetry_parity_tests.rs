@@ -69,8 +69,8 @@ use super::{
     TELEMETRY_DEFAULT_BASE_URL, TELEMETRY_MAX_CONNECTIONS, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS,
     TELEMETRY_PATH, TELEMETRY_TIMEOUT_SECONDS, TelemetryCallType, TelemetryClient, TelemetryConfig,
     TelemetryContext, TelemetryEnvelope, TelemetryEvent, TelemetryFuture, TelemetryRecord,
-    TelemetryTransport, attachment_counts, merge_properties, platform_id, platform_version,
-    records, telemetry_headers, telemetry_user_agent,
+    TelemetryTransport, attachment_counts, merge_properties, platform_arch, platform_id,
+    platform_version, records, telemetry_headers, telemetry_user_agent,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/telemetry/corpus.json";
@@ -887,8 +887,8 @@ impl Sent {
 }
 
 /// The corpus masks four host-dependent values, so a comparison substitutes
-/// what this host answers before comparing. This build publishes no machine
-/// architecture, so `{arch}` stands for the host's target architecture.
+/// what this host answers before comparing: `{arch}` stands for the machine
+/// name the host reports, which Windows spells `amd64` for `x86_64`.
 fn unmask(value: &Value) -> Value {
     let Some(text) = value.as_str() else {
         return value.clone();
@@ -896,7 +896,7 @@ fn unmask(value: &Value) -> Value {
     match text {
         "{platformId}" => Value::String(platform_id()),
         "{platformVersion}" => platform_version().map_or(Value::Null, Value::String),
-        "{arch}" => Value::String(std::env::consts::ARCH.to_owned()),
+        "{arch}" => Value::String(platform_arch()),
         _ => Value::String(text.replace("{version}", env!("CARGO_PKG_VERSION"))),
     }
 }

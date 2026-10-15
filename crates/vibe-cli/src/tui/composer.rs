@@ -105,7 +105,13 @@ mod tests {
         let workspace = tempfile::tempdir().expect("temporary workspace");
         let image = workspace.path().join("dropped image.png");
         fs::write(&image, b"image").expect("image fixture");
-        let dropped = image.to_string_lossy().replace(' ', "\\ ");
+        // A POSIX terminal escapes the space of a dropped path; a Windows one
+        // quotes the path instead.
+        let dropped = if cfg!(windows) {
+            format!("\"{}\"", image.to_string_lossy())
+        } else {
+            image.to_string_lossy().replace(' ', "\\ ")
+        };
         let mut input = ChatInputState::new();
         let mut state = TuiState::new("session");
         let mut normalization = PathNormalizationManager::new().expect("normalization worker");

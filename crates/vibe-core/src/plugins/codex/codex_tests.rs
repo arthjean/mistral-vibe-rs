@@ -411,10 +411,12 @@ fn codex_plugins_resolve_as_the_reference_resolves_them() {
         ..PluginResolver::default()
     }
     .resolve();
+    // Spelled with `/` on every host, as the reference capture spells them.
     let rel = |path: &std::path::Path| {
         path.to_string_lossy()
             .replace(&*plugins.to_string_lossy(), "<plugins>")
             .replace(&*data.to_string_lossy(), "<data>")
+            .replace('\\', "/")
     };
 
     let mut issues: Vec<Value> = resolved

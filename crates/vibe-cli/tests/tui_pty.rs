@@ -1,3 +1,10 @@
+//! The TUI driven through a real pseudo-terminal.
+//!
+//! The file compiles to no test on Windows: it opens its terminal with
+//! `nix::pty::openpty` and installs `#!/bin/sh` editor and shell fixtures made
+//! executable by mode bits, none of which exist there. The Windows console path
+//! is a ConPTY, owned by US-017 of `tasks/prd-windows-native-support.md`.
+
 #![cfg(unix)]
 #![allow(
     clippy::expect_used,

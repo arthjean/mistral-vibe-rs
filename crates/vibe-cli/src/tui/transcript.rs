@@ -1431,6 +1431,15 @@ mod tests {
         assert_eq!(renamed.collapsed_by_default, previous.collapsed_by_default);
     }
 
+    /// `path` as the reference displays a relative path: `str(Path)`, which
+    /// spells it with the host separator.
+    fn native(path: &str) -> String {
+        path.split('/')
+            .collect::<std::path::PathBuf>()
+            .display()
+            .to_string()
+    }
+
     #[test]
     fn every_audited_effect_kind_keeps_its_reference_header_body_and_collapse() {
         let read = effect_of(&effect(
@@ -1441,7 +1450,10 @@ mod tests {
                 "output": {"path": "src/lib.rs", "content": "1|use std;\n2|fn main() {}", "startLine": 1, "endLine": 2},
             }),
         ));
-        assert_eq!(read.header_text(), "Read 2 lines from src/lib.rs");
+        assert_eq!(
+            read.header_text(),
+            format!("Read 2 lines from {}", native("src/lib.rs"))
+        );
         assert_eq!(read.body[0].text, "use std;");
         assert!(read.collapsed_by_default);
 
@@ -1450,7 +1462,10 @@ mod tests {
             json!({"file_path": "docs/readme.md"}),
             json!({"status": "completed", "output": {"path": "docs/readme.md", "content": "hello"}}),
         ));
-        assert_eq!(write.header_text(), "Created docs/readme.md");
+        assert_eq!(
+            write.header_text(),
+            format!("Created {}", native("docs/readme.md"))
+        );
         assert!(!write.collapsed_by_default);
 
         let edit = effect_of(&effect(
@@ -1461,7 +1476,10 @@ mod tests {
                 "output": {"file": "src/lib.rs", "old_string": "old", "new_string": "new"},
             }),
         ));
-        assert_eq!(edit.header_text(), "Edited src/lib.rs");
+        assert_eq!(
+            edit.header_text(),
+            format!("Edited {}", native("src/lib.rs"))
+        );
         assert!(!edit.collapsed_by_default);
         assert_eq!(
             edit.body

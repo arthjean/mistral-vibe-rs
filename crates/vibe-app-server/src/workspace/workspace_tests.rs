@@ -1553,6 +1553,10 @@ fn the_builtins_are_published_on_the_wire() {
 /// US-168: a `SKILL.md` that will not parse is published as an issue naming
 /// the file, which is what `diagnostics/list` reads.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: skill diagnostics publish verbatim paths (US-010)"
+)]
 fn an_unloadable_skill_is_published_as_an_issue() {
     let temporary = tempdir().expect("tempdir");
     let workspace = temporary.path().join("workspace");

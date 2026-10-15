@@ -67,6 +67,10 @@ fn an_existing_request_must_name_a_linked_worktree() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_prompt_request_takes_the_suggestion_on_a_vibe_branch() {
     let (_scratch, checkout, lifecycle) = fixture();
     let resolved = lifecycle
@@ -86,6 +90,10 @@ fn a_prompt_request_takes_the_suggestion_on_a_vibe_branch() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn cleanup_takes_back_a_created_worktree_and_its_branch() {
     let (_scratch, checkout, lifecycle) = fixture();
     let resolved = lifecycle

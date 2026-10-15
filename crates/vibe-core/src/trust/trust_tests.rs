@@ -38,15 +38,24 @@ fn decisions_are_written_as_tomli_w_writes_them_and_keep_an_existing_mode() {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("chmod");
     }
     let store = TrustStore::for_vibe_home(&home);
-    let odd = root.path().join("q\"u\\ote");
+    // A Windows file name cannot hold `"` and reads `\` as a separator, so
+    // there the separators every path carries are what gets escaped.
+    let odd = root.path().join(if cfg!(windows) {
+        "q'u ote"
+    } else {
+        "q\"u\\ote"
+    });
     fs::create_dir_all(&odd).expect("odd");
     store.add_untrusted(&odd).expect("declined");
     store.add_trusted(root.path()).expect("trusted");
-    let odd = resolve(&odd)
-        .to_string_lossy()
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"");
-    let root_text = resolve(root.path()).to_string_lossy().into_owned();
+    let escaped = |path: &Path| {
+        resolve(path)
+            .to_string_lossy()
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+    };
+    let odd = escaped(&odd);
+    let root_text = escaped(root.path());
     assert_eq!(
         fs::read_to_string(&path).expect("written"),
         format!("trusted = [\n    \"{root_text}\",\n]\nuntrusted = [\n    \"{odd}\",\n]\n")

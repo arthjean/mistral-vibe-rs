@@ -150,9 +150,12 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
                 "transport".to_owned(),
                 toml::Value::String("stdio".to_owned()),
             ),
+            // The list form is used as written; a string is split as a POSIX
+            // shell would, which consumes the backslashes of a Windows path in
+            // the reference as in this port.
             (
                 "command".to_owned(),
-                toml::Value::String(fixture.to_owned()),
+                toml::Value::Array(vec![toml::Value::String(fixture.to_owned())]),
             ),
             ("args".to_owned(), toml::Value::Array(Vec::new())),
             (
@@ -201,7 +204,11 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         dispatch.signals.runtime_updated,
         "discovery moved runtime state, so `runtime/updated` follows the answer"
     );
-    assert!(dispatch.signals.warnings.is_empty());
+    assert!(
+        dispatch.signals.warnings.is_empty(),
+        "discovery warned: {:?}",
+        dispatch.signals.warnings
+    );
     // The answer declares no state of its own; what the backend learned travels
     // on the signals, which is what the runtime snapshot is composed from.
     let integrations = dispatch

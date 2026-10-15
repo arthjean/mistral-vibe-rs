@@ -140,9 +140,17 @@ fn toml_table(map: &Map<String, JsonValue>) -> Table {
 /// Substitutes the temporary root the capture wrote a placeholder for.
 fn resolve_root(value: &JsonValue, root: &Path) -> JsonValue {
     match value {
-        JsonValue::String(text) => {
-            JsonValue::String(text.replace(ROOT_PLACEHOLDER, &root.display().to_string()))
-        }
+        // A path under the root was joined with the capture host's `/`; the
+        // reference joins it with the replay host's separator, so the tail is
+        // read in that spelling.
+        JsonValue::String(text) => JsonValue::String(match text.strip_prefix(ROOT_PLACEHOLDER) {
+            Some(tail) => format!(
+                "{}{}",
+                root.display(),
+                tail.replace('/', std::path::MAIN_SEPARATOR_STR)
+            ),
+            None => text.replace(ROOT_PLACEHOLDER, &root.display().to_string()),
+        }),
         JsonValue::Object(entries) => JsonValue::Object(
             entries
                 .iter()

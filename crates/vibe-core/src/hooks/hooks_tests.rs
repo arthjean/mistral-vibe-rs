@@ -90,6 +90,12 @@ fn answering(stdout: &Value) -> String {
     format!("printf '%s' '{stdout}'")
 }
 
+/// A hook command in the dialect of the shell hooks run under: `/bin/sh` on
+/// Unix and `COMSPEC` on Windows, as the reference's `create_subprocess_shell`.
+fn dialect(posix: &'static str, windows: &'static str) -> &'static str {
+    if cfg!(windows) { windows } else { posix }
+}
+
 #[test]
 fn a_declared_hook_loads_with_the_reference_defaults() {
     let directory = tempfile::tempdir().expect("a directory");
@@ -310,9 +316,16 @@ async fn a_failed_hook_warns_with_its_most_telling_output_unless_it_is_strict() 
             hook(
                 "stderr",
                 HookType::PreTool,
-                "echo out; echo '  broke  ' >&2; exit 1",
+                dialect(
+                    "echo out; echo '  broke  ' >&2; exit 1",
+                    "echo out& echo   broke  1>&2& exit 1",
+                ),
             ),
-            hook("stdout", HookType::PreTool, "echo only stdout; exit 4"),
+            hook(
+                "stdout",
+                HookType::PreTool,
+                dialect("echo only stdout; exit 4", "echo only stdout& exit 4"),
+            ),
             hook("bare", HookType::PreTool, "exit 3"),
         ],
         pre_tool("bash"),
@@ -359,7 +372,7 @@ async fn an_answer_that_is_not_a_response_object_is_reported_as_python_reports_i
     let yielded = run(
         vec![
             hook("text", HookType::PreTool, "echo not json"),
-            hook("list", HookType::PreTool, "echo '[1, 2]'"),
+            hook("list", HookType::PreTool, &answering(&json!([1, 2]))),
             hook(
                 "decision",
                 HookType::PreTool,

@@ -995,6 +995,10 @@ fn validate_trace_schema(trace: &Map<String, Value>, id: &str) -> Result<(), Str
 
 #[test]
 #[allow(clippy::unwrap_in_result)]
+#[cfg_attr(
+    windows,
+    ignore = "windows by design: the drag-and-drop traces were captured on Linux, and the reference neither unescapes spaces nor leaves drive-letter paths unquoted on Windows"
+)]
 fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
     let manifest = load_manifest()?;
     let expectations = load_expectations()?;

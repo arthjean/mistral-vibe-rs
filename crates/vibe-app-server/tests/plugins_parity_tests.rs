@@ -110,6 +110,10 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: plugin roots and issue files are published verbatim (US-010)"
+)]
 fn the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);

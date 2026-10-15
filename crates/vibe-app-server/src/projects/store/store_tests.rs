@@ -263,8 +263,15 @@ fn a_failed_write_reads_as_python_reports_an_os_error() {
         path: PathBuf::from("/home/u/.vibe/projects.toml"),
         source: std::io::Error::from_raw_os_error(13),
     };
+    let text = error.to_string();
+    // The reason between the code and the path is the host's own text for the
+    // code, localized on Windows, so only POSIX pins its wording.
+    assert!(text.starts_with("[Errno 13] "), "{text}");
+    assert!(text.ends_with(": '/home/u/.vibe/projects.toml'"), "{text}");
+    assert!(!text.contains("os error"), "{text}");
+    #[cfg(unix)]
     assert_eq!(
-        error.to_string(),
+        text,
         "[Errno 13] Permission denied: '/home/u/.vibe/projects.toml'"
     );
 }

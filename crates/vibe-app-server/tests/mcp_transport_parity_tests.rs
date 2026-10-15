@@ -379,11 +379,18 @@ impl Scenario {
     fn normalize(&self, value: &Value) -> Value {
         match value {
             Value::String(text) => {
-                let mut text = text.replace(FIXTURE, "__FIXTURE__");
+                let root = self.root.path().display().to_string();
+                // A path also reaches a canonical form inside a JSON string,
+                // where a Windows separator is escaped.
+                let mut text = text
+                    .replace(&json_escaped(FIXTURE), "__FIXTURE__")
+                    .replace(FIXTURE, "__FIXTURE__");
                 for port in self.ports.values() {
                     text = text.replace(&format!("127.0.0.1:{port}"), "127.0.0.1:__PORT__");
                 }
-                text = text.replace(&self.root.path().display().to_string(), "__SCENARIO__");
+                text = text
+                    .replace(&json_escaped(&root), "__SCENARIO__")
+                    .replace(&root, "__SCENARIO__");
                 text = text.replace(
                     &format!("MistralAI-VibeCLI/{}", vibe_core::telemetry::version()),
                     "MistralAI-VibeCLI/__VERSION__",
@@ -858,6 +865,12 @@ fn ledgered(scenario: &str, pointer: &str) -> Option<&'static Divergence> {
     })
 }
 
+/// `path` as it reads inside a JSON string.
+fn json_escaped(path: &str) -> String {
+    let quoted = serde_json::to_string(path).expect("a string serializes");
+    quoted[1..quoted.len() - 1].to_owned()
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_scenario_matches_the_reference_mcp_client() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("corpus JSON");
@@ -868,13 +881,35 @@ async fn every_scenario_matches_the_reference_mcp_client() {
             .to_owned(),
         corpus["token"].as_str().expect("token").to_owned(),
     );
-    let inherited = corpus["inheritedNames"]
+    let mut inherited = corpus["inheritedNames"]
         .as_array()
         .expect("inherited names")
         .iter()
         .filter_map(Value::as_str)
         .map(str::to_owned)
         .collect::<BTreeSet<_>>();
+    // The corpus records the POSIX names the SDK passes through; on win32 the
+    // SDK passes its Windows list instead (`mcp/client/stdio/__init__.py`,
+    // `DEFAULT_INHERITED_ENV_VARS`), which the replay removes the same way.
+    if cfg!(windows) {
+        inherited.extend(
+            [
+                "APPDATA",
+                "HOMEDRIVE",
+                "HOMEPATH",
+                "LOCALAPPDATA",
+                "PATH",
+                "PATHEXT",
+                "PROCESSOR_ARCHITECTURE",
+                "SYSTEMDRIVE",
+                "SYSTEMROOT",
+                "TEMP",
+                "USERNAME",
+                "USERPROFILE",
+            ]
+            .map(str::to_owned),
+        );
+    }
     let only = std::env::var("VIBE_MCP_PARITY_ONLY").ok();
     let mut failures = Vec::new();
     let mut used = BTreeSet::new();

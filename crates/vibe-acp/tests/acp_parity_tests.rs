@@ -167,11 +167,19 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: ACP tool locations, search paths and permission patterns are published verbatim (US-009, US-010)"
+)]
 fn the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     replay(CORPUS, "legacy");
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: ACP tool locations, search paths and permission patterns are published verbatim (US-009, US-010)"
+)]
 fn the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     replay(UNIFIED_CORPUS, "unified");
 }

@@ -472,7 +472,14 @@ fn start_error(error: RecorderError) -> RecordingStartError {
 /// access, on the two platforms that gate it.
 #[must_use]
 pub fn mic_access_hint() -> &'static str {
-    match vibe_core::telemetry::platform_id().as_str() {
+    mic_access_hint_for(&vibe_core::telemetry::platform_id())
+}
+
+/// The hint [`mic_access_hint`] gives on `platform`, a
+/// [`vibe_core::telemetry::platform_id`] value.
+#[must_use]
+pub fn mic_access_hint_for(platform: &str) -> &'static str {
+    match platform {
         "darwin" => " Grant access in System Settings → Privacy & Security → Microphone.",
         "windows" => " Grant access in Settings → Privacy & security → Microphone.",
         _ => "",

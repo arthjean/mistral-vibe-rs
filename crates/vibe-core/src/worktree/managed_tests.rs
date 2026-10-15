@@ -55,6 +55,10 @@ fn prepared(
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_fresh_worktree_is_starting_until_a_session_holds_it() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
@@ -70,6 +74,10 @@ fn a_fresh_worktree_is_starting_until_a_session_holds_it() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn an_attachment_hold_counts_until_it_is_released() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
@@ -87,6 +95,10 @@ fn an_attachment_hold_counts_until_it_is_released() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_pending_hold_for_another_worktree_is_refused_and_released() {
     let (_scratch, checkout, managed) = fixture();
     let (first, first_held) = prepared(&checkout, &managed, "first");
@@ -112,6 +124,10 @@ fn a_pending_hold_for_another_worktree_is_refused_and_released() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_forgotten_claim_holds_nothing_and_its_last_holder_cleans_up() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
@@ -129,6 +145,10 @@ fn a_forgotten_claim_holds_nothing_and_its_last_holder_cleans_up() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_held_worktree_keeps_its_reap_until_the_sweep_finds_it_unheld() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
@@ -156,6 +176,10 @@ fn a_held_worktree_keeps_its_reap_until_the_sweep_finds_it_unheld() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_cancelled_reap_refuses_the_same_request_arriving_late() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
@@ -183,6 +207,10 @@ fn a_cancelled_reap_refuses_the_same_request_arriving_late() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn an_unheld_reap_snapshots_a_clean_worktree_before_removing_it() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
@@ -200,6 +228,10 @@ fn an_unheld_reap_snapshots_a_clean_worktree_before_removing_it() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_probe_discounts_the_asker_and_a_forced_release_drops_the_work() {
     let (_scratch, checkout, managed) = fixture();
     let (prepared, held) = prepared(&checkout, &managed, "review");
