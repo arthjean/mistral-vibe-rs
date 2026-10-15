@@ -13,6 +13,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      # The packaged `vibe` links `cpal`, which builds against the ALSA headers.
+      # Bounded and retried as in the CI quality job.
+      - name: Install system dependencies
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            if sudo timeout 180 apt-get update \
+              -o Acquire::Retries=3 \
+              -o Acquire::http::Timeout=30; then
+              break
+            fi
+            echo "apt-get update stalled on attempt ${attempt}"
+            sleep 15
+          done
+          sudo timeout 300 apt-get install --no-install-recommends -y libasound2-dev
       - name: Package local artifact
         run: bash scripts/ci/package-release.sh linux-x86_64 2.24.0
       - name: Run local action with string inputs
