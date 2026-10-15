@@ -940,12 +940,14 @@ fn run_ranking(corpus: &Corpus, report: &mut Report) {
 /// Runs one git setup command with the system and global configuration off,
 /// as the capture does.
 fn git(repository: &Path, arguments: &[&str]) {
-    let null_device = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    // An empty file rather than the null device: Git for Windows intermittently
+    // refuses `NUL` as a configuration path ("unable to access 'NUL'").
+    let empty = tempfile::NamedTempFile::new().expect("an empty global configuration");
     let output = Command::new("git")
         .args(arguments)
         .current_dir(repository)
         .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", null_device)
+        .env("GIT_CONFIG_GLOBAL", empty.path())
         .output()
         .expect("git runs");
     assert!(
