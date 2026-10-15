@@ -1,10 +1,10 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", all(test, unix)))]
 use std::process::ExitStatus;
 use std::process::{Command, Stdio};
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", all(test, unix)))]
 use std::time::{Duration, Instant};
 
 use base64::Engine;
@@ -347,7 +347,7 @@ fn read_nonempty(path: &Path) -> Result<Option<Vec<u8>>, ClipboardError> {
     Ok((!bytes.is_empty()).then_some(bytes))
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", all(test, unix)))]
 fn run_command_until(
     command: &mut Command,
     deadline: Instant,
@@ -453,6 +453,7 @@ fn ensure_private_directory(path: &Path) -> Result<(), ClipboardError> {
 }
 
 fn create_private_directory(path: &Path) -> std::io::Result<()> {
+    #[cfg_attr(not(unix), expect(unused_mut, reason = "only Unix sets a mode"))]
     let mut builder = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {

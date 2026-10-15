@@ -145,6 +145,13 @@ struct ManagedProcess {
 ///
 /// Both backends answer the same four questions, so every caller below stays
 /// written once instead of once per backend.
+#[cfg_attr(
+    windows,
+    expect(
+        clippy::large_enum_variant,
+        reason = "a Windows child group also holds its job object; one per session needs no box"
+    )
+)]
 enum TerminalChild {
     Piped(ChildGroup),
     Terminal(Box<PtyTerminal>),
@@ -774,6 +781,7 @@ mod tests {
 
     use super::*;
     use serde_json::json;
+    #[cfg(unix)]
     use tempfile::tempdir;
 
     #[cfg(unix)]

@@ -1,9 +1,12 @@
+#[cfg(unix)]
 use std::time::Duration;
 
+#[cfg(unix)]
 use serde_json::json;
 
 use super::*;
 
+#[cfg(unix)]
 fn structured(result: ToolResult) -> Value {
     match result {
         ToolResult::Success {

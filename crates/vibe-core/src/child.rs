@@ -61,6 +61,10 @@ pub(crate) struct ChildPipes {
 /// A child process together with the process group it leads.
 pub(crate) struct ChildGroup {
     child: PlatformChild,
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only the POSIX process-group signals read it")
+    )]
     group: Option<i32>,
 }
 

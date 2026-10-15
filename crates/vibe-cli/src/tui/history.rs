@@ -175,6 +175,13 @@ fn write_entries(path: &Path, entries: &[String]) -> Result<(), String> {
     write_result
 }
 
+#[cfg_attr(
+    not(unix),
+    expect(
+        unused_variables,
+        reason = "a directory cannot be opened to sync it on Windows"
+    )
+)]
 fn sync_parent(parent: &Path) {
     #[cfg(unix)]
     if let Ok(directory) = File::open(parent) {

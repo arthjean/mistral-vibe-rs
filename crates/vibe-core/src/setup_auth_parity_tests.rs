@@ -797,6 +797,10 @@ fn unlock_dotenv(path: &Path) {
         let mut permissions = fs::metadata(path)
             .expect("the seeded dotenv exists")
             .permissions();
+        #[expect(
+            clippy::permissions_set_readonly_false,
+            reason = "the lint guards against world-writable Unix files; this branch is not Unix"
+        )]
         permissions.set_readonly(false);
         fs::set_permissions(path, permissions).expect("the dotenv chmods back");
     }
