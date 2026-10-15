@@ -100,7 +100,9 @@ CI=true VIBE_REFERENCE=/nonexistent`, which removes the key, the keyring, and
 the reference checkout as the runner lacks them.
 
 CI runs the same four gates on `windows-2022` from Git Bash, with `python3` on
-`PATH` for the parity drivers. A test that fails there because of a product
+`PATH` for the parity drivers. Its test gate runs through
+`cargo nextest run --profile ci` (one process per test, a hung test ended after
+five minutes; see `.config/nextest.toml`) followed by `cargo test --doc`. A test that fails there because of a product
 defect a story of `tasks/prd-windows-native-support.md` owns carries
 `#[cfg_attr(windows, ignore = "windows: <cause> (US-NNN)")]`, and the job
 summary counts those tags; a test that cannot run on Windows at all says why

@@ -1,0 +1,10 @@
+# The Windows CI job runs the suite through nextest, one process per test, so a
+# pseudoconsole one test opens cannot hold the pipes of another test running
+# beside it in the same process. A hung test is ended after five minutes and
+# reported as a timeout instead of holding the job.
+# The CI job installs exactly this release.
+nextest-version = "0.9.146"
+
+[profile.ci]
+fail-fast = false
+slow-timeout = { period = "60s", terminate-after = 5 }
