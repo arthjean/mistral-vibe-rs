@@ -64,6 +64,75 @@ jobs:
         run: |
           cargo +stable test -p vibe-app-server --all-features app_server_surface_parity_tests -- --nocapture
 
+  # EP-001 of `tasks/prd-windows-native-support.md`: the four quality gates on
+  # Windows. A test that fails there because of a known product defect carries
+  # `#[cfg_attr(windows, ignore = "windows: <cause> (US-NNN)")]`, so a red run
+  # means a new regression and the remaining backlog is counted in the summary.
+  windows-quality:
+    name: Quality gates on Windows
+    runs-on: windows-2022
+    # A healthy run fits in 90 minutes. The test step alone is bounded at 100,
+    # so a hung test is canceled with its log still uploaded below.
+    timeout-minutes: 140
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_NET_RETRY: "3"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      # The parity replays drive `python3`, which the hosted Windows image does
+      # not put on PATH under that name.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Expose python3
+        run: |
+          if ! command -v python3 >/dev/null; then
+            directory="$(dirname "$(command -v python)")"
+            cp "${directory}/python.exe" "${directory}/python3.exe"
+          fi
+          python3 --version
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      - name: Format
+        run: cargo +stable fmt --all -- --check
+      - name: Check
+        run: cargo +stable check --workspace --all-targets --all-features
+      - name: Clippy
+        run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
+      # Same command as the AGENTS.md gate, from Git Bash. The log is written as
+      # the run goes, so a step canceled on its timeout still names the last
+      # test binary it started.
+      - name: Test
+        timeout-minutes: 100
+        run: |
+          set -o pipefail
+          vibe_home="$(mktemp -d)"
+          env -u FORCE_COLOR -u MISTRAL_API_KEY VIBE_HOME="${vibe_home}" \
+            cargo +stable test --workspace --all-features --no-fail-fast 2>&1 \
+            | tee "${RUNNER_TEMP}/windows-test.log"
+      - name: Count windows ignore tags
+        if: always()
+        run: |
+          tags="$(grep -rhoE 'ignore = "windows: [^"]*\(US-[0-9]+(, US-[0-9]+)*\)"' crates --include='*.rs' || true)"
+          by_design="$(grep -rhoE 'ignore = "windows by design: ' crates --include='*.rs' | grep -c . || true)"
+          count="$(printf '%s' "${tags}" | grep -c . || true)"
+          {
+            echo "### Windows ignore tags: ${count} (plus ${by_design} by design)"
+            echo
+            printf '%s\n' "${tags}" | grep -oE 'US-[0-9]+' | sort | uniq -c \
+              | awk '{ print "- " $2 ": " $1 }'
+          } >> "${GITHUB_STEP_SUMMARY}"
+      - name: Upload the test log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: windows-test-log
+          path: ${{ runner.temp }}/windows-test.log
+          if-no-files-found: warn
+
   # US-226: the PowerShell installer is the only delivery path no Linux job can
   # execute, so it gets a runner of its own. The job packages a real
   # `windows-x86_64` archive from binaries it just built and drives
