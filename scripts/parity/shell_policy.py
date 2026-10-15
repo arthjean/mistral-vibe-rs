@@ -843,10 +843,10 @@ def _operand_tree(root: Path) -> tuple[Path, Path, Path]:
     (outside / "approved").mkdir(parents=True)
     (workdir / "nested").mkdir(parents=True)
     scratchpad.mkdir(parents=True)
-    (workdir / "inside.txt").write_text("inside", encoding="utf-8")
-    (outside / "secret.txt").write_text("secret", encoding="utf-8")
-    (outside / "nested" / "secret.txt").write_text("secret", encoding="utf-8")
-    (scratchpad / "note.txt").write_text("note", encoding="utf-8")
+    (workdir / "inside.txt").write_text("inside", encoding="utf-8", newline="")
+    (outside / "secret.txt").write_text("secret", encoding="utf-8", newline="")
+    (outside / "nested" / "secret.txt").write_text("secret", encoding="utf-8", newline="")
+    (scratchpad / "note.txt").write_text("note", encoding="utf-8", newline="")
     (workdir / "escape").symlink_to(outside, target_is_directory=True)
     (outside / "approved" / "link").symlink_to(
         outside / "nested", target_is_directory=True
@@ -918,7 +918,7 @@ def capture_repository_resolutions(reference: Path) -> list[dict[str, Any]]:
         with tempfile.TemporaryDirectory() as root:
             workdir, outside, scratchpad = _operand_tree(Path(root))
             (workdir / ".git").mkdir()
-            (workdir / ".git" / "config").write_text(config, encoding="utf-8")
+            (workdir / ".git" / "config").write_text(config, encoding="utf-8", newline="")
             placeholders = _placeholders(workdir, outside, scratchpad)
             tool = _bash_tool(reference, workdir, scratchpad)
             for command in REPOSITORY_COMMANDS:
@@ -1249,7 +1249,7 @@ def main() -> int:
 
     arguments.output.parent.mkdir(parents=True, exist_ok=True)
     arguments.output.write_text(
-        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(corpus, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline=""
     )
     counts = corpus["counts"]
     print(

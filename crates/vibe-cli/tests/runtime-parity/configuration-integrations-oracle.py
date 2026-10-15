@@ -360,7 +360,7 @@ def observe_proxy(event: dict) -> str:
 def observe_proxy_mutation(event: dict) -> str:
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / ".env"
-        path.write_text(event["initial"])
+        path.write_text(event["initial"], newline="")
         # The oracle imposes the canonical `SUPPORTED_PROXY_VARS` order. The
         # pinned reference instead iterates `params.changes.items()` in wire
         # order (`vibe/app_server/_resources.py:716-722`), one `set_proxy_var`
@@ -393,7 +393,7 @@ def observe_proxy_mutation(event: dict) -> str:
                     set_key(path, key, value)
             status = "ok"
         except ValueError:
-            path.write_text(event["initial"])
+            path.write_text(event["initial"], newline="")
             status = "error"
         return f"proxy-fs|{status}|{json.dumps(path.read_text(), separators=(',', ':'))}"
 

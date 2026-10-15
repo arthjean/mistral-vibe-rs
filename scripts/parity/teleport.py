@@ -75,6 +75,7 @@ import acp  # noqa: E402
 import agents  # noqa: E402
 import hooks  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -250,6 +251,7 @@ def git_env(world: acp.World) -> dict[str, str]:
     return {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(world.home),
+        **host_env.windows_base(str(world.home)),
         "GIT_CONFIG_NOSYSTEM": "1",
         "LANG": "C.UTF-8",
         "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
@@ -274,13 +276,14 @@ def prepare_git(world: acp.World, spec: dict[str, Any] | None) -> None:
         f"[http]\n\tproxy = {DEAD_PROXY}\n"
         "[advice]\n\tdetachedHead = false\n",
         encoding="utf-8",
+        newline="",
     )
     if spec is None:
         return
     for name, contents in spec.get("files", {"README.md": "hello\n"}).items():
         path = world.workspace / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents, encoding="utf-8")
+        path.write_text(contents, encoding="utf-8", newline="")
     run_git(world, "init", "-q")
     if spec.get("noCommits"):
         pass
@@ -300,14 +303,14 @@ def prepare_git(world: acp.World, spec: dict[str, Any] | None) -> None:
             run_git(world, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
     if spec.get("pushFails"):
         hook = bare / "hooks" / "pre-receive"
-        hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+        hook.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8", newline="")
         hook.chmod(0o755)
     if branch := spec.get("branch"):
         run_git(world, "checkout", "-q", "-b", branch)
         if spec.get("branchPublished"):
             run_git(world, "update-ref", f"refs/remotes/origin/{branch}", "HEAD")
     for index in range(int(spec.get("ahead", 0))):
-        (world.workspace / f"change-{index}.txt").write_text(f"change {index}\n", encoding="utf-8")
+        (world.workspace / f"change-{index}.txt").write_text(f"change {index}\n", encoding="utf-8", newline="")
         run_git(world, "add", "-A")
         run_git(world, "commit", "-q", "-m", f"change {index}")
     if other := spec.get("otherRemoteBranch"):
@@ -323,7 +326,7 @@ def prepare_git(world: acp.World, spec: dict[str, Any] | None) -> None:
             )
         path = world.workspace / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(contents, encoding="utf-8")
+        path.write_text(contents, encoding="utf-8", newline="")
     if spec.get("detached"):
         run_git(world, "checkout", "-q", "--detach")
 
@@ -361,9 +364,9 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         prepare_git(world, scenario.get("git", {}))
-        (world.vibe_home / "config.toml").write_text(base_config(backend, scenario), encoding="utf-8")
+        (world.vibe_home / "config.toml").write_text(base_config(backend, scenario), encoding="utf-8", newline="")
         (world.vibe_home / "trusted_folders.toml").write_text(
-            f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8"
+            f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8", newline=""
         )
         env = {
             **git_env(world),
@@ -1197,7 +1200,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (rewind.OracleError, acp.OracleError) as error:

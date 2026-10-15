@@ -53,6 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import acp  # noqa: E402
 import rewind  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/hooks-parity/corpus.json"
@@ -84,7 +85,7 @@ answer = responses[min(index, len(responses) - 1)]
 if answer.get("sleep"):
     time.sleep(answer["sleep"])
     # Only a hook that outlived its wait gets here: a killed one never does.
-    with open(os.path.join(root, "finished.log"), "a", encoding="utf-8") as finished:
+    with open(os.path.join(root, "finished.log"), "a", encoding="utf-8", newline="") as finished:
         finished.write(name + "\n")
 sys.stdout.write(answer.get("stdout", ""))
 sys.stderr.write(answer.get("stderr", ""))
@@ -92,6 +93,46 @@ sys.stdout.flush()
 sys.stderr.flush()
 sys.exit(answer.get("exit", 0))
 '''
+
+
+def host_recorder() -> str:
+    """The recorder as this host runs it.
+
+    Windows has no ``fcntl`` and writes text streams through the console code
+    page with CRLF line endings, so there the recorder locks with ``msvcrt``
+    and answers in UTF-8 bytes. Elsewhere it is :data:`RECORDER`.
+    """
+
+    if os.name != "nt":
+        return RECORDER
+    return (
+        RECORDER.replace(
+            "import fcntl, json, os, sys, time",
+            "import json, msvcrt, os, sys, time",
+        )
+        .replace(
+            "    fcntl.flock(log, fcntl.LOCK_EX)\n",
+            "    log.seek(0)\n    msvcrt.locking(log.fileno(), msvcrt.LK_LOCK, 1)\n",
+        )
+        .replace(
+            'sys.stdout.write(answer.get("stdout", ""))\nsys.stderr.write(answer.get("stderr", ""))',
+            'sys.stdout.buffer.write(answer.get("stdout", "").encode("utf-8"))\n'
+            'sys.stderr.buffer.write(answer.get("stderr", "").encode("utf-8"))',
+        )
+    )
+
+
+def host_commands(text: str) -> str:
+    """Hook configuration whose ``python3`` is this interpreter on Windows.
+
+    A Windows ``python3`` is often the Store alias, which prints to the hook's
+    output or installs an interpreter instead of running the recorder.
+    """
+
+    if os.name != "nt" or " " in sys.executable:
+        return text
+    return text.replace("'python3 ", f"'{sys.executable} ")
+
 
 #: Transcript keys whose values are identities.
 ID_KEYS = rewind.ID_KEYS | {"tool_call_id", "session_id", "parent_session_id"}
@@ -177,14 +218,14 @@ def write_hooks(session: rewind.Session, hooks: dict[str, str]) -> None:
                 target.unlink()
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(session.substitute(text), encoding="utf-8")
+        target.write_text(host_commands(session.substitute(text)), encoding="utf-8", newline="")
 
 
 def write_responses(root: Path, responses: dict[str, list[dict[str, Any]]]) -> None:
     directory = root / "responses"
     directory.mkdir(parents=True, exist_ok=True)
     for name, answers in responses.items():
-        (directory / f"{name}.json").write_text(json.dumps(answers), encoding="utf-8")
+        (directory / f"{name}.json").write_text(json.dumps(answers), encoding="utf-8", newline="")
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
@@ -195,22 +236,24 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         (world.vibe_home / "config.toml").write_text(
-            rewind.base_config(backend, scenario.get("config", "")), encoding="utf-8"
+            rewind.base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
         )
         if scenario.get("trusted", True):
             (world.vibe_home / "trusted_folders.toml").write_text(
                 f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
                 encoding="utf-8",
+                newline="",
             )
         acp.write_tree(world.workspace, scenario.get("files", {}))
         for relative, text in scenario.get("rootFiles", {}).items():
-            acp.write_tree(root, {relative: session.substitute(text)})
-        (root / "hook.py").write_text(RECORDER, encoding="utf-8")
+            acp.write_tree(root, {relative: host_commands(session.substitute(text))})
+        (root / "hook.py").write_text(host_recorder(), encoding="utf-8", newline="")
         write_responses(root, scenario.get("responses", {}))
         write_hooks(session, scenario.get("hooks", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -1147,7 +1190,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (rewind.OracleError, acp.OracleError) as error:

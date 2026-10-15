@@ -59,6 +59,7 @@ import acp  # noqa: E402
 import hooks  # noqa: E402
 import rewind  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/agents-parity/corpus.json"
@@ -176,7 +177,7 @@ def write_agents(world: acp.World, root: Path, agents: dict[str, dict[str, str]]
         directory = targets[where]
         directory.mkdir(parents=True, exist_ok=True)
         for name, text in files.items():
-            (directory / name).write_text(text, encoding="utf-8")
+            (directory / name).write_text(text, encoding="utf-8", newline="")
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
@@ -188,20 +189,30 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         # The scenario's keys lead, so none of them lands inside the provider
         # table the base configuration ends on.
+        config = scenario.get("config", "")
+        if os.name == "nt":
+            # A TOML basic string reads a backslash as an escape, so a fixture
+            # path enters the configuration with forward slashes.
+            config = config.replace("$ROOT", world.root.as_posix()).replace(
+                "$WS", world.workspace.as_posix()
+            )
         (world.vibe_home / "config.toml").write_text(
-            session.substitute(scenario.get("config", "")) + acp.base_config(backend),
+            session.substitute(config) + acp.base_config(backend),
             encoding="utf-8",
+            newline="",
         )
         if scenario.get("trusted", True):
             (world.vibe_home / "trusted_folders.toml").write_text(
                 f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
                 encoding="utf-8",
+                newline="",
             )
         acp.write_tree(world.workspace, scenario.get("files", {}))
         write_agents(world, root, scenario.get("agents", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -358,15 +369,15 @@ def saved_tree(world: acp.World) -> list[Any]:
         if relative.parts and relative.parts[0] in {"active", ".session_index.json"}:
             continue
         if path.is_dir():
-            tree.append({"dir": str(relative)})
+            tree.append({"dir": relative.as_posix()})
         elif path.name == "meta.json":
             meta = json.loads(path.read_text(encoding="utf-8"))
-            tree.append({"meta": str(relative), "children": meta.get("child_sessions"),
+            tree.append({"meta": relative.as_posix(), "children": meta.get("child_sessions"),
                          "parent": meta.get("parent_session_id"),
                          "agent": (meta.get("agent_profile") or {}).get("name")
                          if isinstance(meta.get("agent_profile"), dict) else meta.get("agent_profile")})
         else:
-            tree.append({"file": str(relative)})
+            tree.append({"file": relative.as_posix()})
     return tree
 
 
@@ -1079,7 +1090,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (rewind.OracleError, acp.OracleError) as error:

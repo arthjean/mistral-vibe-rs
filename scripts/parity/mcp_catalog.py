@@ -56,6 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/mcp-catalog/corpus.json"
@@ -92,7 +93,7 @@ class FileKeyring(keyring.backend.KeyringBackend):
             return {}
 
     def _store(self, entries):
-        with open(os.environ["VIBE_ORACLE_KEYRING"], "w", encoding="utf-8") as handle:
+        with open(os.environ["VIBE_ORACLE_KEYRING"], "w", encoding="utf-8", newline="") as handle:
             json.dump(entries, handle, sort_keys=True)
 
     def get_password(self, service, username):
@@ -171,11 +172,12 @@ class Fixture:
         directory = root / f"fixture-{name}"
         directory.mkdir()
         rendered = json.dumps(script).replace("{redirect}", str(redirect))
-        (directory / "script.json").write_text(rendered, encoding="utf-8")
+        (directory / "script.json").write_text(rendered, encoding="utf-8", newline="")
         self.log = directory / "log.jsonl"
         port_file = directory / "port"
         environment = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            **host_env.windows_base(),
             "VIBE_OAUTH_SCRIPT": str(directory / "script.json"),
             "VIBE_OAUTH_LOG": str(self.log),
             "VIBE_OAUTH_PORT_FILE": str(port_file),
@@ -280,7 +282,7 @@ class Run:
                 self.redirects[name] = free_port()
                 self.fixtures[name] = Fixture(fixture, self.root, name, script, self.redirects[name])
             config = acp.base_config(self.backend) + self.substitute(scenario.get("config", ""))
-            (self.world.vibe_home / "config.toml").write_text(config, encoding="utf-8")
+            (self.world.vibe_home / "config.toml").write_text(config, encoding="utf-8", newline="")
             if "keyring" in scenario:
                 entries = {
                     SERVICE: {
@@ -288,13 +290,14 @@ class Run:
                         for account, value in scenario["keyring"].items()
                     }
                 }
-                self.keyring.write_text(json.dumps(entries), encoding="utf-8")
+                self.keyring.write_text(json.dumps(entries), encoding="utf-8", newline="")
             module = self.root / "keyring-module"
             module.mkdir()
-            (module / "oracle_keyring.py").write_text(KEYRING_MODULE, encoding="utf-8")
+            (module / "oracle_keyring.py").write_text(KEYRING_MODULE, encoding="utf-8", newline="")
             env = {
                 "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                 "HOME": str(self.world.home),
+                **host_env.windows_base(str(self.world.home)),
                 "VIBE_HOME": str(self.world.vibe_home),
                 "MISTRAL_API_KEY": "oracle-key",
                 "VIBE_API_BASE": f"{self.backend.base}/v1/chat/completions",
@@ -972,7 +975,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
     except (OracleError, acp.OracleError) as error:

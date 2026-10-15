@@ -68,6 +68,7 @@ from compaction import (  # noqa: E402
     resolve_reference,
 )
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+import host_env  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_CORPUS = Path("crates/vibe-app-server/tests/mcp-transport/corpus.json")
@@ -83,6 +84,13 @@ TOKEN = "token-oracle"
 #: absent depending on who runs the capture, so the normalized log drops it and
 #: keeps every other name, which is the part a client decides.
 INHERITED_NAMES = {"HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"}
+
+#: What the SDK lets a stdio server inherit on win32 instead. The log drops
+#: these too, while the corpus keeps recording the POSIX set above.
+WINDOWS_INHERITED_NAMES = {
+    "APPDATA", "HOMEDRIVE", "HOMEPATH", "LOCALAPPDATA", "PATH", "PATHEXT",
+    "PROCESSOR_ARCHITECTURE", "SYSTEMDRIVE", "SYSTEMROOT", "TEMP", "USERNAME", "USERPROFILE",
+}
 
 #: Placeholders for what differs between two runs of the same scenario.
 FIXTURE_PLACEHOLDER = "__FIXTURE__"
@@ -512,7 +520,7 @@ class Scenario:
             directory = root / name
             directory.mkdir(parents=True)
             script = directory / "script.json"
-            script.write_text(json.dumps(spec["scripts"][name]), encoding="utf-8")
+            script.write_text(json.dumps(spec["scripts"][name]), encoding="utf-8", newline="")
             self.files[name] = {
                 "script": script,
                 "log": directory / "log.jsonl",
@@ -565,10 +573,12 @@ class Scenario:
 
     def normalize(self, value: Any) -> Any:
         if isinstance(value, str):
-            value = value.replace(str(self.fixture), FIXTURE_PLACEHOLDER)
+            for spelling in host_env.path_spellings(str(self.fixture)):
+                value = value.replace(spelling, FIXTURE_PLACEHOLDER)
             for port in self.ports.values():
                 value = value.replace(f"127.0.0.1:{port}", f"127.0.0.1:{PORT_PLACEHOLDER}")
-            value = value.replace(str(self.root), "__SCENARIO__")
+            for spelling in host_env.path_spellings(str(self.root)):
+                value = value.replace(spelling, "__SCENARIO__")
             # The user agent carries the package version, which each
             # implementation reports for itself.
             value = value.replace(f"MistralAI-VibeCLI/{reference_version()}", "MistralAI-VibeCLI/__VERSION__")
@@ -587,7 +597,8 @@ class Scenario:
         for line in log.read_text(encoding="utf-8").splitlines():
             entry = json.loads(line)
             if entry.get("kind") == "spawn":
-                entry["envNames"] = sorted(set(entry["envNames"]) - INHERITED_NAMES)
+                inherited = INHERITED_NAMES | (WINDOWS_INHERITED_NAMES if os.name == "nt" else set())
+                entry["envNames"] = sorted(set(entry["envNames"]) - inherited)
                 entry["cwd"] = "__CWD__" if entry.get("cwd") == os.getcwd() else self.normalize(entry.get("cwd"))
             entries.append(self.normalize(entry))
         # The reference's HTTP client opens its event stream concurrently with
@@ -764,7 +775,7 @@ def age_cache(root: Path, seconds: float) -> None:
         stamp = moved.isoformat().replace("+00:00", "Z")
         record["discoveredAt"] = stamp
         record["lastUsedAt"] = stamp
-        path.write_text(json.dumps(record, separators=(",", ":")), encoding="utf-8")
+        path.write_text(json.dumps(record, separators=(",", ":")), encoding="utf-8", newline="")
 
 
 def fingerprint_identity(server: Any) -> dict[str, Any]:
@@ -899,7 +910,7 @@ def capture(reference: dict[str, str], fixture: Path) -> dict[str, Any]:
         second = asyncio.run(run_scenario(spec, fixture))
         if first != second:
             if os.environ.get("VIBE_MCP_PARITY_DUMP"):
-                Path(os.environ["VIBE_MCP_PARITY_DUMP"]).write_text(json.dumps([first, second], indent=1, sort_keys=True), encoding="utf-8")
+                Path(os.environ["VIBE_MCP_PARITY_DUMP"]).write_text(json.dumps([first, second], indent=1, sort_keys=True), encoding="utf-8", newline="")
             raise OracleError(f"scenario {spec['name']} is not deterministic across two captures")
         scenarios.append({"name": spec["name"], "spec": copy.deepcopy(spec), "observed": first})
     return {
@@ -999,7 +1010,7 @@ def main() -> int:
         return 0
     target = target if target.is_absolute() else REPOSITORY / target
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(rendered, encoding="utf-8")
+    target.write_text(rendered, encoding="utf-8", newline="")
     print(f"captured {len(corpus['scenarios'])} scenarios from {reference['commit'][:12]} into {target}")
     print(f"python {platform.python_version()}")
     return 0

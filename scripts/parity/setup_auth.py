@@ -388,13 +388,13 @@ def capture_auth_state() -> list[dict[str, Any]]:
             root = Path(scratch)
             env_path = root / "global.env"
             if case["dotenv"] == "value":
-                env_path.write_text(f"{env_key}=oracle-dotenv-value\n")
+                env_path.write_text(f"{env_key}=oracle-dotenv-value\n", newline="")
             elif case["dotenv"] == "empty":
-                env_path.write_text(f"{env_key}=\n")
+                env_path.write_text(f"{env_key}=\n", newline="")
             elif case["dotenv"] == "directory":
                 env_path.mkdir()
             elif case["dotenv"] == "unreadable":
-                env_path.write_text(f"{env_key}=oracle-dotenv-value\n")
+                env_path.write_text(f"{env_key}=oracle-dotenv-value\n", newline="")
                 env_path.chmod(0)
 
             environ: dict[str, str] = {}
@@ -619,11 +619,11 @@ def _capture_persist_cases() -> list[dict[str, Any]]:
                     patched(api_key_persistence, "unset_key", failing_unset)
                 )
             if case.get("seedDotenv"):
-                (home / ".env").write_text(f"{case_env_key}=stale-dotenv-copy\n")
+                (home / ".env").write_text(f"{case_env_key}=stale-dotenv-copy\n", newline="")
             if case.get("breakDotenv"):
                 # The env-file parent is a *file*, so the fallback mkdir fails.
                 broken = home / "not-a-directory"
-                broken.write_text("occupied")
+                broken.write_text("occupied", newline="")
                 stack.enter_context(
                     patched_environ("VIBE_HOME", str(broken / "nested"))
                 )
@@ -726,7 +726,7 @@ def _capture_remove_cases() -> list[dict[str, Any]]:
                 stack.enter_context(
                     patched_environ(case_env_key, "process-copy")
                 )
-                (home / ".env").write_text(f"{case_env_key}=dotenv-copy\n")
+                (home / ".env").write_text(f"{case_env_key}=dotenv-copy\n", newline="")
 
             raised: str | None = None
             try:
@@ -1912,7 +1912,7 @@ def capture_provider_credentials() -> list[dict[str, Any]]:
             cwd = Path(scratch) / "work"
             cwd.mkdir()
             if case["user"] is not None:
-                (home / "config.toml").write_text(case["user"], encoding="utf-8")
+                (home / "config.toml").write_text(case["user"], encoding="utf-8", newline="")
             try:
                 for key in [key for key in os.environ if key.startswith("VIBE_")]:
                     os.environ.pop(key)
@@ -2063,7 +2063,7 @@ def capture_tenant_reconcile() -> list[dict[str, Any]]:
             cwd = Path(scratch) / "work"
             cwd.mkdir()
             if case["user"] is not None:
-                (home / "config.toml").write_text(case["user"], encoding="utf-8")
+                (home / "config.toml").write_text(case["user"], encoding="utf-8", newline="")
             try:
                 for key in [key for key in os.environ if key.startswith("VIBE_")]:
                     os.environ.pop(key)
@@ -2682,6 +2682,7 @@ def main() -> int:
     staged.write_text(
         json.dumps(full, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, arguments.output)
 
@@ -2693,6 +2694,7 @@ def main() -> int:
         staged.write_text(
             json.dumps(corpus, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
             encoding="utf-8",
+            newline="",
         )
         os.replace(staged, arguments.corpus)
 

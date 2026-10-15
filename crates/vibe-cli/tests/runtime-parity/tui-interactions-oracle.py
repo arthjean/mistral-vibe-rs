@@ -197,6 +197,8 @@ NOTICE_KINDS = {3.0: "selection", None: "edit", 8.0: "consumed"}
 
 
 def resolve_reference(reference: Path, expected_commit: str) -> str:
+    if not reference.is_dir():
+        sys.exit(f"no reference checkout at {reference}; set VIBE_REFERENCE or pass --reference")
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=reference,
@@ -492,7 +494,7 @@ def main() -> int:
     }
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if arguments.output:
-        arguments.output.write_text(text, encoding="utf-8")
+        arguments.output.write_text(text, encoding="utf-8", newline="")
     else:
         print(text, end="")
     return 0

@@ -940,7 +940,7 @@ async def run_scenario(
     for relative, content in FIXTURES.items():
         target = work / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_text(content, encoding="utf-8", newline="")
     (scenario_root / "vibe-home").mkdir(parents=True, exist_ok=True)
     os.environ["VIBE_HOME"] = str(scenario_root / "vibe-home")
 
@@ -1307,7 +1307,7 @@ def rendered(document: dict[str, Any]) -> str:
 def write_atomically(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     staged = path.with_suffix(path.suffix + ".tmp")
-    staged.write_text(content, encoding="utf-8")
+    staged.write_text(content, encoding="utf-8", newline="")
     os.replace(staged, path)
 
 

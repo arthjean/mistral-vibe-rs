@@ -1670,12 +1670,12 @@ def capture_layer_precedence(scratch: Path) -> list[dict[str, Any]]:
         (home / ".vibe").mkdir(parents=True, exist_ok=True)
         project.mkdir(parents=True, exist_ok=True)
         (home / ".vibe" / "config.toml").write_text(
-            case["user"] + BASE_USER_DOCUMENT, encoding="utf-8"
+            case["user"] + BASE_USER_DOCUMENT, encoding="utf-8", newline=""
         )
         if case["project"] is not None:
             (project / ".vibe").mkdir(parents=True, exist_ok=True)
             (project / ".vibe" / "config.toml").write_text(
-                case["project"], encoding="utf-8"
+                case["project"], encoding="utf-8", newline=""
             )
         environment: dict[str, str | None] = {
             "VIBE_HOME": str(home / ".vibe"),
@@ -2146,7 +2146,7 @@ def capture_promo_state(scratch: Path) -> list[dict[str, Any]]:
         home = scratch / f"promo-{index}"
         home.mkdir(parents=True, exist_ok=True)
         if document is not None:
-            (home / "cache.toml").write_text(document, encoding="utf-8")
+            (home / "cache.toml").write_text(document, encoding="utf-8", newline="")
         repository = FileSystemVscodeExtensionPromoRepository(home)
         state = asyncio.run(repository.get())
         cases.append(
@@ -2164,6 +2164,7 @@ def capture_promo_state(scratch: Path) -> list[dict[str, Any]]:
     (home / "cache.toml").write_text(
         '[update_cache]\nlatest_version = "1.2.3"\nstored_at_timestamp = 42\n',
         encoding="utf-8",
+        newline="",
     )
     repository = FileSystemVscodeExtensionPromoRepository(home)
     asyncio.run(repository.set(VscodeExtensionPromoState(shown_count=3)))
@@ -2703,7 +2704,7 @@ def capture_eval_cache(scratch: Path) -> list[dict[str, Any]]:
         home.mkdir(parents=True, exist_ok=True)
         cache_file = home / "experiment_eval_cache.json"
         if seed is not None:
-            cache_file.write_text(seed, encoding="utf-8")
+            cache_file.write_text(seed, encoding="utf-8", newline="")
         with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
             loaded = cache_module.load_cached_eval_response(build_config(gates[configuration]))
         cases.append(
@@ -2722,7 +2723,7 @@ def capture_eval_cache(scratch: Path) -> list[dict[str, Any]]:
         home.mkdir(parents=True, exist_ok=True)
         cache_file = home / "experiment_eval_cache.json"
         if seed is not None:
-            cache_file.write_text(seed, encoding="utf-8")
+            cache_file.write_text(seed, encoding="utf-8", newline="")
         with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
             cache_module.store_cached_eval_response(
                 build_config(gates[configuration]), EvalResponse.model_validate(response)
@@ -2947,7 +2948,7 @@ def capture_startup(scratch: Path) -> list[dict[str, Any]]:
                 work = home / "project"
                 work.mkdir(parents=True, exist_ok=True)
                 document = _startup_document(configuration)
-                (home / "config.toml").write_text(document, encoding="utf-8")
+                (home / "config.toml").write_text(document, encoding="utf-8", newline="")
                 cache_file = home / "experiment_eval_cache.json"
                 if seed is not None:
                     owner = key if seed["owner"] == "oracle" else "0" * 32
@@ -2961,6 +2962,7 @@ def capture_startup(scratch: Path) -> list[dict[str, Any]]:
                             }
                         ),
                         encoding="utf-8",
+                        newline="",
                     )
                 with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
                     with captured_logs():
@@ -3131,6 +3133,7 @@ def write_json(path: Path, document: dict[str, Any]) -> None:
     staged.write_text(
         json.dumps(document, indent=2, sort_keys=False, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, path)
 

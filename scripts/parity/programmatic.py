@@ -54,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/programmatic-parity/corpus.json"
@@ -589,7 +590,7 @@ def write_tree(root: Path, files: dict[str, str]) -> None:
     for relative, content in files.items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="")
 
 
 def workspace_files(root: Path) -> list[str]:
@@ -664,13 +665,14 @@ def run_scenario(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]
     world = World(root)
     backend = Backend([])
     try:
-        (world.vibe_home / "config.toml").write_text(compose_config(scenario, backend), encoding="utf-8")
+        (world.vibe_home / "config.toml").write_text(compose_config(scenario, backend), encoding="utf-8", newline="")
         backend.whoami = scenario.get("whoami")
         write_tree(world.workspace, scenario.get("files", {}))
         write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "LANG": "C.UTF-8",
@@ -971,7 +973,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
     except (OracleError, acp.OracleError, subprocess.TimeoutExpired) as error:

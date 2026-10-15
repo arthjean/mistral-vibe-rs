@@ -57,6 +57,7 @@ import agents  # noqa: E402
 import hooks  # noqa: E402
 import rewind  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/agent-loop-parity/corpus.json"
@@ -285,7 +286,7 @@ class Server(agents.Server):
                          for path in PLAN_PATH.findall(text)}
                 for plan in sorted(named or set(self.plans.glob("*.md"))):
                     plan.parent.mkdir(parents=True, exist_ok=True)
-                    plan.write_text(script["editPlan"], encoding="utf-8")
+                    plan.write_text(script["editPlan"], encoding="utf-8", newline="")
             if script.get("ignore"):
                 # Never answered: the turn waits until it is interrupted.
                 params = request.get("params") or {}
@@ -349,19 +350,22 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
             session.substitute(scenario.get("config", "")) + acp.base_config(backend)
             + session.substitute(scenario.get("tables", "")),
             encoding="utf-8",
+            newline="",
         )
         if scenario.get("trusted", True):
             (world.vibe_home / "trusted_folders.toml").write_text(
                 f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
                 encoding="utf-8",
+                newline="",
             )
         acp.write_tree(world.workspace, scenario.get("files", {}))
-        (root / "hook.py").write_text(hooks.RECORDER, encoding="utf-8")
+        (root / "hook.py").write_text(hooks.host_recorder(), encoding="utf-8", newline="")
         hooks.write_responses(root, scenario.get("responses", {}))
         hooks.write_hooks(session, scenario.get("hooks", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -527,7 +531,7 @@ def run_steps(
                 if not target.is_absolute():
                     target = world.workspace / target
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(session.substitute(text), encoding="utf-8")
+                target.write_text(session.substitute(text), encoding="utf-8", newline="")
             continue
         if "persisted" in step:
             steps.append({"persisted": persisted(world)})
@@ -1280,7 +1284,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (rewind.OracleError, acp.OracleError) as error:

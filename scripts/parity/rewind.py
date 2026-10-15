@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/rewind-parity/corpus.json"
@@ -288,12 +289,13 @@ def run_scenario(
         # A tool call may name a scenario directory, which only exists now.
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         (world.vibe_home / "config.toml").write_text(
-            base_config(backend, scenario.get("config", "")), encoding="utf-8"
+            base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
         )
         acp.write_tree(world.workspace, scenario.get("files", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -410,7 +412,7 @@ def run_steps(
             for name in step["remove"]:
                 target = world.workspace / name
                 if target.is_dir():
-                    shutil.rmtree(target)
+                    host_env.remove_tree(target)
                 elif target.exists():
                     target.unlink()
             continue
@@ -834,7 +836,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (OracleError, acp.OracleError) as error:

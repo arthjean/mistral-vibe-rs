@@ -149,13 +149,14 @@ class HarnessApp(App[None]):
             raw = scenario["history"].get("raw")
             entries = scenario["history"].get("entries", [])
             if raw is not None:
-                self.history_file.write_text(raw, encoding="utf-8")
+                self.history_file.write_text(raw, encoding="utf-8", newline="")
             elif entries:
                 self.history_file.write_text(
                     "".join(
                         json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries
                     ),
                     encoding="utf-8",
+                    newline="",
                 )
 
     def compose(self) -> ComposeResult:

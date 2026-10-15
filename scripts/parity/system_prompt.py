@@ -61,6 +61,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/system-prompt-parity/corpus.json"
@@ -403,17 +404,17 @@ def materialize(scenario: dict[str, Any], root: Path, backend: str = "http://127
     for relative, content in scenario.get("files", {}).items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="")
     for directory in scenario.get("addDirs", []):
         (root / directory).mkdir(parents=True, exist_ok=True)
     config = BASE_CONFIG.replace("$BACKEND", backend)
     lines = scenario.get("config", "").splitlines(keepends=True)
     at = next((i for i, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
     config = config.replace("$EXTRA", "".join(lines[:at])) + "\n" + "".join(lines[at:])
-    (root / "home/.vibe/config.toml").write_text(config, encoding="utf-8")
+    (root / "home/.vibe/config.toml").write_text(config, encoding="utf-8", newline="")
     trusted = [str((root / path).resolve()) for path in scenario.get("trusted", [])]
     (root / "home/.vibe/trusted_folders.toml").write_text(
-        "trusted = " + json.dumps(trusted) + "\nuntrusted = []\n", encoding="utf-8"
+        "trusted = " + json.dumps(trusted) + "\nuntrusted = []\n", encoding="utf-8", newline=""
     )
     for repository in scenario.get("repositories", []):
         path = root / repository["path"]
@@ -421,7 +422,7 @@ def materialize(scenario: dict[str, Any], root: Path, backend: str = "http://127
         git(path, "init", "-q")
         git(path, "checkout", "-q", "-b", repository["branch"])
         for index, subject in enumerate(repository.get("commits", [])):
-            (path / f"commit-{index}.txt").write_text(subject + "\n", encoding="utf-8")
+            (path / f"commit-{index}.txt").write_text(subject + "\n", encoding="utf-8", newline="")
             git(path, "add", f"commit-{index}.txt")
             git(path, "commit", "-q", "-m", subject)
         if repository.get("remoteMaster") and repository.get("commits"):
@@ -434,6 +435,7 @@ def environment_for(scenario: dict[str, Any], root: Path) -> dict[str, str]:
     environment = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(root / "home"),
+        **host_env.windows_base(str(root / "home")),
         "VIBE_HOME": str(root / "home/.vibe"),
         "LANG": "C.UTF-8",
         "TERM": "dumb",
@@ -1029,7 +1031,7 @@ def main() -> int:
             command = [str(arguments.live_binary.resolve()), *HARNESS_FLAGS]
             selected = [s for s in live_scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
             captured = [capture(s, None, command) for s in selected]
-            arguments.output.write_text(rendered({"scenarios": captured}), encoding="utf-8")
+            arguments.output.write_text(rendered({"scenarios": captured}), encoding="utf-8", newline="")
             print(f"captured {len(captured)} live scenarios into {arguments.output}")
             return 0
         reference = resolve_reference(arguments.reference, arguments.expected_commit)
@@ -1064,7 +1066,7 @@ def main() -> int:
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
-        arguments.output.write_text(rendered(corpus), encoding="utf-8")
+        arguments.output.write_text(rendered(corpus), encoding="utf-8", newline="")
         print(f"captured {len(captured)} scenarios into {arguments.output}")
     except (OracleError, subprocess.TimeoutExpired, subprocess.CalledProcessError) as error:
         print(f"system prompt capture failed: {error}", file=sys.stderr)

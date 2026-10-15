@@ -54,6 +54,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/workspace-trust/corpus.json"
@@ -429,16 +430,17 @@ class Run:
             for relative, content in scenario.get("tree", {}).items():
                 path = Path(self.substitute(relative))
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content, encoding="utf-8")
-            (self.world.vibe_home / "config.toml").write_text(acp.base_config(self.backend), encoding="utf-8")
+                path.write_text(content, encoding="utf-8", newline="")
+            (self.world.vibe_home / "config.toml").write_text(acp.base_config(self.backend), encoding="utf-8", newline="")
             if scenario.get("trustDirectory"):
                 (self.trust_path / "occupied").mkdir(parents=True)
             if "trust" in scenario:
-                self.trust_path.write_text(self.substitute(scenario["trust"]), encoding="utf-8")
+                self.trust_path.write_text(self.substitute(scenario["trust"]), encoding="utf-8", newline="")
                 os.chmod(self.trust_path, int(scenario.get("trustMode", "0o600"), 8))
             env = {
                 "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                 "HOME": str(self.world.home),
+                **host_env.windows_base(str(self.world.home)),
                 "VIBE_HOME": str(self.world.vibe_home),
                 "MISTRAL_API_KEY": "oracle-key",
                 "VIBE_API_BASE": f"{self.backend.base}/v1/chat/completions",
@@ -724,7 +726,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
     except (OracleError, acp.OracleError) as error:

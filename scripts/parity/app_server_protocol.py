@@ -55,6 +55,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import copy
+import errno
 import json
 import os
 from pathlib import Path
@@ -71,6 +72,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -148,6 +150,11 @@ class Server(rewind.Server):
                 self.process.stdin.flush()
             except (BrokenPipeError, ValueError):
                 pass
+            except OSError as error:
+                # Windows reports a write to an exited child as `EINVAL`
+                # where POSIX raises `BrokenPipeError`: the same event.
+                if error.errno != errno.EINVAL:
+                    raise
 
     def alive(self, identifier: int, quiet: float) -> bool:
         """Whether the server still answers a request."""
@@ -269,7 +276,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         (world.vibe_home / "config.toml").write_text(
-            oracle_config(backend, scenario.get("config", "")), encoding="utf-8"
+            oracle_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
         )
         acp.write_tree(world.workspace, scenario.get("files", {}))
         if scenario.get("git"):
@@ -277,6 +284,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": "oracle-key",
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -330,6 +338,7 @@ def init_repository(workspace: Path, remote: str | None = None) -> None:
             env={
                 "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
                 "HOME": str(workspace.parent / "home"),
+                **host_env.windows_base(str(workspace.parent / "home")),
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "GIT_AUTHOR_NAME": "Oracle",
                 "GIT_AUTHOR_EMAIL": "oracle@example.invalid",
@@ -1334,7 +1343,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (OracleError, acp.OracleError, rewind.OracleError) as error:

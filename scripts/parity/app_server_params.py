@@ -62,6 +62,8 @@ class OracleError(RuntimeError):
 
 
 def resolve_reference(reference: Path, expected: str) -> str:
+    if not reference.is_dir():
+        sys.exit(f"no reference checkout at {reference}; set VIBE_REFERENCE or pass --reference")
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=reference, capture_output=True, text=True, check=False
     )
@@ -480,7 +482,7 @@ def main() -> int:
             return 0
         for path, text in outputs:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
+            path.write_text(text, encoding="utf-8", newline="")
         print(
             f"wrote {len(payload['defs'])} models for {len(payload['methods'])} methods and "
             f"{len(cases['cases'])} cases"

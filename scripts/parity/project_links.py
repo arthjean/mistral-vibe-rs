@@ -60,6 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import acp  # noqa: E402
 import agents  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 import rewind  # noqa: E402
 import teleport  # noqa: E402
 from teleport import GITHUB_URL, ok, page, project  # noqa: E402
@@ -91,6 +92,7 @@ def git_env(world: acp.World) -> dict[str, str]:
     return {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(world.home),
+        **host_env.windows_base(str(world.home)),
         "GIT_CONFIG_NOSYSTEM": "1",
         "LANG": "C.UTF-8",
         "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
@@ -111,7 +113,7 @@ def make_repository(world: acp.World, path: Path, spec: dict[str, Any]) -> None:
     for name, url in spec.get("remotes", {"origin": GITHUB_URL}).items():
         git(world, path, "remote", "add", name, url)
     if spec.get("commits", True):
-        (path / "README.md").write_text("hello\n", encoding="utf-8")
+        (path / "README.md").write_text("hello\n", encoding="utf-8", newline="")
         git(world, path, "add", "-A")
         git(world, path, "commit", "-q", "-m", "initial")
         for branch in spec.get("branches", []):
@@ -136,6 +138,7 @@ def lay_out(world: acp.World, layout: dict[str, Any]) -> None:
         f"[http]\n\tproxy = {teleport.DEAD_PROXY}\n"
         "[advice]\n\tdetachedHead = false\n",
         encoding="utf-8",
+        newline="",
     )
     for name, spec in layout.items():
         path = world.root / name
@@ -143,7 +146,7 @@ def lay_out(world: acp.World, layout: dict[str, Any]) -> None:
             path.mkdir(parents=True, exist_ok=True)
         elif spec == "file":
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("not a directory\n", encoding="utf-8")
+            path.write_text("not a directory\n", encoding="utf-8", newline="")
         else:
             make_repository(world, path, spec)
 
@@ -189,15 +192,15 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
     try:
         lay_out(world, scenario.get("layout", {}))
         (world.vibe_home / "config.toml").write_text(
-            teleport.base_config(backend, scenario), encoding="utf-8"
+            teleport.base_config(backend, scenario), encoding="utf-8", newline=""
         )
         trusted = ", ".join(json.dumps(str(path)) for path in (world.workspace, world.root / "repo"))
         (world.vibe_home / "trusted_folders.toml").write_text(
-            f"trusted = [{trusted}]\nuntrusted = []\n", encoding="utf-8"
+            f"trusted = [{trusted}]\nuntrusted = []\n", encoding="utf-8", newline=""
         )
         if (seed := scenario.get("store")) is not None:
             path = world.vibe_home / STORE
-            path.write_text(substitute(seed, world, session), encoding="utf-8")
+            path.write_text(substitute(seed, world, session), encoding="utf-8", newline="")
             path.chmod(int(scenario.get("storeMode", 0o600)))
         env = {
             **git_env(world),
@@ -270,7 +273,7 @@ def run_steps(
                 git(world, directory, *arguments)
             continue
         if "remove" in step:
-            shutil.rmtree(substitute(step["remove"], world, session))
+            host_env.remove_tree(substitute(step["remove"], world, session))
             continue
         if "chmod" in step:
             Path(substitute(step["chmod"], world, session)).chmod(int(step["mode"]))
@@ -822,7 +825,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (rewind.OracleError, acp.OracleError) as error:

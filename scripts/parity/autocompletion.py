@@ -77,6 +77,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+import host_env  # noqa: E402
 
 #: The variable that relocates the checkout, named in the failure a machine
 #: without one reads first.
@@ -1028,10 +1029,10 @@ def materialize(root: Path, fixture: dict[str, Any]) -> None:
             continue
         target = root / entry
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(FILE_BODY, encoding="utf-8")
+        target.write_text(FILE_BODY, encoding="utf-8", newline="")
     gitignore = fixture.get("gitignore")
     if gitignore is not None:
-        (root / ".gitignore").write_text(gitignore, encoding="utf-8")
+        (root / ".gitignore").write_text(gitignore, encoding="utf-8", newline="")
 
 
 def mutate(root: Path, mutation: dict[str, Any]) -> None:
@@ -1041,17 +1042,17 @@ def mutate(root: Path, mutation: dict[str, Any]) -> None:
     target = root / mutation["path"]
     if operation == "createFile":
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(FILE_BODY, encoding="utf-8")
+        target.write_text(FILE_BODY, encoding="utf-8", newline="")
         return
     if operation == "createDir":
         target.mkdir(parents=True, exist_ok=True)
         return
     if operation == "modifyFile":
-        target.write_text(FILE_BODY + "modified\n", encoding="utf-8")
+        target.write_text(FILE_BODY + "modified\n", encoding="utf-8", newline="")
         return
     if operation == "delete":
         if target.is_dir():
-            shutil.rmtree(target)
+            host_env.remove_tree(target)
         else:
             target.unlink(missing_ok=True)
         return
@@ -1350,20 +1351,20 @@ def materialize_git(enclosure: Path) -> Path:
     for relative in GIT_FIXTURE["tracked"] + GIT_FIXTURE["untracked"]:
         target = repository / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(FILE_BODY, encoding="utf-8")
+        target.write_text(FILE_BODY, encoding="utf-8", newline="")
     for relative in GIT_FIXTURE["emptyDirs"]:
         (repository / relative).mkdir(parents=True, exist_ok=True)
     for relative, text in GIT_FIXTURE["gitignores"].items():
-        (repository / relative).write_text(text, encoding="utf-8")
+        (repository / relative).write_text(text, encoding="utf-8", newline="")
     _run_git(repository, "init", "-q")
     _run_git(repository, "add", "-f", "--", *GIT_FIXTURE["tracked"])
     for relative in GIT_FIXTURE["deleted"]:
         (repository / relative).unlink()
     info = repository / ".git" / "info"
     info.mkdir(parents=True, exist_ok=True)
-    (info / "exclude").write_text(GIT_FIXTURE["infoExclude"], encoding="utf-8")
+    (info / "exclude").write_text(GIT_FIXTURE["infoExclude"], encoding="utf-8", newline="")
     excludes = enclosure / "excludes"
-    excludes.write_text(GIT_FIXTURE["excludesFile"], encoding="utf-8")
+    excludes.write_text(GIT_FIXTURE["excludesFile"], encoding="utf-8", newline="")
     _run_git(repository, "config", "core.excludesFile", excludes.as_posix())
     return repository
 
@@ -1500,7 +1501,7 @@ def materialize_collect(enclosure: Path, fixture_id: str) -> Path:
     for relative in COLLECT_OUTSIDE:
         target = enclosure / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(FILE_BODY, encoding="utf-8")
+        target.write_text(FILE_BODY, encoding="utf-8", newline="")
     return root
 
 
@@ -1965,6 +1966,7 @@ def _write(path: Path, document: dict[str, Any]) -> None:
     staged.write_text(
         json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="",
     )
     os.replace(staged, path)
 

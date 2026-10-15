@@ -978,7 +978,7 @@ def main() -> int:
 
     output = arguments.output
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(corpus, indent=2, sort_keys=False) + "\n")
+    output.write_text(json.dumps(corpus, indent=2, sort_keys=False) + "\n", newline="")
     print(
         f"wrote {output}: {len(corpus['methods'])} methods, "
         f"{len(corpus['clientToolMethods'])} client tools, "

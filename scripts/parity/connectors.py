@@ -74,6 +74,7 @@ import acp  # noqa: E402
 import agents  # noqa: E402
 import hooks  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import host_env  # noqa: E402
 import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -286,7 +287,7 @@ def seed_cache(world: acp.World, base: str, entries: dict[str, Any]) -> None:
                 return now + int(match.group(1) or 0)
         return value
 
-    (world.vibe_home / CACHE_FILE).write_text(json.dumps(resolve(entries)), encoding="utf-8")
+    (world.vibe_home / CACHE_FILE).write_text(json.dumps(resolve(entries)), encoding="utf-8", newline="")
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
@@ -309,15 +310,17 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
             base_config[:split] + "\n" + session.substitute(scenario.get("config", ""))
             + base_config[split:],
             encoding="utf-8",
+            newline="",
         )
         (world.vibe_home / "trusted_folders.toml").write_text(
-            f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8"
+            f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8", newline=""
         )
         if "cache" in scenario:
             seed_cache(world, backend.base, scenario["cache"])
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
+            **host_env.windows_base(str(world.home)),
             "VIBE_HOME": str(world.vibe_home),
             "MISTRAL_API_KEY": API_KEY,
             "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
@@ -1454,7 +1457,7 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8")
+        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
     except (rewind.OracleError, acp.OracleError) as error:
