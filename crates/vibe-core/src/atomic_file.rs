@@ -70,7 +70,15 @@ impl FileLock {
         use fs2::FileExt as _;
 
         let file = open_private_lock(path)?;
-        file.try_lock_exclusive()?;
+        file.try_lock_exclusive().map_err(|error| {
+            // Windows reports a held lock as `ERROR_LOCK_VIOLATION`, whose kind
+            // is not `WouldBlock`; callers read contention from the kind alone.
+            if error.raw_os_error() == fs2::lock_contended_error().raw_os_error() {
+                std::io::Error::from(std::io::ErrorKind::WouldBlock)
+            } else {
+                error
+            }
+        })?;
         Ok(Self { file })
     }
 }
