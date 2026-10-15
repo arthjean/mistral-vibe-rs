@@ -630,6 +630,9 @@ def run_once(
         # The request is in flight; the turn is running.
         time.sleep(0.5)
         process.send_signal(signal.SIGINT)
+        # `communicate` flushes a stdin it still holds, which raises on the pipe
+        # closed above under Python 3.12.
+        process.stdin = None
         stdout, stderr = process.communicate(timeout=RUN_TIMEOUT)
     else:
         stdout, stderr = process.communicate(
