@@ -29,6 +29,8 @@ pub mod http_trust;
 pub mod identity;
 pub mod images;
 pub mod integrations;
+#[cfg(test)]
+mod line_endings_tests;
 pub mod llm;
 pub mod matching;
 pub mod mcp;
