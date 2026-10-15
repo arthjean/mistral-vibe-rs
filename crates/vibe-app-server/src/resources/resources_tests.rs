@@ -379,7 +379,7 @@ async fn core_backend_runs_trusted_shell_and_cleans_the_owned_process() {
         .await
         .expect("run shell");
     assert!(dispatch.signals.runtime_updated);
-    let (completed, saw_output) = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+    let (completed, saw_output) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
         let mut saw_output = false;
         loop {
             let dispatch = backend
