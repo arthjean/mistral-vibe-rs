@@ -99,6 +99,16 @@ runner, add `env -u MISTRAL_API_KEY DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexist
 CI=true VIBE_REFERENCE=/nonexistent`, which removes the key, the keyring, and
 the reference checkout as the runner lacks them.
 
+CI runs the same four gates on `windows-2022` from Git Bash, with `python3` on
+`PATH` for the parity drivers. A test that fails there because of a product
+defect a story of `tasks/prd-windows-native-support.md` owns carries
+`#[cfg_attr(windows, ignore = "windows: <cause> (US-NNN)")]`, and the job
+summary counts those tags; a test that cannot run on Windows at all says why
+in an ignore reason starting `windows by design:`. A test that clears the child
+environment keeps the Windows base set (`SystemRoot` above all, without which
+Winsock fails to start), as `crates/vibe-cli/tests/support` and
+`scripts/parity/host_env.py` do.
+
 ## Architecture
 
 `[workspace.metadata.vibe] dependency-layers` in `Cargo.toml` declares the
