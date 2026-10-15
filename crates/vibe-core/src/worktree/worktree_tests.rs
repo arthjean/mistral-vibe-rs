@@ -129,6 +129,10 @@ fn branch_is_present(checkout: &Path, branch: &str) -> bool {
 /// saying so is not an error: `rev-list --count base..HEAD` answers zero when
 /// `HEAD` is an ancestor of `base` rather than refusing the range.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_head_below_the_session_start_counts_no_commits() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, None);
@@ -187,6 +191,10 @@ fn an_unresolvable_head_fails_and_names_the_worktree() {
 /// Construction failing after `git worktree add` undoes both halves of what the
 /// call created.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_failed_construction_removes_the_worktree_and_the_branch_it_created() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, None);
@@ -296,6 +304,10 @@ fn a_failure_before_the_checkout_removes_nothing() {
 /// worktree and remove it again, which needs the repository root to be the
 /// primary checkout and not the directory beside the git data.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_separate_git_directory_repository_prepares_and_removes() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, Some(&root.join("state").join("repo.git")));
@@ -313,6 +325,10 @@ fn a_separate_git_directory_repository_prepares_and_removes() {
 /// refusing is what keeps a later `worktree remove` from running in a directory
 /// that is not a checkout.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_linked_worktree_of_a_separate_git_directory_repository_refuses() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, Some(&root.join("state").join("repo.git")));
@@ -339,6 +355,10 @@ fn a_linked_worktree_of_a_separate_git_directory_repository_refuses() {
 /// Reusing a worktree reached through a symbolic link finds the same
 /// repository, because both sides of the comparison are resolved first.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn a_symlinked_managed_root_still_reads_as_the_same_repository() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, None);
@@ -616,6 +636,10 @@ fn checkout_with_one_linked_worktree(root: &Path) -> PathBuf {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn the_two_porcelain_spellings_parse_into_the_same_records() {
     let (_scratch, root) = case_root();
     let checkout = checkout_with_one_linked_worktree(&root);
@@ -677,6 +701,10 @@ fn enumeration_outside_a_repository_asks_for_one() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
+)]
 fn enumeration_answers_with_the_linked_worktrees_alone() {
     let (_scratch, root) = case_root();
     let checkout = checkout_with_one_linked_worktree(&root);

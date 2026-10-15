@@ -39,7 +39,16 @@ fn a_detail_carries_neither_the_call_id_nor_the_raw_arguments() {
 
 #[test]
 fn a_call_display_carries_all_eight_reference_fields() {
-    let detail = EffectDetail::for_encoded_call("read_file", r#"{"file_path":"/tmp/a.txt"}"#);
+    // An absolute path in the host's own spelling, which the summary repeats.
+    let path = if cfg!(windows) {
+        r"C:	mp.txt"
+    } else {
+        "/tmp/a.txt"
+    };
+    let detail = EffectDetail::for_encoded_call(
+        "read_file",
+        &serde_json::json!({ "file_path": path }).to_string(),
+    );
     let display = serde_json::to_value(&detail.display).expect("serializes");
     let mut keys = display
         .as_object()
@@ -64,7 +73,7 @@ fn a_call_display_carries_all_eight_reference_fields() {
     assert_eq!(display["verb"], "Reading");
     assert_eq!(display["settledVerb"], "Read");
     assert_eq!(display["statusText"], "Reading file");
-    assert_eq!(display["summary"], "Reading /tmp/a.txt");
+    assert_eq!(display["summary"], format!("Reading {path}"));
 }
 
 #[test]

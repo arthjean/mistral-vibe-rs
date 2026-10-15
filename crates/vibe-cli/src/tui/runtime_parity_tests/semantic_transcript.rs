@@ -341,6 +341,10 @@ fn effect_state(detail: &EffectDetail, outcome: &Outcome) -> Value {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows by design: the corpus was captured on Linux, and the reference displays relative paths with the host separator"
+)]
 fn corpus_replays_semantic_regions_errors_activity_and_diagnostics() {
     let corpus: Corpus = serde_json::from_str(include_str!(
         "../../../tests/runtime-parity/semantic-transcript.json"

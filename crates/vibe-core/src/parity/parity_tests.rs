@@ -26,6 +26,17 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// `path` relative to `root`, separated by `/` on every platform, which is how
+/// the expectations below spell repository paths.
+fn slash_relative(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// Every `.rs` and `.py` file under [`SCANNED_ROOTS`], repository-relative.
 fn scanned_sources(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
@@ -73,12 +84,7 @@ fn the_reference_commit_is_written_in_exactly_two_places() {
         if !contents.contains(REFERENCE_COMMIT) || allowed.contains(&path) {
             continue;
         }
-        copies.push(
-            path.strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string(),
-        );
+        copies.push(slash_relative(&root, &path));
     }
     copies.sort();
 
@@ -119,12 +125,7 @@ fn no_rust_module_redeclares_its_own_reference_commit() {
         if !contents.contains(&declaration) {
             continue;
         }
-        declarations.push(
-            path.strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string(),
-        );
+        declarations.push(slash_relative(&root, &path));
     }
     declarations.sort();
 
@@ -178,12 +179,7 @@ fn no_capture_script_redeclares_the_pin() {
         if !declares {
             continue;
         }
-        declarations.push(
-            path.strip_prefix(&root)
-                .unwrap_or(&path)
-                .display()
-                .to_string(),
-        );
+        declarations.push(slash_relative(&root, &path));
     }
     declarations.sort();
 

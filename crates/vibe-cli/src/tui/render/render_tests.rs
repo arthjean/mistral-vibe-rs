@@ -462,7 +462,12 @@ fn failed_effects_render_the_error_indicator_and_never_a_success_header() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    assert!(text.contains("⏵ Edited src/lib.rs"), "{text}");
+    // The reference displays a relative path with the host separator.
+    let edited = format!(
+        "⏵ Edited {}",
+        std::path::Path::new("src").join("lib.rs").display()
+    );
+    assert!(text.contains(&edited), "{text}");
     assert!(text.contains("Error: permission denied"), "{text}");
     let red = terminal
         .backend()

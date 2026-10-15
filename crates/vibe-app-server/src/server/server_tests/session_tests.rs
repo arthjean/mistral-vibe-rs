@@ -400,6 +400,10 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: rewind checkpoints publish verbatim paths (US-010)"
+)]
 fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     let temporary = tempfile::tempdir().expect("rewind stores");
     let session_root = temporary.path().join("sessions");

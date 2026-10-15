@@ -142,11 +142,15 @@ fn pasted_workspace_images_become_quoted_mentions() {
     let mixed = format!("{}\n{}", text.to_string_lossy(), missing.to_string_lossy());
     assert_eq!(normalize_pasted_text(&mixed), mixed);
 
+    // A POSIX terminal escapes the space of a dropped path; a Windows one
+    // quotes the path instead, and only POSIX unescapes.
+    let dropped = if cfg!(windows) {
+        format!("\"{}\"", image.to_string_lossy())
+    } else {
+        image.to_string_lossy().replace(' ', "\\ ")
+    };
     assert_eq!(
-        normalize_pasted_text(&format!(
-            "drop {} here",
-            image.to_string_lossy().replace(' ', "\\ ")
-        )),
+        normalize_pasted_text(&format!("drop {dropped} here")),
         format!("drop @'{}' here", image.to_string_lossy())
     );
 }
@@ -242,7 +246,12 @@ fn external_images_attach_but_unsupported_models_and_oversize_files_fail_atomica
     fs::write(&image, b"image").expect("external image");
     let prompt = draft(
         temporary.path(),
-        format!("inspect @{}", image.to_string_lossy()),
+        // An unquoted mention stops at a drive colon, so Windows quotes it.
+        if cfg!(windows) {
+            format!("inspect @'{}'", image.to_string_lossy())
+        } else {
+            format!("inspect @{}", image.to_string_lossy())
+        },
         &[],
     );
 

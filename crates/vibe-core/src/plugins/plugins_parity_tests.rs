@@ -42,12 +42,49 @@ const LEDGER: &[Divergence] = &[];
 
 const SKILL_PATH_METADATA: &str = "unified-harness.runtime-skill-path";
 
+/// `path` under `home`, separated by `/` as the corpus host spells it.
 fn relative(home: &Path, path: &Path) -> Value {
-    json!(path.strip_prefix(home).unwrap_or(path).to_string_lossy())
+    json!(slashed(path.strip_prefix(home).unwrap_or(path)))
 }
 
+fn slashed(path: &Path) -> String {
+    path.components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// `text` with `home` masked. The path after the mask keeps the host
+/// separator, as the reference's `str(Path)` does, so a Windows replay spells
+/// it with `/` like the corpus host.
 fn masked(home: &Path, text: &str) -> String {
-    text.replace(&home.to_string_lossy().into_owned(), "<home>")
+    let text = text.replace(&home.to_string_lossy().into_owned(), "<home>");
+    if !cfg!(windows) {
+        return text;
+    }
+    // A file URL spells a Windows path as `/C:/...`, without the verbatim
+    // prefix the canonical home carries.
+    let home = home.to_string_lossy();
+    let text = text.replace(
+        &format!(
+            "/{}",
+            home.strip_prefix(r"\\?\")
+                .unwrap_or(&home)
+                .replace('\\', "/")
+        ),
+        "<home>",
+    );
+    let mut pieces = text.split("<home>");
+    let mut out = pieces.next().unwrap_or_default().to_owned();
+    for piece in pieces {
+        let tail = piece
+            .find(|character: char| character.is_whitespace() || "\"'`".contains(character))
+            .unwrap_or(piece.len());
+        out.push_str("<home>");
+        out.push_str(&piece[..tail].replace('\\', "/"));
+        out.push_str(&piece[tail..]);
+    }
+    out
 }
 
 fn issue_rows(home: &Path, issues: &[PluginConfigIssue]) -> Value {
@@ -298,12 +335,7 @@ fn collect_files(directory: &Path, home: &Path, found: &mut Vec<String>) {
         if path.is_dir() {
             collect_files(&path, home, found);
         } else if path.is_file() {
-            found.push(
-                path.strip_prefix(home)
-                    .unwrap_or(&path)
-                    .to_string_lossy()
-                    .into_owned(),
-            );
+            found.push(slashed(path.strip_prefix(home).unwrap_or(&path)));
         }
     }
 }

@@ -56,18 +56,23 @@ async fn the_managed_shell_family_is_selected_by_the_configuration_field() {
                 .expect("tools/list answers with the published names"),
             other => unreachable!("tools/list did not answer: {other:?}"),
         };
+        // The family the host publishes: the managed rollout on Windows
+        // takes Git Bash when it resolves and PowerShell otherwise, read from
+        // the same probe a production session starts from.
+        let host = vibe_core::tools::shell::HostShells::detect();
+        let family = match (managed, host.platform) {
+            (true, vibe_core::platform::Platform::Windows) if host.git_bash.is_some() => "git_bash",
+            (true, vibe_core::platform::Platform::Windows) => "powershell",
+            _ => "bash",
+        };
         assert!(
-            published.contains("bash"),
+            published.contains(family),
             "`{document}` published no command tool: {published:?}"
         );
-        for session_tool in [
-            "bash_stdin",
-            "bash_output",
-            "bash_sessions",
-            "bash_log_file",
-        ] {
+        for suffix in ["stdin", "output", "sessions", "log_file"] {
+            let session_tool = format!("{family}_{suffix}");
             assert_eq!(
-                published.contains(session_tool),
+                published.contains(&session_tool),
                 managed,
                 "`{document}` disagrees on `{session_tool}`: {published:?}"
             );

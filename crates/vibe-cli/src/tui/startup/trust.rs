@@ -117,6 +117,10 @@ mod tests {
         let home = tempfile::tempdir().expect("temporary home");
         let workspace = tempfile::tempdir().expect("temporary workspace");
         let canonical = fs::canonicalize(workspace.path()).expect("canonical workspace");
+        // The settings record the form a user types, never a Windows verbatim
+        // path.
+        let canonical = canonical.to_string_lossy();
+        let canonical = std::path::Path::new(canonical.strip_prefix(r"\\?\").unwrap_or(&canonical));
         let vibe_home = home.path().join(".vibe");
         fs::create_dir_all(&vibe_home).expect("vibe home");
         fs::write(

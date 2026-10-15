@@ -69,7 +69,21 @@ struct BridgeCase {
     spoken: Vec<String>,
 }
 
+/// The platform the committed corpus was captured on. The reference words a
+/// microphone failure for its host (`_mic_access_hint`), so a replay on another
+/// host swaps its own hint for the corpus platform's before reducing the text.
+const CORPUS_PLATFORM: &str = "linux";
+
 fn prose(text: &str) -> Value {
+    let host = vibe_voice::manager::mic_access_hint();
+    let text = &if host.is_empty() {
+        text.to_owned()
+    } else {
+        text.replace(
+            host,
+            vibe_voice::manager::mic_access_hint_for(CORPUS_PLATFORM),
+        )
+    };
     json!({
         "prose": text.chars().count(),
         "sha256": hex::encode(Sha256::digest(text.as_bytes())),

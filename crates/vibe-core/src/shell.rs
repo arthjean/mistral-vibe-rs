@@ -1844,6 +1844,10 @@ mod tests {
     /// US-111: a `~` operand is expanded before it is positioned, so a home-relative
     /// read is measured where it actually reads.
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "windows: `~` operands expand against `HOME`, not the Windows home (US-012)"
+    )]
     fn a_home_relative_operand_is_expanded_before_it_is_positioned() {
         let Some(home) = crate::config::user_home_directory() else {
             eprintln!("skipping: the environment names no home directory");

@@ -641,6 +641,10 @@ fn canonical(path: &Path) -> String {
 /// US-111: the paths a call reaches outside the workspace are the
 /// reference's, each named by where it resolves.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: shell operands outside the workspace are not detected in Windows spelling (US-012)"
+)]
 fn every_escaping_operand_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(corpus.outside_paths.len(), corpus.counts.outside_path_cases);
@@ -874,6 +878,10 @@ fn every_requirement_ledger_entry_names_a_corpus_case() {
 /// directions: a listed case that stopped diverging fails, so the list cannot
 /// rot.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
+)]
 fn every_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(corpus.resolutions.len(), corpus.counts.resolution_cases);
@@ -911,6 +919,10 @@ fn every_resolution_matches_the_reference() {
 /// and keyed to the repository it reads where the configuration could run a
 /// helper.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
+)]
 fn every_repository_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(
@@ -956,6 +968,10 @@ fn every_repository_resolution_matches_the_reference() {
 /// The managed resolver: a call's `cwd`, custom shell and custom environment
 /// are read with its command, and the denylist also matches a basename.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
+)]
 fn every_managed_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(
@@ -988,6 +1004,10 @@ fn every_managed_resolution_matches_the_reference() {
 /// A path grant in the shell's allowlist clears the outside paths it covers,
 /// and nothing else in the allowlist does, under both resolvers.
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
+)]
 fn every_allowlist_grant_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(

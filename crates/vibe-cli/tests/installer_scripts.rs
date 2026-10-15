@@ -5,6 +5,11 @@
 //! aggregate checksum manifest, the release-base override and the scheme
 //! allowlist are therefore driven here through the real scripts, with the
 //! packaging output feeding the installer exactly as a published release does.
+//!
+//! The file compiles to no test on Windows: both scripts are POSIX shell, run
+//! through `sh` and `bash` with `#!/bin/sh` fixtures. The Windows installer,
+//! `scripts/install.ps1`, is covered by `scripts/ci/verify-install-ps1.ps1`,
+//! which the CI workflow runs.
 
 #![cfg(unix)]
 #![allow(

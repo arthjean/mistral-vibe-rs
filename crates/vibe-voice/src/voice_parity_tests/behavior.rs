@@ -192,13 +192,27 @@ pub(super) struct NarrationCase {
 // Shared readings
 // --------------------------------------------------------------------------
 
+/// The platform the committed corpus was captured on. The reference words a
+/// microphone failure for its host (`_mic_access_hint`), so a replay on another
+/// host swaps its own hint for the corpus platform's before reducing the text.
+const CORPUS_PLATFORM: &str = "linux";
+
 /// A text reduced the way the oracle reduces one the reference authored: its
 /// length in code points and its SHA-256.
 pub(super) fn prose(text: &str) -> Value {
+    let text = &as_on_corpus_platform(text);
     json!({
         "prose": text.chars().count(),
         "sha256": sha256(text.as_bytes()),
     })
+}
+
+fn as_on_corpus_platform(text: &str) -> String {
+    let host = crate::manager::mic_access_hint();
+    if host.is_empty() {
+        return text.to_owned();
+    }
+    text.replace(host, crate::manager::mic_access_hint_for(CORPUS_PLATFORM))
 }
 
 fn sha256(bytes: &[u8]) -> String {

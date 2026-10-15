@@ -132,6 +132,10 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: rewind checkpoints publish verbatim paths (US-010)"
+)]
 fn the_port_rewinds_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);

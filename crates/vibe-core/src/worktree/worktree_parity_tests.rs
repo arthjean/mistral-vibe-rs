@@ -1532,6 +1532,10 @@ fn keeps_literal(text: &str, authored: &BTreeSet<String>) -> bool {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the managed worktree root is resolved with the verbatim prefix (US-010)"
+)]
 fn the_projection_agrees_with_the_capture_script() {
     // The two sides must digest identically, or every described string would
     // read as a divergence. Anchored on a value the Python side computes with

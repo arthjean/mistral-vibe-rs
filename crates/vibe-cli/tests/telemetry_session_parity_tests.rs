@@ -35,6 +35,14 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/telemetry_session.py";
 /// The surfaces this binary serves.
 const SURFACES: [&str; 2] = ["programmatic", "tui"];
 
+/// The surfaces replayed on this host. The capture script drives the `tui`
+/// surface through a POSIX pseudo-terminal, which Windows lacks.
+const REPLAYED: &[&str] = if cfg!(windows) {
+    &["programmatic"]
+} else {
+    &SURFACES
+};
+
 /// The scenarios the corpus may not fall below on those surfaces, so a
 /// recapture that lost coverage fails here and not only on the machine that
 /// made it.
@@ -146,6 +154,13 @@ fn the_port_reports_every_session_as_the_corpus_records_or_as_the_ledger_names()
         recorded.len()
     );
 
+    let recorded = recorded
+        .into_iter()
+        .filter(|(_, scenario)| {
+            REPLAYED.contains(&scenario["surface"].as_str().unwrap_or_default())
+        })
+        .collect::<BTreeMap<_, _>>();
+
     let output_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("telemetry-session-port.json");
     let mut arguments: Vec<&OsStr> = vec![
         OsStr::new("--vibe"),
@@ -153,7 +168,7 @@ fn the_port_reports_every_session_as_the_corpus_records_or_as_the_ledger_names()
         OsStr::new("--output"),
         output_path.as_os_str(),
     ];
-    for surface in SURFACES {
+    for surface in REPLAYED {
         arguments.extend([OsStr::new("--surface"), OsStr::new(surface)]);
     }
     let output = capture(&arguments);
@@ -197,9 +212,15 @@ fn the_port_reports_every_session_as_the_corpus_records_or_as_the_ledger_names()
             }
         }
     }
+    // An entry whose scenarios this host does not replay cannot reproduce.
     let stale: Vec<&str> = LEDGER
         .iter()
         .zip(&reproduced)
+        .filter(|(entry, _)| {
+            recorded
+                .keys()
+                .any(|name| scenario_matches(entry.scenario, name))
+        })
         .filter(|(_, count)| **count == 0)
         .map(|(entry, _)| entry.pointer)
         .collect();
@@ -250,7 +271,7 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         OsStr::new("--reference"),
         root.as_os_str(),
     ];
-    for surface in SURFACES {
+    for surface in REPLAYED {
         arguments.extend([OsStr::new("--surface"), OsStr::new(surface)]);
     }
     let output = capture(&arguments);
