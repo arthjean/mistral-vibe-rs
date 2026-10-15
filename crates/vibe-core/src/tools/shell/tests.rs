@@ -1123,6 +1123,10 @@ async fn stdin_takes_exactly_one_input_and_refuses_bad_base64_before_writing() {
 /// command from its own prompt; input to any other session follows the
 /// configured `always`. Reference `BashStdin.resolve_permission`.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn input_to_a_pager_session_is_asked_about() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let plain = background_session(&harness, "cat > /dev/null").await;
@@ -1220,6 +1224,10 @@ async fn a_log_path_is_positioned_after_it_resolves() {
 /// A session belongs to the Vibe session, not to the turn that started it, so
 /// a later call can list, inspect and stop it.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_session_started_by_one_call_is_listed_inspected_and_killed_by_another() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "sleep 30").await;
@@ -1394,6 +1402,10 @@ async fn a_refused_command_carries_the_analysis_rationale() {
 /// A live session's log is fed by its process, so writing to it is refused;
 /// any other file under the shell-tool directory is writable.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_live_session_log_cannot_be_written_but_a_scratch_file_can() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "sleep 30").await;
@@ -2077,6 +2089,10 @@ async fn a_windows_family_forces_its_reference_environment() {
 /// is delivered where the reference delivers it: the session teardown
 /// terminates the group whichever turn opened it.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_cancelled_windows_family_turn_leaves_no_orphaned_process_group() {
     let harness = harness_on(
         git_bash_host(),
@@ -2446,7 +2462,10 @@ async fn the_git_bash_fallback_runs_its_resolved_shell_on_the_client() {
 #[tokio::test]
 async fn a_client_hosting_no_terminal_runs_the_command_on_this_host() {
     let client = TerminalClient::hosting(false);
-    let harness = terminal_client_harness(client.clone()).await;
+    // The command really runs here, so it runs under this host's shells: a
+    // POSIX host on Windows would spawn `$SHELL`, which a runner leaves unset.
+    let harness =
+        terminal_client_harness_on(test_host(), ShellRollout::Legacy, Some(client.clone())).await;
 
     let output = harness
         .call("bash", json!({"command": "echo local"}))
@@ -2559,6 +2578,10 @@ async fn a_control_key_interrupts_the_foreground_program() {
 /// A hard timeout terminates the whole process group, so a grandchild that
 /// outlives its parent does not outlive the session.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_hard_timeout_terminates_the_whole_process_group() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let marker = harness.root().join("grandchild.marker");
@@ -3007,6 +3030,10 @@ async fn a_settled_orphan_keeps_the_status_its_manifest_recorded() {
 /// A manifest that cannot be read is skipped, and the sessions beside it still
 /// load.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_corrupt_manifest_is_skipped_without_dropping_the_others() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "sleep 30").await;
@@ -3121,6 +3148,10 @@ async fn session_identifiers_carry_the_reference_prefix_stamp_and_entropy() {
 /// not on the name of the file that carries it, and a manifest in the format
 /// this port used before is ignored rather than crashing the scan.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn the_orphan_filter_reads_the_identifier_rather_than_the_file_name() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let live = background_session(&harness, "sleep 30").await;
@@ -3566,6 +3597,10 @@ async fn a_configured_output_ceiling_bounds_the_managed_window() {
 /// would report as a success: reference `_result_from_session` asks for both
 /// halves, so the status is what refuses it here.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let running = tokio::spawn({
@@ -3636,6 +3671,10 @@ async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
 /// success condition is never applied to it: the session is still running and
 /// the model is handed its id instead of an error.
 #[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
+)]
 async fn a_soft_timeout_backgrounds_the_session_instead_of_failing_it() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     // `timeout_seconds` is the soft form: an integer `timeout` would make the
