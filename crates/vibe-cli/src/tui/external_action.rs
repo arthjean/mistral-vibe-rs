@@ -71,11 +71,10 @@ async fn run_command_with_timeout(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[tokio::test]
     async fn nonzero_and_blocked_helpers_fail_after_being_reaped() {
         assert_eq!(

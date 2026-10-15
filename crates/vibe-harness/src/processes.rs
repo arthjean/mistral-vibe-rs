@@ -110,6 +110,10 @@ struct Process {
     output: Mutex<Output>,
     writer: Mutex<Option<Box<dyn Write + Send>>>,
     /// The process group, the root's own ID.
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only the POSIX process-group signals read it")
+    )]
     group: Option<i32>,
     killer: Mutex<Option<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
     directory: Option<PathBuf>,

@@ -78,6 +78,10 @@ pub(crate) struct PtyTerminal {
     child: Box<dyn portable_pty::Child + Send + Sync>,
     /// `portable-pty` calls `setsid` before `exec`, so the child leads both its
     /// session and its process group and its pid is that group's id.
+    #[cfg_attr(
+        not(unix),
+        expect(dead_code, reason = "only the POSIX process-group signals read it")
+    )]
     group: Option<i32>,
     /// Held so the terminal outlives the child: dropping the master closes the
     /// descriptor the reader thread is still draining.
