@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Windows fixes found while bringing the test suite up on Windows: `vibe-acp`
+  names itself `vibe-acp` in usage and errors instead of `vibe-acp.exe`; a
+  lock another process holds reads as busy instead of as an I/O failure; the
+  connector catalog cache is written again (its lock file was refused); legacy
+  sessions migrate instead of failing with access denied; and a debug build of
+  `vibe` no longer overflows its stack on startup.
+
 - Open every session on the Unified Harness, as the reference does since
   v2.26.0; `--legacy-harness` keeps the previous backend. The new
   `vibe-harness` crate is the core a unified session runs on: its own prompt,
