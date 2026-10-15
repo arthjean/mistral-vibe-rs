@@ -1456,8 +1456,10 @@ pub enum ConfigError {
     #[error("invalid TOML at `{path}`")]
     InvalidToml {
         path: PathBuf,
+        /// Boxed so a Windows `PathBuf` beside it keeps every
+        /// `Result<_, ConfigError>` under Clippy's large-error bound.
         #[source]
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
     #[error("configuration serialization failed: {0}")]
     Serialize(toml::ser::Error),
