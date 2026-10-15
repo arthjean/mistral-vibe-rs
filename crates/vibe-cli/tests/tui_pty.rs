@@ -359,6 +359,10 @@ struct PtyProcess {
     reader: JoinHandle<Vec<u8>>,
     /// Every byte read so far, which replays to the whole current screen.
     screen: Vec<u8>,
+    /// How much of `screen` an earlier wait has matched. One read can carry
+    /// the bytes a wait looked for and the frame after them, so the next wait
+    /// starts from this mark rather than from the next chunk.
+    consumed: usize,
 }
 
 /// How long one step of a PTY exchange may take before the test gives up.
@@ -476,6 +480,7 @@ impl PtyProcess {
             receiver,
             reader,
             screen: Vec::new(),
+            consumed: 0,
         }
     }
 
@@ -483,12 +488,12 @@ impl PtyProcess {
     /// the cells a frame changed, so a rendered phrase is routinely split by
     /// cursor moves and cannot be matched in the raw byte stream, and a cell
     /// that already held the right character is not written at all. A phrase
-    /// absent from the screen when the wait starts therefore also matches on
+    /// absent from the screen earlier waits matched therefore also matches on
     /// the whole replayed screen; one already there must be painted again.
     fn wait_for_visible(&mut self, pattern: &str, timeout: Duration) -> Vec<u8> {
         let deadline = Instant::now() + timeout;
-        let mut output = Vec::new();
-        let already_visible = visible_text(&self.screen).contains(pattern);
+        let mut output = self.screen[self.consumed..].to_vec();
+        let already_visible = visible_text(&self.screen[..self.consumed]).contains(pattern);
         while !(visible_text(&output).contains(pattern)
             || (!already_visible && visible_text(&self.screen).contains(pattern)))
         {
@@ -516,12 +521,13 @@ impl PtyProcess {
                 }
             }
         }
+        self.consumed = self.screen.len();
         output
     }
 
     fn wait_for(&mut self, pattern: &[u8], timeout: Duration) -> Vec<u8> {
         let deadline = Instant::now() + timeout;
-        let mut output = Vec::new();
+        let mut output = self.screen[self.consumed..].to_vec();
         while !output
             .windows(pattern.len())
             .any(|window| window == pattern)
@@ -552,6 +558,12 @@ impl PtyProcess {
                 }
             }
         }
+        let start = self.screen.len() - output.len();
+        let matched_end = output
+            .windows(pattern.len())
+            .position(|window| window == pattern)
+            .map_or(output.len(), |index| index + pattern.len());
+        self.consumed = start + matched_end;
         output
     }
 
