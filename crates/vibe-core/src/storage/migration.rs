@@ -148,6 +148,8 @@ impl SessionStore {
                 path: metadata_path,
                 source,
             })?;
+        // Windows refuses to rename a directory while a file inside it is open.
+        drop(metadata_file);
         sync_directory(&staging)?;
         let destination = self.root.join(&directory);
         fs::rename(&staging, &destination).map_err(|source| StorageError::Io {
