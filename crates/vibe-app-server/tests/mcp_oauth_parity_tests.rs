@@ -433,6 +433,9 @@ impl Browser {
                 }
             }
         };
+        // `settle` joins this thread, so a callback server that never answers
+        // ends the visit instead of the test.
+        let _ = connection.set_read_timeout(Some(Duration::from_secs(60)));
         match target {
             Some(target) => connection
                 .write_all(

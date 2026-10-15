@@ -16,6 +16,9 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
+mod support;
+use support::FixtureEnvironment;
+
 /// A refusal argparse renders itself exits 2 and reports on standard error,
 /// under the usage block and the program's own name.
 #[test]
@@ -213,9 +216,8 @@ fn launch_in(argv: &[&str], credential: Option<&str>) -> Output {
     fs::create_dir_all(&home).expect("home directory");
     let mut command = Command::new(env!("CARGO_BIN_EXE_vibe"));
     command
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .env("HOME", &home)
+        .env_clear_keeping_base()
+        .env_home(&home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("TERM", "dumb")
         // No keyring either: a credential comes from the environment or not at all.

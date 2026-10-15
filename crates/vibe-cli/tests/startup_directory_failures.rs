@@ -15,8 +15,11 @@
 )]
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
+
+mod support;
+use support::{FixtureEnvironment, canonical};
 
 /// A `--workdir` that is not a directory names the flag and the path once it
 /// was made absolute, not the spelling that was typed.
@@ -125,9 +128,8 @@ fn a_deleted_working_directory_explains_itself_and_offers_workdir() {
     // away after it moved there, so the shell moves in, removes it, and hands
     // the launch its own working directory.
     let output = Command::new("/bin/sh")
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .env("HOME", &home)
+        .env_clear_keeping_base()
+        .env_home(&home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("TERM", "dumb")
         .arg("-c")
@@ -290,9 +292,8 @@ fn replay_startup(case: &str, argv: &[&str]) -> Option<Output> {
     };
     Some(
         command
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-            .env("HOME", &home)
+            .env_clear_keeping_base()
+            .env_home(&home)
             .env("VIBE_HOME", home.join(".vibe"))
             // An update route that got past its validation must not reach the
             // real release index.
@@ -330,19 +331,14 @@ fn assert_no_operating_system_error(output: &Output) {
     );
 }
 
-fn canonical(path: &Path) -> PathBuf {
-    fs::canonicalize(path).expect("the fixture path resolves")
-}
-
 /// One programmatic launch, with the environment reduced to what startup reads
 /// and no provider credential in reach.
 fn launch(home_root: &Path, workspace: &Path, arguments: &[&str]) -> Output {
     let home = home_root.join("home");
     fs::create_dir_all(&home).expect("home directory");
     Command::new(env!("CARGO_BIN_EXE_vibe"))
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
-        .env("HOME", &home)
+        .env_clear_keeping_base()
+        .env_home(&home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
         .env("TERM", "dumb")
