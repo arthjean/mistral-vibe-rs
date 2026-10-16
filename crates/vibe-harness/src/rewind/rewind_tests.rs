@@ -30,10 +30,6 @@ fn write(id: &str, turn: &str, path: &str, previous: Option<&str>) -> Value {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the rewind file list publishes verbatim paths (US-010)"
-)]
 fn a_rewind_restores_every_file_its_turns_wrote() {
     let dir = tempfile::tempdir().unwrap();
     let cwd = dir.path().to_string_lossy().into_owned();

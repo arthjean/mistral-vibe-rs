@@ -72,7 +72,7 @@ pub fn resolve_path(raw: &str, workspace: &Workspace) -> Result<PathBuf, String>
     if raw.trim().is_empty() {
         return Err("Path cannot be empty".to_owned());
     }
-    let expanded = expand_user(raw);
+    let expanded = vibe_core::platform::expand_home(Path::new(raw));
     let path = if expanded.is_absolute() {
         expanded
     } else {
@@ -85,7 +85,7 @@ pub fn resolve_path(raw: &str, workspace: &Workspace) -> Result<PathBuf, String>
     let inside = workspace
         .roots
         .iter()
-        .map(|root| resolve_lexically(&expand_user(&root.to_string_lossy())))
+        .map(|root| resolve_lexically(&vibe_core::platform::expand_home(root)))
         .any(|root| resolved.starts_with(root));
     if !inside {
         return Err(format!(
@@ -96,19 +96,10 @@ pub fn resolve_path(raw: &str, workspace: &Workspace) -> Result<PathBuf, String>
     Ok(resolved)
 }
 
-fn expand_user(raw: &str) -> PathBuf {
-    if (raw == "~" || raw.starts_with("~/"))
-        && let Some(home) = std::env::var_os("HOME")
-    {
-        return PathBuf::from(home).join(raw.trim_start_matches('~').trim_start_matches('/'));
-    }
-    PathBuf::from(raw)
-}
-
 /// `Path.resolve()`: symlinks followed as far as the path exists, `..`
 /// folded lexically past that.
 fn resolve_lexically(path: &Path) -> PathBuf {
-    if let Ok(canonical) = fs::canonicalize(path) {
+    if let Ok(canonical) = vibe_core::platform::canonicalize(path) {
         return canonical;
     }
     let mut existing = path.to_path_buf();
@@ -122,7 +113,7 @@ fn resolve_lexically(path: &Path) -> PathBuf {
             _ => break,
         }
     }
-    let mut out = fs::canonicalize(&existing).unwrap_or(existing);
+    let mut out = vibe_core::platform::canonicalize(&existing).unwrap_or(existing);
     for part in rest.into_iter().rev() {
         if part == ".." {
             out.pop();
