@@ -160,7 +160,7 @@ fn prompt_drafts_own_only_exact_transient_mentions() {
     let temporary = tempfile::tempdir().expect("temporary workspace");
     let image = temporary.path().join("clipboard-1.png");
     fs::write(&image, b"image").expect("clipboard image");
-    let image = fs::canonicalize(image).expect("canonical image");
+    let image = vibe_core::platform::canonicalize(image).expect("canonical image");
 
     let unrelated = draft(
         temporary.path(),
@@ -188,7 +188,7 @@ fn clipboard_images_are_marked_for_cleanup_after_their_bytes_are_embedded() {
     let temporary = tempfile::tempdir().expect("temporary workspace");
     let image = temporary.path().join("clipboard-1.png");
     fs::write(&image, b"image").expect("clipboard image");
-    let image = fs::canonicalize(image).expect("canonical image");
+    let image = vibe_core::platform::canonicalize(image).expect("canonical image");
     let prompt = draft(
         temporary.path(),
         "inspect @'clipboard-1.png'",
@@ -220,7 +220,7 @@ fn a_transient_image_replaced_by_another_file_before_submission_is_recoverable()
     let temporary = tempfile::tempdir().expect("temporary workspace");
     let image = temporary.path().join("clipboard-1.png");
     fs::write(&image, b"image").expect("clipboard image");
-    let image = fs::canonicalize(image).expect("canonical image");
+    let image = vibe_core::platform::canonicalize(image).expect("canonical image");
     let prompt = draft(
         temporary.path(),
         "inspect @'clipboard-1.png'",

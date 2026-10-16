@@ -21,10 +21,6 @@ use support::FixtureEnvironment;
 /// Preparation narrates the requested name, then the resolved path, both on
 /// standard error, leaving standard output for the run's own result.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-)]
 fn preparation_narrates_on_standard_error_in_the_reference_order() {
     let Some(root) = scripted_repository() else {
         eprintln!("skipping: git is unavailable to build the fixture repository");

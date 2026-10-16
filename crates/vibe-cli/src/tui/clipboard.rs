@@ -395,7 +395,7 @@ fn write_clipboard_image_in(directory: &Path, bytes: &[u8]) -> Result<PathBuf, C
                     let _ = std::fs::remove_file(&path);
                     return Err(ClipboardError::Operation(error.to_string()));
                 }
-                return match std::fs::canonicalize(&path) {
+                return match vibe_core::platform::canonicalize(&path) {
                     Ok(path) => Ok(path),
                     Err(error) => {
                         let _ = std::fs::remove_file(&path);

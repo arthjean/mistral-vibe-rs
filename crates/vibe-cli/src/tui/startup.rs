@@ -109,11 +109,10 @@ pub(crate) fn workspace_paths(arguments: &Arguments, working_directory: &Path) -
 ///
 /// Every entry point resolves them here: the interactive launch, the one-shot
 /// commands, and the log directory `/log` prints. A launch that names no
-/// session root falls back to `VIBE_HOME`, then to the user's home, then to the
-/// workspace, which is the order the reference reads them in. `VIBE_HOME` is
-/// tilde-expanded on the way through, because the reference expands it before
-/// it resolves it (`vibe/utils/paths.py`) and a home spelled `~/.vibe` in the
-/// environment otherwise names a literal directory called `~`.
+/// session root takes the home [`vibe_core::platform::vibe_home`] resolves:
+/// `VIBE_HOME` with its `~` expanded, then `.vibe` under the user's home, which
+/// is the order the reference reads them in. `main` has already refused to
+/// start on a Windows host where that resolution fails.
 #[must_use]
 pub(crate) fn workspace_paths_for(
     session_root: Option<&Path>,
@@ -135,20 +134,10 @@ pub(crate) fn vibe_home_directory(arguments: &Arguments, working_directory: &Pat
 }
 
 fn vibe_home_for(session_root: Option<&Path>, working_directory: &Path) -> PathBuf {
-    session_root
-        .and_then(Path::parent)
-        .map(Path::to_path_buf)
-        .or_else(|| {
-            std::env::var_os("VIBE_HOME")
-                .map(PathBuf::from)
-                .map(|path| worktree::expand_user_path(&path))
-        })
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|path| path.join(".vibe"))
-        })
-        .unwrap_or_else(|| working_directory.join(".vibe"))
+    session_root.and_then(Path::parent).map_or_else(
+        || vibe_core::platform::vibe_home_or_local(working_directory),
+        Path::to_path_buf,
+    )
 }
 
 pub(super) fn startup_io(path: &Path, source: std::io::Error) -> StartupError {

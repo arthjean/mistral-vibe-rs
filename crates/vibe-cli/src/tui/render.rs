@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -774,30 +774,13 @@ pub(super) fn format_token_count(tokens: u64) -> String {
 }
 
 fn display_path(path: &Path) -> String {
-    let Some(home) = user_home_directory() else {
+    let Some(home) = vibe_core::platform::user_home() else {
         return path.to_string_lossy().into_owned();
     };
     match path.strip_prefix(&home) {
         Ok(relative) if relative.as_os_str().is_empty() => "~".to_owned(),
         Ok(relative) => Path::new("~").join(relative).to_string_lossy().into_owned(),
         Err(_) => path.to_string_lossy().into_owned(),
-    }
-}
-
-pub(in crate::tui) fn user_home_directory() -> Option<PathBuf> {
-    #[cfg(windows)]
-    {
-        std::env::var_os("USERPROFILE")
-            .map(PathBuf::from)
-            .or_else(|| {
-                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
-                home.push(std::env::var_os("HOMEPATH")?);
-                Some(home)
-            })
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var_os("HOME").map(PathBuf::from)
     }
 }
 

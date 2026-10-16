@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
@@ -177,7 +176,7 @@ pub fn prepare_submission(
     active_model: &str,
     supports_images: bool,
 ) -> Result<PreparedSubmission, SubmissionError> {
-    let canonical_workspace = fs::canonicalize(workspace)
+    let canonical_workspace = vibe_core::platform::canonicalize(workspace)
         .map_err(|error| SubmissionError::Workspace(error.to_string()))?;
     let payload = build_path_prompt_payload(&canonical_workspace, draft.text());
     let mention_stats = payload.mention_stats();

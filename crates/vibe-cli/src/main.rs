@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 use std::io::Write;
+use std::path::Path;
 use std::process::ExitCode;
 
 use vibe_cli::tui::startup::PreparedInvocation;
@@ -15,6 +16,9 @@ async fn main() -> ExitCode {
     // interactive parser runs so that `mcp` is never read as a prompt.
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if vibe_cli::mcp_command::intercepts(&arguments) {
+        if let Err(code) = require_vibe_home(None) {
+            return code;
+        }
         let mut stdout = std::io::stdout().lock();
         let mut stderr = std::io::stderr().lock();
         let environment = vibe_cli::mcp_command::McpEnvironment::from_process();
@@ -37,6 +41,9 @@ async fn main() -> ExitCode {
             return ExitCode::from(failure.exit);
         }
     };
+    if let Err(code) = require_vibe_home(arguments.session_root.as_deref()) {
+        return code;
+    }
     vibe_cli::publish_dotenv(&arguments);
     // The log file opens before anything else can fail, so a startup that dies
     // before the app server attaches still leaves a line behind.
@@ -139,4 +146,20 @@ async fn main() -> ExitCode {
             outcome
         }
     }
+}
+
+/// Refuses the launch before anything is written when the vibe home cannot be
+/// placed, which only a Windows host without a profile directory reaches. A
+/// session root named on the command line places the home itself.
+fn require_vibe_home(session_root: Option<&Path>) -> Result<(), ExitCode> {
+    if session_root.is_some() {
+        return Ok(());
+    }
+    let working_directory = std::env::current_dir().unwrap_or_default();
+    vibe_core::platform::vibe_home(&working_directory)
+        .map(drop)
+        .map_err(|error| {
+            let _ = writeln!(std::io::stderr().lock(), "Error: {error}");
+            ExitCode::FAILURE
+        })
 }

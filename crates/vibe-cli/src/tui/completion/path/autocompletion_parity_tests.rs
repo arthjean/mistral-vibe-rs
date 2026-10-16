@@ -1011,7 +1011,7 @@ fn run_git_walk(corpus: &Corpus, report: &mut Report) {
         } else {
             repository.join(&case.root)
         };
-        let root = fs::canonicalize(&root).expect("git root resolves");
+        let root = vibe_core::platform::canonicalize(&root).expect("git root resolves");
         let mut index = WorkspaceIndex::default();
         index.rebuild(&root);
         report.check(
@@ -1054,7 +1054,7 @@ fn run_git_changes(corpus: &Corpus, report: &mut Report) {
             &corpus.git_walk.fixture,
             file_body(corpus),
         );
-        let root = fs::canonicalize(&repository).expect("git root resolves");
+        let root = vibe_core::platform::canonicalize(&repository).expect("git root resolves");
         let mut index = WorkspaceIndex::default();
         index.ensure(&root);
         for mutation in &case.mutations {
@@ -1118,7 +1118,7 @@ fn materialize_collect(enclosure: &Path, collect: &Collect, fixture: &Fixture) -
         }
         fs::write(&target, &fixture.file_body).expect("outside file");
     }
-    fs::canonicalize(&root).expect("collect root resolves")
+    vibe_core::platform::canonicalize(&root).expect("collect root resolves")
 }
 
 /// A prompt editor holding `text` with the caret at character `cursor`.
@@ -1345,7 +1345,7 @@ fn run_path_prompt(corpus: &Corpus, report: &mut Report) {
         }
         fs::write(&target, file_body(corpus)).expect("prompt fixture file");
     }
-    let root = fs::canonicalize(&root).expect("prompt root resolves");
+    let root = vibe_core::platform::canonicalize(&root).expect("prompt root resolves");
     let spelled = root.to_string_lossy().replace('\\', "/");
     let placed = |path: &Path| {
         path.strip_prefix(&root).map_or_else(
