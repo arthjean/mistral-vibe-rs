@@ -59,6 +59,7 @@ nix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 command-group.workspace = true
+keyring-core.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
