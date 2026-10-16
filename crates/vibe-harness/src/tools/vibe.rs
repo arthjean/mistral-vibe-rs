@@ -255,7 +255,8 @@ fn pydantic_error(
 /// Where a session's notes live: beside its store, outside the workspace.
 #[must_use]
 pub fn scratchpad_dir(storage_root: &Path, session_id: &str) -> PathBuf {
-    let root = std::fs::canonicalize(storage_root).unwrap_or_else(|_| storage_root.to_path_buf());
+    let root = vibe_core::platform::canonicalize(storage_root)
+        .unwrap_or_else(|_| storage_root.to_path_buf());
     root.join("unified").join(session_id).join("scratchpad")
 }
 
@@ -336,7 +337,8 @@ fn scratchpad(arguments: &Value, directory: &Path) -> Result<ToolResult, String>
 }
 
 fn resolve_within(directory: &Path, path: &str) -> Result<PathBuf, String> {
-    let root = std::fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
+    let root =
+        vibe_core::platform::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
     let resolved = resolve(&root.join(path));
     if resolved == root {
         return Err("Path must name a file inside the scratchpad".to_owned());
@@ -349,7 +351,7 @@ fn resolve_within(directory: &Path, path: &str) -> Result<PathBuf, String> {
 
 /// `Path.resolve()` for a path that may not exist yet.
 fn resolve(path: &Path) -> PathBuf {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
+    if let Ok(canonical) = vibe_core::platform::canonicalize(path) {
         return canonical;
     }
     let mut out = PathBuf::new();
@@ -361,7 +363,7 @@ fn resolve(path: &Path) -> PathBuf {
             std::path::Component::CurDir => {}
             other => {
                 out.push(other);
-                if let Ok(canonical) = std::fs::canonicalize(&out) {
+                if let Ok(canonical) = vibe_core::platform::canonicalize(&out) {
                     out = canonical;
                 }
             }
@@ -387,7 +389,7 @@ fn hard_linked(path: &Path) -> bool {
 /// it even through links.
 #[must_use]
 pub fn scratchpad_files(directory: &Path) -> Vec<String> {
-    let Ok(root) = std::fs::canonicalize(directory) else {
+    let Ok(root) = vibe_core::platform::canonicalize(directory) else {
         return Vec::new();
     };
     let mut found = Vec::new();
@@ -402,7 +404,7 @@ fn collect_files(root: &Path, directory: &Path, found: &mut Vec<String>) {
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        let Ok(resolved) = std::fs::canonicalize(&path) else {
+        let Ok(resolved) = vibe_core::platform::canonicalize(&path) else {
             continue;
         };
         if !resolved.starts_with(root) {
@@ -463,7 +465,7 @@ fn short_digest(bytes: &[u8]) -> String {
 }
 
 fn read_notes(directory: &Path) -> Option<(String, String)> {
-    let root = std::fs::canonicalize(directory).ok()?;
+    let root = vibe_core::platform::canonicalize(directory).ok()?;
     let files = scratchpad_files(&root);
     let mut truncated = files.len() > RESTATE_MAX_FILES;
     let mut budget = RESTATE_MAX_CHARS;

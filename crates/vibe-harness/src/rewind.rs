@@ -368,7 +368,7 @@ fn resolve(cwd: &str, path: &str) -> String {
     } else {
         PathBuf::from(cwd).join(path)
     };
-    std::fs::canonicalize(&absolute)
+    vibe_core::platform::canonicalize(&absolute)
         .unwrap_or(absolute)
         .to_string_lossy()
         .into_owned()
