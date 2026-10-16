@@ -24,6 +24,9 @@ use std::process::{Command, Output};
 
 use super::WorktreeError;
 
+#[cfg(test)]
+mod git_tests;
+
 /// What `core.hooksPath` is pointed at so a repository's hooks never run.
 ///
 /// Absolute and absent rather than empty: git resolves a relative hooks path
@@ -146,15 +149,26 @@ fn resolved_executable(candidate: &Path) -> Option<PathBuf> {
 }
 
 fn is_untrusted_project_executable(candidate: &Path, project: &Path) -> bool {
-    if !candidate.starts_with(project) {
+    // `platform::canonicalize` keeps the verbatim prefix on a path a plain
+    // spelling cannot name (a reserved component, one over the legacy length
+    // limit), so a binary deep inside the checkout can be spelled `\\?\C:\...`
+    // under a project spelled `C:\...`. Containment is decided without the
+    // prefix, so no spelling makes a project binary look trusted.
+    let plain = |path: &Path| {
+        PathBuf::from(crate::platform::strip_verbatim_prefix(
+            &path.to_string_lossy(),
+        ))
+    };
+    let (candidate, project) = (plain(candidate), plain(project));
+    if !candidate.starts_with(&project) {
         return false;
     }
     let overbroad = project.parent().is_none()
         || crate::platform::user_home()
             .and_then(|home| crate::platform::canonicalize(home).ok())
-            .is_some_and(|home| home == project);
+            .is_some_and(|home| plain(&home) == project);
     if overbroad {
-        candidate.parent() == Some(project)
+        candidate.parent() == Some(project.as_path())
     } else {
         true
     }
