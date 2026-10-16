@@ -53,8 +53,11 @@ fn a_rewind_restores_every_file_its_turns_wrote() {
     snapshots.observe(&state(Some("t2"), &two), &cwd);
     snapshots.observe(&state(None, &two), &cwd);
 
-    let a = dir.path().join("a.txt").to_string_lossy().into_owned();
-    let b = dir.path().join("b.txt").to_string_lossy().into_owned();
+    // Restorable paths are canonical, so a short (8.3) temporary directory
+    // comes back under its long name.
+    let root = vibe_core::platform::canonicalize(dir.path()).unwrap();
+    let a = root.join("a.txt").to_string_lossy().into_owned();
+    let b = root.join("b.txt").to_string_lossy().into_owned();
     assert_eq!(snapshots.restorable_paths("u2"), vec![a.clone(), b.clone()]);
     assert_eq!(snapshots.restorable_paths("u1"), vec![a.clone(), b.clone()]);
     assert!(snapshots.restorable_paths("missing").is_empty());
