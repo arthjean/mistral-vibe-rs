@@ -61,6 +61,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .status()?;
         std::process::exit(status.code().unwrap_or(1));
     }
+    // Refused before anything is written: on a Windows host without a profile
+    // directory the fallback would be the editor's working directory.
+    vibe_core::platform::vibe_home(&std::env::current_dir().unwrap_or_default())?;
     let vibe_home = default_vibe_home();
     let session_root = vibe_home.join("sessions");
     // `{vibe_home}/.env` stands in for an unset process variable, which is what
