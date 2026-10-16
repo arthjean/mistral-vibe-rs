@@ -201,7 +201,8 @@ impl AppServer {
             return Ok(content);
         }
         let mut roots = vec![
-            std::fs::canonicalize(&unified.cwd).unwrap_or_else(|_| PathBuf::from(&unified.cwd)),
+            vibe_core::platform::canonicalize(&unified.cwd)
+                .unwrap_or_else(|_| PathBuf::from(&unified.cwd)),
         ];
         if let Some(dir) = unified
             .host
@@ -352,7 +353,8 @@ fn harness_image(attachment: &Value, roots: &[PathBuf]) -> Result<Value, String>
         }
         Some("file") => {
             let path = PathBuf::from(source["path"].as_str().unwrap_or_default());
-            let resolved = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+            let resolved =
+                vibe_core::platform::canonicalize(&path).unwrap_or_else(|_| path.clone());
             if !roots.iter().any(|root| resolved.starts_with(root)) {
                 return Err(format!(
                     "Image file is outside the workspace or session attachments: {}",
@@ -430,14 +432,14 @@ fn loaded_skill(entry: &Value, name: &str) -> bool {
 /// Reference `mentioned_file_content_blocks_async`: each file the message
 /// mentions inside the session's root, inlined as a resource.
 pub(super) fn mentioned_file_blocks(text: &str, cwd: &Path) -> Result<Vec<Value>, String> {
-    let root = std::fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let root = vibe_core::platform::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let payload = vibe_core::path_resources::build_path_prompt_payload(&root, text);
     let files: Vec<_> = payload
         .resources
         .iter()
         .filter(|resource| resource.kind == vibe_core::path_resources::PathResourceKind::File)
         .filter(|resource| {
-            std::fs::canonicalize(&resource.path)
+            vibe_core::platform::canonicalize(&resource.path)
                 .unwrap_or_else(|_| resource.path.clone())
                 .starts_with(&root)
         })
@@ -494,12 +496,14 @@ fn read_lines_bounded(path: &Path) -> std::io::Result<(Vec<String>, bool)> {
     Ok((text.lines().map(ToOwned::to_owned).collect(), truncated))
 }
 
-/// `Path.as_uri()` on a POSIX path: `file://` and the path, its bytes outside
-/// the unreserved set percent-encoded.
+/// `Path.as_uri()`: a prefix, then the path with its bytes outside the
+/// unreserved set and `/` percent-encoded. A POSIX path takes `file://`. On
+/// Windows the path is written with forward slashes: a drive path takes
+/// `file:///C:` and keeps the rest, any other prefixed path (UNC) takes
+/// `file:`.
 fn file_uri(path: &Path) -> String {
-    let raw = path.to_string_lossy();
-    let mut uri = String::from("file://");
-    for byte in raw.as_bytes() {
+    let (mut uri, rest) = uri_parts(path);
+    for byte in rest.as_bytes() {
         match byte {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-' | b'~' | b'/' => {
                 uri.push(char::from(*byte));
@@ -509,3 +513,27 @@ fn file_uri(path: &Path) -> String {
     }
     uri
 }
+
+#[cfg(not(windows))]
+fn uri_parts(path: &Path) -> (String, String) {
+    ("file://".to_owned(), path.to_string_lossy().into_owned())
+}
+
+#[cfg(windows)]
+fn uri_parts(path: &Path) -> (String, String) {
+    use std::path::{Component, Prefix};
+
+    let posix = path.to_string_lossy().replace('\\', "/");
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)) => {
+            let rest = posix.get(2..).unwrap_or_default().to_owned();
+            let drive = posix.get(..2).unwrap_or_default();
+            (format!("file:///{drive}"), rest)
+        }
+        Some(Component::Prefix(_)) => ("file:".to_owned(), posix),
+        _ => ("file://".to_owned(), path.to_string_lossy().into_owned()),
+    }
+}
+
+#[cfg(test)]
+mod prepare_tests;

@@ -12,7 +12,6 @@ use crate::params::{WireCheck, object_of};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::Map;
-use std::fs;
 use vibe_core::storage::lease::{LeaseError, SessionLease};
 use vibe_core::storage::{SessionInfo, SessionStore, StorageError, parse_iso_millis};
 use vibe_core::worktree::WorktreeRepository;
@@ -989,7 +988,7 @@ impl ServerConnection {
             || self.server.workspace.working_directory().to_path_buf(),
             PathBuf::from,
         );
-        let cwd = fs::canonicalize(&cwd).unwrap_or(cwd);
+        let cwd = vibe_core::platform::canonicalize(&cwd).unwrap_or(cwd);
         let cwd = cwd.to_string_lossy().into_owned();
         match self.store().continue_target(&cwd) {
             Ok(session_id) => Ok(session_id),
@@ -1000,7 +999,9 @@ impl ServerConnection {
                 );
                 let managed =
                     vibe_core::worktree::managed_worktrees_root(self.server.workspace.vibe_home());
-                if Path::new(&cwd).starts_with(fs::canonicalize(&managed).unwrap_or(managed)) {
+                if Path::new(&cwd)
+                    .starts_with(vibe_core::platform::canonicalize(&managed).unwrap_or(managed))
+                {
                     message.push_str(
                         ". This worktree has no session of its own yet: start one here, or \
                          name an existing session to resume",
@@ -1569,7 +1570,8 @@ fn relocation_target(
     requested: &str,
 ) -> Result<String, ProtocolFault> {
     let expanded = crate::host::expand_home(Path::new(requested));
-    let target = fs::canonicalize(&expanded).unwrap_or_else(|_| absolute(&expanded));
+    let target =
+        vibe_core::platform::canonicalize(&expanded).unwrap_or_else(|_| absolute(&expanded));
     if !target.is_dir() {
         return Err(ProtocolFault::plain(
             ProtocolErrorCode::InvalidParams,
@@ -1582,7 +1584,9 @@ fn relocation_target(
             let mut counterparts: Vec<PathBuf> = repository
                 .linked()?
                 .into_iter()
-                .map(|worktree| fs::canonicalize(&worktree.path).unwrap_or(worktree.path))
+                .map(|worktree| {
+                    vibe_core::platform::canonicalize(&worktree.path).unwrap_or(worktree.path)
+                })
                 .collect();
             counterparts.extend(repository.repository_counterpart());
             Ok(counterparts)
@@ -1613,7 +1617,7 @@ fn absolute(path: &Path) -> PathBuf {
 /// `Path.expanduser().resolve()`, as far as the directory exists.
 fn resolve(cwd: &str) -> PathBuf {
     let expanded = crate::host::expand_home(Path::new(cwd));
-    fs::canonicalize(&expanded).unwrap_or_else(|_| absolute(&expanded))
+    vibe_core::platform::canonicalize(&expanded).unwrap_or_else(|_| absolute(&expanded))
 }
 
 /// Reference `_session_roots`: each session's furthest ancestor among the

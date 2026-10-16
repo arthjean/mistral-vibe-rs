@@ -123,6 +123,26 @@ pub(crate) struct SessionRuntime {
 }
 
 impl SessionRuntime {
+    /// Drops every handle this session holds on its working directory: the
+    /// tools it registered and the review manager, which both keep the
+    /// workspace's root open.
+    ///
+    /// The workspace opens its root without `FILE_SHARE_DELETE` on Windows
+    /// (cap-std refuses to let a directory it confines be renamed or removed),
+    /// so a worktree the closing session is about to take back cannot be
+    /// deleted while either lives. The tool map is shared by every clone of
+    /// the registry, so it is emptied rather than replaced.
+    pub(crate) fn release_workspace(&mut self) {
+        for source in [
+            vibe_core::tools::ToolSource::BuiltIn,
+            vibe_core::tools::ToolSource::Mcp,
+            vibe_core::tools::ToolSource::Connector,
+        ] {
+            let _ = self.tools.retract_source(source);
+        }
+        self.review = None;
+    }
+
     /// A freshly attached, idle session holding one attachment.
     ///
     /// Callers set the fields that vary by entry point: `persisted`,

@@ -109,9 +109,7 @@ const LEDGER: &[Divergence] = &[Divergence {
 }];
 
 fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 
@@ -173,7 +171,7 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 #[test]
 #[cfg_attr(
     windows,
-    ignore = "windows: project links persist and publish verbatim repository roots (US-010)"
+    ignore = "windows by design: the corpus records the store's POSIX mode and a 0o444 store's write error, and the reference resolves a rootless /l onto the current drive"
 )]
 fn the_port_answers_every_project_links_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");

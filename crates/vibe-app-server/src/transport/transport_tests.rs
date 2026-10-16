@@ -389,7 +389,7 @@ async fn stdio_server_carries_a_client_tool_delegation_and_its_answer() {
     assert_eq!(
         delegated["params"]["path"],
         serde_json::Value::String(
-            std::fs::canonicalize(directory.path())
+            vibe_core::platform::canonicalize(directory.path())
                 .expect("canonical root")
                 .join("main.rs")
                 .to_string_lossy()

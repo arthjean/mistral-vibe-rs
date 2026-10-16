@@ -208,10 +208,10 @@ pub(super) fn resolve_workspace_cwd(
     root: &Path,
     requested: Option<&str>,
 ) -> Result<PathBuf, ProtocolFault> {
-    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let root = vibe_core::platform::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let requested = requested.map(|path| {
-        let expanded = expand_user(path);
-        expanded.canonicalize().unwrap_or(expanded)
+        let expanded = vibe_core::platform::expand_home(Path::new(path));
+        vibe_core::platform::canonicalize(&expanded).unwrap_or(expanded)
     });
     let cwd = requested.unwrap_or_else(|| root.clone());
     if !cwd.is_dir() {
@@ -230,19 +230,6 @@ pub(super) fn resolve_workspace_cwd(
         ));
     }
     Ok(cwd)
-}
-
-/// `~` and `~/...` read against the home directory, as Python's
-/// `Path.expanduser` does.
-fn expand_user(path: &str) -> PathBuf {
-    let home = || std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
-    match path.strip_prefix('~') {
-        Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => home().map_or_else(
-            || PathBuf::from(path),
-            |home| PathBuf::from(home).join(rest.trim_start_matches(['/', '\\'])),
-        ),
-        _ => PathBuf::from(path),
-    }
 }
 
 /// Decodes a stream as it arrives, holding back a character split across two

@@ -680,6 +680,9 @@ impl ServerConnection {
         // (`vibe/app_server/_legacy_session_backend.py:923-941`).
         let unstarted_worktree =
             session.created_worktree.is_some() && session.latest_turn.is_none();
+        if unstarted_worktree {
+            session.release_workspace();
+        }
         drop(sessions);
         self.server.release_lease(&session_id);
         if self.root.as_deref() == Some(key.as_str()) {

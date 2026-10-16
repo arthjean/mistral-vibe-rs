@@ -339,7 +339,8 @@ impl WorkspaceService {
             return mapped;
         };
         let managed_root = vibe_core::worktree::managed_worktrees_root(&self.paths.vibe_home);
-        let standing = fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+        let standing =
+            vibe_core::platform::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
         if !standing.starts_with(&managed_root) {
             return mapped;
         }

@@ -104,7 +104,7 @@ fn github_repository() -> TempDir {
 }
 
 fn canonical(path: &Path) -> String {
-    fs::canonicalize(path)
+    vibe_core::platform::canonicalize(path)
         .expect("the directory resolves")
         .to_string_lossy()
         .into_owned()
@@ -242,7 +242,7 @@ async fn saving_writes_a_directory_link_or_a_checkout_link_for_the_expected_remo
 async fn inspection_keeps_a_directory_link_and_clears_a_checkout_link_whose_remote_moved() {
     let fixture = Fixture::new();
     let repository = github_repository();
-    let root = fs::canonicalize(repository.path()).expect("the checkout resolves");
+    let root = vibe_core::platform::canonicalize(repository.path()).expect("the checkout resolves");
     fixture
         .store()
         .upsert_project_link(&ProjectLink::Remote {
@@ -287,7 +287,7 @@ async fn inspection_keeps_a_directory_link_and_clears_a_checkout_link_whose_remo
 async fn unlinking_a_root_that_no_longer_resolves_drops_its_closest_ancestor_link() {
     let fixture = Fixture::new();
     let parent = tempdir().expect("a parent directory");
-    let outer = fs::canonicalize(parent.path()).expect("the parent resolves");
+    let outer = vibe_core::platform::canonicalize(parent.path()).expect("the parent resolves");
     let inner = outer.join("checkout");
     fs::create_dir(&inner).expect("the checkout directory");
     for (path, project_id) in [(&outer, "outer"), (&inner, "inner")] {

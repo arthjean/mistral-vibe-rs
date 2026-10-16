@@ -5,44 +5,24 @@
 //! lives in [`vibe_core::clock`], where every layer reads it; this module
 //! re-exports it so call sites keep naming one host surface.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub(crate) use vibe_core::clock::{now_millis, now_seconds};
 
-/// Replaces a leading `~` with the user's home directory, as the reference
-/// `Path.expanduser` does. A path that needs a home directory this host cannot
-/// resolve is returned unchanged, so the caller reports the path it was given
-/// rather than a silently different one.
-#[must_use]
-pub(crate) fn expand_home(path: &Path) -> PathBuf {
-    let mut components = path.components();
-    let Some(first) = components.next() else {
-        return path.to_path_buf();
-    };
-    if first.as_os_str() != "~" {
-        return path.to_path_buf();
-    }
-    let Some(mut home) = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)
-    else {
-        return path.to_path_buf();
-    };
-    home.extend(components);
-    home
-}
+/// `Path.expanduser`: a leading `~` is the user's home directory. A path that
+/// needs a home directory this host cannot resolve is returned unchanged, so
+/// the caller reports the path it was given rather than a silently different
+/// one.
+pub(crate) use vibe_core::platform::expand_home;
 
-/// Resolves the Vibe home directory, preferring an explicit `VIBE_HOME` over
-/// the user's home and falling back to a workspace-local directory.
+/// The Vibe home directory, from the resolver every entry point shares
+/// ([`vibe_core::platform::vibe_home`]); the binary hosting this server has
+/// already refused to start where it cannot be placed.
 #[must_use]
 pub(crate) fn vibe_home() -> PathBuf {
-    std::env::var_os("VIBE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe"))
-        })
-        .or_else(|| std::env::current_dir().ok().map(|cwd| cwd.join(".vibe")))
-        .unwrap_or_else(|| PathBuf::from(".vibe"))
+    let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    vibe_core::platform::vibe_home_or_local(&working_directory)
 }
+
+#[cfg(test)]
+mod host_tests;

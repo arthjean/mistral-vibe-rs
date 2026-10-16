@@ -145,7 +145,7 @@ async fn a_declared_filesystem_read_reaches_the_client_and_comes_back() {
     assert_eq!(
         params["path"],
         json!(
-            std::fs::canonicalize(directory.path())
+            vibe_core::platform::canonicalize(directory.path())
                 .expect("canonical root")
                 .join("main.rs")
                 .to_string_lossy()
@@ -401,7 +401,7 @@ async fn an_approved_path_outside_the_workspace_reaches_the_client_resolved() {
     assert_eq!(
         params["path"],
         json!(
-            std::fs::canonicalize(&outside)
+            vibe_core::platform::canonicalize(&outside)
                 .expect("canonical outside file")
                 .to_string_lossy()
         )

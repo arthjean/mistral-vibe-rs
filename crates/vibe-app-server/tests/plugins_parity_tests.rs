@@ -48,9 +48,7 @@ struct Divergence {
 const LEDGER: &[Divergence] = &[];
 
 fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 
@@ -112,7 +110,7 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 #[test]
 #[cfg_attr(
     windows,
-    ignore = "windows: plugin roots and issue files are published verbatim (US-010)"
+    ignore = "windows by design: unified/mcp-servers ships a #!/bin/sh script as an MCP server, which CreateProcess cannot launch (os error 193)"
 )]
 fn the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");

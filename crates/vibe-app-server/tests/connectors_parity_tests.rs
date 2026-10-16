@@ -90,9 +90,7 @@ const LEDGER: &[Divergence] = &[
 ];
 
 fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 

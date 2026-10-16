@@ -305,7 +305,7 @@ pub(crate) fn resolve_path(path: &Path) -> PathBuf {
             }
             Component::Normal(name) => {
                 let candidate = resolved.join(name);
-                resolved = fs::canonicalize(&candidate).unwrap_or(candidate);
+                resolved = vibe_core::platform::canonicalize(&candidate).unwrap_or(candidate);
             }
         }
     }

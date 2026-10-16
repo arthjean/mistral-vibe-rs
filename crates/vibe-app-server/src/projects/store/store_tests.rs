@@ -33,7 +33,7 @@ fn local(root: &Path, project: &str) -> ProjectLink {
 }
 
 fn canonical(path: &Path) -> PathBuf {
-    fs::canonicalize(path).expect("the directory resolves")
+    vibe_core::platform::canonicalize(path).expect("the directory resolves")
 }
 
 fn rewritten(text: &str) -> String {
