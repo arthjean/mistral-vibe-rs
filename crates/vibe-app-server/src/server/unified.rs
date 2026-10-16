@@ -645,7 +645,7 @@ impl ServerConnection {
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ProtocolFault::internal("the opened session is gone"))?;
-            let cwd = std::fs::canonicalize(&session.working_directory)
+            let cwd = vibe_core::platform::canonicalize(&session.working_directory)
                 .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_else(|_| session.working_directory.clone());
             (
@@ -2471,7 +2471,7 @@ impl ServerConnection {
             .and_then(Value::as_u64)
             .map_or(50, |limit| usize::try_from(limit).unwrap_or(50));
         let cwd = object.get("cwd").and_then(Value::as_str).map(|cwd| {
-            std::fs::canonicalize(cwd)
+            vibe_core::platform::canonicalize(cwd)
                 .map(|path| path.to_string_lossy().into_owned())
                 .unwrap_or_else(|_| cwd.to_owned())
         });

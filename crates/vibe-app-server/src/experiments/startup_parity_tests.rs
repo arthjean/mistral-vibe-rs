@@ -73,9 +73,7 @@ const MINIMUM_COMPARISONS: usize = 180;
 const DIVERGENCES: &[(&str, &str)] = &[];
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 

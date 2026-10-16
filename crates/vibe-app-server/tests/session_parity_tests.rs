@@ -71,9 +71,7 @@ fn covers(entry: &Divergence, pointer: &str) -> bool {
 }
 
 fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 
@@ -144,7 +142,7 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 #[test]
 #[cfg_attr(
     windows,
-    ignore = "windows: a relocated session publishes a verbatim cwd (US-010)"
+    ignore = "windows by design: on win32 the reference records a .last_session pointer (keyed by console window or parent pid) that a Linux capture never holds"
 )]
 fn the_port_answers_every_session_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");

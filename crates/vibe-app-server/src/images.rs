@@ -208,7 +208,9 @@ async fn snapshot_inline_image(
     if !tokio::fs::try_exists(&path).await.map_err(io_error)? {
         tokio::fs::write(&path, &bytes).await.map_err(io_error)?;
     }
-    let path = tokio::fs::canonicalize(&path).await.map_err(io_error)?;
+    let path =
+        vibe_core::platform::simplified(&tokio::fs::canonicalize(&path).await.map_err(io_error)?)
+            .to_path_buf();
     let mut snapshot = attachment.clone();
     snapshot["source"] = json!({"kind": "file", "path": path.to_string_lossy()});
     Ok(Some(snapshot))
@@ -284,7 +286,8 @@ pub(crate) fn snapshot_image_file(
     if !destination.exists() {
         std::fs::write(&destination, &image.bytes).map_err(|error| error.to_string())?;
     }
-    let destination = std::fs::canonicalize(&destination).map_err(|error| error.to_string())?;
+    let destination =
+        vibe_core::platform::canonicalize(&destination).map_err(|error| error.to_string())?;
     Ok(json!({
         "source": {"kind": "file", "path": destination.to_string_lossy()},
         "alias": alias,

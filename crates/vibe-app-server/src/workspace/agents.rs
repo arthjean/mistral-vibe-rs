@@ -553,16 +553,16 @@ impl WorkspaceService {
         } else {
             self.paths.working_directory.join(path)
         };
-        let canonical = fs::canonicalize(&candidate).map_err(|error| {
+        let canonical = vibe_core::platform::canonicalize(&candidate).map_err(|error| {
             WorkspaceServiceError::InvalidParams(format!(
                 "authorized path `{}` cannot be resolved: {error}",
                 candidate.display()
             ))
         })?;
-        let authorized = self
-            .allowed_roots
-            .iter()
-            .any(|root| fs::canonicalize(root).is_ok_and(|allowed| canonical.starts_with(allowed)));
+        let authorized = self.allowed_roots.iter().any(|root| {
+            vibe_core::platform::canonicalize(root)
+                .is_ok_and(|allowed| canonical.starts_with(allowed))
+        });
         if !authorized {
             return Err(WorkspaceServiceError::InvalidParams(format!(
                 "path `{}` is outside server-authorized workspace roots",
@@ -582,10 +582,13 @@ impl WorkspaceService {
         if skill.source == vibe_core::skills::SkillSource::Plugin {
             return false;
         }
-        let resolved = path.canonicalize().unwrap_or_else(|_| path.clone());
+        let resolved = vibe_core::platform::canonicalize(path).unwrap_or_else(|_| path.clone());
         seed.values()
             .filter_map(|plugin| plugin.path.as_ref())
-            .any(|claimed| claimed.canonicalize().unwrap_or_else(|_| claimed.clone()) == resolved)
+            .any(|claimed| {
+                vibe_core::platform::canonicalize(claimed).unwrap_or_else(|_| claimed.clone())
+                    == resolved
+            })
     }
 
     /// The skills a unified session takes from its own roots: everything

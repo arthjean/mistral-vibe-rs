@@ -185,9 +185,7 @@ struct FieldDivergence {
 const FIELDS: &[FieldDivergence] = &[];
 
 fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 
@@ -247,10 +245,6 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: read_file publishes verbatim paths into hook payloads (US-009)"
-)]
 fn the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);

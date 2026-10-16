@@ -363,6 +363,9 @@ impl ServerConnection {
                     if session.attachments == 0 && session.status != SessionStatus::Closed {
                         let unstarted_worktree =
                             session.created_worktree.is_some() && session.latest_turn.is_none();
+                        if unstarted_worktree {
+                            session.release_workspace();
+                        }
                         released.push((
                             session.id.clone(),
                             PathBuf::from(&session.working_directory),

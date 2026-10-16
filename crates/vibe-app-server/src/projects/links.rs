@@ -570,7 +570,7 @@ impl Inspected {
 /// repository, or in a bare one, is a plain directory; one that does not
 /// exist, is not a directory or whose repository cannot be read is refused.
 async fn inspect_directory(path: &Path) -> Result<Inspected, String> {
-    let directory = std::fs::canonicalize(path)
+    let directory = vibe_core::platform::canonicalize(path)
         .map_err(|error| format!("{} cannot be read: {error}", path.display()))?;
     if !directory.is_dir() {
         return Err(format!("{} is not a directory", directory.display()));

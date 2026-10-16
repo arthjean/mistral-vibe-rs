@@ -525,7 +525,7 @@ pub(crate) fn swallow_missing_checkout<T>(
 /// given rather than dropped: the caller reports the path it was asked about.
 fn resolve_request_path(path: &Path) -> PathBuf {
     let expanded = expand_home(path);
-    std::fs::canonicalize(&expanded).unwrap_or(expanded)
+    vibe_core::platform::canonicalize(&expanded).unwrap_or(expanded)
 }
 
 fn path_string(path: &Path) -> String {

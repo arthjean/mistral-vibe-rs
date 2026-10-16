@@ -1629,10 +1629,10 @@ struct Difference {
 async fn observed_document(case: &Case, source: &Path, scratch: &Path, index: usize) -> Value {
     let tree = scratch.join(format!("case-{index}"));
     materialize_tree(source, &tree);
-    let tree = tree.canonicalize().expect("the tree resolves");
+    let tree = vibe_core::platform::canonicalize(&tree).expect("the tree resolves");
     let home = scratch.join("home");
     fs::create_dir_all(&home).expect("home");
-    let scratchpad = scratch.canonicalize().expect("the scratch root resolves");
+    let scratchpad = vibe_core::platform::canonicalize(scratch).expect("the scratch root resolves");
 
     let (observed, authority) = observe(case, &tree, &home, &scratchpad, index).await;
     project(

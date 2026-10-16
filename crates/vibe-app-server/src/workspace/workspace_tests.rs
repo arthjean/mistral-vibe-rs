@@ -1,3 +1,5 @@
+use std::fs;
+
 use tempfile::tempdir;
 use vibe_core::events::ModelMessage;
 use vibe_protocol::{Envelope, TransportKind, decode_frame};
@@ -1553,10 +1555,6 @@ fn the_builtins_are_published_on_the_wire() {
 /// US-168: a `SKILL.md` that will not parse is published as an issue naming
 /// the file, which is what `diagnostics/list` reads.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: skill diagnostics publish verbatim paths (US-010)"
-)]
 fn an_unloadable_skill_is_published_as_an_issue() {
     let temporary = tempdir().expect("tempdir");
     let workspace = temporary.path().join("workspace");
@@ -1576,7 +1574,10 @@ fn an_unloadable_skill_is_published_as_an_issue() {
     let issues = service.skill_issues();
 
     assert_eq!(issues.len(), 1, "{issues:?}");
-    assert!(issues[0].0.ends_with("broken/SKILL.md"), "{issues:?}");
+    assert!(
+        std::path::Path::new(&issues[0].0).ends_with("broken/SKILL.md"),
+        "{issues:?}"
+    );
     assert!(!issues[0].1.is_empty(), "the issue carries a reason");
     assert_eq!(
         listed_skills(&service),

@@ -100,8 +100,7 @@ impl Eq for SessionHooks {}
 /// or not the file exists yet.
 #[must_use]
 pub fn transcript_path(session_dir: &Path) -> String {
-    let directory = session_dir
-        .canonicalize()
+    let directory = vibe_core::platform::canonicalize(session_dir)
         .unwrap_or_else(|_| session_dir.to_path_buf());
     directory
         .join("messages.jsonl")

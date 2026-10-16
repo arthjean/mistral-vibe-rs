@@ -400,10 +400,6 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: rewind checkpoints publish verbatim paths (US-010)"
-)]
 fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     let temporary = tempfile::tempdir().expect("rewind stores");
     let session_root = temporary.path().join("sessions");
@@ -875,7 +871,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
     let session = json!({"sessionId": "review-session"});
     // Every answer names a file by the resolved absolute path the log keys it
     // by, and a client sends that path back.
-    let main = fs::canonicalize(&working_directory)
+    let main = vibe_core::platform::canonicalize(&working_directory)
         .expect("canonical workspace")
         .join("main.txt")
         .to_string_lossy()

@@ -429,7 +429,7 @@ mod tests {
         );
 
         let written = fs::read_to_string(&prompt.settings_path).expect("persisted settings");
-        let cwd = fs::canonicalize(root.path()).expect("canonical workspace");
+        let cwd = vibe_core::platform::canonicalize(root.path()).expect("canonical workspace");
         // The store records the form a user types: no Windows verbatim prefix,
         // and backslashes escaped inside the TOML basic string.
         let cwd = cwd.to_string_lossy();

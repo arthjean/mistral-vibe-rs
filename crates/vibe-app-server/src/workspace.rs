@@ -11,7 +11,6 @@
 //! in it is answered by exactly one of the three parts.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 

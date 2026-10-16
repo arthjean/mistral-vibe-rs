@@ -73,7 +73,7 @@ fn sources(home: &Path) -> PluginSources {
 #[tokio::test]
 async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
     let home = HardenedHome::new();
-    let home = home.path().canonicalize().unwrap();
+    let home = vibe_core::platform::canonicalize(home.path()).unwrap();
     let sources = sources(&home);
     let plugins = start(&sources, "session-1", PluginPorts::default()).await;
     let catalog = plugin_catalog(&plugins);
@@ -87,14 +87,16 @@ async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
     assert_eq!(
         demo["pinnedRoot"],
         json!(
-            home.join("logs/session/plugins/packages/a8")
+            ["logs", "session", "plugins", "packages", "a8"]
+                .iter()
+                .fold(home.clone(), |path, part| path.join(part))
                 .join(digest)
                 .to_string_lossy()
         )
     );
     assert_eq!(
         demo["installedRoot"],
-        json!(home.join("plugins/demo").to_string_lossy())
+        json!(home.join("plugins").join("demo").to_string_lossy())
     );
     assert_eq!(
         demo["components"],
@@ -113,9 +115,13 @@ async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
     assert_eq!(
         info["components"][0]["sourcePath"],
         json!(
-            home.join("logs/session/plugins/packages/a8")
+            ["logs", "session", "plugins", "packages", "a8"]
+                .iter()
+                .fold(home.clone(), |path, part| path.join(part))
                 .join(digest)
-                .join("skills/hello/SKILL.md")
+                .join("skills")
+                .join("hello")
+                .join("SKILL.md")
                 .to_string_lossy()
         )
     );

@@ -132,7 +132,8 @@ impl GitRepository {
             .stdout(&["rev-parse", "--show-toplevel"])
             .await
             .ok_or_else(not_a_repository)?;
-        let working_tree = std::fs::canonicalize(&top).unwrap_or_else(|_| PathBuf::from(top));
+        let working_tree =
+            vibe_core::platform::canonicalize(&top).unwrap_or_else(|_| PathBuf::from(top));
         Ok(Self {
             executable: probe.executable,
             directory: working_tree.clone(),
