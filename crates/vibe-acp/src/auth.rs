@@ -36,22 +36,13 @@ mod sign_in_parity_tests;
 const SIGN_IN_TARGET_MISTRAL: &str = "mistral";
 const SIGN_IN_TARGET_CUSTOM: &str = "custom";
 
-/// The default home the production environment resolves when the process
-/// environment names none, mirroring the CLI's `$VIBE_HOME` then `~/.vibe`.
+/// The home the production environment resolves, from the resolver every
+/// entry point shares ([`vibe_core::platform::vibe_home`]); `main` has already
+/// refused to start where it cannot be placed.
 #[must_use]
 pub fn default_vibe_home() -> PathBuf {
-    std::env::var_os("VIBE_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            std::env::var_os("HOME")
-                .map(PathBuf::from)
-                .map(|home| home.join(".vibe"))
-        })
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".vibe")
-        })
+    let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    vibe_core::platform::vibe_home_or_local(&working_directory)
 }
 
 pub type AuthKeyFuture<'a> = Pin<Box<dyn Future<Output = Result<String, SignInError>> + Send + 'a>>;

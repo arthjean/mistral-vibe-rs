@@ -766,7 +766,7 @@ fn resolved_path(value: &str) -> String {
     let mut existing = absolute.clone();
     let mut rest = Vec::new();
     loop {
-        if let Ok(resolved) = std::fs::canonicalize(&existing) {
+        if let Ok(resolved) = vibe_core::platform::canonicalize(&existing) {
             let mut resolved = resolved;
             for component in rest.iter().rev() {
                 resolved.push(component);
