@@ -66,9 +66,7 @@ struct Divergence {
 const LEDGER: &[Divergence] = &[];
 
 fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
+    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("the workspace root resolves")
 }
 
@@ -154,7 +152,7 @@ struct Normalizer {
 impl Normalizer {
     fn new(root: &Path) -> Self {
         let mut roots = vec![root.display().to_string()];
-        if let Ok(resolved) = root.canonicalize() {
+        if let Ok(resolved) = vibe_core::platform::canonicalize(root) {
             roots.push(resolved.display().to_string());
         }
         roots.sort_by_key(|root| std::cmp::Reverse(root.len()));
@@ -327,10 +325,8 @@ fn observed_sections(
     normalizer: &Normalizer,
 ) -> Value {
     let project = &inputs.project;
-    let cwd = project
-        .cwd
-        .canonicalize()
-        .unwrap_or_else(|_| project.cwd.clone());
+    let cwd =
+        vibe_core::platform::canonicalize(&project.cwd).unwrap_or_else(|_| project.cwd.clone());
     let sections = composed
         .sections
         .iter()
@@ -438,7 +434,7 @@ fn string_list(value: &Value) -> Vec<String> {
 fn replay_compose(scenario: &Value) -> Value {
     let name = scenario["name"].as_str().expect("a name");
     let temporary = tempfile::tempdir().expect("a scenario root");
-    let root = temporary.path().canonicalize().expect("the root resolves");
+    let root = vibe_core::platform::canonicalize(temporary.path()).expect("the root resolves");
     // The trust file records the root as typed; a Windows verbatim root would
     // never match the workspace the port resolves.
     let root = root

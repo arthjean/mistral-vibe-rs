@@ -62,7 +62,7 @@ impl FixtureEnvironment for Command {
 /// binary reports: Windows answers a canonical path with the `\\?\` verbatim
 /// prefix, which only a drive-letter path can drop without changing meaning.
 pub fn canonical(path: &Path) -> PathBuf {
-    let resolved = std::fs::canonicalize(path).expect("the fixture path resolves");
+    let resolved = vibe_core::platform::canonicalize(path).expect("the fixture path resolves");
     let text = resolved.to_string_lossy();
     match text.strip_prefix(r"\\?\") {
         Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),

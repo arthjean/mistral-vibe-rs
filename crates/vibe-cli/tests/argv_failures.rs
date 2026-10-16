@@ -234,5 +234,5 @@ fn launch_in(argv: &[&str], credential: Option<&str>) -> Output {
 }
 
 fn canonical(path: &Path) -> std::path::PathBuf {
-    fs::canonicalize(path).expect("the fixture path resolves")
+    vibe_core::platform::canonicalize(path).expect("the fixture path resolves")
 }

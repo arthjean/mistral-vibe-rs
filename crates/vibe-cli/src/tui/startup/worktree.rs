@@ -7,7 +7,6 @@
 //! directory moved, which prompt names an unnamed worktree, and whether a
 //! human at a terminal agreed to discard their work.
 
-use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -109,7 +108,7 @@ impl LaunchWorkspace {
             Some(path) => path.clone(),
             None => std::env::current_dir().map_err(|_| StartupError::WorkingDirectoryGone)?,
         };
-        let expanded = expand_user_path(&requested);
+        let expanded = vibe_core::platform::expand_home(&requested);
         let base_directory = match canonical_directory(&expanded) {
             Some(directory) => directory,
             None if arguments.workdir.is_some() => {
@@ -237,7 +236,7 @@ fn resolve_additional_directories(
         // The reference reports the argument as it was typed, so the raw
         // spelling is taken before anything expands or joins it.
         let typed = directory.display().to_string();
-        let expanded = expand_user_path(directory);
+        let expanded = vibe_core::platform::expand_home(directory);
         let candidate = if expanded.is_absolute() {
             expanded
         } else {
@@ -271,23 +270,6 @@ fn absolute_path(path: &Path) -> PathBuf {
         }
     }
     resolved
-}
-
-pub(super) fn expand_user_path(path: &Path) -> PathBuf {
-    let Some(text) = path.to_str() else {
-        return path.to_path_buf();
-    };
-    if text == "~" {
-        return std::env::var_os("HOME").map_or_else(|| path.to_path_buf(), PathBuf::from);
-    }
-    for prefix in ["~/", "~\\"] {
-        if let Some(remainder) = text.strip_prefix(prefix)
-            && let Some(home) = std::env::var_os("HOME")
-        {
-            return PathBuf::from(home).join(remainder);
-        }
-    }
-    path.to_path_buf()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -473,7 +455,7 @@ fn confirm(
 /// caller reports the flag it came from and the path the user gave, which is
 /// what the reference prints and all a reader needs to fix the invocation.
 fn canonical_directory(path: &Path) -> Option<PathBuf> {
-    let canonical = fs::canonicalize(path).ok()?;
+    let canonical = vibe_core::platform::canonicalize(path).ok()?;
     canonical.is_dir().then_some(canonical)
 }
 
@@ -481,6 +463,8 @@ fn canonical_directory(path: &Path) -> Option<PathBuf> {
 mod tests {
     use std::io::Cursor;
     use std::process::Command;
+
+    use std::fs;
 
     use super::*;
 
@@ -539,10 +523,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn worktree_is_prepared_at_the_reference_location_and_reused() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -585,9 +565,7 @@ mod tests {
         assert!(workspace.worktree.is_none());
         assert_eq!(
             workspace.effective_directory,
-            root.path()
-                .canonicalize()
-                .expect("the fixture root resolves")
+            vibe_core::platform::canonicalize(root.path()).expect("the fixture root resolves")
         );
         assert!(!arguments.trust, "an empty flag granted trust");
     }
@@ -596,12 +574,12 @@ mod tests {
     /// expanded here before it names a directory.
     #[test]
     fn a_tilde_in_a_home_path_expands() {
-        let Some(home) = std::env::var_os("HOME") else {
+        let Some(home) = vibe_core::platform::user_home() else {
             return;
         };
         assert_eq!(
-            expand_user_path(Path::new("~/.vibe")),
-            PathBuf::from(home).join(".vibe")
+            vibe_core::platform::expand_home(Path::new("~/.vibe")),
+            home.join(".vibe")
         );
     }
 
@@ -630,10 +608,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn conflicting_worktree_path_is_preserved() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -665,10 +639,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn attached_preexisting_branch_can_survive_cleanup() {
         let root = repository();
         git(root.path(), &["branch", "attached"]);
@@ -691,10 +661,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn relative_additional_directory_is_resolved_inside_the_worktree() {
         let root = repository();
         fs::create_dir_all(root.path().join("nested/context")).expect("nested directory");
@@ -721,10 +687,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn dirty_owned_worktree_is_kept_when_cleanup_is_declined() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -751,10 +713,6 @@ mod tests {
     /// without asking. Declining has to be reachable, which means the prompt
     /// has to happen.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn detached_head_commit_is_kept_when_cleanup_is_declined() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -792,10 +750,6 @@ mod tests {
     /// Both narration lines are the reference's, in its order: the requested
     /// name before git runs, the resolved path once it did.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn preparation_narrates_the_name_then_the_path() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -840,10 +794,6 @@ mod tests {
     /// The removal is announced before it is attempted, so a git failure has a
     /// line naming what was being removed when it happened.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn cleanup_names_the_worktree_before_removing_it() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -870,10 +820,6 @@ mod tests {
     /// A worktree git can no longer describe cannot be the subject of a
     /// truthful question, so cleanup says so and keeps whatever is left.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn an_uninspectable_worktree_is_named_and_kept() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -903,10 +849,6 @@ mod tests {
     /// A removal git refuses is reported and ends the cleanup there: no
     /// confirmation line follows it and whatever git left on disk stays.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn a_removal_git_refuses_is_reported_and_stops_the_cleanup() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -950,10 +892,6 @@ mod tests {
     /// The reference asks through `input()`, which raises at end of file and is
     /// caught as a refusal, so a closed stdin keeps the work.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn end_of_input_declines_and_keeps_the_worktree() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -1016,10 +954,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn clean_owned_worktree_is_removed_once() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -1042,10 +976,6 @@ mod tests {
     /// A bare flag names the worktree itself: with no prompt to name it after,
     /// a random slug on a `vibe/` branch, narrated without a name.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn a_bare_flag_prepares_an_unnamed_worktree_on_a_vibe_branch() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -1077,10 +1007,6 @@ mod tests {
     /// The launch stands in its worktree as `cli-<pid>` until it lets go, which
     /// is what keeps an app server sweeping the repository off it.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn the_launch_holds_its_worktree_until_released() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
@@ -1106,10 +1032,6 @@ mod tests {
     /// A session elsewhere standing in the worktree keeps it: removing it would
     /// leave that session in a deleted directory.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-    )]
     fn cleanup_keeps_a_worktree_another_session_holds() {
         let root = repository();
         let mut arguments = test_arguments(root.path());

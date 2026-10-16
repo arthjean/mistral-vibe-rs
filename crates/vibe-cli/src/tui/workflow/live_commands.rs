@@ -864,8 +864,7 @@ impl CommandBackend for LiveBackend<'_> {
             self.state.push_diagnostic(SETUP_REQUIRED);
             return;
         };
-        let home = crate::tui::render::user_home_directory()
-            .map(|home| home.to_string_lossy().into_owned());
+        let home = vibe_core::platform::user_home().map(|home| home.to_string_lossy().into_owned());
         let mut panel = PluginsPanel::new(catalog, home);
         self.state.overlay = Some(panel.overlay());
         runtime.plugins_panel = Some(panel);

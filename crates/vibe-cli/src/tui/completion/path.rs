@@ -142,7 +142,7 @@ impl WorkspaceIndex {
         if partial.is_empty() {
             return Ok(list_current_directory(workspace));
         }
-        let root = fs::canonicalize(workspace)
+        let root = vibe_core::platform::canonicalize(workspace)
             .map_err(|error| InputError::Workspace(error.to_string()))?;
         if let Some(matches) = collect_filesystem_matches(&root, &partial) {
             return Ok(matches);
@@ -335,7 +335,7 @@ impl WorkspaceIndex {
         workspace: &Path,
         raw_query: &str,
     ) -> Result<Vec<CompletionCandidate>, InputError> {
-        let root = fs::canonicalize(workspace)
+        let root = vibe_core::platform::canonicalize(workspace)
             .map_err(|error| InputError::Workspace(error.to_string()))?;
         self.ensure(&root);
         Ok(rank_indexed_paths(self.entries.values(), raw_query, true))
@@ -608,7 +608,7 @@ fn lenient_resolve(base: &Path, relative: &str) -> PathBuf {
             }
             Component::Normal(name) => {
                 resolved.push(name);
-                if let Ok(canonical) = fs::canonicalize(&resolved) {
+                if let Ok(canonical) = vibe_core::platform::canonicalize(&resolved) {
                     resolved = canonical;
                 }
             }
@@ -1304,7 +1304,7 @@ mod tests {
         assert_eq!(rebuilds, 2, "each root was walked once");
         assert_eq!(
             root,
-            Some(fs::canonicalize(second.path()).expect("resolved root"))
+            Some(vibe_core::platform::canonicalize(second.path()).expect("resolved root"))
         );
     }
 
@@ -1380,7 +1380,7 @@ mod tests {
         index
             .candidates(root, "")
             .expect("the fixture root is walkable");
-        let root = fs::canonicalize(root).expect("resolved root");
+        let root = vibe_core::platform::canonicalize(root).expect("resolved root");
 
         // A created file is added; a created directory brings its descendants.
         fs::write(root.join("src/added.rs"), "fixture").expect("added file");
@@ -1433,7 +1433,7 @@ mod tests {
         index
             .candidates(root, "")
             .expect("the fixture root is walkable");
-        let root = fs::canonicalize(root).expect("resolved root");
+        let root = vibe_core::platform::canonicalize(root).expect("resolved root");
 
         let mut changes = Vec::new();
         for entry in 0..=MASS_CHANGE_THRESHOLD {

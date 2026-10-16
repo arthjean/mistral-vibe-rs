@@ -471,7 +471,7 @@ mod tests {
     #[test]
     fn a_started_watch_is_not_restarted_for_the_same_root() {
         let workspace = tempfile::tempdir().expect("temporary workspace");
-        let root = std::fs::canonicalize(workspace.path()).expect("resolved root");
+        let root = vibe_core::platform::canonicalize(workspace.path()).expect("resolved root");
         let mut controller = WatchController::default();
 
         controller.start(&root).expect("the backend is available");
@@ -495,8 +495,8 @@ mod tests {
     fn a_second_root_replaces_the_first_and_stop_returns_within_the_join_bound() {
         let first = tempfile::tempdir().expect("first workspace");
         let second = tempfile::tempdir().expect("second workspace");
-        let first = std::fs::canonicalize(first.path()).expect("resolved root");
-        let second = std::fs::canonicalize(second.path()).expect("resolved root");
+        let first = vibe_core::platform::canonicalize(first.path()).expect("resolved root");
+        let second = vibe_core::platform::canonicalize(second.path()).expect("resolved root");
         let mut controller = WatchController::default();
 
         controller.start(&first).expect("the backend is available");
@@ -531,7 +531,7 @@ mod tests {
     #[test]
     fn a_written_file_reaches_a_delivered_batch() {
         let workspace = tempfile::tempdir().expect("temporary workspace");
-        let root = std::fs::canonicalize(workspace.path()).expect("resolved root");
+        let root = vibe_core::platform::canonicalize(workspace.path()).expect("resolved root");
         let mut controller = WatchController::default();
         controller.start(&root).expect("the backend is available");
 

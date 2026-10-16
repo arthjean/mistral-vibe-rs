@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use vibe_app_server::startup::StartupHost;
@@ -73,10 +72,9 @@ pub fn resolve_location_safety(warning: Option<&str>) -> Result<bool, StartupErr
 
 #[must_use]
 pub fn dangerous_directory_warning(path: &Path) -> Option<String> {
-    let path = fs::canonicalize(path).ok()?;
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .and_then(|path| fs::canonicalize(path).ok());
+    let path = vibe_core::platform::canonicalize(path).ok()?;
+    let home = vibe_core::platform::user_home()
+        .and_then(|path| vibe_core::platform::canonicalize(path).ok());
     let mut dangerous = Vec::new();
     if let Some(home) = home {
         dangerous.extend([
@@ -110,13 +108,16 @@ pub fn dangerous_directory_warning(path: &Path) -> Option<String> {
 mod tests {
     use clap::Parser;
 
+    use std::fs;
+
     use super::*;
 
     #[test]
     fn setup_mode_no_longer_suppresses_trust_resolution() {
         let home = tempfile::tempdir().expect("temporary home");
         let workspace = tempfile::tempdir().expect("temporary workspace");
-        let canonical = fs::canonicalize(workspace.path()).expect("canonical workspace");
+        let canonical =
+            vibe_core::platform::canonicalize(workspace.path()).expect("canonical workspace");
         // The settings record the form a user types, never a Windows verbatim
         // path.
         let canonical = canonical.to_string_lossy();
@@ -150,8 +151,8 @@ mod tests {
 
     #[test]
     fn dangerous_home_directory_has_a_text_warning() {
-        let home = std::env::var_os("HOME").expect("test home");
-        let warning = dangerous_directory_warning(Path::new(&home)).expect("home warning");
+        let home = vibe_core::platform::user_home().expect("test home");
+        let warning = dangerous_directory_warning(&home).expect("home warning");
         assert!(warning.contains("WARNING"));
         assert!(warning.contains("home directory"));
     }
