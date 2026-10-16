@@ -242,7 +242,12 @@ def run_scenario(scenario: dict[str, Any], command: list[str], dialect: str, qui
     connections: dict[int, Connection] = {}
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", TURN_BACKEND)))
-        config = session.substitute(scenario.get("config", ""))
+        config = scenario.get("config", "")
+        if os.name == "nt":
+            # A TOML basic string reads a Windows separator as an escape.
+            for token, path in (("$ROOT", world.root), ("$WS", world.workspace)):
+                config = config.replace(token, json.dumps(str(path))[1:-1])
+        config = session.substitute(config)
         (world.vibe_home / "config.toml").write_text(
             rewind.base_config(backend, config), encoding="utf-8", newline=""
         )
@@ -361,10 +366,12 @@ def seed(world: acp.World, spec: dict[str, Any]) -> None:
     """Writes one session the way the reference lays it out on disk."""
     directory = save_dir(world, spec.get("saveDir")) / spec["directory"]
     directory.mkdir(parents=True, exist_ok=True)
+    # The placeholders sit inside JSON strings, so a path lands JSON-escaped
+    # (a Windows separator would otherwise read as an escape sequence).
     metadata = json.loads(
         json.dumps(spec["meta"])
-        .replace("$WS", str(world.workspace))
-        .replace("$ROOT", str(world.root))
+        .replace("$WS", json.dumps(str(world.workspace))[1:-1])
+        .replace("$ROOT", json.dumps(str(world.root))[1:-1])
     )
     (directory / "meta.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8", newline="")
     (directory / "messages.jsonl").write_text(

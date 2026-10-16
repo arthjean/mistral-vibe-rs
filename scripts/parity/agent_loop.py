@@ -531,6 +531,11 @@ def run_steps(
                 if not target.is_absolute():
                     target = world.workspace / target
                 target.parent.mkdir(parents=True, exist_ok=True)
+                if os.name == "nt" and target.suffix in (".json", ".jsonl"):
+                    # The placeholders sit inside JSON strings, where a Windows
+                    # separator would read as an escape sequence.
+                    for token, path in (("$WS", world.workspace), ("$ROOT", world.root)):
+                        text = text.replace(token, json.dumps(str(path))[1:-1])
                 target.write_text(session.substitute(text), encoding="utf-8", newline="")
             continue
         if "persisted" in step:
@@ -634,7 +639,7 @@ def strings(value: Any) -> list[str]:
 
 
 #: A plan file's name: when it was created and three random words.
-PLAN_FILE = re.compile(r"plans/\d+-[a-z]+(?:-[a-z]+)*\.md")
+PLAN_FILE = re.compile(r"plans[/\\]+\d+-[a-z]+(?:-[a-z]+)*\.md")
 #: A plan file's absolute path, as a review's footer names it.
 PLAN_PATH = re.compile(r"/\S*?plans/\d+-[a-z]+(?:-[a-z]+)*\.md")
 #: A child's log directory beneath its parent's: its agent, when it started

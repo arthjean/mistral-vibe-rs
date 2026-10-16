@@ -51,6 +51,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
+import host_env  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 import rewind  # noqa: E402
 
@@ -124,7 +125,10 @@ class ReviewSession(rewind.Session):
             if kind == "N":
                 return learned[1]
             return copy.deepcopy(learned)
-        return super().substitute(value)
+        substituted = super().substitute(value)
+        if isinstance(value, str):
+            return host_env.native_path(value, substituted)
+        return substituted
 
 
 # --------------------------------------------------------------------------

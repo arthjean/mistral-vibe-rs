@@ -757,11 +757,13 @@ def normalize_server(run: dict[str, Any], reference_root: str | None) -> list[An
             if pinned:
                 builtin_digests.add(pinned["contentSha256"])
     text = json.dumps(run["steps"])
+    for placeholder, path in sorted(run["paths"].items(), key=lambda item: -len(item[1])):
+        for spelling in host_env.path_spellings(path):
+            text = text.replace(spelling, placeholder)
+    text = host_env.posix_tails(text, list(run["paths"]))
     for digest_value in builtin_digests:
         text = text.replace(digest_value, "<builtin-digest>")
         text = text.replace(f"/{digest_value[:2]}/<builtin-digest>", "/<builtin-shard>/<builtin-digest>")
-    for placeholder, path in sorted(run["paths"].items(), key=lambda item: -len(item[1])):
-        text = text.replace(path, placeholder)
     if reference_root:
         text = text.replace(f"{reference_root}/vibe/plugins/builtins/vibe", "<builtin-root>")
     text = text.replace("<vibe-home>/builtin-plugins/vibe", "<builtin-root>")
