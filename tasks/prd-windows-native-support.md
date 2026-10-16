@@ -7,6 +7,7 @@
 |---------|------|--------|---------|
 | 1.0 | 2026-10-15 | Arthur Jean | Initial draft from the verified Windows audit of 2026-10-14 |
 | 1.1 | 2026-10-15 | Arthur Jean | US-006 measured the reference on Windows (`docs/parity.md`, "Windows observations"): FR-01, US-008, US-013, US-015, US-021 and the Open Questions amended where the measurement contradicts this draft |
+| 1.2 | 2026-10-16 | Arthur Jean | EP-001 review: US-017 names the ConPTY cursor-position stall and the teardown tags it owns; US-025 added to EP-002 for the keyring divergence US-006 measured |
 
 ## Problem Statement
 
@@ -27,7 +28,7 @@ This PRD makes Mistral Vibe RS behave on native Windows 10 and 11 the way the Py
 
 The key decisions: (a) the Windows CI job is required from the start, and every test that fails because of a product defect owned by a story here carries `#[cfg_attr(windows, ignore = "windows: <cause> (US-NNN)")]`, so the 2403 tests that pass today are protected immediately and the backlog is mechanically countable; (b) platform knowledge is consolidated in `vibe-core` (layer 1), where the correct home resolver, the verbatim strip, and the Windows shell ladder already live, and the adapters stop reimplementing it; (c) the permission matcher adopts Windows path semantics (both separators, case-insensitive, verbatim prefix removed) on Windows only, so Linux parity corpora replay unchanged; (d) no command interpreter ever parses a URL or a user-controlled string for launching; (e) a validation spike stands up the pinned reference on Windows before the stories whose target behavior depends on it.
 
-Delivery is phased. **Release 1** holds the 17 P0 stories (US-001 to US-015, US-018, US-019) and ends when a Windows user can sign in safely, keep state in `%USERPROFILE%\.vibe`, rely on `.env` protection, run MCP servers through `npx`, run harness processes, create worktrees, type AltGr characters, and paste multi-line text. **Release 2** holds the 7 P1 and P2 stories (US-016, US-017, US-020 to US-024).
+Delivery is phased. **Release 1** holds the 17 P0 stories (US-001 to US-015, US-018, US-019) and ends when a Windows user can sign in safely, keep state in `%USERPROFILE%\.vibe`, rely on `.env` protection, run MCP servers through `npx`, run harness processes, create worktrees, type AltGr characters, and paste multi-line text. **Release 2** holds the 8 P1 and P2 stories (US-016, US-017, US-020 to US-025).
 
 ## Goals
 
@@ -225,7 +226,7 @@ Make the workspace suite run to completion on Windows and make a red Windows res
 
 Give every crate one vibe home and one non-verbatim path form, so that state, tool results, editors, and git all see the same paths a Windows user types.
 
-**Definition of Done:** `vibe`, `vibe-acp`, and the app-server resolve the same vibe home on Windows; no tool result, wire payload, ACP location, or git argument contains `\\?\` or `//?/`; every worktree test passes on Windows.
+**Definition of Done:** `vibe`, `vibe-acp`, and the app-server resolve the same vibe home on Windows; no tool result, wire payload, ACP location, or git argument contains `\\?\` or `//?/`; every worktree test passes on Windows; the port and the reference read each other's stored credentials on Windows.
 
 #### US-008: Resolve one vibe home on every entry point
 **Description:** As a Windows terminal developer, I want `vibe`, `vibe-acp`, and the app-server to keep their state in `%USERPROFILE%\.vibe` so that my config, trust decisions, and history follow me across projects.
@@ -270,6 +271,21 @@ Give every crate one vibe home and one non-verbatim path form, so that state, to
 - [ ] Given skill diagnostics and rewind checkpoints in the app-server, and the harness rewind file list (`crates/vibe-harness/src/rewind/rewind_tests.rs:58`), when published, then their paths are non-verbatim.
 - [ ] Given the remaining production `canonicalize(` calls, when reviewed, then each either goes through the shared helper or carries a comment stating why the verbatim form is required.
 - [ ] Given a worktree name that git rejects on Windows, when creation fails, then the error names the path and neither the worktree directory nor the branch is left behind.
+
+#### US-025: Share stored credentials with the reference on Windows
+**Description:** As a Windows terminal developer who has used the Python reference, I want the port to read and write my API key and MCP OAuth tokens where the reference keeps them so that switching between the two never asks me to sign in again.
+
+**Priority:** P1
+**Size:** S (2 pts)
+**Dependencies:** None
+
+**Acceptance Criteria:**
+- [ ] Given an API key the reference stored on Windows (generic credential, target `ai.mistral.vibe`, user name `MISTRAL_API_KEY`, as US-006 measured), when the port resolves credentials without `MISTRAL_API_KEY` in the environment, then it finds that key.
+- [ ] Given the port stores an API key on Windows, when the reference resolves credentials, then it finds that key, and the port writes no new entry under its former target `MISTRAL_API_KEY.ai.mistral.vibe`.
+- [ ] Given another account already holds the plain `ai.mistral.vibe` target (an MCP OAuth token, for example), when either side stores a second secret, then both sides read it under the compound target `<account>@ai.mistral.vibe` the reference uses.
+- [ ] Given a key a previous port build stored under `MISTRAL_API_KEY.ai.mistral.vibe`, when the port resolves credentials, then it still finds the key and moves it to the reference's target, as `PRIOR_BUILD_KEYRING_SERVICE` already does for an older service name (`crates/vibe-core/src/auth/keyring.rs:22`).
+- [ ] Given `mcp-oauth:{alias}:tokens` and `mcp-oauth:{alias}:client_info` (`crates/vibe-core/src/auth/mcp_oauth.rs:5`), when stored on Windows, then they follow the same target rule as the API key.
+- [ ] Given Linux or macOS, when credentials are stored or read, then the keyring entries are unchanged.
 
 ---
 
@@ -383,6 +399,8 @@ Make every process the agent starts run under a resolvable shell with intact arg
 - [ ] Given a PTY session whose child exits after printing 1 MiB, when the session completes, then the reader reaches EOF within 2 s of the exit, `output_dropped` is false, and the full output is returned in 50 of 50 runs.
 - [ ] Given a PTY session that started a background grandchild, when the session is killed or times out, then no descendant process survives 2 s later (`crates/vibe-core/src/pty.rs:385` and `crates/vibe-harness/src/processes.rs:1039`).
 - [ ] Given the pseudoconsole cannot be closed without error, when the session ends, then the session reports an error and the child tree is still killed.
+- [ ] Given a pseudoconsole created with `PSEUDOCONSOLE_INHERIT_CURSOR` (the portable-pty 0.9 default), when it sends its startup cursor-position request (`ESC[6n`), then the session answers it, the child's first output arrives without waiting on the answer, and the 13 tests tagged "ConPTY stalls on an unanswered cursor-position request (US-017)" in `crates/vibe-core/src/tools/shell/tests.rs` pass on windows-2022 with their tags removed.
+- [ ] Given the 9 tests tagged "a ConPTY session outlives its teardown on Windows Server 2022 (US-017)" in the same file, when this story lands, then they pass on windows-2022 with their tags removed.
 - [ ] Given `docs/parity.md` "The Windows terminal ladder is one rung" (row at line 367), when this story lands, then the ledger row still holds.
 
 ---
@@ -567,7 +585,7 @@ What this version explicitly does NOT include:
 - MSI, winget, or Scoop packaging and Authenticode code signing; `install.ps1` stays the distribution channel for v1.
 - Capturing Windows-specific parity corpora: v1 records targeted normalized observations (US-006) and replays the Linux corpora on Windows.
 - Image paste from the Windows clipboard (macOS-only today, `crates/vibe-cli/src/tui/clipboard.rs:96`) and voice capture tuning on WASAPI; revisit after Release 2 if reported.
-- Keyring interoperability changes, unless US-006 measures a divergence.
+- Keyring changes beyond the target interoperability US-025 owns (US-006 measured the divergence).
 
 ## Files NOT to Modify
 
@@ -608,6 +626,6 @@ Frame as questions for engineering input, not mandates:
 - Should the Windows job run on every PR or only on `main` and release branches, given the 2x minute multiplier if the repository is private? Owner: maintainer, before US-007 lands.
 - ~~Should the Unified Harness shell tool on Windows stay PowerShell while `process.*` follows the Git Bash first ladder?~~ Answered by US-006: the reference uses one ladder for both.
 - Should users with state stranded in `<cwd>\.vibe` get a one-time notice, given that the directory doubles as project config? Owner: maintainer, before US-008 ships.
-- Does the port's Windows keyring entry interoperate with the reference's? US-006 measured that it does not: the reference stores the key under target `ai.mistral.vibe` (user `MISTRAL_API_KEY`), the port under `MISTRAL_API_KEY.ai.mistral.vibe`. Owner: maintainer, to open the follow-up story.
+- ~~Does the port's Windows keyring entry interoperate with the reference's?~~ Answered by US-006: it does not (the reference stores the key under target `ai.mistral.vibe`, user `MISTRAL_API_KEY`; the port under `MISTRAL_API_KEY.ai.mistral.vibe`). US-025 owns the fix.
 - US-013 (browser launcher failure) and US-021 (default editor) each need a decision between matching the reference US-006 measured and keeping this PRD's behavior with a ledger row. Owner: maintainer, before those stories start.
 [/PRD]
