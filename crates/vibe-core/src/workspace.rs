@@ -1875,7 +1875,11 @@ needle: a colon inside the text
         assert_eq!(
             found.projected_result["parsed_matches"],
             json!([{
-                "path": root.path().join("notes.md").display().to_string(),
+                "path": crate::platform::canonicalize(root.path())
+                    .expect("the root resolves")
+                    .join("notes.md")
+                    .display()
+                    .to_string(),
                 "line": 2,
             }]),
         );

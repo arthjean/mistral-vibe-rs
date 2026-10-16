@@ -3612,7 +3612,7 @@ async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
                     &tool,
                     ToolInvocation {
                         call_id: format!("{tool}-1"),
-                        arguments: json!({"command": "trap 'exit 0' TERM; sleep 30"}),
+                        arguments: json!({"command": "trap 'exit 0' TERM; echo armed; sleep 30"}),
                     },
                 )
                 .await
@@ -3645,8 +3645,28 @@ async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     };
     // The trap has to be installed before the signal, otherwise the shell's
-    // default disposition answers it and the exit code is not zero.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // default disposition answers it and the exit code is not zero. The
+    // command prints once the trap is set, so wait for that rather than for
+    // a fixed delay a loaded runner can outlast.
+    loop {
+        let polled = harness
+            .call(
+                "bash_output",
+                json!({"session_id": session, "wait_seconds": 1}),
+            )
+            .await
+            .expect("the session output answers");
+        if polled.typed_result["output"]
+            .as_str()
+            .is_some_and(|output| output.contains("armed"))
+        {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the trap was not armed within 30s"
+        );
+    }
     harness
         .call(
             "bash_sessions",

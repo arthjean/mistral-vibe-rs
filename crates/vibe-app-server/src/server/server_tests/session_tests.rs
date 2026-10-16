@@ -547,7 +547,8 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     // The read answers the entry it was asked about and nothing else, and
     // the paths come from the session's own checkpoint log, resolved as the
     // reference reports them.
-    let main = working_directory
+    let main = vibe_core::platform::canonicalize(&working_directory)
+        .expect("the working directory resolves")
         .join("main.txt")
         .to_string_lossy()
         .into_owned();

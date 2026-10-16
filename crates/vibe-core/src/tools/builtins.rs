@@ -844,7 +844,12 @@ mod tests {
         assert!(second.model_text.contains("already loaded"), "{second:?}");
         assert_eq!(
             second.typed_result["skill_dir"],
-            json!(skill_directory.to_string_lossy().replace('\\', "/"))
+            json!(
+                crate::platform::canonicalize(&skill_directory)
+                    .expect("the skill directory resolves")
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            )
         );
     }
 
