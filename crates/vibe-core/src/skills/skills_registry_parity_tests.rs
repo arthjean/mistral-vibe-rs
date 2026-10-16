@@ -221,9 +221,7 @@ fn source_named(source: &str) -> SkillSource {
 /// as the operator's home and `home/.vibe` as the Vibe home, with the tree
 /// written under them.
 fn scenario_roots(scratch: &Path, tree: &Tree) -> BTreeMap<String, PathBuf> {
-    let base = scratch
-        .canonicalize()
-        .expect("the scratch directory resolves");
+    let base = crate::platform::canonicalize(scratch).expect("the scratch directory resolves");
     let mut roots = BTreeMap::new();
     for label in ["home", "project", "configured", "configured2"] {
         let root = base.join(label);
@@ -1010,10 +1008,8 @@ fn union_records(vibe_home: &Path) -> Value {
 
 fn ledger_answer(case: &str) -> Value {
     let scratch = tempfile::tempdir().expect("a scratch directory is available");
-    let base = scratch
-        .path()
-        .canonicalize()
-        .expect("the scratch directory resolves");
+    let base =
+        crate::platform::canonicalize(scratch.path()).expect("the scratch directory resolves");
     let vibe_home = base.join("home").join(".vibe");
     let first = base.join("ledger-roots").join("first");
     let second = base.join("ledger-roots").join("second");

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, RwLock as StdRwLock};
 
@@ -1546,8 +1546,8 @@ fn best_rule<'a>(
 }
 
 pub(crate) fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyError> {
-    if path.exists() {
-        return std::fs::canonicalize(path).map_err(|source| PolicyError::PathResolution {
+    if exists_physically(path) {
+        return crate::platform::canonicalize(path).map_err(|source| PolicyError::PathResolution {
             path: path.to_path_buf(),
             source,
         });
@@ -1565,12 +1565,13 @@ pub(crate) fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyErro
             .file_name()
             .ok_or_else(|| PolicyError::Denied("path has no file name".to_owned()))?;
         remainder.push(file_name.to_os_string());
-        if parent.exists() {
-            let canonical_parent =
-                std::fs::canonicalize(parent).map_err(|source| PolicyError::PathResolution {
+        if exists_physically(parent) {
+            let canonical_parent = crate::platform::canonicalize(parent).map_err(|source| {
+                PolicyError::PathResolution {
                     path: parent.to_path_buf(),
                     source,
-                })?;
+                }
+            })?;
             return Ok(remainder
                 .iter()
                 .rev()
@@ -1580,6 +1581,28 @@ pub(crate) fn canonicalize_for_policy(path: &Path) -> Result<PathBuf, PolicyErro
         }
         cursor = parent;
     }
+}
+
+/// Whether `path` exists when every `..` is taken against the directory it
+/// follows, as a POSIX kernel takes it.
+///
+/// Win32 folds `..` lexically before it looks at the disk, so on Windows
+/// `missing\..\..\escape.txt` exists whenever the grandparent does, and a
+/// traversal hidden behind a directory that was never created would resolve
+/// instead of being refused. Each `..` therefore requires the directory before
+/// it to exist.
+fn exists_physically(path: &Path) -> bool {
+    if !cfg!(windows) {
+        return path.exists();
+    }
+    let mut prefix = PathBuf::new();
+    for component in path.components() {
+        if component == Component::ParentDir && !prefix.is_dir() {
+            return false;
+        }
+        prefix.push(component);
+    }
+    path.exists()
 }
 
 #[cfg(test)]

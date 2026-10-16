@@ -632,7 +632,7 @@ impl OperandWorkspace {
 }
 
 fn canonical(path: &Path) -> String {
-    path.canonicalize()
+    crate::platform::canonicalize(path)
         .unwrap_or_else(|_| path.to_path_buf())
         .to_string_lossy()
         .into_owned()
@@ -1228,10 +1228,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         eprintln!("skipping the live shell-policy probe: no reference interpreter");
         return;
     };
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root");
+    let workspace =
+        crate::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .expect("workspace root");
     let temporary = tempfile::tempdir().expect("temporary root");
     let captured = temporary.path().join("policy.json");
     let output = Command::new(&interpreter)

@@ -216,7 +216,7 @@ pub fn agent_search_paths(
         if !candidate.is_dir() {
             continue;
         }
-        let resolved = std::fs::canonicalize(&candidate).unwrap_or(candidate);
+        let resolved = crate::platform::canonicalize(&candidate).unwrap_or(candidate);
         if !unique.iter().any(|(_, seen)| *seen == resolved) {
             unique.push((source, resolved));
         }
@@ -553,7 +553,7 @@ fn parse_skill(
     // file name, so a `SKILL.md` that is itself a symlink still names the
     // directory it was configured in.
     let resolved = match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) => fs::canonicalize(parent)
+        (Some(parent), Some(name)) => crate::platform::canonicalize(parent)
             .unwrap_or_else(|_| parent.to_path_buf())
             .join(name),
         _ => path.to_path_buf(),

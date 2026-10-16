@@ -349,22 +349,11 @@ impl ModelAvailability {
     }
 }
 
-/// `$VIBE_HOME`, else `~/.vibe`. Reference `get_vibe_home`; the user's home
-/// is read per platform, as `Path.home()` reads it.
+/// `$VIBE_HOME`, else `~/.vibe`. Reference `get_vibe_home`, resolved through
+/// the one resolver every entry point uses.
 fn ambient_vibe_home() -> PathBuf {
-    let home = || crate::config::user_home_directory().unwrap_or_default();
-    match std::env::var("VIBE_HOME")
-        .ok()
-        .filter(|value| !value.is_empty())
-    {
-        Some(value) => match value.strip_prefix('~') {
-            Some(rest) if rest.is_empty() || rest.starts_with('/') => {
-                home().join(rest.trim_start_matches('/'))
-            }
-            _ => PathBuf::from(value),
-        },
-        None => home().join(".vibe"),
-    }
+    let working_directory = std::env::current_dir().unwrap_or_default();
+    crate::platform::vibe_home_or_local(&working_directory)
 }
 
 /// The key a provider's credential resolves to, or the empty string.

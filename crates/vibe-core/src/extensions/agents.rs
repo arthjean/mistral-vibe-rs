@@ -347,14 +347,17 @@ impl AgentRegistry {
             .clone()
             .ok_or_else(|| ExtensionError::AgentNotUserOwned(name.to_owned()))?;
         let canonical_parent =
-            fs::canonicalize(&self.user_directory).map_err(|source| ExtensionError::Io {
-                path: self.user_directory.clone(),
+            crate::platform::canonicalize(&self.user_directory).map_err(|source| {
+                ExtensionError::Io {
+                    path: self.user_directory.clone(),
+                    source,
+                }
+            })?;
+        let canonical =
+            crate::platform::canonicalize(&path).map_err(|source| ExtensionError::Io {
+                path: path.clone(),
                 source,
             })?;
-        let canonical = fs::canonicalize(&path).map_err(|source| ExtensionError::Io {
-            path: path.clone(),
-            source,
-        })?;
         if !canonical.starts_with(&canonical_parent) {
             return Err(ExtensionError::AgentNotUserOwned(name.to_owned()));
         }

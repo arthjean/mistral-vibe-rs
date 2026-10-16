@@ -443,7 +443,7 @@ pub(super) fn resolve_session_shell(
 /// separator must name an executable file, `~` expanded; a bare name is looked
 /// up on `PATH` the way `shutil.which` looks it up.
 pub(super) fn resolve_posix_executable(candidate: &str) -> Option<PathBuf> {
-    let expanded = expand_home(candidate);
+    let expanded = crate::platform::expand_home(Path::new(candidate));
     if candidate.contains('/') {
         return is_executable_file(&expanded).then_some(expanded);
     }
@@ -457,7 +457,7 @@ pub(super) fn resolve_posix_executable(candidate: &str) -> Option<PathBuf> {
 /// path (either separator or a drive colon) must name a file; a bare name is
 /// looked up on `PATH`, trying the `PATHEXT` suffixes a Windows `which` tries.
 fn resolve_windows_executable(candidate: &str) -> Option<PathBuf> {
-    let expanded = expand_home(candidate);
+    let expanded = crate::platform::expand_home(Path::new(candidate));
     if candidate.contains(['/', '\\', ':']) {
         return expanded.is_file().then_some(expanded);
     }
@@ -483,23 +483,6 @@ fn resolve_windows_executable(candidate: &str) -> Option<PathBuf> {
             .map(|suffix| directory.join(format!("{candidate}{suffix}")))
             .find(|found| found.is_file())
     })
-}
-
-/// `Path.expanduser`: a leading `~` names the home directory.
-fn expand_home(candidate: &str) -> PathBuf {
-    let home = || std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
-    if candidate == "~" {
-        if let Some(home) = home() {
-            return PathBuf::from(home);
-        }
-    } else if let Some(rest) = candidate
-        .strip_prefix("~/")
-        .or_else(|| candidate.strip_prefix("~\\"))
-        && let Some(home) = home()
-    {
-        return PathBuf::from(home).join(rest);
-    }
-    PathBuf::from(candidate)
 }
 
 fn is_executable_file(path: &Path) -> bool {

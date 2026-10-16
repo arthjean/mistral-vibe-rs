@@ -438,9 +438,7 @@ fn common_git_directory(checkout: &Path) -> PathBuf {
     } else {
         checkout.join(reported)
     };
-    resolved
-        .canonicalize()
-        .expect("the common git directory resolves")
+    crate::platform::canonicalize(&resolved).expect("the common git directory resolves")
 }
 
 /// One case's own filesystem, resolved so every recorded path is relative to a
@@ -448,7 +446,7 @@ fn common_git_directory(checkout: &Path) -> PathBuf {
 fn case_root(scratch: &Path, index: usize) -> PathBuf {
     let root = scratch.join(format!("case-{index}"));
     fs::create_dir_all(&root).expect("the case root is writable");
-    root.canonicalize().expect("the case root resolves")
+    crate::platform::canonicalize(&root).expect("the case root resolves")
 }
 
 /// Materializes one scripted case under `root`, mirroring `build_setup` in the
@@ -1532,10 +1530,6 @@ fn keeps_literal(text: &str, authored: &BTreeSet<String>) -> bool {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the managed worktree root is resolved with the verbatim prefix (US-010)"
-)]
 fn the_projection_agrees_with_the_capture_script() {
     // The two sides must digest identically, or every described string would
     // read as a divergence. Anchored on a value the Python side computes with
@@ -1563,7 +1557,12 @@ fn the_projection_agrees_with_the_capture_script() {
             Path::new("/synthetic/repo/.git")
         )
         .expect("the synthetic managed root stays under its vibe home"),
-        home.join("worktrees").join("repo-48615fc593d4")
+        // Resolved as `Path.resolve()` resolves it: on Windows a rooted path
+        // with no drive lands on the current drive.
+        std::path::absolute(home)
+            .expect("the synthetic home is absolute once anchored")
+            .join("worktrees")
+            .join("repo-48615fc593d4")
     );
 
     let authored = BTreeSet::from(["a b".to_owned()]);

@@ -116,12 +116,6 @@ pub const AUTO_WORKTREE_BRANCH_PREFIX: &str = "vibe/";
 /// (`vibe/core/git/worktree/repository.py:34`).
 const MAX_AUTO_WORKTREE_ATTEMPTS: usize = 100;
 
-/// What Windows canonicalization prefixes an absolute path with.
-const VERBATIM_PREFIX: &str = r"\\?\";
-
-/// The `\\?\UNC\` form, which names a network share rather than a drive.
-const VERBATIM_UNC_PREFIX: &str = r"\\?\UNC\";
-
 /// One character Python calls non-printable: anything in the Unicode `Other`
 /// or `Separator` categories, minus the ASCII space.
 ///
@@ -1096,27 +1090,11 @@ fn managed_worktree_root_in(
     }
 }
 
-/// The path string the digest is taken over, without what Windows
-/// canonicalization prefixes it with.
-///
-/// The reference hashes `Path.resolve()`, which never carries the verbatim
-/// prefix; `fs::canonicalize` on Windows always does. On every other platform
-/// this is the identity.
-pub(crate) fn strip_verbatim_prefix(value: &str) -> String {
-    if let Some(remainder) = value.strip_prefix(VERBATIM_UNC_PREFIX) {
-        format!(r"\\{remainder}")
-    } else if let Some(remainder) = value.strip_prefix(VERBATIM_PREFIX) {
-        remainder.to_owned()
-    } else {
-        value.to_owned()
-    }
-}
-
 /// The reference's non-strict `resolve` over a path that may not exist yet:
 /// the deepest existing ancestor is canonicalized and the remainder appended,
 /// so two spellings of one location compare equal.
 pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = fs::canonicalize(path) {
+    if let Ok(resolved) = crate::platform::canonicalize(path) {
         return resolved;
     }
     // The longest prefix that exists is resolved, and the rest is applied
@@ -1125,7 +1103,7 @@ pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
     let components = path.components().collect::<Vec<_>>();
     for split in (1..components.len()).rev() {
         let prefix = components[..split].iter().collect::<PathBuf>();
-        let Ok(mut resolved) = fs::canonicalize(&prefix) else {
+        let Ok(mut resolved) = crate::platform::canonicalize(&prefix) else {
             continue;
         };
         for component in &components[split..] {
@@ -1155,7 +1133,7 @@ pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
 fn target_cwd(root: &Path, relative_base: &Path, name: &str) -> Result<PathBuf, WorktreeError> {
     let root = resolve_lenient(root);
     let path = root.join(relative_base);
-    let resolved = fs::canonicalize(&path).map_err(|_| {
+    let resolved = crate::platform::canonicalize(&path).map_err(|_| {
         WorktreeError::failed(
             name,
             format!(

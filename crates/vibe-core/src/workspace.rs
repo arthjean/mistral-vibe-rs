@@ -334,7 +334,7 @@ pub struct Workspace {
 impl Workspace {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, WorkspaceError> {
         let canonical_root =
-            std::fs::canonicalize(path.as_ref()).map_err(|source| WorkspaceError::Io {
+            crate::platform::canonicalize(path.as_ref()).map_err(|source| WorkspaceError::Io {
                 path: path.as_ref().to_path_buf(),
                 source,
             })?;
@@ -363,13 +363,14 @@ impl Workspace {
     }
 
     /// The absolute path a tool result names, which is what the reference
-    /// publishes and what a client can resolve without a working directory.
+    /// publishes (`str(path)`, so native separators) and what a client can
+    /// resolve without a working directory.
     #[must_use]
     pub fn absolute_display(&self, relative: &Path) -> String {
         self.canonical_root
             .join(relative)
             .to_string_lossy()
-            .replace('\\', "/")
+            .into_owned()
     }
 
     /// The lock guarding one path's read-modify-write.
@@ -967,6 +968,8 @@ impl Workspace {
         }) {
             return Err(WorkspaceError::OutsideRoot(requested.to_path_buf()));
         }
+        // `Dir::canonicalize` answers relative to the confined root, so it
+        // never carries a verbatim prefix and needs no `platform` helper.
         let relative = if must_exist || self.directory.metadata(&lexical).is_ok() {
             self.directory
                 .canonicalize(&lexical)
@@ -1428,8 +1431,13 @@ mod tests {
         // The plan is the log's, so its order is the order the dropped turns
         // first touched each path rather than an alphabetical one, and each is
         // named by the resolved absolute path the log keys it by.
-        let canonical = std::fs::canonicalize(directory.path()).expect("canonical");
-        let key = |name: &str| canonical.join(name).to_string_lossy().into_owned();
+        let canonical = crate::platform::canonicalize(directory.path()).expect("canonical");
+        let key = |name: &str| {
+            name.split('/')
+                .fold(canonical.clone(), |path, part| path.join(part))
+                .to_string_lossy()
+                .into_owned()
+        };
         assert_eq!(
             review.restorable_paths_at(4).expect("latest paths"),
             vec![key("main.txt"), key("generated/later.txt")]
@@ -1841,10 +1849,6 @@ mod tests {
     /// line splits on its first two colons only, so a colon inside the matched
     /// text stays in the text and never shifts the line number.
     #[tokio::test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: grep publishes `//?/` verbatim paths (US-009)"
-    )]
     async fn grep_projects_one_parsed_entry_per_match() {
         let root = tempdir().expect("workspace");
         std::fs::write(
@@ -2378,7 +2382,7 @@ let old = 2;
         // The request carries the confined absolute path, which is the only
         // form a client can resolve, and the result keeps the workspace-
         // relative display the local read reports.
-        let expected = std::fs::canonicalize(directory.path())
+        let expected = crate::platform::canonicalize(directory.path())
             .expect("canonical root")
             .join("main.rs")
             .to_string_lossy()
@@ -2665,13 +2669,9 @@ let old = 2;
     /// the root, written absolute, relative or under `~`-free whitespace, and
     /// the edit it makes is checkpointed under its absolute path.
     #[tokio::test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: file tools publish `//?/` verbatim paths (US-009)"
-    )]
     async fn an_approved_path_outside_the_root_is_reached_by_every_file_tool() {
         let parent = tempdir().expect("parent");
-        let parent_path = std::fs::canonicalize(parent.path()).expect("canonical");
+        let parent_path = crate::platform::canonicalize(parent.path()).expect("canonical");
         let root = parent_path.join("project");
         let outside = parent_path.join("elsewhere");
         std::fs::create_dir_all(&root).expect("root");
@@ -2899,10 +2899,6 @@ let old = 2;
     /// second read of the same directory pays for it again in neither the text
     /// nor the progress stream.
     #[tokio::test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: nested instruction discovery compares a verbatim path and never matches (US-009)"
-    )]
     async fn a_subdirectory_instruction_file_is_injected_once_per_session() {
         let directory = tempdir().expect("tempdir");
         std::fs::create_dir_all(directory.path().join("nested/deeper")).expect("nested");
@@ -2935,12 +2931,11 @@ let old = 2;
         );
         assert_eq!(
             first.display["discovered"],
-            json!([format!(
-                "{}/nested",
-                std::fs::canonicalize(directory.path())
-                    .expect("canonical")
-                    .display()
-            )])
+            json!([crate::platform::canonicalize(directory.path())
+                .expect("canonical")
+                .join("nested")
+                .display()
+                .to_string()])
         );
 
         let second = registry

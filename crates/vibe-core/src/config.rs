@@ -48,8 +48,8 @@ pub mod registry;
 mod transaction;
 mod view;
 
+pub(crate) use crate::platform::user_home as user_home_directory;
 pub use dotenv::{DotenvValues, global_env_file, inherited_by_children};
-pub(crate) use effective::user_home_directory;
 pub use effective::{active_model_alias, available_model_aliases, default_model_alias};
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
 pub use experiments_layer::{

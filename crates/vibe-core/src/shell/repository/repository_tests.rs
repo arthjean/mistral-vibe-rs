@@ -66,7 +66,7 @@ fn a_linked_worktree_keeps_its_own_identity_and_configuration() {
     assert!(asks(&linked, "status"));
     assert!(!asks(&main, "status"));
     let canonical = |path: &Path| {
-        fs::canonicalize(path)
+        crate::platform::canonicalize(path)
             .expect("canonical")
             .display()
             .to_string()

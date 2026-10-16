@@ -3,6 +3,14 @@ use std::path::{Component, Path};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod home;
+mod paths;
+
+pub use home::{
+    HomeNotFound, VIBE_HOME_ENV_VAR, expand_home, user_home, vibe_home, vibe_home_or_local,
+};
+pub use paths::{canonicalize, simplified, strip_verbatim_prefix};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Platform {

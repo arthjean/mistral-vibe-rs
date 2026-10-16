@@ -247,7 +247,7 @@ fn config_files(root: &Path) -> BTreeMap<String, String> {
 
 fn replay_stack(case: &StackCase, observed: &mut Vec<(String, String, String, String)>) {
     let temporary = tempfile::tempdir().expect("temporary root");
-    let root = temporary.path().canonicalize().expect("canonical root");
+    let root = crate::platform::canonicalize(temporary.path()).expect("canonical root");
     let home = root.join(".vibe");
     fs::create_dir_all(&home).expect("home directory");
     if let Some(user) = &case.user {

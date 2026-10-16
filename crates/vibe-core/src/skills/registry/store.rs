@@ -71,7 +71,7 @@ fn skill_root(root: &Path, skill_id: &str) -> Result<PathBuf, StoreError> {
     if !is_plain_component(skill_id) {
         return Err(StoreError::UnsafeId(skill_id.to_owned()));
     }
-    let resolved = fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let resolved = crate::platform::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     Ok(resolved.join(skill_id))
 }
 
@@ -237,7 +237,7 @@ fn strip_frontmatter(body: &str) -> String {
 /// Writes the payload's assets under the staged version directory, skipping
 /// unsafe destinations and undecodable content.
 fn write_assets(dest: &Path, item: &RegistrySkillItem) -> io::Result<()> {
-    let base = fs::canonicalize(dest).unwrap_or_else(|_| dest.to_path_buf());
+    let base = crate::platform::canonicalize(dest).unwrap_or_else(|_| dest.to_path_buf());
     for (raw_path, asset) in &item.skill.skill_assets {
         let Some(target) = safe_dest(&base, raw_path) else {
             continue;

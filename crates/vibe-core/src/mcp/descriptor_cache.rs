@@ -73,8 +73,7 @@ impl McpDescriptorCache {
     /// directory and takes its parent.
     #[must_use]
     pub fn root_for(session_log_dir: &Path) -> PathBuf {
-        let resolved = session_log_dir
-            .canonicalize()
+        let resolved = crate::platform::canonicalize(session_log_dir)
             .unwrap_or_else(|_| session_log_dir.to_path_buf());
         resolved
             .parent()

@@ -769,10 +769,6 @@ mod tests {
     /// discarded, so a skill missing because its own file will not parse is
     /// distinguishable from one that was never written.
     #[tokio::test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: skill diagnostics name the verbatim path (US-009)"
-    )]
     async fn an_unloadable_skill_is_named_when_a_lookup_misses() {
         let directory = tempdir().expect("tempdir");
         let broken = directory.path().join(".vibe/skills/broken");
@@ -793,17 +789,14 @@ mod tests {
 
         let message = missing.to_string();
         assert!(message.contains("could not be loaded"), "{message}");
-        assert!(message.contains("broken/SKILL.md"), "{message}");
+        let file = std::path::Path::new("broken").join("SKILL.md");
+        assert!(message.contains(&file.display().to_string()), "{message}");
     }
 
     /// US-115: the second request for a skill already in the conversation is
     /// acknowledged rather than rendered again, and it still names the
     /// directory so a relative path in the instructions still resolves.
     #[tokio::test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: skill paths are published with the `//?/` verbatim prefix (US-009)"
-    )]
     async fn a_skill_loaded_twice_is_acknowledged_rather_than_rendered_again() {
         let directory = tempdir().expect("tempdir");
         let skill_directory = directory.path().join(".vibe/skills/probe");

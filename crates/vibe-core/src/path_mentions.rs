@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use crate::images::ImageFormat;
@@ -128,7 +127,7 @@ fn extract_quoted_candidate(
 }
 
 pub fn resolve_candidate(workspace: &Path, candidate: &str) -> Option<PathBuf> {
-    fs::canonicalize(candidate_path(workspace, candidate)).ok()
+    crate::platform::canonicalize(candidate_path(workspace, candidate)).ok()
 }
 
 pub fn resolve_owned_candidate(
@@ -140,7 +139,9 @@ pub fn resolve_owned_candidate(
     if is_tracked(&path) {
         return Some(path);
     }
-    fs::canonicalize(path).ok().filter(|path| is_tracked(path))
+    crate::platform::canonicalize(path)
+        .ok()
+        .filter(|path| is_tracked(path))
 }
 
 fn candidate_path(workspace: &Path, candidate: &str) -> PathBuf {
@@ -269,26 +270,9 @@ fn expand_tilde_path(value: &str) -> PathBuf {
     if !matches!(components.next(), Some(Component::Normal(first)) if first == "~") {
         return path.to_path_buf();
     }
-    let Some(mut home) = user_home_directory() else {
+    let Some(mut home) = crate::platform::user_home() else {
         return path.to_path_buf();
     };
     home.extend(components);
     home
-}
-
-fn user_home_directory() -> Option<PathBuf> {
-    #[cfg(windows)]
-    {
-        std::env::var_os("USERPROFILE")
-            .map(PathBuf::from)
-            .or_else(|| {
-                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
-                home.push(std::env::var_os("HOMEPATH")?);
-                Some(home)
-            })
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var_os("HOME").map(PathBuf::from)
-    }
 }

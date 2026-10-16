@@ -159,7 +159,7 @@ fn is_sensitive(path: &Path, options: &SearchOptions) -> bool {
     if options.sensitive_patterns.is_empty() {
         return false;
     }
-    let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let resolved = crate::platform::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     crate::policy::matches_sensitive_pattern(&options.sensitive_patterns, &resolved)
 }
 

@@ -244,7 +244,7 @@ pub(crate) fn resolve_path(path: &Path) -> PathBuf {
             std::path::Component::CurDir => {}
             other => {
                 resolved.push(other.as_os_str());
-                if let Ok(canonical) = fs::canonicalize(&resolved) {
+                if let Ok(canonical) = crate::platform::canonicalize(&resolved) {
                     resolved = canonical;
                 }
             }

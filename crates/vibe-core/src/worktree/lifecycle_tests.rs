@@ -21,7 +21,7 @@ fn git(directory: &Path, arguments: &[&str]) -> bool {
 
 fn fixture() -> (tempfile::TempDir, PathBuf, SessionWorktrees) {
     let scratch = tempfile::tempdir().expect("tempdir");
-    let root = scratch.path().canonicalize().expect("the root resolves");
+    let root = crate::platform::canonicalize(scratch.path()).expect("the root resolves");
     let checkout = root.join("repo");
     fs::create_dir_all(&checkout).expect("the checkout is writable");
     for arguments in [
@@ -67,10 +67,6 @@ fn an_existing_request_must_name_a_linked_worktree() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-)]
 fn a_prompt_request_takes_the_suggestion_on_a_vibe_branch() {
     let (_scratch, checkout, lifecycle) = fixture();
     let resolved = lifecycle
@@ -90,10 +86,6 @@ fn a_prompt_request_takes_the_suggestion_on_a_vibe_branch() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the managed worktree path keeps the verbatim prefix, which `git worktree add` rejects (US-010)"
-)]
 fn cleanup_takes_back_a_created_worktree_and_its_branch() {
     let (_scratch, checkout, lifecycle) = fixture();
     let resolved = lifecycle

@@ -133,7 +133,7 @@ fn skills_list_only_what_the_model_may_load_escaped_and_sorted() {
 #[test]
 fn the_dangerous_directory_replaces_the_repository_snapshot() {
     let root = tempfile::tempdir().expect("root");
-    let home = std::fs::canonicalize(root.path()).expect("home");
+    let home = crate::platform::canonicalize(root.path()).expect("home");
     let mut inputs = inputs(&home);
     inputs.project.home = Some(home.clone());
     let composed = compose(&inputs);
@@ -151,7 +151,7 @@ fn the_dangerous_directory_replaces_the_repository_snapshot() {
 #[test]
 fn other_open_roots_are_listed_without_the_working_directory() {
     let root = tempfile::tempdir().expect("root");
-    let cwd = std::fs::canonicalize(root.path()).expect("cwd");
+    let cwd = crate::platform::canonicalize(root.path()).expect("cwd");
     let mut inputs = inputs(&cwd);
     inputs.project.project_roots = vec![cwd.clone(), cwd.join("extra")];
     let composed = compose(&inputs);

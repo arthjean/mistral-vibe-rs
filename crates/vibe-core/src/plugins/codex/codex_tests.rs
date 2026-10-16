@@ -396,7 +396,7 @@ const EXPECTED: &str = r#"{
 #[test]
 fn codex_plugins_resolve_as_the_reference_resolves_them() {
     let temporary = tempfile::tempdir().unwrap();
-    let base = fs::canonicalize(temporary.path()).unwrap();
+    let base = crate::platform::canonicalize(temporary.path()).unwrap();
     let plugins = base.join("plugins");
     let spec: serde_json::Map<String, Value> = serde_json::from_str(SPEC).unwrap();
     for (relative, content) in &spec {

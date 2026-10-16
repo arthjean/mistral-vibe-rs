@@ -5796,6 +5796,7 @@ dependencies = [
  "blake2",
  "cap-std",
  "command-group",
+ "dunce",
  "flate2",
  "fs2",
  "futures-util",

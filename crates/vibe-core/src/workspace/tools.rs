@@ -333,7 +333,7 @@ fn anchored_match_path(base: &Path, printed: &str) -> String {
             other => resolved.push(other),
         }
     }
-    resolved.to_string_lossy().replace('\\', "/")
+    resolved.to_string_lossy().into_owned()
 }
 
 /// `edit`: one anchored replacement, refused before it opens anything when the

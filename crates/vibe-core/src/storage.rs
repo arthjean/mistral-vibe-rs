@@ -1819,8 +1819,8 @@ fn same_working_directory(stored: &str, current: &str) -> bool {
     if stored == current {
         return true;
     }
-    let stored = fs::canonicalize(stored);
-    let current = fs::canonicalize(current);
+    let stored = crate::platform::canonicalize(stored);
+    let current = crate::platform::canonicalize(current);
     matches!((stored, current), (Ok(stored), Ok(current)) if stored == current)
 }
 

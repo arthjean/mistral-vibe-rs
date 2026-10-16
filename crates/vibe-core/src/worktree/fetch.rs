@@ -306,7 +306,8 @@ fn null_device() -> String {
 }
 
 fn project_directory(repo: &GitRepo) -> PathBuf {
-    std::fs::canonicalize(repo.working_dir()).unwrap_or_else(|_| repo.working_dir().to_path_buf())
+    crate::platform::canonicalize(repo.working_dir())
+        .unwrap_or_else(|_| repo.working_dir().to_path_buf())
 }
 
 fn remote_url(repo: &GitRepo, remote: &str) -> Result<String, UnsafeFetch> {
@@ -647,6 +648,9 @@ fn is_trusted_fetch_config_key(key: &str) -> bool {
 /// would let the repository author the "trusted" scopes
 /// (`vibe/core/git/fetch.py:348-374`).
 fn ensure_global_config_paths_are_trusted(project: &Path) -> Result<(), UnsafeFetch> {
+    // These are the homes git reads `.gitconfig` from, not the vibe home: git
+    // for Windows honors `HOME` first, so this is the one production read of
+    // `HOME` that does not go through `crate::platform::user_home`.
     let mut homes = Vec::new();
     if let Some(home) = std::env::var_os("HOME").filter(|value| !value.is_empty()) {
         homes.push(PathBuf::from(home));
@@ -737,7 +741,7 @@ fn trusted_path(project: &Path) -> String {
             if !entry.is_absolute() {
                 return None;
             }
-            let resolved = std::fs::canonicalize(&entry).ok()?;
+            let resolved = crate::platform::canonicalize(&entry).ok()?;
             (!resolved.starts_with(project)).then_some(resolved)
         })
         .collect::<Vec<_>>();

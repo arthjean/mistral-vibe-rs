@@ -80,7 +80,7 @@ pub fn search_paths(inputs: &SearchInputs<'_>) -> Vec<PathBuf> {
 
     let mut unique: Vec<PathBuf> = Vec::new();
     for candidate in candidates {
-        let resolved = std::fs::canonicalize(&candidate).unwrap_or(candidate);
+        let resolved = crate::platform::canonicalize(&candidate).unwrap_or(candidate);
         if !unique.contains(&resolved) {
             unique.push(resolved);
         }
