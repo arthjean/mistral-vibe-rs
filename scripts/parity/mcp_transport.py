@@ -818,7 +818,7 @@ def fingerprint_identity(server: Any) -> dict[str, Any]:
 
 
 async def run_scenario(spec: dict[str, Any], fixture: Path) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="mcp-transport-"))
+    root = Path(tempfile.mkdtemp(prefix="mcp-transport-")).resolve()
     scenario = Scenario(spec, fixture, root)
     sessions: list[Session] = []
     try:

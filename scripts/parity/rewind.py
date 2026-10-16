@@ -282,7 +282,7 @@ def run_scenario(
     than rewinds need, such as the review oracle's owners and regions.
     """
     backend = RecordingBackend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-rewind-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-rewind-oracle-")).resolve()
     session = (session_factory or Session)(root)
     world = session.world
     try:

@@ -269,7 +269,7 @@ class Run:
         self.scenario = scenario
         self.dialect = dialect
         self.quiet = quiet
-        self.root = Path(tempfile.mkdtemp(prefix="vibe-mcp-catalog-oracle-"))
+        self.root = Path(tempfile.mkdtemp(prefix="vibe-mcp-catalog-oracle-")).resolve()
         self.world = acp.World(self.root)
         self.backend = acp.Backend()
         self.fixtures: dict[str, Fixture] = {}

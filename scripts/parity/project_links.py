@@ -186,7 +186,7 @@ def store_view(world: acp.World) -> dict[str, Any]:
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = teleport.Backend(scenario.get("code", {}))
-    root = Path(tempfile.mkdtemp(prefix="vibe-project-links-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-project-links-oracle-")).resolve()
     session = rewind.Session(root)
     world = session.world
     try:

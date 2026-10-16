@@ -292,7 +292,7 @@ def seed_cache(world: acp.World, base: str, entries: dict[str, Any]) -> None:
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend(scenario.get("connectors", {}))
-    root = Path(tempfile.mkdtemp(prefix="vibe-connectors-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-connectors-oracle-")).resolve()
     session = rewind.Session(root)
     world = session.world
     try:

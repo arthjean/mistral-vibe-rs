@@ -236,7 +236,7 @@ class Backend(rewind.RecordingBackend):
 
 def run_scenario(scenario: dict[str, Any], command: list[str], dialect: str, quiet: float) -> dict[str, Any]:
     backend = Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-session-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-session-oracle-")).resolve()
     session = Sessions(root)
     world = session.world
     connections: dict[int, Connection] = {}

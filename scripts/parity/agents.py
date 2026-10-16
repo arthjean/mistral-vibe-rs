@@ -182,7 +182,7 @@ def write_agents(world: acp.World, root: Path, agents: dict[str, dict[str, str]]
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = hooks.Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-agents-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-agents-oracle-")).resolve()
     session = Session(root)
     world = session.world
     try:

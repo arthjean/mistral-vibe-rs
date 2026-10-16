@@ -538,7 +538,7 @@ def run_scenario(
     scenario: dict[str, Any], command: list[str], quiet: float
 ) -> dict[str, Any]:
     backend = Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-acp-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-acp-oracle-")).resolve()
     world = World(root)
     try:
         backend.responses = world.substitute(copy.deepcopy(scenario.get("backend", [])))
@@ -1643,7 +1643,7 @@ def normalize_stream(text: str) -> Any:
 
 
 def run_argv(command: list[str], args: list[str]) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="vibe-acp-argv-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-acp-argv-")).resolve()
     try:
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
