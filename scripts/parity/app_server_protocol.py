@@ -276,7 +276,7 @@ STORED_ACCOUNT = "OTHER_ORACLE_KEY"
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = rewind.RecordingBackend()
     serve_gets(backend, scenario.get("gets", {}))
-    root = Path(tempfile.mkdtemp(prefix="vibe-protocol-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-protocol-oracle-")).resolve()
     session = Session(root)
     world = session.world
     stores_credential = '"setup/store-credential"' in json.dumps(scenario)

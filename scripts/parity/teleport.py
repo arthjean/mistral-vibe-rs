@@ -358,7 +358,7 @@ def base_config(backend: Backend, scenario: dict[str, Any]) -> str:
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend(scenario.get("code", {}))
-    root = Path(tempfile.mkdtemp(prefix="vibe-teleport-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-teleport-oracle-")).resolve()
     session = rewind.Session(root)
     world = session.world
     try:

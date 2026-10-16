@@ -594,7 +594,7 @@ def authorization_url(url: str) -> dict[str, Any]:
 async def run_scenario(spec: dict[str, Any], fixture: Path) -> dict[str, Any]:
     from vibe.app_server._mcp_auth import MCPAuthenticationService
 
-    root = Path(tempfile.mkdtemp(prefix="vibe-oauth-parity-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-oauth-parity-")).resolve()
     scenario = Scenario(spec, fixture, root)
     busy: socket.socket | None = None
     try:

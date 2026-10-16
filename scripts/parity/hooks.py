@@ -230,7 +230,7 @@ def write_responses(root: Path, responses: dict[str, list[dict[str, Any]]]) -> N
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-hooks-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-hooks-oracle-")).resolve()
     session = rewind.Session(root)
     world = session.world
     try:

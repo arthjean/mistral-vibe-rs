@@ -338,7 +338,7 @@ def connect(scenario: dict[str, Any], command: list[str], env: dict[str, str],
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-loop-oracle-"))
+    root = Path(tempfile.mkdtemp(prefix="vibe-loop-oracle-")).resolve()
     session = Session(root)
     world = session.world
     try:
