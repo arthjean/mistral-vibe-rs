@@ -61,7 +61,7 @@ pub(super) fn finalize_effective(
     vibe_home: &Path,
     admin: &Table,
 ) -> Result<Vec<String>, ConfigError> {
-    resolve_session_log_dir(effective, vibe_home, user_home_directory())?;
+    resolve_session_log_dir(effective, vibe_home, crate::platform::user_home())?;
     // The reference coerces both routed fields in a `BeforeValidator`, so the
     // definitions are already typed by the time the injections read them, and
     // both run before the model entries are completed.
@@ -773,28 +773,6 @@ fn expand_home(path: &Path, home: Option<PathBuf>) -> Option<PathBuf> {
     let mut home = home?;
     home.extend(components);
     Some(home)
-}
-
-/// The operator's home directory, or [`None`] when the environment names none.
-///
-/// The shell policy expands a `~` operand through this before positioning it
-/// against the workspace roots, so `cat ~/.ssh/id_rsa` is measured where it
-/// actually reads rather than under a literal `~` directory in the workspace.
-pub(crate) fn user_home_directory() -> Option<PathBuf> {
-    #[cfg(windows)]
-    {
-        std::env::var_os("USERPROFILE")
-            .map(PathBuf::from)
-            .or_else(|| {
-                let mut home = PathBuf::from(std::env::var_os("HOMEDRIVE")?);
-                home.push(std::env::var_os("HOMEPATH")?);
-                Some(home)
-            })
-    }
-    #[cfg(not(windows))]
-    {
-        std::env::var_os("HOME").map(PathBuf::from)
-    }
 }
 
 /// Anchors a relative path on the working directory without touching the

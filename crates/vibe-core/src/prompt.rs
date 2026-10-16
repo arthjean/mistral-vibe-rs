@@ -195,7 +195,7 @@ pub fn prepare_user_resources(
 }
 
 fn canonical_existing(path: &Path) -> Result<PathBuf, PromptError> {
-    fs::canonicalize(path).map_err(|source| PromptError::Io {
+    crate::platform::canonicalize(path).map_err(|source| PromptError::Io {
         path: path.to_path_buf(),
         source,
     })

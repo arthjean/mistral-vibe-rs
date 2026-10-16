@@ -200,7 +200,7 @@ fn toml_string(value: &str) -> String {
 /// the deepest existing ancestor is canonicalized and the remainder appended,
 /// so two spellings of one location compare equal.
 pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = fs::canonicalize(path) {
+    if let Ok(resolved) = crate::platform::canonicalize(path) {
         return resolved;
     }
     let mut remainder = Vec::new();
@@ -209,7 +209,7 @@ pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
         if let Some(name) = cursor.file_name() {
             remainder.push(name.to_owned());
         }
-        if let Ok(resolved) = fs::canonicalize(parent) {
+        if let Ok(resolved) = crate::platform::canonicalize(parent) {
             let mut out = resolved;
             for part in remainder.iter().rev() {
                 out.push(part);

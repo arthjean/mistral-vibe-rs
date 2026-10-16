@@ -176,7 +176,7 @@ pub fn managed_bucket_name(repo_root: &Path, common_git_dir: &Path) -> String {
     use sha2::{Digest as _, Sha256};
 
     let digest = hex::encode(Sha256::digest(
-        super::strip_verbatim_prefix(&common_git_dir.to_string_lossy()).as_bytes(),
+        crate::platform::strip_verbatim_prefix(&common_git_dir.to_string_lossy()).as_bytes(),
     ));
     let repository_name = repo_root
         .file_name()

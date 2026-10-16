@@ -54,7 +54,7 @@ pub fn is_scratchpad_path(path: &Path, scratchpad: Option<&Path>) -> bool {
     let Some(scratchpad) = scratchpad else {
         return false;
     };
-    let Ok(root) = scratchpad.canonicalize() else {
+    let Ok(root) = crate::platform::canonicalize(scratchpad) else {
         return false;
     };
     // A file that does not exist yet still belongs to the scratchpad when the

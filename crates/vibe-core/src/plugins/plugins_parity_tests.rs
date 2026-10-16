@@ -342,7 +342,7 @@ fn collect_files(directory: &Path, home: &Path, found: &mut Vec<String>) {
 
 async fn resolve_case(case: &Value) -> Value {
     let directory = tempfile::tempdir().unwrap();
-    let home = fs::canonicalize(directory.path()).unwrap();
+    let home = crate::platform::canonicalize(directory.path()).unwrap();
     for (path, content) in case["files"].as_object().unwrap() {
         let target = home.join(path);
         fs::create_dir_all(target.parent().unwrap()).unwrap();

@@ -479,7 +479,7 @@ pub(crate) fn read_stripped(path: &Path) -> Option<String> {
 /// Python's non-strict `Path.resolve()`: symlinks resolved as far as the path
 /// exists, and the part that does not exist appended as written.
 pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = std::fs::canonicalize(path) {
+    if let Ok(resolved) = crate::platform::canonicalize(path) {
         return resolved;
     }
     let mut missing = Vec::new();
@@ -492,7 +492,7 @@ pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
         if !current.pop() {
             return path.to_path_buf();
         }
-        if let Ok(mut resolved) = std::fs::canonicalize(&current) {
+        if let Ok(mut resolved) = crate::platform::canonicalize(&current) {
             for name in missing.iter().rev() {
                 resolved.push(name);
             }

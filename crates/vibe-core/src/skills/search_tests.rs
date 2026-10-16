@@ -38,9 +38,7 @@ impl Tree {
         let temporary = tempfile::tempdir().expect("a scratch directory is available");
         // The roots are canonicalized so a platform that hands out a symlinked
         // temporary directory still compares equal to what discovery resolves.
-        let root = temporary
-            .path()
-            .canonicalize()
+        let root = crate::platform::canonicalize(temporary.path())
             .expect("the scratch directory resolves");
         let (project, home, extra) = (root.join("project"), root.join("home"), root.join("extra"));
         for directory in [&project, &home, &extra] {

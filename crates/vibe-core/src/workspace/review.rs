@@ -1198,7 +1198,7 @@ mod tests {
     #[test]
     fn the_disk_port_tells_an_absent_path_apart_from_an_unreadable_one() {
         let root = tempdir().expect("workspace");
-        let root = std::fs::canonicalize(root.path()).expect("canonical");
+        let root = crate::platform::canonicalize(root.path()).expect("canonical");
         std::fs::write(root.join("there.txt"), "body\n").expect("seed file");
         std::fs::create_dir(root.join("a-directory")).expect("seed directory");
         let key = |name: &str| root.join(name).to_string_lossy().into_owned();
@@ -1338,7 +1338,7 @@ mod tests {
 
     /// The key the log files `name` under: its resolved absolute path.
     fn key(root: &std::path::Path, name: &str) -> String {
-        std::fs::canonicalize(root)
+        crate::platform::canonicalize(root)
             .expect("canonical root")
             .join(name)
             .to_string_lossy()

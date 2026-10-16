@@ -33,7 +33,7 @@ fn write_description(tools: &Path, stem: &str, text: &str) {
 /// The canonical spelling of `path`, which is what [`search_paths`] answers for
 /// a directory that exists.
 fn resolved(path: &Path) -> PathBuf {
-    fs::canonicalize(path).expect("the directory exists")
+    crate::platform::canonicalize(path).expect("the directory exists")
 }
 
 /// The scenario roots these tests share: a project tools directory, a user
@@ -46,7 +46,7 @@ struct Tree {
 impl Tree {
     fn new() -> Self {
         let temporary = tempfile::tempdir().expect("a temporary tree");
-        let root = fs::canonicalize(temporary.path()).expect("the tree resolves");
+        let root = crate::platform::canonicalize(temporary.path()).expect("the tree resolves");
         for relative in ["project/.vibe/tools", "home/tools", "extra", "module"] {
             fs::create_dir_all(root.join(relative)).expect("the tree is writable");
         }

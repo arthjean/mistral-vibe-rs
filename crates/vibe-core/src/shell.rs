@@ -1110,7 +1110,7 @@ fn escaping_directory(context: &ShellPolicyContext, directory: &PolicyPath) -> O
 /// `str(PureWindowsPath(...))` does on a POSIX host.
 fn outside_name(path: &PolicyPath) -> String {
     match policy_path_to_host(path) {
-        Some(host) => crate::worktree::strip_verbatim_prefix(
+        Some(host) => crate::platform::strip_verbatim_prefix(
             &crate::worktree::resolve_lenient(&host).to_string_lossy(),
         ),
         None => render_policy_path(path),
@@ -1275,15 +1275,15 @@ fn inside_any_root(path: &PolicyPath, roots: &[PolicyPath]) -> bool {
 
 fn host_path_is_authorized(path: &PolicyPath, context: &ShellPolicyContext) -> Option<bool> {
     let working_directory = policy_path_to_host(&context.working_directory)?;
-    std::fs::canonicalize(&working_directory).ok()?;
+    crate::platform::canonicalize(&working_directory).ok()?;
     let candidate = policy_path_to_host(path)?;
-    let canonical = match std::fs::canonicalize(candidate) {
+    let canonical = match crate::platform::canonicalize(candidate) {
         Ok(canonical) => canonical,
         Err(_) => return Some(false),
     };
     Some(context.roots.iter().any(|root| {
         policy_path_to_host(root)
-            .and_then(|root| std::fs::canonicalize(root).ok())
+            .and_then(|root| crate::platform::canonicalize(root).ok())
             .is_some_and(|root| canonical.starts_with(root))
     }))
 }

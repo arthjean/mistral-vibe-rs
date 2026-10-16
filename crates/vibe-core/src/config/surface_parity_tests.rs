@@ -1318,10 +1318,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         );
         return;
     };
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root");
+    let workspace =
+        crate::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .expect("workspace root");
     let temporary = tempfile::tempdir().expect("temporary root");
     let captured = temporary.path().join("corpus.json");
     let output = Command::new(&interpreter)

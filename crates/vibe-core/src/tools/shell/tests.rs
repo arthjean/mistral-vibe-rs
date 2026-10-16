@@ -761,7 +761,7 @@ async fn the_legacy_variant_ignores_the_managed_overrides() {
         .await
         .expect("the legacy variant ignores an override it does not publish");
     assert_eq!(harness.approval_count(), 0);
-    let root = harness.root().canonicalize().expect("canonical root");
+    let root = crate::platform::canonicalize(harness.root()).expect("canonical root");
     let printed = output.typed_result["stdout"]
         .as_str()
         .expect("stdout")

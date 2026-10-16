@@ -8,7 +8,7 @@ use crate::skills::SkillScope;
 #[test]
 fn the_root_manifest_wins_and_the_nested_one_is_reported_shadowed() {
     let root = tempfile::tempdir().unwrap();
-    let root = fs::canonicalize(root.path()).unwrap();
+    let root = crate::platform::canonicalize(root.path()).unwrap();
     fs::create_dir_all(root.join(".kimi-plugin")).unwrap();
     fs::write(root.join("kimi.plugin.json"), r#"{"name": "front"}"#).unwrap();
     fs::write(
@@ -33,7 +33,7 @@ fn the_root_manifest_wins_and_the_nested_one_is_reported_shadowed() {
 #[test]
 fn a_name_outside_the_kimi_pattern_drops_the_plugin_fatally() {
     let root = tempfile::tempdir().unwrap();
-    let root = fs::canonicalize(root.path()).unwrap();
+    let root = crate::platform::canonicalize(root.path()).unwrap();
     fs::write(root.join("kimi.plugin.json"), r#"{"name": "Upper"}"#).unwrap();
 
     let result = adapt(&root, &root.join("data"), SkillScope::Project);

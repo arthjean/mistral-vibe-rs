@@ -166,7 +166,7 @@ pub fn search_paths(inputs: &SearchInputs<'_>) -> Vec<(PathBuf, SkillScope)> {
         .filter(|(candidate, _)| candidate.is_dir())
         .map(|(candidate, scope)| {
             (
-                std::fs::canonicalize(&candidate).unwrap_or(candidate),
+                crate::platform::canonicalize(&candidate).unwrap_or(candidate),
                 scope,
             )
         })

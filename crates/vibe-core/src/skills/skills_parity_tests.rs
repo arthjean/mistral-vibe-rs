@@ -615,10 +615,8 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
     let scratch = tempfile::tempdir().expect("a scratch directory is available");
     // The scratch root is canonicalized so the resolved paths `parse_skill`
     // now records still strip against the scenario roots.
-    let scratch_root = scratch
-        .path()
-        .canonicalize()
-        .expect("the scratch directory resolves");
+    let scratch_root =
+        crate::platform::canonicalize(scratch.path()).expect("the scratch directory resolves");
     let mut roots: BTreeMap<String, PathBuf> = BTreeMap::new();
     for label in ["home", "project", "configured", "configured2"] {
         let root = scratch_root.join(label);
@@ -1058,9 +1056,7 @@ fn store_answer(case: &StoreCase, fallback: &mut Option<String>) -> Value {
     use crate::skills::registry::store;
 
     let scratch = tempfile::tempdir().expect("a scratch store is available");
-    let root = scratch
-        .path()
-        .canonicalize()
+    let root = crate::platform::canonicalize(scratch.path())
         .expect("the scratch store resolves")
         .join("store");
     fs::create_dir_all(&root).expect("the store root is writable");
@@ -1081,7 +1077,8 @@ fn store_answer(case: &StoreCase, fallback: &mut Option<String>) -> Value {
                 Err(store::StoreError::UnsafeId(_)) => json!({"error": "unsafeId"}),
                 Err(error) => json!({"error": error.to_string()}),
                 Ok(path) => {
-                    let resolved = root.canonicalize().unwrap_or_else(|_| root.clone());
+                    let resolved =
+                        crate::platform::canonicalize(&root).unwrap_or_else(|_| root.clone());
                     json!({
                         "relPath": path
                             .strip_prefix(&resolved)
@@ -1251,9 +1248,7 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
     use crate::skills::registry::manifest;
 
     let scratch = tempfile::tempdir().expect("a scratch manifest directory is available");
-    let workdir = scratch
-        .path()
-        .canonicalize()
+    let workdir = crate::platform::canonicalize(scratch.path())
         .expect("the scratch manifest directory resolves");
     match case.case.as_str() {
         "alias-for-string-version" => {
@@ -1430,7 +1425,7 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
         "project-paths-dedup-and-drop-global" => {
             let home = workdir.join("home");
             fs::create_dir_all(&home).expect("the scenario home is writable");
-            let home = home.canonicalize().expect("the scenario home resolves");
+            let home = crate::platform::canonicalize(&home).expect("the scenario home resolves");
             let project_a = workdir.join("proj-a");
             let project_b = workdir.join("proj-b");
             let roots = vec![
@@ -1451,7 +1446,8 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
                         let (relative, label) = labeled
                             .iter()
                             .find_map(|(root, label)| {
-                                let resolved = root.canonicalize().unwrap_or_else(|_| root.clone());
+                                let resolved = crate::platform::canonicalize(root)
+                                    .unwrap_or_else(|_| root.clone());
                                 path.strip_prefix(&resolved)
                                     .ok()
                                     .map(|relative| (relative.to_path_buf(), label))

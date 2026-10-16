@@ -37,7 +37,7 @@ fn a_windows_path_needs_both_a_drive_and_a_root_or_neither() {
 #[test]
 fn a_missing_tail_resolves_lexically_under_its_existing_prefix() {
     let directory = tempfile::tempdir().expect("tempdir");
-    let root = std::fs::canonicalize(directory.path()).expect("root");
+    let root = crate::platform::canonicalize(directory.path()).expect("root");
     std::fs::create_dir(root.join("kept")).expect("directory");
     assert_eq!(
         resolved(&root.join("missing/../kept/./new.txt")),

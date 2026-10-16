@@ -85,7 +85,7 @@ pub(crate) fn git_executable(cwd: &Path) -> Result<PathBuf, WorktreeError> {
 /// only a binary directly inside it is refused there, which is the reference's
 /// `_is_untrusted_project_executable`.
 pub(crate) fn search_trusted_path(name: &str, cwd: &Path) -> Option<PathBuf> {
-    let project = fs::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
+    let project = crate::platform::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
     let path = std::env::var_os("PATH").unwrap_or_default();
     for entry in std::env::split_paths(&path) {
         let entry = strip_quotes(entry);
@@ -130,7 +130,7 @@ fn executable_names(name: &str) -> Vec<OsString> {
 }
 
 fn resolved_executable(candidate: &Path) -> Option<PathBuf> {
-    let resolved = fs::canonicalize(candidate).ok()?;
+    let resolved = crate::platform::canonicalize(candidate).ok()?;
     let metadata = fs::metadata(&resolved).ok()?;
     if !metadata.is_file() {
         return None;
@@ -151,7 +151,7 @@ fn is_untrusted_project_executable(candidate: &Path, project: &Path) -> bool {
     }
     let overbroad = project.parent().is_none()
         || std::env::home_dir()
-            .and_then(|home| fs::canonicalize(home).ok())
+            .and_then(|home| crate::platform::canonicalize(home).ok())
             .is_some_and(|home| home == project);
     if overbroad {
         candidate.parent() == Some(project)
@@ -266,8 +266,8 @@ impl GitRepo {
             // checkout to work in, which the reference refuses the same way.
             return Err(WorktreeError::RepositoryRequired);
         }
-        let working_dir =
-            fs::canonicalize(&reported).map_err(|_| WorktreeError::RepositoryRequired)?;
+        let working_dir = crate::platform::canonicalize(&reported)
+            .map_err(|_| WorktreeError::RepositoryRequired)?;
         Ok(Self {
             executable,
             working_dir,
@@ -363,7 +363,7 @@ impl GitRepo {
         } else {
             self.working_dir.join(path)
         };
-        fs::canonicalize(&path).map_err(|source| WorktreeError::Io { path, source })
+        crate::platform::canonicalize(&path).map_err(|source| WorktreeError::Io { path, source })
     }
 
     /// Where `base` sits inside this checkout.
@@ -471,8 +471,10 @@ impl GitRepo {
         if output.status.success() {
             Ok(())
         } else {
+            // The reference's message carries git's command line, and so the
+            // path it handed git; this one names that path outright.
             Err(WorktreeError::git(format!(
-                "failed to create worktree `{}` for branch `{branch}`: {}",
+                "failed to create worktree `{}` at {target_text} for branch `{branch}`: {}",
                 target
                     .file_name()
                     .map(|value| value.to_string_lossy().into_owned())

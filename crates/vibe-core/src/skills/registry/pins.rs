@@ -345,7 +345,7 @@ fn within_roots(path: &Path, roots: &[PathBuf]) -> bool {
 
 /// A path resolved through its longest existing prefix.
 fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = std::fs::canonicalize(path) {
+    if let Ok(resolved) = crate::platform::canonicalize(path) {
         return resolved;
     }
     match (path.parent(), path.file_name()) {

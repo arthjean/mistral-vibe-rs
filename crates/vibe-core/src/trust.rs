@@ -20,7 +20,8 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
-use crate::worktree::{resolve_lenient, strip_verbatim_prefix};
+use crate::platform::strip_verbatim_prefix;
+use crate::worktree::resolve_lenient;
 
 /// The trust file's name under the vibe home.
 pub const TRUST_FILE: &str = "trusted_folders.toml";

@@ -87,7 +87,7 @@ pub fn resolve_lax(path: &Path) -> PathBuf {
 ///
 /// A path that does not exist, or a loop of links.
 pub fn resolve_strict(path: &Path) -> std::io::Result<PathBuf> {
-    std::fs::canonicalize(path)
+    crate::platform::canonicalize(path)
 }
 
 /// Python's `PurePath.is_relative_to` on two resolved paths.

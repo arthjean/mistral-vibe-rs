@@ -631,9 +631,7 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
     // the invocation pattern and `glob.escape`d in the session pattern. The
     // port's answer is folded into the same placeholder form, so the corpus
     // value, the answer and the ledger entry are all compared alike.
-    let root = workspace
-        .path()
-        .canonicalize()
+    let root = crate::platform::canonicalize(workspace.path())
         .expect("canonical")
         .display()
         .to_string();
@@ -728,9 +726,7 @@ async fn an_outside_target_raises_the_reference_requirement() {
             }
             other => panic!("the corpus names an unknown target `{other}`"),
         };
-        let root = outside
-            .path()
-            .canonicalize()
+        let root = crate::platform::canonicalize(outside.path())
             .expect("canonical")
             .display()
             .to_string();
@@ -1049,7 +1045,7 @@ async fn the_list_chain_answers_like_the_reference() {
     let outside = tempfile::tempdir().expect("outside directory");
     let store = store_trusting(workspace.path()).await;
     let canonical = |path: &Path| {
-        path.canonicalize()
+        crate::platform::canonicalize(path)
             .expect("canonical")
             .display()
             .to_string()
@@ -1245,10 +1241,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         eprintln!("skipping the live permission-surface probe: no reference interpreter");
         return;
     };
-    let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("workspace root");
+    let workspace =
+        crate::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .expect("workspace root");
     let temporary = tempfile::tempdir().expect("temporary root");
     let captured = temporary.path().join("vocabulary.json");
     let output = Command::new(&interpreter)

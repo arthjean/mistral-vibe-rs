@@ -99,7 +99,7 @@ pub fn expanded(path: &Path) -> PathBuf {
 /// not exist yet is kept as written with `.` and `..` applied to it.
 #[must_use]
 pub fn resolved(path: &Path) -> PathBuf {
-    if let Ok(canonical) = std::fs::canonicalize(path) {
+    if let Ok(canonical) = crate::platform::canonicalize(path) {
         return canonical;
     }
     let mut resolved = PathBuf::new();
@@ -112,7 +112,7 @@ pub fn resolved(path: &Path) -> PathBuf {
             }
             Component::Normal(name) => {
                 resolved.push(name);
-                if let Ok(canonical) = std::fs::canonicalize(&resolved) {
+                if let Ok(canonical) = crate::platform::canonicalize(&resolved) {
                     resolved = canonical;
                 }
             }

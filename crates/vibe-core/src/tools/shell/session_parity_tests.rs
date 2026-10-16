@@ -716,8 +716,8 @@ impl Scenario {
         }
         let home = root.join("vibe-home");
         fs::create_dir_all(&home).expect("the session home is writable");
-        let root = root.canonicalize().expect("the scenario root resolves");
-        let work = work.canonicalize().expect("the working directory resolves");
+        let root = crate::platform::canonicalize(&root).expect("the scenario root resolves");
+        let work = crate::platform::canonicalize(&work).expect("the working directory resolves");
 
         assert!(
             root.starts_with(scratch),

@@ -152,7 +152,7 @@ async fn an_outside_file_is_named_by_its_own_path() {
     };
     let resolution = resolve(escaping.clone()).await;
 
-    let canonical = escaping.canonicalize().expect("canonical");
+    let canonical = crate::platform::canonicalize(&escaping).expect("canonical");
     let path = canonical.display().to_string();
     assert_eq!(resolution.mode, PermissionMode::Ask);
     let [requirement] = resolution.required_permissions.as_slice() else {
@@ -193,7 +193,7 @@ async fn an_outside_directory_offers_itself_as_the_recursive_grant_root() {
         .await
         .expect("resolution");
 
-    let directory = outside.path().canonicalize().expect("canonical");
+    let directory = crate::platform::canonicalize(outside.path()).expect("canonical");
     assert_eq!(
         resolution.required_permissions[0].path_scope_root,
         Some(directory.display().to_string())
@@ -695,7 +695,7 @@ async fn a_sensitive_path_asks_even_at_permission_always() {
 
     let sensitive_context =
         resolve_file_tool_permission(&directory.path().join(".env"), "read_file", &settings, None);
-    let resolved = std::fs::canonicalize(directory.path())
+    let resolved = crate::platform::canonicalize(directory.path())
         .expect("the directory resolves")
         .join(".env")
         .display()
@@ -784,13 +784,9 @@ async fn an_unresolvable_path_is_treated_as_outside_the_working_directory() {
 /// deepest ancestor that does, and a traversal hidden behind that missing
 /// directory is refused rather than resolved into the trusted root.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a policy path keeps the verbatim prefix, so the traversal check misreads it (US-009)"
-)]
 fn a_path_below_a_missing_directory_resolves_without_admitting_a_traversal() {
     let root = tempdir().expect("tempdir");
-    let canonical = std::fs::canonicalize(root.path()).expect("canonical root");
+    let canonical = crate::platform::canonicalize(root.path()).expect("canonical root");
 
     assert_eq!(
         canonicalize_for_policy(&canonical.join("missing/deeper/file.txt"))
@@ -999,7 +995,7 @@ async fn an_added_directory_joins_the_boundary_and_its_sibling_does_not() {
         .try_authorize_workspace(&cwd, &[std::path::PathBuf::from("../added")])
         .expect("authorize");
 
-    let canonical = std::fs::canonicalize(&added).expect("canonical");
+    let canonical = crate::platform::canonicalize(&added).expect("canonical");
     assert!(store.workspace_roots().contains(&canonical));
     let reached = store
         .resolve(

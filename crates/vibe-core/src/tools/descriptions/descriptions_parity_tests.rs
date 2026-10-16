@@ -138,7 +138,8 @@ struct Scratch {
 impl Scratch {
     fn build(tree: &Tree) -> Self {
         let temporary = tempfile::tempdir().expect("temporary root");
-        let root = fs::canonicalize(temporary.path()).expect("the temporary root canonicalizes");
+        let root = crate::platform::canonicalize(temporary.path())
+            .expect("the temporary root canonicalizes");
         for relative in &tree.directories {
             fs::create_dir_all(root.join(relative)).expect("scratch directory");
         }
