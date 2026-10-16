@@ -554,7 +554,14 @@ def run_steps(
             observe(steps, "ack", observed, None)
             continue
         if "write" in step:
-            acp.write_tree(Path(session.substitute(step.get("into", "$WS"))), step["write"])
+            into = step.get("into", "$WS")
+            target = Path(session.substitute(into))
+            # A placeholder left unresolved (a worktree that was never
+            # created) is a relative path, which would land in the
+            # driver's own working directory.
+            if not target.is_absolute():
+                raise OracleError(f"the write target {into} never resolved to a path")
+            acp.write_tree(target, step["write"])
             continue
         if "raw" in step:
             server.raw(step["raw"].encode("utf-8"))
