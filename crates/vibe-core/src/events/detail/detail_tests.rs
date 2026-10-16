@@ -41,7 +41,7 @@ fn a_detail_carries_neither_the_call_id_nor_the_raw_arguments() {
 fn a_call_display_carries_all_eight_reference_fields() {
     // An absolute path in the host's own spelling, which the summary repeats.
     let path = if cfg!(windows) {
-        r"C:	mp.txt"
+        r"C:\tmp\a.txt"
     } else {
         "/tmp/a.txt"
     };
