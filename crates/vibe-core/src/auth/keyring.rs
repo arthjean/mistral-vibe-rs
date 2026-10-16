@@ -6,12 +6,17 @@
 //! process-wide cache serves repeated lookups. This port adds one more legacy
 //! name to the read path: `mistral-vibe-rs`, the service every previously
 //! released build of this port wrote under, so an upgrade never asks the
-//! operator to sign in again.
+//! operator to sign in again. On Windows the native backend stores each
+//! secret in the reference's credential layout ([`win_vault`]), so the two
+//! implementations read each other's secrets there too.
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use thiserror::Error;
+
+#[cfg(any(windows, test))]
+mod win_vault;
 
 /// The service both implementations write under.
 pub const KEYRING_SERVICE: &str = "ai.mistral.vibe";
@@ -75,7 +80,7 @@ impl NativeKeyringBackend {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 fn entry(service: &str, account: &str) -> Result<keyring::Entry, KeyringFailure> {
     keyring::Entry::new(service, account).map_err(map_native_error)
 }
@@ -97,7 +102,11 @@ impl KeyringBackend for NativeKeyringBackend {
             .serialization
             .lock()
             .map_err(|_| KeyringFailure::Backend("keyring serialization poisoned".to_owned()))?;
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        #[cfg(target_os = "windows")]
+        {
+            win_vault::WinVaultLayout::new(win_vault::NativeTargets).get(service, account)
+        }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             match entry(service, account)?.get_password() {
                 Ok(secret) => Ok(Some(secret)),
@@ -117,7 +126,11 @@ impl KeyringBackend for NativeKeyringBackend {
             .serialization
             .lock()
             .map_err(|_| KeyringFailure::Backend("keyring serialization poisoned".to_owned()))?;
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        #[cfg(target_os = "windows")]
+        {
+            win_vault::WinVaultLayout::new(win_vault::NativeTargets).set(service, account, secret)
+        }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             entry(service, account)?
                 .set_password(secret)
@@ -135,7 +148,11 @@ impl KeyringBackend for NativeKeyringBackend {
             .serialization
             .lock()
             .map_err(|_| KeyringFailure::Backend("keyring serialization poisoned".to_owned()))?;
-        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        #[cfg(target_os = "windows")]
+        {
+            win_vault::WinVaultLayout::new(win_vault::NativeTargets).delete(service, account)
+        }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             entry(service, account)?
                 .delete_credential()
