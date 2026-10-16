@@ -267,12 +267,21 @@ def serve_gets(backend: rewind.RecordingBackend, gets: dict[str, Any]) -> None:
     handler.do_GET = do_get
 
 
+#: Where `flows/setup` stores a key through `setup/store-credential`: the
+#: keyring service both implementations use, and the provider's variable.
+KEYRING_SERVICE = "ai.mistral.vibe"
+STORED_ACCOUNT = "OTHER_ORACLE_KEY"
+
+
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = rewind.RecordingBackend()
     serve_gets(backend, scenario.get("gets", {}))
     root = Path(tempfile.mkdtemp(prefix="vibe-protocol-oracle-"))
     session = Session(root)
     world = session.world
+    stores_credential = '"setup/store-credential"' in json.dumps(scenario)
+    if stores_credential:
+        host_env.forget_credential(KEYRING_SERVICE, STORED_ACCOUNT)
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         (world.vibe_home / "config.toml").write_text(
@@ -326,6 +335,8 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
     finally:
         backend.close()
         shutil.rmtree(root, ignore_errors=True)
+        if stores_credential:
+            host_env.forget_credential(KEYRING_SERVICE, STORED_ACCOUNT)
 
 
 def init_repository(workspace: Path, remote: str | None = None) -> None:

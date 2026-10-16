@@ -97,6 +97,8 @@ ISO_TIME = re.compile(
 COMPACT_TIME = re.compile(r"\d{8}_\d{6}")
 # A session log directory ends in the first eight hex digits of its identifier.
 SESSION_DIRECTORY = re.compile(r"(session_<time>_)[0-9a-f]{8}")
+#: A file URI over a fixture root as `Path.as_uri()` spells it on Windows.
+WINDOWS_FILE_URI = re.compile(r"file:///(<(?:ws|vibe-home|home|root|bin)>)")
 # Loops are named by eight hex digits of a fresh identifier.
 SHORT_ID = re.compile(r"[0-9a-f]{8}")
 UUID = re.compile(
@@ -446,11 +448,13 @@ class World:
                 if isinstance(call_id, str) and call_id not in self.tool_calls:
                     self.tool_calls.append(call_id)
 
-    def substitute(self, value: Any) -> Any:
+    def substitute(self, value: Any, native: bool = False) -> Any:
+        """``value`` with its placeholders filled in; with ``native``, a path
+        argument spelled as a Windows client sends it (``host_env.native_path``)."""
         if isinstance(value, dict):
-            return {key: self.substitute(item) for key, item in value.items()}
+            return {key: self.substitute(item, native) for key, item in value.items()}
         if isinstance(value, list):
-            return [self.substitute(item) for item in value]
+            return [self.substitute(item, native) for item in value]
         if not isinstance(value, str):
             return value
         text = value.replace("$WS", str(self.workspace)).replace(
@@ -459,7 +463,7 @@ class World:
         for prefix, table in (("$S", self.sessions), ("$U", self.user_messages), ("$T", self.tool_calls)):
             for index in range(len(table), 0, -1):
                 text = text.replace(f"{prefix}{index}", table[index - 1])
-        return text
+        return host_env.native_path(value, text) if native else text
 
 
 def answer_client_request(
@@ -590,7 +594,7 @@ def run_scenario(
                         world.learn(item)
                     steps.append({"messages": observed})
                     continue
-                message = world.substitute(step["send"])
+                message = world.substitute(step["send"], native=True)
                 message.setdefault("jsonrpc", "2.0")
                 agent.send(message)
                 awaited = None if step.get("defer") else message.get("id")
@@ -687,6 +691,10 @@ class Normalizer:
         for path, placeholder in self.paths:
             value = value.replace(path, placeholder)
         value = host_env.posix_tails(value, ["<ws>", "<vibe-home>", "<home>", "<root>", "<bin>"])
+        if os.name == "nt":
+            # `Path.as_uri()` puts a slash before the drive (`file:///C:/...`)
+            # where a POSIX root brings its own.
+            value = WINDOWS_FILE_URI.sub(r"file://\1", value)
         # Short identifiers are scenario words that also occur inside prose.
         for original, placeholder in sorted(self.ids.items(), key=lambda item: -len(item[0])):
             if len(original) >= 8:

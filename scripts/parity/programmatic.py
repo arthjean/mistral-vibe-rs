@@ -42,7 +42,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tempfile
@@ -620,6 +619,7 @@ def run_once(
         stderr=subprocess.PIPE,
         env=env,
         cwd=world.workspace,
+        **(host_env.interruptible() if step.get("interrupt") else {}),
     )
     if step.get("interrupt"):
         assert process.stdin is not None
@@ -629,7 +629,7 @@ def run_once(
             time.sleep(0.05)
         # The request is in flight; the turn is running.
         time.sleep(0.5)
-        process.send_signal(signal.SIGINT)
+        host_env.interrupt(process)
         # `communicate` flushes a stdin it still holds, which raises on the pipe
         # closed above under Python 3.12.
         process.stdin = None
@@ -724,11 +724,15 @@ class Normalizer:
         self.authored = acp.authored_strings(scenario)
         self.paths = sorted(
             (
-                (paths["workspace"], "<ws>"),
-                (paths["vibeHome"], "<vibe-home>"),
-                (paths["home"], "<home>"),
-                (paths["root"], "<root>"),
-                (paths["backend"], "<backend>"),
+                (spelling, placeholder)
+                for path, placeholder in (
+                    (paths["workspace"], "<ws>"),
+                    (paths["vibeHome"], "<vibe-home>"),
+                    (paths["home"], "<home>"),
+                    (paths["root"], "<root>"),
+                    (paths["backend"], "<backend>"),
+                )
+                for spelling in host_env.path_spellings(path)
             ),
             key=lambda item: -len(item[0]),
         )
@@ -744,6 +748,7 @@ class Normalizer:
     def text(self, value: str) -> str:
         for path, placeholder in self.paths:
             value = value.replace(path, placeholder)
+        value = host_env.posix_tails(value, ["<ws>", "<vibe-home>", "<home>", "<root>"])
         for original, placeholder in sorted(self.ids.items(), key=lambda item: -len(item[0])):
             if len(original) >= 8:
                 value = value.replace(original, placeholder)

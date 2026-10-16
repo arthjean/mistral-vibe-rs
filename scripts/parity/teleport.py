@@ -652,7 +652,14 @@ def decode_diff(content: str) -> dict[str, Any]:
                 ["zstd", "-d", "-c"], input=raw, capture_output=True, check=True
             ).stdout
         except (OSError, subprocess.CalledProcessError):
-            return {"invalid": "zstd"}
+            # A host without the CLI (a stock Windows one) still has the
+            # standard library's decoder from Python 3.14 on.
+            try:
+                from compression import zstd
+
+                decompressed = zstd.decompress(raw)
+            except Exception:  # noqa: BLE001
+                return {"invalid": "zstd"}
     text = decompressed.decode("utf-8", "replace")
     return {
         "bytes": len(decompressed),

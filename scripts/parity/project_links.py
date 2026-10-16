@@ -200,6 +200,14 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         )
         if (seed := scenario.get("store")) is not None:
             path = world.vibe_home / STORE
+            if os.name == "nt":
+                # The seed is TOML, whose basic strings read a Windows
+                # separator as an escape.
+                for token, directory in (
+                    ("$VH", world.vibe_home), ("$HOME", world.home),
+                    ("$WS", world.workspace), ("$ROOT", world.root),
+                ):
+                    seed = seed.replace(token, json.dumps(str(directory))[1:-1])
             path.write_text(substitute(seed, world, session), encoding="utf-8", newline="")
             path.chmod(int(scenario.get("storeMode", 0o600)))
         env = {
