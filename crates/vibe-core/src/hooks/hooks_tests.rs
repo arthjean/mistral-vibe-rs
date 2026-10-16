@@ -367,6 +367,46 @@ async fn a_hook_past_its_timeout_is_stopped_and_reported() {
     );
 }
 
+/// A turn canceled while its hook runs takes the hook's whole process group
+/// down, as reference `HookExecutor.run` kills the process on cancellation:
+/// `/bin/sh` forks the background command, so stopping the shell alone would
+/// leave it running and holding the hook's output open.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_canceled_hook_takes_its_whole_process_group_down() {
+    let directory = tempfile::tempdir().expect("tempdir");
+    let marker = directory.path().join("child.pid");
+    let lingering = hook(
+        "lingering",
+        HookType::PreTool,
+        &format!("sleep 30 & echo $! > '{}'; wait", marker.display()),
+    );
+    let canceled = tokio::time::timeout(
+        std::time::Duration::from_millis(500),
+        executor::run_hook(&lingering, b"{}", directory.path()),
+    )
+    .await;
+    assert!(
+        canceled.is_err(),
+        "the hook settled before the turn canceled it"
+    );
+    let pid = std::fs::read_to_string(&marker).expect("the hook recorded its child");
+    let pid = pid.trim();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while std::process::Command::new("kill")
+        .args(["-0", pid])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+    {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the hook's background child {pid} outlived the canceled turn"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 #[tokio::test]
 async fn an_answer_that_is_not_a_response_object_is_reported_as_python_reports_it() {
     let yielded = run(
