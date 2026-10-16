@@ -63,7 +63,7 @@ impl PromptHost {
     #[must_use]
     pub fn detect(tool_names: &[String]) -> Self {
         Self {
-            home: std::env::home_dir(),
+            home: vibe_core::platform::user_home(),
             current_date: vibe_core::system_prompt::current_date(),
             platform: vibe_core::system_prompt::platform_display_name().to_owned(),
             shell: ShellEnvironment::detect(tool_names),

@@ -447,7 +447,7 @@ fn normalize(path: &Path) -> String {
 }
 
 fn home() -> Option<PathBuf> {
-    std::env::home_dir()
+    crate::platform::user_home()
 }
 
 fn expand_user(path: &Path) -> PathBuf {

@@ -306,7 +306,7 @@ fn gcloud_file() -> Option<PathBuf> {
     let directory = match std::env::var_os("CLOUDSDK_CONFIG") {
         Some(directory) => PathBuf::from(directory),
         None if cfg!(windows) => PathBuf::from(std::env::var_os("APPDATA")?).join("gcloud"),
-        None => std::env::home_dir()?.join(".config").join("gcloud"),
+        None => crate::platform::user_home()?.join(".config").join("gcloud"),
     };
     Some(directory.join("application_default_credentials.json"))
 }

@@ -150,7 +150,7 @@ fn is_untrusted_project_executable(candidate: &Path, project: &Path) -> bool {
         return false;
     }
     let overbroad = project.parent().is_none()
-        || std::env::home_dir()
+        || crate::platform::user_home()
             .and_then(|home| crate::platform::canonicalize(home).ok())
             .is_some_and(|home| home == project);
     if overbroad {
