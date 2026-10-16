@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- On Windows, `vibe`, `vibe-acp` and the app server keep their state in
+  `%USERPROFILE%\.vibe`, as the reference does: `VIBE_HOME` still wins, and
+  `HOME` (which Git Bash exports) is no longer read. Builds before this one
+  fell back to `.vibe` under the working directory when `HOME` was unset; move
+  `config.toml`, `trusted_folders.toml`, `vibehistory`, `sessions/` and `logs/`
+  from that directory to `%USERPROFILE%\.vibe` by hand to keep them, leaving
+  any project configuration in place. A Windows host with neither `USERPROFILE`
+  nor `HOMEDRIVE` and `HOMEPATH` set now refuses to start, naming `VIBE_HOME`,
+  instead of writing state into the working directory.
+
+- On Windows, tool results, editor locations, review and rewind paths, skill
+  diagnostics and git arguments use plain paths (`C:\work\proj`) instead of the
+  `\\?\` verbatim form, so managed worktrees can be created, nested
+  `AGENTS.md` files are discovered, and file tools publish paths with native
+  separators as the reference does. Mentioned files and images in a unified
+  turn reach the model as `file:///C:/...` URIs. A `missing\..\..` traversal
+  below a directory that does not exist is still refused. Closing or stopping
+  a session that never ran a turn now removes the worktree it created.
+
+- On Windows, the API key and MCP OAuth tokens are stored where the reference
+  stores them (generic credential, target `ai.mistral.vibe`, moved to
+  `<account>@ai.mistral.vibe` when another account holds it), so switching
+  between the two no longer asks to sign in again. A key an earlier build
+  stored under `MISTRAL_API_KEY.ai.mistral.vibe` is found and moved.
+
 - Interrupting a turn while a hook runs now stops the hook on Linux and
   macOS, as the reference does: the whole process group is killed, where only
   the shell that launched the hook command was before.
