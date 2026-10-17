@@ -14,6 +14,7 @@
 | 1.6 | 2026-10-17 | Arthur Jean | Linux verification moved out of the Windows epics: from EP-004 on, a story's gates run on Windows only, and EP-007 (US-026) verifies on Linux, once EP-004 to EP-006 are in review, that Linux and macOS behavior is unchanged |
 | 1.7 | 2026-10-17 | Arthur Jean | EP-004 review: US-017's cursor-position criterion restated as 13 tests untagged and the UTF-16 test `windows by design`, as decided in the 1.5 measurement; the windows-2022 job, red since EP-003 on fixture paths that assumed the checkout and the temporary directory share a drive and carry no 8.3 short name, fixed so the job can certify US-017 |
 | 1.8 | 2026-10-17 | Arthur Jean | EP-005 implementation: the US-021 default-editor question answered (match the reference: `nano` on every platform, and an editor that cannot start is named on the diagnostics line); the paste-burst detector lives in the event loop, ahead of `accepts_key_event`, because it needs a timer and must see every key before any consumer; a Windows path in the composer, the key burst read as a paste and the named editor failure are ledgered divergences; US-019's 10,000-character paste measures 1.5 s against its 1 s target, because crossterm 0.29 reads the console one record per call (about 75 us each under ConPTY, 20,000 records for 10,000 characters, measured in a release build with the records already buffered), so the maintainer restated the target to 2 s rather than own the Windows console input reader |
+| 1.9 | 2026-10-17 | Arthur Jean | EP-005 review: the windows-2022 runner measures the 10,000-character paste at 2.5 to 3.1 s in a debug build, against 1.7 s on the workstation, because its console round trips are slower; the maintainer kept 2 s as the workstation target and gave the hosted job a 4 s regression bound rather than own the console reader. A burst misread from keys queued during a stall now closes once typing resumes, so an Enter typed after it still submits |
 
 ## Problem Statement
 
@@ -443,7 +444,7 @@ Make the composer accept every character and every paste a Windows user produces
 
 **Acceptance Criteria:**
 - [ ] Given a 50-line clipboard pasted with Ctrl+V or right-click in Windows Terminal and in conhost, when the paste completes, then the composer holds all 50 lines and nothing is submitted.
-- [ ] Given a 10,000-character paste, when it completes, then all characters are present within 2 s. Restated from 1 s on 2026-10-17: crossterm 0.29 reads the Windows console one record per call, which puts the floor near 1.5 s.
+- [ ] Given a 10,000-character paste, when it completes, then all characters are present within 2 s on a workstation, and within 4 s on the hosted windows-2022 job. Restated from 1 s on 2026-10-17: crossterm 0.29 reads the Windows console one record per call, which puts the floor near 1.5 s on a workstation and past 2 s on the hosted runner.
 - [ ] Given a person typing with at least 20 ms between keys and pressing Enter, when Enter is pressed, then the prompt is submitted.
 - [ ] Given a paste containing Tab or Esc characters, when it lands, then it neither triggers completion nor cancels the composer.
 - [ ] Given a paste ending with a newline, when the burst ends, then the trailing newline is inserted rather than submitting.
@@ -565,7 +566,7 @@ Verify on Linux, once, that the Windows epics left Linux and macOS behavior unch
 
 ## Non-Functional Requirements
 
-- **Performance:** The required Windows CI job completes in ≤ 90 min on windows-2022; no single test binary exceeds 15 min. A 10,000-character paste lands in ≤ 2 s. Vibe home resolution adds ≤ 1 ms to startup.
+- **Performance:** The required Windows CI job completes in ≤ 90 min on windows-2022; no single test binary exceeds 15 min. A 10,000-character paste lands in ≤ 2 s on a workstation (≤ 4 s on the hosted windows-2022 job). Vibe home resolution adds ≤ 1 ms to startup.
 - **Security:** 0 call sites spawn `cmd` with user-, model-, or server-controlled data except the shell tools, hooks, and fallback shell whose contract is to run commands; sensitive-pattern matching on Windows detects 100% of the cases in the policy tests across `\`, `/`, and case variants; 0 regressions in Linux policy parity replays.
 - **Accessibility:** 100% of printable characters on the US, French AZERTY, and German QWERTZ layouts are typeable in the composer; every action reachable by keyboard on Linux stays reachable on Windows.
 - **Scalability:** Path normalization handles paths up to 32,767 characters (the Windows extended-length limit) without error; paste detection handles bursts of 100,000 characters without dropping input.
