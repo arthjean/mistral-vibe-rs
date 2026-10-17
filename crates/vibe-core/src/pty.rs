@@ -20,12 +20,15 @@ use std::path::Path;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
+use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 use crate::child::{ChildExit, GROUP_POLL_INTERVAL, Rung, TerminationError};
 
+mod console;
 #[cfg(test)]
 mod pty_tests;
+
+pub use console::pseudoconsole_streams;
 
 /// The terminals a managed session tries, in the order it tries them, and under
 /// the names a session reports through `pty_backend`.
@@ -84,8 +87,17 @@ pub(crate) struct PtyTerminal {
     )]
     group: Option<i32>,
     /// Held so the terminal outlives the child: dropping the master closes the
-    /// descriptor the reader thread is still draining.
-    _master: Box<dyn MasterPty + Send>,
+    /// descriptor the reader thread is still draining. On Windows it is the
+    /// pseudoconsole, which [`PtyTerminal::close_console`] closes once the
+    /// child is gone so the reader reaches its end.
+    #[cfg_attr(
+        not(windows),
+        expect(
+            dead_code,
+            reason = "only a pseudoconsole is closed before the terminal drops"
+        )
+    )]
+    master: Option<Box<dyn Send>>,
     exit: Option<ChildExit>,
 }
 
@@ -181,6 +193,18 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
         builder.arg(argument);
     }
     builder.cwd(spec.working_directory);
+    // `portable-pty` seeds a Windows child from the registry rather than from
+    // this process, which loses what the session's environment holds, such as
+    // the `PATH` a Git Bash put its tools on. The reference hands the child
+    // this process's environment, so it is passed explicitly. On POSIX the
+    // seed already is this process's, plus a `SHELL` when none is set, which
+    // the child keeps.
+    if cfg!(windows) {
+        builder.env_clear();
+        for (key, value) in std::env::vars_os() {
+            builder.env(key, value);
+        }
+    }
     for (key, value) in crate::config::inherited_by_children() {
         builder.env(key, value);
     }
@@ -205,12 +229,13 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
         .master
         .take_writer()
         .map_err(|error| format!("the terminal cannot be written: {error}"))?;
+    let (reader, writer) = pseudoconsole_streams(reader, writer);
     let group = child.process_id().and_then(|id| i32::try_from(id).ok());
     Ok((
         PtyTerminal {
             child,
             group,
-            _master: pair.master,
+            master: Some(Box::new(pair.master)),
             exit: None,
         },
         PtyStreams {
@@ -218,6 +243,40 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
             writer: PtyWriter::new(writer),
         },
     ))
+}
+
+/// Ends `pid` and every process still parented under it.
+///
+/// Reference `force_termination` (`vibe/_processes/_windows.py`) runs
+/// `taskkill /PID <pid> /T /F`, since a child started under a pseudoconsole
+/// belongs to no job object that could take its tree down. A process already
+/// gone is not a failure: the caller confirms the exit itself.
+///
+/// # Errors
+///
+/// When `taskkill` itself cannot be started.
+#[cfg(windows)]
+pub fn kill_tree(pid: u32) -> std::io::Result<()> {
+    use std::os::windows::process::CommandExt as _;
+
+    /// `CREATE_NO_WINDOW`: a console-less host never flashes one for this.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let program = std::env::var_os("SystemRoot").map_or_else(
+        || std::path::PathBuf::from("taskkill.exe"),
+        |root| {
+            std::path::PathBuf::from(root)
+                .join("System32")
+                .join("taskkill.exe")
+        },
+    );
+    std::process::Command::new(program)
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()
+        .map(drop)
 }
 
 /// How a terminal child ended.
@@ -388,24 +447,72 @@ impl PtyTerminal {
         }
         #[cfg(windows)]
         {
-            // ConPTY hands the child no job object, so the leader is the only
-            // member this backend can address; the shutdown ladder confirms it.
+            // ConPTY hands the child no job object. The tree kill reaches the
+            // descendants still parented under a live leader, and closing the
+            // pseudoconsole ends the ones attached to it that the leader left
+            // behind. The console is closed even when the leader would not
+            // die, so that failure is reported only after the close.
             if !already_signaled {
                 self.signal(true)?;
             }
-            self.shut_down(grace, Rung::Wait).await.map(drop)
+            let exit = self.shut_down(grace, Rung::Wait).await.map(drop);
+            let closed = self.close_console(grace).await;
+            exit.and(closed)
         }
     }
 
+    /// Closes the pseudoconsole, which ends every process still attached to it
+    /// and lets the reader reach end of file: ConPTY reports end of file when
+    /// the console closes, not when the child exits.
+    ///
+    /// `ClosePseudoConsole` blocks until the console host is gone, so it runs
+    /// on a blocking task and a close that outlasts `grace` is a failure. A
+    /// POSIX terminal has nothing to close before it drops.
+    pub(crate) async fn close_console(&mut self, grace: Duration) -> Result<(), TerminationError> {
+        #[cfg(windows)]
+        if let Some(master) = self.master.take() {
+            let closing = tokio::task::spawn_blocking(move || drop(master));
+            return match tokio::time::timeout(grace, closing).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(error)) => Err(TerminationError::Console(error.to_string())),
+                Err(_) => Err(TerminationError::Console(
+                    "ClosePseudoConsole did not return before the cleanup deadline".to_owned(),
+                )),
+            };
+        }
+        let _ = grace;
+        Ok(())
+    }
+
     /// Signals the whole group, falling back to the child when none is owned.
+    ///
+    /// On Windows both rungs end the leader's whole tree, as reference
+    /// `request_termination` does by forcing it, and a leader that already
+    /// exited needs nothing.
     pub(crate) fn signal(&mut self, force: bool) -> Result<(), TerminationError> {
         #[cfg(unix)]
         if let Some(group) = self.group {
             return crate::child::signal_group(group, force);
         }
         let _ = force;
-        self.child
-            .kill()
-            .map_err(|error| TerminationError::Signal(error.to_string()))
+        #[cfg(windows)]
+        {
+            if matches!(self.try_wait(), Ok(Some(_))) {
+                return Ok(());
+            }
+            if let Some(pid) = self.child.process_id() {
+                kill_tree(pid).map_err(|error| TerminationError::Signal(error.to_string()))?;
+            }
+            if matches!(self.try_wait(), Ok(Some(_))) {
+                return Ok(());
+            }
+        }
+        self.child.kill().or_else(|error| {
+            if matches!(self.try_wait(), Ok(Some(_))) {
+                Ok(())
+            } else {
+                Err(TerminationError::Signal(error.to_string()))
+            }
+        })
     }
 }

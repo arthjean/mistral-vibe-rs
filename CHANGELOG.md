@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- On Windows, the Unified Harness shell tool and `process.*` run under one
+  shell, as the reference does: Git Bash (`bash -c`) when it is installed,
+  PowerShell (`-NoLogo -NoProfile -Command`) otherwise, configured through the
+  `shell` key of the `git_bash` or `powershell` tool, and the shell tool's
+  description names that family. Background processes used to fail with
+  `shell_resolution` on every Windows session; a configured shell that does not
+  resolve now fails naming it. Manual `!` commands also prefer Git Bash over
+  `cmd.exe`.
+
+- On Windows, terminal sessions no longer stall on ConPTY's startup cursor
+  request, return everything the command wrote without the console's own
+  escape sequences, and end the command's background jobs when they are
+  stopped, interrupted or released. The `cmd.exe` fallback receives the command
+  as written, so `echo "a b"` prints `"a b"` instead of `\"a b\"`.
+
 - On Windows, `vibe`, `vibe-acp` and the app server keep their state in
   `%USERPROFILE%\.vibe`, as the reference does: `VIBE_HOME` still wins, and
   `HOME` (which Git Bash exports) is no longer read. Builds before this one

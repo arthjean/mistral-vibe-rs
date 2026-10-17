@@ -1,18 +1,20 @@
-//! `file_system.bash`: one command through a login shell, bounded in time and
-//! in output.
+//! `file_system.bash`: one command through the session's shell, bounded in
+//! time and in output.
 //!
 //! Reference `harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/_shell_tools.py`:
-//! the shell is the configured one or the first of zsh, bash and sh, the
-//! environment is told no terminal is attached, each stream keeps its first
-//! 16 000 bytes, and a command past its timeout loses its whole process group.
+//! the shell is the one the session's command environment resolves (see
+//! [`HostShells::command_shell`]), the environment is told no terminal is
+//! attached, each stream keeps its first 16 000 bytes, and a command past its
+//! timeout loses its whole process group.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt};
+use vibe_core::tools::shell::HostShells;
 
 use crate::state::ToolResult;
 
@@ -23,6 +25,9 @@ const DEFAULT_TIMEOUT_SECONDS: u64 = 300;
 #[derive(Debug, Clone)]
 pub struct ShellContext {
     pub cwd: PathBuf,
+    /// What the host offers, which decides the command environment the shell
+    /// tool and `process.*` share.
+    pub host: HostShells,
     /// The configured shell, which wins over the search.
     pub shell: Option<String>,
     /// Variables the session adds on top of the process environment.
@@ -76,10 +81,11 @@ async fn run(arguments: &Value, context: &ShellContext) -> Result<Value, String>
             })?,
     };
     let env = shell_env(&context.env);
-    let argv = shell_argv(&command, context.shell.as_deref(), &env)?;
-    let mut process = tokio::process::Command::new(&argv[0]);
+    let shell = context.host.command_shell(context.shell.as_deref(), &env)?;
+    let mut process = tokio::process::Command::new(&shell.executable);
     process
-        .args(&argv[1..])
+        .args(&shell.arguments)
+        .arg(&command)
         .current_dir(&context.cwd)
         .env_clear()
         .envs(&env)
@@ -163,11 +169,7 @@ fn kill_group(pid: Option<u32>) {
     }
     #[cfg(windows)]
     if let Some(pid) = pid {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/F", "/T", "/PID", &pid.to_string()])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        let _ = vibe_core::pty::kill_tree(pid);
     }
 }
 
@@ -200,81 +202,6 @@ pub fn shell_env(extra: &BTreeMap<String, String>) -> BTreeMap<String, String> {
         env.insert(key.to_owned(), value.to_owned());
     }
     env
-}
-
-fn shell_argv(
-    command: &str,
-    configured: Option<&str>,
-    env: &BTreeMap<String, String>,
-) -> Result<Vec<String>, String> {
-    if cfg!(windows) {
-        let shell = configured.unwrap_or("powershell").to_owned();
-        return Ok(vec![
-            shell,
-            "-NoLogo".to_owned(),
-            "-NoProfile".to_owned(),
-            "-Command".to_owned(),
-            command.to_owned(),
-        ]);
-    }
-    let shell = resolve_shell(configured, env)?;
-    Ok(vec![shell, "-lc".to_owned(), command.to_owned()])
-}
-
-/// The configured shell, else the first of zsh, bash and sh on the `PATH`,
-/// else at their usual places.
-pub fn resolve_shell(
-    configured: Option<&str>,
-    env: &BTreeMap<String, String>,
-) -> Result<String, String> {
-    let search = env.get("PATH").map(String::as_str).unwrap_or_default();
-    if let Some(configured) = configured {
-        return which(configured, search)
-            .ok_or_else(|| "configured shell is not executable".to_owned());
-    }
-    for candidate in ["zsh", "bash", "sh"] {
-        if let Some(found) = which(candidate, search) {
-            return Ok(found);
-        }
-    }
-    for candidate in [
-        "/bin/zsh",
-        "/usr/bin/zsh",
-        "/bin/bash",
-        "/usr/bin/bash",
-        "/bin/sh",
-        "/usr/bin/sh",
-    ] {
-        if is_executable(Path::new(candidate)) {
-            return Ok(candidate.to_owned());
-        }
-    }
-    Err("no POSIX shell found".to_owned())
-}
-
-fn which(name: &str, search: &str) -> Option<String> {
-    if name.contains(std::path::MAIN_SEPARATOR) {
-        return is_executable(Path::new(name)).then(|| name.to_owned());
-    }
-    std::env::split_paths(search)
-        .map(|directory| directory.join(name))
-        .find(|candidate| is_executable(candidate))
-        .map(|found| found.to_string_lossy().into_owned())
-}
-
-fn is_executable(path: &Path) -> bool {
-    let Ok(metadata) = std::fs::metadata(path) else {
-        return false;
-    };
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        metadata.is_file()
-    }
 }
 
 fn io_message(error: &std::io::Error) -> String {

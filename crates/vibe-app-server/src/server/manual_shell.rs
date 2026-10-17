@@ -288,23 +288,17 @@ struct ShellRun {
     interrupted: bool,
 }
 
-/// The shell a manual command runs under: `$SHELL -c` on POSIX (reference
-/// `create_subprocess_shell` with `executable=$SHELL`), `cmd.exe /d /c` on
-/// Windows.
+/// The shell a manual command runs under: reference `spawn_shell_command`,
+/// which drives `$SHELL -c` on POSIX and on Windows a detected Git Bash with
+/// `-c`, else `cmd.exe /d /c`.
 fn shell_spec(command: &str, cwd: &Path) -> ProcessSpec {
-    let (program, arguments) = if cfg!(windows) {
-        ("cmd.exe".to_owned(), vec!["/d".to_owned(), "/c".to_owned()])
-    } else {
-        (
-            std::env::var("SHELL")
-                .ok()
-                .filter(|shell| !shell.is_empty())
-                .unwrap_or_else(|| "/bin/sh".to_owned()),
-            vec!["-c".to_owned()],
-        )
-    };
-    let mut spec = ProcessSpec::new(program, cwd);
-    spec.arguments = arguments.into_iter().chain([command.to_owned()]).collect();
+    let shell = vibe_core::tools::shell::HostShells::detect().legacy_shell();
+    let mut spec = ProcessSpec::new(shell.executable, cwd);
+    spec.arguments = shell
+        .arguments
+        .into_iter()
+        .chain([command.to_owned()])
+        .collect();
     spec.max_output_bytes = usize::MAX;
     // Reference `_shell_environment`: a non-interactive child whose pagers
     // exit and whose output is UTF-8. `LC_ALL` would override `LC_CTYPE`.

@@ -7,6 +7,10 @@
 //! prose, which `NOTICE` requires and the parity ledger records.
 
 use serde_json::{Value, json};
+use vibe_core::tools::shell::CommandEnvironment;
+
+#[cfg(test)]
+mod catalog_tests;
 
 /// One declaration as the request carries it.
 #[derive(Debug, Clone, PartialEq)]
@@ -50,9 +54,35 @@ pub fn harness_arguments(model_name: &str, arguments: Value) -> Value {
     })
 }
 
-/// Every declaration, in the order the reference sends them.
+/// What the `bash` tool tells the model about the shell it drives.
+///
+/// Reference `CommandEnvironment::profile` (`harness/core/src/core/tools/`)
+/// describes one tool per command environment, so a model on Windows learns
+/// which syntax its commands are read in; the prose here is this port's own.
+fn bash_description(environment: CommandEnvironment) -> &'static str {
+    match environment {
+        CommandEnvironment::Unix => {
+            "Run a command through the login shell in the working directory and return its output."
+        }
+        CommandEnvironment::GitBash => {
+            "Run a command through Git Bash on native Windows, in the working directory, and \
+             return its output. Each call starts a fresh `bash -c` process, so write POSIX shell \
+             syntax (not PowerShell or cmd.exe syntax); stdout, stderr and the return code come \
+             back separately."
+        }
+        CommandEnvironment::PowerShell => {
+            "Run a command through PowerShell on native Windows, in the working directory, and \
+             return its output. Each call starts a fresh PowerShell process, so write PowerShell \
+             syntax and cmdlets (not Bash or cmd.exe syntax); stdout, stderr and the return code \
+             come back separately."
+        }
+    }
+}
+
+/// Every declaration, in the order the reference sends them, with the shell
+/// tool described for the session's command `environment`.
 #[must_use]
-pub fn model_tools() -> Vec<ModelTool> {
+pub fn model_tools(environment: CommandEnvironment) -> Vec<ModelTool> {
     vec![
         ModelTool {
             name: "search_tool_functions",
@@ -162,7 +192,7 @@ pub fn model_tools() -> Vec<ModelTool> {
         },
         ModelTool {
             name: "bash",
-            description: "Run a command through the login shell in the working directory and return its output.".to_owned(),
+            description: bash_description(environment).to_owned(),
             parameters: json!({
                 "type": "object",
                 "properties": {

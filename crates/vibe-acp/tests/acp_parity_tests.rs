@@ -170,10 +170,6 @@ fn the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the bash scenarios time out under ConPTY on Windows Server 2022 (US-017)"
-)]
 fn the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     replay(UNIFIED_CORPUS, "unified");
 }

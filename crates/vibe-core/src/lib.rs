@@ -46,7 +46,7 @@ pub mod policy;
 pub mod process;
 pub mod prompt;
 pub mod provider;
-mod pty;
+pub mod pty;
 pub mod pyurl;
 pub mod redaction;
 mod remote_tools;

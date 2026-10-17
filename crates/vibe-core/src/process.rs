@@ -272,8 +272,8 @@ impl TerminalManager {
             Some(started) => started,
             None => {
                 let mut command = Command::new(&spec.program);
+                pass_arguments(&mut command, &spec.program, &spec.arguments);
                 command
-                    .args(&spec.arguments)
                     .current_dir(&spec.working_directory)
                     .envs(crate::config::inherited_by_children());
                 for key in &spec.unset_environment {
@@ -561,6 +561,14 @@ impl TerminalManager {
     }
 
     async fn join_readers(&self, process: &ManagedProcess) {
+        // A pseudoconsole reaches end of file when it is closed rather than
+        // when its child exits, so it is closed before its reader is awaited.
+        // One that does not close leaves the reader short of its end.
+        if let TerminalChild::Terminal(terminal) = &mut *process.child.lock().await
+            && terminal.close_console(self.cleanup_grace).await.is_err()
+        {
+            process.output_dropped.store(true, Ordering::Release);
+        }
         let readers = std::mem::take(&mut *process.readers.lock().await);
         for mut reader in readers {
             if tokio::time::timeout(self.cleanup_grace, &mut reader)
@@ -586,6 +594,10 @@ impl ManagedProcess {
                     message,
                 }
             }
+            error @ TerminationError::Console(_) => ProcessError::Signal {
+                terminal_id: self.id.clone(),
+                message: error.to_string(),
+            },
         }
     }
 }
@@ -622,6 +634,24 @@ impl GitInspector for TerminalManager {
             Ok(GitState::from_porcelain(&text))
         })
     }
+}
+
+/// Hands `arguments` to `program`.
+///
+/// `cmd.exe` does not split its command line the way the C runtime does: it
+/// reads everything after `/c` as the command, quotes included. Quoting each
+/// argument for the C runtime, as std does, turns `echo "a b"` into
+/// `"echo \"a b\""`, which `cmd.exe` then prints with the backslashes. So the
+/// arguments reach it as one raw command line, as the hook runner already
+/// passes its own (`hooks/executor.rs`).
+fn pass_arguments(command: &mut Command, program: &std::path::Path, arguments: &[String]) {
+    #[cfg(windows)]
+    if crate::tools::shell::is_cmd(program) {
+        command.raw_arg(arguments.join(" "));
+        return;
+    }
+    let _ = program;
+    command.args(arguments);
 }
 
 /// Drains a terminal into the same queue the pipe readers feed.
@@ -773,6 +803,9 @@ pub fn suspend_current_process() -> Result<(), String> {
 pub fn suspend_current_process() -> Result<(), String> {
     Err("suspend is unsupported on this platform".to_owned())
 }
+
+#[cfg(all(test, windows))]
+mod conpty_tests;
 
 #[cfg(test)]
 mod tests {

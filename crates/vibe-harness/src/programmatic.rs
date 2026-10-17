@@ -92,8 +92,9 @@ pub fn inventory() -> Vec<Callable> {
         }
         json!({"type": "object", "properties": properties, "required": required, "additionalProperties": false})
     };
+    // Only the parameters are read, and every command environment shares them.
     let direct = |name: &str| {
-        catalog::model_tools()
+        catalog::model_tools(vibe_core::tools::shell::CommandEnvironment::Unix)
             .into_iter()
             .find(|tool| tool.name == name)
             .map(|tool| tool.parameters)
@@ -466,7 +467,7 @@ fn todo_result_schema() -> Value {
         },
         "required": ["verb", "todos", "total_count"],
     });
-    let input = catalog::model_tools()
+    let input = catalog::model_tools(vibe_core::tools::shell::CommandEnvironment::Unix)
         .into_iter()
         .find(|tool| tool.name == "todo")
         .map(|tool| tool.parameters)

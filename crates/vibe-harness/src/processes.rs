@@ -2,11 +2,13 @@
 //! keeps talking to after the call returns.
 //!
 //! Reference `harness/runtimes/python/.../vibe/_processes/` and
-//! `_process_actions.py`: each process runs `<shell> -lc <command>` on a
-//! terminal of its own, in a session and process group of its own, and every
-//! byte it writes is kept under a logical cursor counted from its start. A
-//! session lists its processes in its public state, and each one that ends
-//! leaves a notification the model reads before its next call.
+//! `_process_actions.py`: each process runs under the shell its session's
+//! command environment resolves (`<shell> -lc <command>` on POSIX, Git Bash's
+//! `-c` or PowerShell's `-Command` on Windows) on a terminal of its own, in a
+//! session and process group of its own, and every byte it writes is kept
+//! under a logical cursor counted from its start. A session lists its
+//! processes in its public state, and each one that ends leaves a notification
+//! the model reads before its next call.
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -17,9 +19,11 @@ use std::time::{Duration, Instant};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use vibe_core::tools::shell::CommandEnvironment;
 
 use crate::clock::now_millis;
 use crate::state::ToolResult;
+use crate::tools::shell::ShellContext;
 
 /// The most a page returns, whatever `maxBytes` asks.
 const MAX_PAGE: usize = 64_000;
@@ -34,7 +38,8 @@ const WRITE_SETTLE: Duration = Duration::from_millis(50);
 /// How often a waiting read looks again.
 const POLL: Duration = Duration::from_millis(250);
 
-/// What every process's environment holds unless the call says otherwise.
+/// What every process's environment holds unless the call says otherwise:
+/// reference `_POSIX_ENV_DEFAULTS`, which Git Bash shares.
 const DEFAULT_ENVIRONMENT: [(&str, &str); 7] = [
     ("TERM", "xterm-256color"),
     ("COLUMNS", "120"),
@@ -44,6 +49,8 @@ const DEFAULT_ENVIRONMENT: [(&str, &str); 7] = [
     ("LESS", "-FX"),
     ("DEBIAN_FRONTEND", "noninteractive"),
 ];
+/// Reference `_POWERSHELL_ENV_DEFAULTS`.
+const POWERSHELL_ENVIRONMENT: [(&str, &str); 2] = [("GIT_PAGER", "more"), ("PAGER", "more")];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -109,11 +116,8 @@ struct Process {
     changed: Condvar,
     output: Mutex<Output>,
     writer: Mutex<Option<Box<dyn Write + Send>>>,
-    /// The process group, the root's own ID.
-    #[cfg_attr(
-        not(unix),
-        expect(dead_code, reason = "only the POSIX process-group signals read it")
-    )]
+    /// The process group, the root's own ID, which on Windows names the tree
+    /// a stop ends.
     group: Option<i32>,
     killer: Mutex<Option<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
     directory: Option<PathBuf>,
@@ -198,17 +202,37 @@ pub fn process_id(session_id: &str, action_id: &str, call_id: &str) -> String {
     format!("process-{}-{}", &session[..12], &hex_digest(&seed)[..24])
 }
 
-/// The shell a command runs under: zsh, bash or sh, the first found on
-/// `PATH`.
-fn shell(environment: &BTreeMap<String, String>) -> Option<PathBuf> {
-    let path = environment.get("PATH").cloned().unwrap_or_default();
-    let fallbacks = ["/bin", "/usr/bin"];
-    ["zsh", "bash", "sh"].iter().find_map(|name| {
-        std::env::split_paths(&path)
-            .chain(fallbacks.iter().map(PathBuf::from))
-            .map(|directory| directory.join(name))
-            .find(|candidate| candidate.is_file())
-    })
+/// Reference `_merge_process_environment`: the environment's defaults under
+/// the inherited variables, then the call's own over both. A Windows
+/// environment compares names without case, as its variables are.
+fn process_environment(
+    environment: CommandEnvironment,
+    explicit: Option<&serde_json::Map<String, Value>>,
+) -> BTreeMap<String, String> {
+    let windows = environment != CommandEnvironment::Unix;
+    let same = |left: &str, right: &str| {
+        if windows {
+            left.eq_ignore_ascii_case(right)
+        } else {
+            left == right
+        }
+    };
+    let mut merged: BTreeMap<String, String> = std::env::vars().collect();
+    let defaults: &[(&str, &str)] = if environment == CommandEnvironment::PowerShell {
+        &POWERSHELL_ENVIRONMENT
+    } else {
+        &DEFAULT_ENVIRONMENT
+    };
+    for (key, value) in defaults {
+        if !merged.keys().any(|existing| same(existing, key)) {
+            merged.insert((*key).to_owned(), (*value).to_owned());
+        }
+    }
+    for (key, value) in explicit.into_iter().flatten() {
+        merged.retain(|existing, _| !same(existing, key));
+        merged.insert(key.clone(), value.as_str().unwrap_or_default().to_owned());
+    }
+    merged
 }
 
 /// Reference `_process_actions` argument checks, which refuse a call before
@@ -449,6 +473,7 @@ impl ProcessManager {
         arguments: &Value,
         workspace: &Path,
         session_dir: Option<&Path>,
+        shell: &ShellContext,
     ) -> ToolResult {
         if let Some(refused) = precheck("process.start", arguments, workspace) {
             return refused;
@@ -459,15 +484,10 @@ impl ProcessManager {
             return success(json!({"processId": process_id, "status": status.as_str()}));
         }
         let cwd = start_directory(arguments, workspace);
-        let mut environment: BTreeMap<String, String> = std::env::vars().collect();
-        for (key, value) in DEFAULT_ENVIRONMENT {
-            environment
-                .entry(key.to_owned())
-                .or_insert_with(|| value.to_owned());
-        }
-        for (key, value) in arguments["env"].as_object().into_iter().flatten() {
-            environment.insert(key.clone(), value.as_str().unwrap_or_default().to_owned());
-        }
+        let environment = process_environment(
+            shell.host.command_environment(),
+            arguments["env"].as_object(),
+        );
         let start_failed = |stage: &str| {
             failure(
                 "process_start_failed",
@@ -475,8 +495,20 @@ impl ProcessManager {
                 json!({"processId": process_id, "stage": stage}),
             )
         };
-        let Some(shell) = shell(&environment) else {
-            return start_failed("shell_resolution");
+        let shell = match shell
+            .host
+            .command_shell(shell.shell.as_deref(), &environment)
+        {
+            Ok(shell) => shell,
+            // The reference's message carries no reason; naming the shell that
+            // was tried is this port's addition (`docs/parity.md`).
+            Err(reason) => {
+                return failure(
+                    "process_start_failed",
+                    &format!("Background process could not be started: {reason}"),
+                    json!({"processId": process_id, "stage": "shell_resolution"}),
+                );
+            }
         };
         let rows = environment
             .get("LINES")
@@ -494,8 +526,9 @@ impl ProcessManager {
         }) else {
             return start_failed("spawn");
         };
-        let mut builder = CommandBuilder::new(&shell);
-        builder.args(["-lc", command]);
+        let mut builder = CommandBuilder::new(&shell.executable);
+        builder.args(&shell.arguments);
+        builder.arg(command);
         builder.cwd(&cwd);
         builder.env_clear();
         for (key, value) in &environment {
@@ -505,12 +538,12 @@ impl ProcessManager {
             return start_failed("spawn");
         };
         drop(pair.slave);
-        let (Ok(mut reader), Ok(writer)) =
-            (pair.master.try_clone_reader(), pair.master.take_writer())
+        let (Ok(reader), Ok(writer)) = (pair.master.try_clone_reader(), pair.master.take_writer())
         else {
             let _ = child.kill();
             return start_failed("post_spawn");
         };
+        let (mut reader, writer) = vibe_core::pty::pseudoconsole_streams(reader, writer);
         let directory = session_dir.map(|dir| dir.join("processes").join(&process_id));
         if let Some(directory) = &directory {
             let _ = std::fs::create_dir_all(directory);
@@ -559,9 +592,15 @@ impl ProcessManager {
         {
             let manager = Arc::clone(self);
             let process = Arc::clone(&process);
-            let master = pair.master;
+            let mut master = Some(pair.master);
             std::thread::spawn(move || {
                 let exit = child.wait();
+                // A pseudoconsole reaches end of file once it is closed, not
+                // when its root exits, and closing it ends whatever the root
+                // left attached to it; a POSIX terminal drains first.
+                if cfg!(windows) {
+                    drop(master.take());
+                }
                 let deadline = Instant::now() + DRAIN_WAIT;
                 while Instant::now() < deadline
                     && !process
@@ -593,7 +632,11 @@ impl ProcessManager {
             let Ok(mut lifecycle) = process.lifecycle.lock() else {
                 return;
             };
-            let (status, exit_code) = if lifecycle.stopping && code.is_none_or(|code| code < 0) {
+            // A forced end on Windows exits with a plain code rather than a
+            // signal, so there the stop under way is what marks it, as
+            // reference `_finish` marks any end while stopping.
+            let forced = cfg!(windows) || code.is_none_or(|code| code < 0);
+            let (status, exit_code) = if lifecycle.stopping && forced {
                 (Status::Stopped, None)
             } else if let Some(code) = code {
                 (Status::Completed, Some(code))
@@ -1071,8 +1114,13 @@ impl Process {
         }
     }
 
-    #[cfg(not(unix))]
+    /// Reference `request_termination` forces on Windows too: the root's whole
+    /// tree, then the root itself should the tree kill miss it.
+    #[cfg(windows)]
     fn signal(&self, _force: bool) {
+        if let Some(pid) = self.group.and_then(|pid| u32::try_from(pid).ok()) {
+            let _ = vibe_core::pty::kill_tree(pid);
+        }
         if let Ok(mut killer) = self.killer.lock()
             && let Some(killer) = killer.as_mut()
         {

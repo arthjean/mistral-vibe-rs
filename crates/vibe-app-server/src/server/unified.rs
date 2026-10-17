@@ -1578,7 +1578,18 @@ impl AppServer {
                 .filter_map(|tool| tool["name"].as_str().map(ToOwned::to_owned))
                 .collect::<Vec<_>>()
         };
-        let model_tools = vibe_harness::catalog::model_tools()
+        // Reference `_build_unified_runtime`: one command environment serves
+        // the shell tool and `process.*`, configured through the `shell` key of
+        // the tool it names.
+        let host = vibe_core::tools::shell::HostShells::detect();
+        let command_environment = host.command_environment();
+        let configured_shell = self
+            .workspace
+            .tool_config()
+            .resolve(command_environment.config_tool())
+            .text("shell");
+        let configured_shell = (!configured_shell.is_empty()).then_some(configured_shell);
+        let model_tools = vibe_harness::catalog::model_tools(command_environment)
             .into_iter()
             .filter(|tool| match tool.name {
                 "skill" => !skills.is_empty(),
@@ -1602,7 +1613,8 @@ impl AppServer {
             },
             shell: vibe_harness::tools::shell::ShellContext {
                 cwd,
-                shell: None,
+                host,
+                shell: configured_shell,
                 env: BTreeMap::new(),
             },
             gate: gate::session_gate(

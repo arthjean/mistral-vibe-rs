@@ -233,7 +233,7 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
 #[test]
 #[cfg_attr(
     windows,
-    ignore = "windows: bash and process.* find no shell (US-015), and the mcp/* servers are #! scripts CreateProcess cannot launch"
+    ignore = "windows by design: the mcp/* fixture servers are #! scripts CreateProcess cannot launch"
 )]
 fn the_port_runs_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");

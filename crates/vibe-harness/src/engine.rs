@@ -2566,10 +2566,15 @@ async fn execute(
             let process_id = crate::processes::process_id(&session_id, &action.action_id, call_id);
             let workspace = environment.workspace.cwd.clone();
             let session_dir = environment.session_dir.clone();
+            let shell = environment.shell.clone();
             tokio::task::spawn_blocking(move || match operation.as_str() {
-                "start" => {
-                    manager.start(process_id, &arguments, &workspace, session_dir.as_deref())
-                }
+                "start" => manager.start(
+                    process_id,
+                    &arguments,
+                    &workspace,
+                    session_dir.as_deref(),
+                    &shell,
+                ),
                 "output" => manager.output(&arguments),
                 "write" => manager.write(&arguments),
                 "list" => manager.list(),

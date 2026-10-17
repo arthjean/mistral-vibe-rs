@@ -54,7 +54,7 @@ mod specs;
 
 use decode::{render_stream_bytes, render_stream_chars};
 use document::Document;
-pub use host::{HostShells, ShellRollout};
+pub use host::{CommandEnvironment, HostShells, ShellRollout, is_cmd};
 
 /// The shell reference `resolve_windows_shell` settles on for the legacy
 /// command tool on Windows, which is also the one its system prompt names.

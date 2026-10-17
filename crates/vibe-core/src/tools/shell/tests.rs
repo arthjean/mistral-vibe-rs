@@ -667,10 +667,6 @@ async fn a_managed_override_stops_an_allowlisted_command_from_running_outright()
 /// `Workspace.allows` (`vibe/core/workspace.py`): a root the operator revoked
 /// is asked about like any other directory outside the boundary, not refused.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_working_directory_under_a_revoked_root_is_asked_like_any_outside_one() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let outside = tempdir().expect("outside");
@@ -700,10 +696,6 @@ async fn a_working_directory_under_a_revoked_root_is_asked_like_any_outside_one(
 /// directory inside the session root is where the command would have run
 /// anyway, so it is not a reason to ask.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_working_directory_inside_the_session_root_does_not_ask() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::Deny).await;
     let inside = harness.root().join("inside");
@@ -936,10 +928,6 @@ async fn background_session(harness: &Harness, command: &str) -> String {
 /// A cursor read returns only what is new, and the reported cursor is where the
 /// next read starts.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_cursor_read_returns_only_the_bytes_that_followed_it() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "echo first; sleep 5; echo second").await;
@@ -963,10 +951,12 @@ async fn a_cursor_read_returns_only_the_bytes_that_followed_it() {
     );
     let cursor = first.typed_result["next_cursor"].as_u64().expect("cursor");
 
+    // The poll ends with the session, so the margin past the five-second sleep
+    // costs nothing; it only covers a slow start of `sleep` and `echo`.
     let second = harness
         .call(
             "bash_output",
-            json!({"session_id": session, "cursor": cursor, "wait_seconds": 5}),
+            json!({"session_id": session, "cursor": cursor, "wait_seconds": 15}),
         )
         .await
         .expect("the second poll answers");
@@ -979,10 +969,6 @@ async fn a_cursor_read_returns_only_the_bytes_that_followed_it() {
 /// A session that has exited still answers, with its last output and its exit
 /// status rather than an error.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn an_exited_session_still_reports_its_output_and_status() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "echo done; exit 7").await;
@@ -1033,10 +1019,6 @@ async fn an_unknown_session_id_lists_the_active_sessions() {
 
 /// Text reaches the process, and the session that reads it says so.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn text_written_to_a_session_reaches_the_process() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "read line; echo \"got $line\"").await;
@@ -1123,10 +1105,6 @@ async fn stdin_takes_exactly_one_input_and_refuses_bad_base64_before_writing() {
 /// command from its own prompt; input to any other session follows the
 /// configured `always`. Reference `BashStdin.resolve_permission`.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn input_to_a_pager_session_is_asked_about() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let plain = background_session(&harness, "cat > /dev/null").await;
@@ -1224,10 +1202,6 @@ async fn a_log_path_is_positioned_after_it_resolves() {
 /// A session belongs to the Vibe session, not to the turn that started it, so
 /// a later call can list, inspect and stop it.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_session_started_by_one_call_is_listed_inspected_and_killed_by_another() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "sleep 30").await;
@@ -1324,10 +1298,6 @@ async fn reset_stops_every_session_and_can_clear_their_logs() {
 /// A session id reads that session's own log; a relative path that climbs out
 /// of the log directory is refused before the filesystem is touched.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_log_path_that_escapes_the_session_directory_is_refused() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "echo logged; sleep 30").await;
@@ -1402,10 +1372,6 @@ async fn a_refused_command_carries_the_analysis_rationale() {
 /// A live session's log is fed by its process, so writing to it is refused;
 /// any other file under the shell-tool directory is writable.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_live_session_log_cannot_be_written_but_a_scratch_file_can() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "sleep 30").await;
@@ -1971,10 +1937,6 @@ fn the_windows_shell_search_skips_the_wsl_launcher_and_keeps_the_reference_order
 /// mints an id under its own prefix so the two families never collide in the
 /// shared session directory.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_git_bash_session_runs_and_answers_under_its_own_prefix() {
     let harness = harness_on(
         git_bash_host(),
@@ -2045,10 +2007,6 @@ async fn a_git_bash_session_runs_and_answers_under_its_own_prefix() {
 /// keys, so the reference keeps its terminal interactive instead of declaring
 /// it absent.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_windows_family_forces_its_reference_environment() {
     let harness = harness_on(
         git_bash_host(),
@@ -2089,10 +2047,6 @@ async fn a_windows_family_forces_its_reference_environment() {
 /// is delivered where the reference delivers it: the session teardown
 /// terminates the group whichever turn opened it.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_cancelled_windows_family_turn_leaves_no_orphaned_process_group() {
     let harness = harness_on(
         git_bash_host(),
@@ -2179,7 +2133,7 @@ fn encode_utf16(text: &str, little_endian: bool) -> Vec<u8> {
 #[tokio::test]
 #[cfg_attr(
     windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
+    ignore = "windows by design: ConPTY renders the child's bytes through the console code page, so a UTF-16 byte-order mark and its NULs never reach the reader"
 )]
 async fn a_command_writing_utf16_reaches_the_model_as_text() {
     let harness = harness_on(
@@ -2568,10 +2522,6 @@ async fn a_client_hosting_no_terminal_runs_the_command_on_this_host() {
 /// Reference `PosixManagedShellBackend.start_terminal` opens a PTY and gives
 /// the child a controlling terminal, which is what `[ -t 1 ]` answers to.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_managed_session_runs_under_a_terminal() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let output = harness
@@ -2613,10 +2563,6 @@ async fn a_managed_session_reports_its_terminal_backend() {
 /// A control key reaches the foreground program, which is the whole point of a
 /// terminal: the same byte written to a pipe would be data rather than a signal.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_control_key_interrupts_the_foreground_program() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "trap 'echo caught; exit 7' INT; sleep 30").await;
@@ -2651,10 +2597,6 @@ async fn a_control_key_interrupts_the_foreground_program() {
 /// A hard timeout terminates the whole process group, so a grandchild that
 /// outlives its parent does not outlive the session.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_hard_timeout_terminates_the_whole_process_group() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let marker = harness.root().join("grandchild.marker");
@@ -2679,10 +2621,6 @@ async fn a_hard_timeout_terminates_the_whole_process_group() {
 /// `_reader_loop` appends every byte to the log the polling tools page through,
 /// so a chatty background command loses nothing to a capture budget.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_chatty_session_keeps_its_whole_output() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(
@@ -3103,10 +3041,6 @@ async fn a_settled_orphan_keeps_the_status_its_manifest_recorded() {
 /// A manifest that cannot be read is skipped, and the sessions beside it still
 /// load.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_corrupt_manifest_is_skipped_without_dropping_the_others() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(&harness, "sleep 30").await;
@@ -3221,10 +3155,6 @@ async fn session_identifiers_carry_the_reference_prefix_stamp_and_entropy() {
 /// not on the name of the file that carries it, and a manifest in the format
 /// this port used before is ignored rather than crashing the scan.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn the_orphan_filter_reads_the_identifier_rather_than_the_file_name() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let live = background_session(&harness, "sleep 30").await;
@@ -3581,10 +3511,6 @@ async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
 /// `max_output_bytes` where the three polling tools read `max_inline_bytes`, so
 /// the same 20 000 bytes truncate on one side of the pair and not on the other.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn the_managed_window_is_the_command_ceiling_and_a_poll_keeps_its_own() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let command_window = shell_settings().max_output_bytes;
@@ -3634,10 +3560,6 @@ async fn the_managed_window_is_the_command_ceiling_and_a_poll_keeps_its_own() {
 /// `max_output_bytes` is what bounds the managed command, which is the field
 /// reference `ExperimentalBash.run` reads rather than the polling one.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
-)]
 async fn a_configured_output_ceiling_bounds_the_managed_window() {
     // The section is named after the family the host publishes, which is the
     // one whose settings the managed command reads.
@@ -3670,10 +3592,6 @@ async fn a_configured_output_ceiling_bounds_the_managed_window() {
 /// would report as a success: reference `_result_from_session` asks for both
 /// halves, so the status is what refuses it here.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let running = tokio::spawn({
@@ -3764,10 +3682,6 @@ async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
 /// success condition is never applied to it: the session is still running and
 /// the model is handed its id instead of an error.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: a ConPTY session outlives its teardown on Windows Server 2022 (US-017)"
-)]
 async fn a_soft_timeout_backgrounds_the_session_instead_of_failing_it() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     // `timeout_seconds` is the soft form: an integer `timeout` would make the
@@ -3958,4 +3872,83 @@ async fn an_orphan_manifest_cannot_point_the_log_tool_outside_the_sessions_direc
         std::fs::read_to_string(&secret).expect("the secret survives the write"),
         "not for the model"
     );
+}
+
+/// The `cmd.exe` fallback a Windows host without Git Bash runs the legacy
+/// `bash` tool under.
+#[cfg(windows)]
+async fn cmd_fallback() -> Harness {
+    harness_on(
+        windows_host(None, None),
+        ShellRollout::Legacy,
+        ApprovalDecision::ApproveOnce,
+    )
+    .await
+}
+
+/// What `cmd.exe` itself answers for `line`, run with the command line as
+/// written.
+#[cfg(windows)]
+fn cmd_directly(line: &str, cwd: &Path) -> std::process::Output {
+    use std::os::windows::process::CommandExt as _;
+    std::process::Command::new(super::host::windows_cmd_path())
+        .raw_arg(format!("/d /c {line}"))
+        .current_dir(cwd)
+        .output()
+        .expect("cmd.exe runs")
+}
+
+/// US-016: quotes reach `cmd.exe` as the model wrote them, where quoting each
+/// argument for the C runtime printed `\"a b\"`.
+#[cfg(windows)]
+#[tokio::test]
+async fn the_cmd_fallback_keeps_the_quotes_it_was_given() {
+    let harness = cmd_fallback().await;
+    let output = harness
+        .call("bash", json!({"command": r#"echo "a b""#}))
+        .await
+        .expect("the command runs");
+    assert_eq!(
+        output.typed_result["stdout"].as_str().map(str::trim),
+        Some(r#""a b""#),
+        "{output:?}"
+    );
+}
+
+/// US-016: a quoted argument with a space reaches the program `cmd.exe`
+/// starts as one argument.
+#[cfg(windows)]
+#[tokio::test]
+async fn the_cmd_fallback_passes_a_quoted_search_string_whole() {
+    let harness = cmd_fallback().await;
+    std::fs::write(harness.root().join("file.txt"), "x y\r\nx\r\ny\r\n")
+        .expect("the file is written");
+    let output = harness
+        .call("bash", json!({"command": r#"findstr /c:"x y" file.txt"#}))
+        .await
+        .expect("the command runs");
+    let stdout = output.typed_result["stdout"].as_str().expect("stdout");
+    assert_eq!(stdout.lines().collect::<Vec<_>>(), ["x y"], "{output:?}");
+}
+
+/// US-016: a command `cmd.exe` cannot parse fails the way `cmd.exe` fails it,
+/// with its own status and its own error naming what it could not run.
+#[cfg(windows)]
+#[tokio::test]
+async fn the_cmd_fallback_returns_the_error_cmd_gives_an_unbalanced_quote() {
+    let harness = cmd_fallback().await;
+    let line = r#""missing-program-us016 a"#;
+    let direct = cmd_directly(line, harness.root());
+    let code = direct.status.code().expect("cmd.exe exits with a code");
+    assert_ne!(code, 0, "cmd.exe accepts {line}");
+    let failed = harness
+        .call("bash", json!({"command": line}))
+        .await
+        .expect_err("the command fails")
+        .to_string();
+    assert!(
+        failed.contains(&format!("exit status {code}")),
+        "cmd.exe exits {code}: {failed}"
+    );
+    assert!(failed.contains("missing-program-us016"), "{failed}");
 }

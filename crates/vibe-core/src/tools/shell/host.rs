@@ -7,6 +7,7 @@
 //! host, and the Windows surface can be measured against the reference from a
 //! POSIX one.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::platform::Platform;
@@ -214,6 +215,160 @@ impl HostShells {
             powershell: find_powershell(&directories),
         }
     }
+
+    /// Reference `_command_environment_mode` (`vibe/app_server/_runtime.py`):
+    /// the one environment a unified session runs its shell tool and its
+    /// background processes in.
+    #[must_use]
+    pub fn command_environment(&self) -> CommandEnvironment {
+        match self.platform {
+            Platform::Windows if self.git_bash.is_some() => CommandEnvironment::GitBash,
+            Platform::Windows => CommandEnvironment::PowerShell,
+            Platform::Posix | Platform::GitBash => CommandEnvironment::Unix,
+        }
+    }
+
+    /// The shell one command runs under in [`HostShells::command_environment`],
+    /// with the arguments that precede the command.
+    ///
+    /// Reference `TerminalBackend.resolve_shell` and the argument vector
+    /// `_shell_argv` (`_shell_tools.py`) and `start_terminal`
+    /// (`vibe/_processes/`) build from it: `configured` must resolve, and on
+    /// Windows to the environment's own family; otherwise the host's
+    /// executable for the family is used, or on POSIX the first of zsh, bash
+    /// and sh on the environment's `PATH`, then at their usual places.
+    ///
+    /// # Errors
+    ///
+    /// When no shell resolves, naming the configured one or the ones searched.
+    pub fn command_shell(
+        &self,
+        configured: Option<&str>,
+        environment: &BTreeMap<String, String>,
+    ) -> Result<ShellConfig, String> {
+        let configured = configured.filter(|value| !value.is_empty());
+        let family = self.command_environment();
+        let executable = match (family, configured) {
+            (CommandEnvironment::Unix, _) => {
+                return posix_command_shell(configured, environment).map(|executable| {
+                    ShellConfig {
+                        flavor: ShellFlavor::Posix,
+                        executable,
+                        arguments: vec!["-lc".to_owned()],
+                    }
+                });
+            }
+            (_, Some(configured)) => {
+                let resolved = resolve_windows_executable(configured)
+                    .ok_or_else(|| format!("configured shell is not executable: {configured}"))?;
+                let expected = match family {
+                    CommandEnvironment::GitBash => WindowsShellKind::Bash,
+                    _ => WindowsShellKind::PowerShell,
+                };
+                if windows_shell_family(&resolved) != expected {
+                    return Err(format!(
+                        "configured shell is not a {} shell: {configured}",
+                        family.name()
+                    ));
+                }
+                resolved
+            }
+            (CommandEnvironment::GitBash, None) => self
+                .git_bash
+                .clone()
+                .ok_or_else(|| "no Git Bash shell found".to_owned())?,
+            (CommandEnvironment::PowerShell, None) => self.powershell.clone().ok_or_else(|| {
+                "no PowerShell shell found; tried pwsh.exe, powershell.exe".to_owned()
+            })?,
+        };
+        Ok(ShellConfig {
+            flavor: match family {
+                CommandEnvironment::GitBash => ShellFlavor::GitBash,
+                _ => ShellFlavor::PowerShell,
+            },
+            arguments: windows_shell_arguments(&executable),
+            executable,
+        })
+    }
+
+    /// The shell a one-off command outside any tool runs under: reference
+    /// `spawn_shell_command` (`vibe/core/utils/shell.py`), which drives `$SHELL`
+    /// on POSIX and on Windows a detected Git Bash, else `cmd.exe`.
+    #[must_use]
+    pub fn legacy_shell(&self) -> ShellConfig {
+        legacy_bash_config(self)
+    }
+}
+
+/// Where a unified session runs commands, under the reference's names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandEnvironment {
+    Unix,
+    GitBash,
+    PowerShell,
+}
+
+impl CommandEnvironment {
+    /// The reference's `command_environment` value.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Unix => "unix",
+            Self::GitBash => "git_bash",
+            Self::PowerShell => "powershell",
+        }
+    }
+
+    /// The tool configuration whose `shell` key the environment reads: the
+    /// environment's own name, `unix` aside, which reads the `bash` tool's.
+    #[must_use]
+    pub fn config_tool(self) -> &'static str {
+        match self {
+            Self::Unix => "bash",
+            other => other.name(),
+        }
+    }
+}
+
+/// Reference `PosixTerminalBackend.resolve_shell`: the configured shell, else
+/// zsh, bash and sh on `PATH`, else at their usual absolute places.
+fn posix_command_shell(
+    configured: Option<&str>,
+    environment: &BTreeMap<String, String>,
+) -> Result<PathBuf, String> {
+    let search = environment
+        .get("PATH")
+        .map(String::as_str)
+        .unwrap_or_default();
+    let which = |name: &str| {
+        if name.contains(std::path::MAIN_SEPARATOR) {
+            return is_executable_file(Path::new(name)).then(|| PathBuf::from(name));
+        }
+        std::env::split_paths(search)
+            .map(|directory| directory.join(name))
+            .find(|candidate| is_executable_file(candidate))
+    };
+    if let Some(configured) = configured {
+        return which(configured)
+            .ok_or_else(|| format!("configured shell is not executable: {configured}"));
+    }
+    ["zsh", "bash", "sh"]
+        .into_iter()
+        .find_map(which)
+        .or_else(|| {
+            [
+                "/bin/zsh",
+                "/usr/bin/zsh",
+                "/bin/bash",
+                "/usr/bin/bash",
+                "/bin/sh",
+                "/usr/bin/sh",
+            ]
+            .into_iter()
+            .map(PathBuf::from)
+            .find(|candidate| is_executable_file(candidate))
+        })
+        .ok_or_else(|| "no POSIX shell found; tried zsh, bash, sh".to_owned())
 }
 
 /// Reference `get_windows_bash_path`.
@@ -565,18 +720,26 @@ pub(super) fn legacy_posix_shell() -> PathBuf {
         .map_or_else(|| PathBuf::from("/bin/sh"), PathBuf::from)
 }
 
+/// Whether `program` is `cmd.exe`, read off its basename on either separator.
+#[must_use]
+pub fn is_cmd(program: &Path) -> bool {
+    let name = program
+        .to_string_lossy()
+        .trim_matches('"')
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    name == "cmd" || name == "cmd.exe"
+}
+
 /// Reference `_get_windows_cmd_path`: `COMSPEC` when it names `cmd`, then
 /// `%SystemRoot%\System32\cmd.exe`, then the bare name.
 pub(super) fn windows_cmd_path() -> PathBuf {
-    if let Some(comspec) = std::env::var("COMSPEC").ok().filter(|comspec| {
-        let name = comspec
-            .trim_matches('"')
-            .rsplit(['/', '\\'])
-            .next()
-            .unwrap_or_default()
-            .to_lowercase();
-        name == "cmd" || name == "cmd.exe"
-    }) {
+    if let Some(comspec) = std::env::var("COMSPEC")
+        .ok()
+        .filter(|comspec| is_cmd(Path::new(comspec)))
+    {
         return PathBuf::from(comspec);
     }
     if let Ok(root) = std::env::var("SystemRoot") {

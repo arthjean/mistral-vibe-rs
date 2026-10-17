@@ -312,4 +312,6 @@ pub(crate) enum TerminationError {
     Wait(String),
     #[error("the process group did not exit before the cleanup deadline")]
     Deadline,
+    #[error("the pseudoconsole did not close: {0}")]
+    Console(String),
 }
