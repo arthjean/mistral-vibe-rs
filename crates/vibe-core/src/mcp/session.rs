@@ -18,7 +18,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::path::Path;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
@@ -623,7 +624,8 @@ impl StdioChannel {
         working_directory: Option<&Path>,
         sender: mpsc::UnboundedSender<Inbound>,
     ) -> Result<Self, SessionError> {
-        let mut command = Command::new(program);
+        let program = stdio_program(program)?;
+        let mut command = Command::new(&program);
         command
             .args(arguments)
             .env_clear()
@@ -633,7 +635,7 @@ impl StdioChannel {
             command.current_dir(working_directory);
         }
         let (child, pipes) = ChildGroup::spawn(&mut command).map_err(|error| {
-            SessionError::Transport(format!("cannot launch `{program}`: {error}"))
+            SessionError::Transport(launch_failure(&program, arguments, &error))
         })?;
         let (Some(stdin), Some(stdout), Some(stderr)) = (pipes.stdin, pipes.stdout, pipes.stderr)
         else {
@@ -703,6 +705,56 @@ impl Drop for StdioChannel {
         self.reader.abort();
         self.stderr.abort();
     }
+}
+
+/// The program a stdio entry launches.
+///
+/// SDK `get_windows_executable_command` resolves a bare name through
+/// `shutil.which` on Windows, which is what starts `npx` as the `npx.cmd`
+/// shim npm installs; `CreateProcess` alone only tries `npx.exe`. A name with
+/// a directory or an extension is used as written, and off Windows the spawn
+/// searches `PATH` itself.
+fn stdio_program(program: &str) -> Result<PathBuf, SessionError> {
+    let written = Path::new(program);
+    if !cfg!(windows) || written.components().count() > 1 || written.extension().is_some() {
+        return Ok(written.to_path_buf());
+    }
+    crate::platform::find_executable(program).ok_or_else(|| {
+        SessionError::Transport(format!(
+            "cannot launch `{program}`: none of {} is on PATH",
+            crate::platform::executable_names(program).join(", ")
+        ))
+    })
+}
+
+/// Why `program` did not start, naming the argument std refused to hand a
+/// batch script.
+///
+/// `CreateProcess` runs a `.bat` or `.cmd` file through `cmd.exe`, so std
+/// escapes its arguments for that parser and refuses, with `InvalidInput`,
+/// one it cannot escape (a line break would end the command line early).
+fn launch_failure(program: &Path, arguments: &[String], error: &io::Error) -> String {
+    let batch = program.extension().is_some_and(|extension| {
+        extension.eq_ignore_ascii_case("bat") || extension.eq_ignore_ascii_case("cmd")
+    });
+    if batch && error.kind() == io::ErrorKind::InvalidInput {
+        let refused = arguments
+            .iter()
+            .find(|argument| argument.contains(['\r', '\n', '\0']));
+        return match refused {
+            Some(argument) => format!(
+                "cannot launch `{}`: the batch script cannot receive the argument {argument:?} \
+                 safely",
+                program.display()
+            ),
+            None => format!(
+                "cannot launch `{}`: the batch script cannot receive its arguments safely \
+                 ({error})",
+                program.display()
+            ),
+        };
+    }
+    format!("cannot launch `{}`: {error}", program.display())
 }
 
 fn inherited_environment() -> Vec<(&'static str, String)> {
@@ -1048,5 +1100,67 @@ mod tests {
         ]}))
         .expect("a null description is absent");
         assert_eq!(tools[0].description, None);
+    }
+
+    /// US-014 (Windows support): a program named with a directory or an
+    /// extension is launched as written, never searched for.
+    #[test]
+    fn a_program_with_a_directory_or_an_extension_is_used_as_written() {
+        for written in [
+            "server.cmd",
+            "server.exe",
+            "./server",
+            r"C:\tools\server",
+            "/opt/server",
+        ] {
+            assert_eq!(
+                stdio_program(written).expect(written),
+                PathBuf::from(written)
+            );
+        }
+    }
+
+    /// US-014 (Windows support): a bare name that resolves to nothing fails
+    /// naming every file it was looked for under.
+    #[cfg(windows)]
+    #[test]
+    fn a_bare_program_found_nowhere_names_every_file_tried() {
+        let name = "vibe-no-such-mcp-server";
+        let Err(SessionError::Transport(message)) = stdio_program(name) else {
+            panic!("`{name}` resolved somewhere");
+        };
+        let tried = crate::platform::executable_names(name);
+        assert!(tried.contains(&format!("{name}.cmd")), "{tried:?}");
+        for file in tried {
+            assert!(
+                message.contains(&file),
+                "`{file}` is missing from: {message}"
+            );
+        }
+    }
+
+    /// US-014 (Windows support): an argument std refuses to escape for a
+    /// batch script fails the launch naming the script and the argument.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn a_batch_argument_std_cannot_escape_is_named() {
+        let directory = tempfile::tempdir().expect("scratch directory");
+        let script = directory.path().join("server.cmd");
+        std::fs::write(&script, "@echo off\r\n").expect("script");
+        let (sender, _receiver) = mpsc::unbounded_channel();
+        let arguments = vec!["--stdio".to_owned(), "two\nlines".to_owned()];
+        let spawned = StdioChannel::spawn(
+            &script.to_string_lossy(),
+            &arguments,
+            &BTreeMap::new(),
+            None,
+            sender,
+        );
+        let Err(SessionError::Transport(message)) = spawned else {
+            panic!("the launch was not refused");
+        };
+        assert!(message.contains("server.cmd"), "{message}");
+        assert!(message.contains(r#""two\nlines""#), "{message}");
+        assert!(!message.contains("--stdio"), "{message}");
     }
 }

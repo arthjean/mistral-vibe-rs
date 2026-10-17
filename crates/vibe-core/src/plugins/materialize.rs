@@ -237,7 +237,7 @@ fn materialize_libraries(
     issues: &mut Vec<PluginConfigIssue>,
 ) -> (Vec<PluginLibraryDefinition>, BTreeMap<String, String>) {
     let mut materialized = Vec::new();
-    let node_available = which("node").is_some();
+    let node_available = crate::platform::find_executable("node").is_some();
     for definition in &resolution.libraries {
         let Some(plugin) = resolution
             .plugins
@@ -463,35 +463,4 @@ fn random_suffix() -> String {
         bytes.copy_from_slice(&stamp);
     }
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-/// `shutil.which` for a bare name.
-fn which(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path).find_map(|directory| {
-        let candidate = directory.join(name);
-        if is_executable(&candidate) {
-            return Some(candidate);
-        }
-        if cfg!(windows) {
-            [".exe", ".cmd", ".bat"]
-                .iter()
-                .map(|suffix| directory.join(format!("{name}{suffix}")))
-                .find(|candidate| candidate.is_file())
-        } else {
-            None
-        }
-    })
-}
-
-#[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    fs::metadata(path)
-        .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-}
-
-#[cfg(not(unix))]
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
 }

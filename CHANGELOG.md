@@ -32,6 +32,12 @@
   its first `&` and ran the rest as a command. Every opener now refuses a URL
   that is not `http` or `https` and leaves it printed.
 
+- On Windows, an MCP stdio server configured by a bare name such as `npx` or
+  `bunx` starts through the `.cmd` shim `PATH` and `PATHEXT` resolve it to. A
+  name that resolves to nothing fails listing every file it was looked for
+  under, and an argument a batch script cannot receive safely is named in the
+  error.
+
 - Interrupting a turn while a hook runs now stops the hook on Linux and
   macOS, as the reference does: the whole process group is killed, where only
   the shell that launched the hook command was before.

@@ -1,4 +1,5 @@
 #![cfg(feature = "test-fixtures")]
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::sync::{Arc, Mutex};
 
@@ -105,9 +106,13 @@ impl EventObserver for RecordsEvents {
     }
 }
 
-#[tokio::test]
-async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
-    let temporary = tempdir().expect("temporary workspace");
+/// A session over `temporary` whose one MCP server, `fixture`, is launched by
+/// `command` and has completed discovery: the source is enabled and the
+/// first page of its tools is registered.
+async fn discovered_fixture(
+    temporary: &tempfile::TempDir,
+    command: &str,
+) -> (CoreResourceBackend, ToolRegistry) {
     let exit_file = temporary.path().join("server-closed");
     let descendant_file = temporary.path().join("descendant-leaked");
     let policy = PermissionStore::default();
@@ -134,7 +139,6 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             tools: tools.clone(),
         })
         .expect("resource session");
-    let fixture = env!("CARGO_BIN_EXE_vibe-mcp-stdio-fixture");
     // The vibe home sits inside its own parent, as a real one does: project
     // discovery stops at the directory holding the vibe home, so a home that is
     // a direct child of the working directory would end the walk before the
@@ -155,7 +159,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             // the reference as in this port.
             (
                 "command".to_owned(),
-                toml::Value::Array(vec![toml::Value::String(fixture.to_owned())]),
+                toml::Value::Array(vec![toml::Value::String(command.to_owned())]),
             ),
             ("args".to_owned(), toml::Value::Array(Vec::new())),
             (
@@ -228,6 +232,16 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         1,
         "only the first page of tools is registered"
     );
+    (backend, tools)
+}
+
+#[tokio::test]
+async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
+    let temporary = tempdir().expect("temporary workspace");
+    let exit_file = temporary.path().join("server-closed");
+    let descendant_file = temporary.path().join("descendant-leaked");
+    let (backend, tools) =
+        discovered_fixture(&temporary, env!("CARGO_BIN_EXE_vibe-mcp-stdio-fixture")).await;
     // Discovery is what teaches the registry where a tool comes from, and the
     // published name no longer says it: `fixture_echo` joins the alias to a
     // sanitized tool name, so only the registration knows the server published
@@ -350,5 +364,70 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
     assert!(
         !descendant_file.exists(),
         "the MCP descendant survived session cleanup"
+    );
+}
+
+/// The variable that tells a re-executed copy of this binary it is the child
+/// [`a_bare_command_starts_through_its_cmd_shim`] runs under its own `PATH`.
+#[cfg(windows)]
+const SHIM_CHILD: &str = "VIBE_MCP_SHIM_CHILD";
+
+/// US-014 (Windows support): a server configured by a bare name starts
+/// through the `.cmd` shim `PATH` and `PATHEXT` resolve it to, as `npx`
+/// resolves to `npx.cmd`, and completes its handshake.
+///
+/// The search reads this process's `PATH`, which a test cannot write
+/// (`unsafe_code` is forbidden), so the test re-executes itself with the
+/// shim's directory in front and the child runs the discovery.
+#[cfg(windows)]
+#[test]
+fn a_bare_command_starts_through_its_cmd_shim() {
+    if std::env::var_os(SHIM_CHILD).is_some() {
+        let runtime = tokio::runtime::Runtime::new().expect("a runtime");
+        runtime.block_on(async {
+            let temporary = tempdir().expect("temporary workspace");
+            let (backend, tools) = discovered_fixture(&temporary, "vibe-fixture-shim").await;
+            assert_eq!(
+                tools.remote_origin("fixture_echo"),
+                Some(RemoteToolOrigin::mcp("echo").from_provider("fixture"))
+            );
+            backend
+                .close_session("session-1", 1)
+                .await
+                .expect("owned MCP cleanup");
+        });
+        return;
+    }
+    let shims = tempdir().expect("shim directory");
+    let fixture = env!("CARGO_BIN_EXE_vibe-mcp-stdio-fixture");
+    std::fs::write(
+        shims.path().join("vibe-fixture-shim.cmd"),
+        format!("@\"{fixture}\" %*\r\n"),
+    )
+    .expect("the shim is written");
+    let path = std::env::join_paths(std::iter::once(shims.path().to_path_buf()).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .expect("a PATH value");
+    let output = std::process::Command::new(std::env::current_exe().expect("this test binary"))
+        .args([
+            "--exact",
+            "a_bare_command_starts_through_its_cmd_shim",
+            "--nocapture",
+        ])
+        .env(SHIM_CHILD, "1")
+        .env("PATH", path)
+        .output()
+        .expect("the child runs");
+    assert!(
+        output.status.success(),
+        "the child failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("1 passed"),
+        "the child ran no test: {}",
+        String::from_utf8_lossy(&output.stdout)
     );
 }

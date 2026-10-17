@@ -17,7 +17,6 @@
 //! reference applies the pair to the calls that write refs or read a working
 //! tree; applying it to the read-only ones as well changes no answer they give.
 
-use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -89,63 +88,18 @@ pub(crate) fn git_executable(cwd: &Path) -> Result<PathBuf, WorktreeError> {
 /// `_is_untrusted_project_executable`.
 pub(crate) fn search_trusted_path(name: &str, cwd: &Path) -> Option<PathBuf> {
     let project = crate::platform::canonicalize(cwd).unwrap_or_else(|_| cwd.to_path_buf());
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    for entry in std::env::split_paths(&path) {
-        let entry = strip_quotes(entry);
-        if !entry.is_absolute() {
-            continue;
-        }
-        for executable in executable_names(name) {
-            let Some(candidate) = resolved_executable(&entry.join(&executable)) else {
-                continue;
-            };
-            if !is_untrusted_project_executable(&candidate, &project) {
-                return Some(candidate);
-            }
-        }
-    }
-    None
+    crate::platform::path_candidates(name)
+        .into_iter()
+        .filter(|candidate| candidate.is_absolute())
+        .filter_map(|candidate| resolved_executable(&candidate))
+        .find(|candidate| !is_untrusted_project_executable(candidate, &project))
 }
 
-fn strip_quotes(entry: PathBuf) -> PathBuf {
-    let text = entry.to_string_lossy();
-    match text
-        .strip_prefix('"')
-        .and_then(|inner| inner.strip_suffix('"'))
-    {
-        Some(inner) => PathBuf::from(inner),
-        None => entry,
-    }
-}
-
-fn executable_names(name: &str) -> Vec<OsString> {
-    if cfg!(windows) && Path::new(name).extension().is_none() {
-        let extensions =
-            std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
-        extensions
-            .split(';')
-            .filter(|extension| !extension.is_empty())
-            .map(|extension| OsString::from(format!("{name}{}", extension.to_lowercase())))
-            .collect()
-    } else {
-        vec![OsString::from(name)]
-    }
-}
-
+/// `candidate` resolved, when it is an executable file.
 fn resolved_executable(candidate: &Path) -> Option<PathBuf> {
-    let resolved = crate::platform::canonicalize(candidate).ok()?;
-    let metadata = fs::metadata(&resolved).ok()?;
-    if !metadata.is_file() {
-        return None;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-        if metadata.permissions().mode() & 0o111 == 0 {
-            return None;
-        }
-    }
-    Some(resolved)
+    crate::platform::canonicalize(candidate)
+        .ok()
+        .filter(|resolved| crate::platform::is_executable_file(resolved))
 }
 
 fn is_untrusted_project_executable(candidate: &Path, project: &Path) -> bool {
