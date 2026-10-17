@@ -17,6 +17,7 @@ fn context(workspace: &Path, host: HostShells, configured: Option<&str>) -> Shel
 }
 
 /// Waits for `process_id` to leave `running` and returns its whole output.
+#[cfg(windows)]
 fn settled_output(manager: &ProcessManager, process_id: &str) -> Value {
     let deadline = Instant::now() + Duration::from_secs(30);
     while manager.public()[0]["status"] == "running" && Instant::now() < deadline {
