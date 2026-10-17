@@ -9,6 +9,7 @@
 | 1.1 | 2026-10-15 | Arthur Jean | US-006 measured the reference on Windows (`docs/parity.md`, "Windows observations"): FR-01, US-008, US-013, US-015, US-021 and the Open Questions amended where the measurement contradicts this draft |
 | 1.2 | 2026-10-16 | Arthur Jean | EP-001 review: US-017 names the ConPTY cursor-position stall and the teardown tags it owns; US-025 added to EP-002 for the keyring divergence US-006 measured |
 | 1.3 | 2026-10-16 | Arthur Jean | EP-002 implementation: the stranded-state notice question answered (no notice, manual move documented in `CHANGELOG.md`); persisted path comparisons checked before US-010; US-017 also owns the ACP unified replay, whose bash scenarios time out on windows-2022 |
+| 1.4 | 2026-10-17 | Arthur Jean | EP-003 implementation: the US-013 launcher-failure question answered (match the reference); US-017 owns a 14th ConPTY stall tag, the managed `cwd` test US-012 unblocked, whose command then stalls under ConPTY |
 
 ## Problem Statement
 
@@ -335,7 +336,7 @@ Make the permission policy, URL opening, and MCP process launch as safe on Windo
 **Acceptance Criteria:**
 - [ ] Given a URL containing `&`, `|`, `^`, `%PATH%`, and `&echo pwned>%TEMP%\vibe-pwned.txt`, when sign-in or MCP authorization opens it, then the browser receives the full URL and `%TEMP%\vibe-pwned.txt` is not created.
 - [ ] Given a URL whose scheme is not `http` or `https`, when an open is requested, then it is refused and printed for manual copy. US-006 measured that the reference opens any scheme, so this hardening is a kept divergence and lands with a ledger row.
-- [ ] Given the launcher fails (no default browser), when an open is requested, then the URL is printed and the flow keeps waiting for the callback. US-006 measured that reference sign-in stops with the `OPEN_BROWSER_FAILED` error code instead; decision required before this story starts: match the reference, or keep this behavior with a ledger row.
+- [ ] Given the launcher fails (no default browser), when an open is requested, then the port answers as the reference US-006 measured: sign-in stops with the `OPEN_BROWSER_FAILED` error code, and MCP authorization leaves the URL printed and keeps waiting for the callback. Decided by the maintainer on 2026-10-17 (match the reference, no ledger row).
 - [ ] Given `crates/vibe-core/src/auth/sign_in.rs:463` and `crates/vibe-cli/src/tui/workflow/mcp.rs:628`, when the change lands, then both call one shared launcher and no production code spawns `cmd` with `start`.
 - [ ] Given Linux or macOS, when an open is requested, then the existing launcher behavior is unchanged.
 
@@ -400,7 +401,7 @@ Make every process the agent starts run under a resolvable shell with intact arg
 - [ ] Given a PTY session whose child exits after printing 1 MiB, when the session completes, then the reader reaches EOF within 2 s of the exit, `output_dropped` is false, and the full output is returned in 50 of 50 runs.
 - [ ] Given a PTY session that started a background grandchild, when the session is killed or times out, then no descendant process survives 2 s later (`crates/vibe-core/src/pty.rs:385` and `crates/vibe-harness/src/processes.rs:1039`).
 - [ ] Given the pseudoconsole cannot be closed without error, when the session ends, then the session reports an error and the child tree is still killed.
-- [ ] Given a pseudoconsole created with `PSEUDOCONSOLE_INHERIT_CURSOR` (the portable-pty 0.9 default), when it sends its startup cursor-position request (`ESC[6n`), then the session answers it, the child's first output arrives without waiting on the answer, and the 13 tests tagged "ConPTY stalls on an unanswered cursor-position request (US-017)" in `crates/vibe-core/src/tools/shell/tests.rs` pass on windows-2022 with their tags removed.
+- [ ] Given a pseudoconsole created with `PSEUDOCONSOLE_INHERIT_CURSOR` (the portable-pty 0.9 default), when it sends its startup cursor-position request (`ESC[6n`), then the session answers it, the child's first output arrives without waiting on the answer, and the 14 tests tagged "ConPTY stalls on an unanswered cursor-position request (US-017)" in `crates/vibe-core/src/tools/shell/tests.rs` pass on windows-2022 with their tags removed.
 - [ ] Given the 9 tests tagged "a ConPTY session outlives its teardown on Windows Server 2022 (US-017)" in the same file, when this story lands, then they pass on windows-2022 with their tags removed.
 - [ ] Given `acp_parity_tests::the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names` in `crates/vibe-acp/tests/`, tagged "the bash scenarios time out under ConPTY on Windows Server 2022 (US-017)" after EP-002 measured `prompt/bash-approved*` failing on windows-2022 while passing on Windows 11, when this story lands, then it passes on windows-2022 with its tag removed.
 - [ ] Given `docs/parity.md` "The Windows terminal ladder is one rung" (row at line 367), when this story lands, then the ledger row still holds.
@@ -629,5 +630,5 @@ Frame as questions for engineering input, not mandates:
 - ~~Should the Unified Harness shell tool on Windows stay PowerShell while `process.*` follows the Git Bash first ladder?~~ Answered by US-006: the reference uses one ladder for both.
 - ~~Should users with state stranded in `<cwd>\.vibe` get a one-time notice, given that the directory doubles as project config?~~ Answered by the maintainer on 2026-10-16: no notice and no migration; `CHANGELOG.md` documents the manual move.
 - ~~Does the port's Windows keyring entry interoperate with the reference's?~~ Answered by US-006: it does not (the reference stores the key under target `ai.mistral.vibe`, user `MISTRAL_API_KEY`; the port under `MISTRAL_API_KEY.ai.mistral.vibe`). US-025 owns the fix.
-- US-013 (browser launcher failure) and US-021 (default editor) each need a decision between matching the reference US-006 measured and keeping this PRD's behavior with a ledger row. Owner: maintainer, before those stories start.
+- US-013 (browser launcher failure) and US-021 (default editor) each need a decision between matching the reference US-006 measured and keeping this PRD's behavior with a ledger row. Owner: maintainer, before those stories start. US-013 answered on 2026-10-17: match the reference (sign-in stops with `OPEN_BROWSER_FAILED`; MCP authorization keeps the URL printed and waits).
 [/PRD]
