@@ -86,6 +86,18 @@ pub fn pattern_matches(pattern: &str, value: &str) -> bool {
     )
 }
 
+/// Python `fnmatch.fnmatch` on this host: `os.path.normcase` applied to both
+/// sides, which on Windows folds case and turns `/` into `\`, and is a no-op
+/// on POSIX, where this is [`pattern_matches`].
+#[must_use]
+pub fn fnmatch(pattern: &str, value: &str) -> bool {
+    if cfg!(windows) {
+        let normcase = |text: &str| text.replace('/', "\\").to_lowercase();
+        return pattern_matches(&normcase(pattern), &normcase(value));
+    }
+    pattern_matches(pattern, value)
+}
+
 /// `fnmatch` semantics over already-lowercased characters: `*` stands for any
 /// run, `?` for exactly one, `[abc]` and `[a-z]` for a set, `[!abc]` for its
 /// complement, and an unterminated `[` is a literal bracket.

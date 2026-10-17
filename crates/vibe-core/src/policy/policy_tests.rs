@@ -125,10 +125,6 @@ fn the_scope_vocabulary_is_exactly_the_four_reference_values() {
 /// granted by its exact encoded path, so approving it leaves its siblings
 /// asking, and a file offers no recursive grant root.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: an outside grant is spelled with the verbatim prefix and Windows case folding (US-011)"
-)]
 async fn an_outside_file_is_named_by_its_own_path() {
     let workspace = tempdir().expect("workspace");
     let outside = tempdir().expect("outside");
@@ -163,9 +159,15 @@ async fn an_outside_file_is_named_by_its_own_path() {
         &PermissionRequirement::outside_path(&canonical)
     );
     assert_eq!(requirement.invocation_pattern, path);
+    // The grant is the normalized path, which Windows also folds in case.
+    let granted = if cfg!(windows) {
+        path.to_lowercase()
+    } else {
+        path.clone()
+    };
     assert_eq!(
         requirement.session_pattern,
-        format!("vibe-path:exact:{path}")
+        format!("vibe-path:exact:{granted}")
     );
     assert_eq!(requirement.label, format!("outside workdir ({path})"));
     assert_eq!(requirement.path_scope_root, None);
@@ -642,10 +644,6 @@ fn a_scratchpad_path_is_granted_before_any_list_is_consulted() {
 /// The denylist is consulted first, and the allowlist grants what it does not
 /// close.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: denylist patterns do not match Windows paths (US-011)"
-)]
 fn the_denylist_is_consulted_before_the_allowlist() {
     let workspace = tempdir().expect("workspace");
     let path = workspace.path().join("notes.txt");
@@ -665,10 +663,6 @@ fn the_denylist_is_consulted_before_the_allowlist() {
 /// US-108: a sensitive path raises a `file_pattern` requirement naming the file,
 /// granting the class for the session, even where the tool is `always`.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: sensitive patterns split on `/` only and miss a Windows path (US-011)"
-)]
 async fn a_sensitive_path_asks_even_at_permission_always() {
     let directory = tempdir().expect("tempdir");
     let store = store_trusting(directory.path()).await;
@@ -804,10 +798,6 @@ fn a_path_below_a_missing_directory_resolves_without_admitting_a_traversal() {
 /// first (`vibe/core/tools/utils.py:171-193`), so the trust recorded for the
 /// directory holding it plays no part.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: allowlist patterns do not match Windows paths (US-011)"
-)]
 async fn an_allowlisted_subject_is_granted_whatever_its_root_trust() {
     let directory = tempdir().expect("tempdir");
     let store = PermissionStore::default();
@@ -1304,4 +1294,86 @@ fn a_sensitive_file_approval_does_not_cover_another_sensitive_file() {
     let second = PermissionRequirement::sensitive_file("/work/b/.env", "read_file");
     assert!(!rule.covers("read_file", &second));
     assert_eq!(glob_escape("/a*b?c[d]"), "/a[*]b[?]c[[]d]");
+}
+
+// --------------------------------------------------------------------------
+// US-011 (Windows support): the lists read Windows paths as the reference
+// does there (`docs/parity.md`, "Windows observations")
+// --------------------------------------------------------------------------
+
+/// The shipped dotenv patterns name a Windows `.env` in any letter case and
+/// raise their requirement even where `read_file` is `always`. Neither path
+/// exists, so each is matched as written.
+#[cfg(windows)]
+#[test]
+fn a_windows_dotenv_path_is_sensitive_in_any_case() {
+    let settings = settings_for("read_file");
+    assert_eq!(settings.permission, PermissionMode::Always);
+    for path in [r"C:\proj\.env", r"C:\PROJ\.ENV", r"C:/proj/.env.local"] {
+        let context = resolve_file_tool_permission(Path::new(path), "read_file", &settings, None);
+        assert_eq!(context.permission, Some(PermissionMode::Ask), "{path}");
+        assert_eq!(
+            context
+                .requirements
+                .iter()
+                .map(|requirement| requirement.scope)
+                .collect::<Vec<_>>(),
+            [PermissionScope::FilePattern],
+            "{path}"
+        );
+    }
+    let ordinary =
+        resolve_file_tool_permission(Path::new(r"C:\proj\env.txt"), "read_file", &settings, None);
+    assert!(ordinary.requirements.is_empty());
+}
+
+/// A denylist entry written with either separator refuses the target, before
+/// an allowlist entry naming the same target is read, and an entry anchored on
+/// another drive refuses nothing on `C:`.
+#[cfg(windows)]
+#[test]
+fn a_windows_denylist_entry_refuses_with_either_separator() {
+    let target = Path::new(r"C:\proj\notes\a.txt");
+    for entry in ["C:/proj/notes/*", r"C:\proj\notes\*", r"c:\PROJ\Notes\*"] {
+        let mut settings = settings_for("read_file");
+        settings.denylist = vec![entry.to_owned()];
+        settings.allowlist = vec![r"C:\proj\notes\a.txt".to_owned()];
+        let context = resolve_file_tool_permission(target, "read_file", &settings, None);
+        assert_eq!(context.permission, Some(PermissionMode::Never), "{entry}");
+    }
+    let mut settings = settings_for("read_file");
+    settings.denylist = vec![r"D:\proj\notes\*".to_owned()];
+    let context = resolve_file_tool_permission(target, "read_file", &settings, None);
+    assert_eq!(context.permission, None, "another drive never denies");
+}
+
+/// An allowlist entry differing from the target only in letter case grants
+/// it, and one anchored on another drive does not, for either list form.
+#[cfg(windows)]
+#[test]
+fn a_windows_allowlist_entry_ignores_case_and_keeps_its_drive() {
+    let target = Path::new(r"C:\proj\notes\a.txt");
+    for entry in [
+        r"c:\PROJ\NOTES\A.TXT",
+        "C:/Proj/Notes/*",
+        r"vibe-path:exact:C:\PROJ\notes\a.txt",
+    ] {
+        let mut settings = settings_for("read_file");
+        settings.allowlist = vec![entry.to_owned()];
+        let context = resolve_file_tool_permission(target, "read_file", &settings, None);
+        assert_eq!(context.permission, Some(PermissionMode::Always), "{entry}");
+    }
+    for entry in [r"D:\proj\notes\a.txt", "D:/proj/notes/*"] {
+        let mut settings = settings_for("read_file");
+        settings.allowlist = vec![entry.to_owned()];
+        let context = resolve_file_tool_permission(target, "read_file", &settings, None);
+        assert_eq!(context.permission, None, "{entry}");
+    }
+    let mut sensitive = settings_for("read_file");
+    sensitive.sensitive_patterns = vec!["D:/**/*.txt".to_owned()];
+    let context = resolve_file_tool_permission(target, "read_file", &sensitive, None);
+    assert!(
+        context.requirements.is_empty(),
+        "a sensitive pattern on another drive names nothing on `C:`"
+    );
 }

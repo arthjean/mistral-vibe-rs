@@ -1956,10 +1956,6 @@ let old = 2;
     /// `resolve_file_tool_permission` grants it before anything else is read,
     /// so the read lands rather than stopping at the root.
     #[tokio::test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: sensitive patterns split on `/` only and miss a Windows path (US-011)"
-    )]
     async fn a_registered_file_tool_reaches_the_scratchpad_without_asking() {
         let root = tempdir().expect("workspace");
         let scratchpad =
@@ -2019,6 +2015,66 @@ let old = 2;
         );
 
         crate::scratchpad::cleanup_scratchpad(Some(&scratchpad));
+    }
+
+    /// US-011 (Windows support): through the published `read_file`, a
+    /// dotenv file asks in any letter case, a denylist entry written with `/`
+    /// refuses a target spelled with `\`, and an allowlist entry differing
+    /// only in case grants a file outside the workspace.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn the_published_read_file_applies_the_lists_to_windows_paths() {
+        let root = tempdir().expect("workspace");
+        let outside = tempdir().expect("outside");
+        let root_path = crate::platform::canonicalize(root.path()).expect("canonical root");
+        let outside_path = crate::platform::canonicalize(outside.path()).expect("canonical");
+        std::fs::write(root_path.join(".env"), "SECRET=1\n").expect("dotenv");
+        std::fs::create_dir(root_path.join("notes")).expect("notes");
+        std::fs::write(root_path.join("notes").join("a.txt"), "denied\n").expect("note");
+        std::fs::write(outside_path.join("secret.txt"), "granted\n").expect("outside");
+        let denied = format!("{}/notes/*", root_path.display()).replace('\\', "/");
+        let granted = outside_path
+            .join("secret.txt")
+            .display()
+            .to_string()
+            .to_uppercase();
+        let (registry, _config) = registered_with_settings(
+            &root_path,
+            &format!("[read_file]\ndenylist = ['{denied}']\nallowlist = ['{granted}']\n"),
+        )
+        .await;
+        let read = |path: String| {
+            registry.invoke(
+                "read_file",
+                ToolInvocation {
+                    call_id: "windows-read".to_owned(),
+                    arguments: json!({ "file_path": path }),
+                },
+            )
+        };
+
+        for spelling in [".env", ".ENV"] {
+            let asked = read(root_path.join(spelling).display().to_string())
+                .await
+                .expect("a sensitive read reaches the operator");
+            assert_eq!(
+                asked.skip,
+                Some(crate::tools::ToolSkip { cancelled: true }),
+                "`{spelling}` is sensitive at permission always: {asked:?}"
+            );
+        }
+        let refused = read(format!(r"{}\notes\a.txt", root_path.display())).await;
+        assert!(
+            matches!(&refused, Err(crate::tools::ToolError::Execution(message)) if message.contains("denylist")),
+            "the denylist refuses the read: {refused:?}"
+        );
+        let landed = read(outside_path.join("secret.txt").display().to_string())
+            .await
+            .expect("the allowlist grants the outside read");
+        assert!(
+            landed.model_text.contains("granted"),
+            "the outside read: {landed:?}"
+        );
     }
 
     /// The file tools of a trusted workspace, published against a resolver the
@@ -2864,10 +2920,6 @@ let old = 2;
     /// itself or walks a directory holding it, and the case of the name does
     /// not matter.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: sensitive patterns split on `/` only, so grep keeps `.env` matches (US-011)"
-    )]
     fn grep_drops_the_matches_a_sensitive_pattern_names() {
         let directory = tempdir().expect("tempdir");
         std::fs::write(directory.path().join(".env"), "TOKEN=needle\n").expect("seed");

@@ -27,6 +27,13 @@
   between the two no longer asks to sign in again. A key an earlier build
   stored under `MISTRAL_API_KEY.ai.mistral.vibe` is found and moved.
 
+- On Windows, `sensitive_patterns`, allowlists and denylists match paths
+  without regard to letter case and with `\` and `/` alike, as the reference
+  does there: `read_file` asks before reading `C:\proj\.ENV` even at
+  permission `always`, `grep` drops matches found in a `.env`, and a denylist
+  entry written `C:/proj/notes/*` refuses `C:\proj\notes\a.txt`. A pattern on
+  another drive never matches.
+
 - On Windows, sign-in and MCP authorization open their URL through the shell's
   URL association (`url.dll`) instead of `cmd /C start`, which cut the URL at
   its first `&` and ran the rest as a command. Every opener now refuses a URL

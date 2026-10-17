@@ -9,7 +9,7 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::matching::pattern_matches;
+use crate::matching::{fnmatch, pattern_matches};
 use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 use crate::tools::{
@@ -392,12 +392,12 @@ pub fn glob_escape(text: &str) -> String {
 /// `git status *` covers a later bare `git status`.
 #[must_use]
 pub fn wildcard_match(text: &str, pattern: &str) -> bool {
-    if pattern_matches(pattern, text) {
+    if fnmatch(pattern, text) {
         return true;
     }
     pattern
         .strip_suffix(" *")
-        .is_some_and(|prefix| pattern_matches(prefix, text))
+        .is_some_and(|prefix| fnmatch(prefix, text))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1428,12 +1428,10 @@ pub fn resolve_task_tool_permission(agent: &str, settings: &SharedToolConfig) ->
     PermissionContext::deferred()
 }
 
-/// The first entry of `patterns` matching `subject`, in the order the operator
-/// wrote them.
+/// The first entry of `patterns` matching `subject` under `fnmatch`, in the
+/// order the operator wrote them.
 fn matched_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a String> {
-    patterns
-        .iter()
-        .find(|pattern| pattern_matches(pattern, subject))
+    patterns.iter().find(|pattern| fnmatch(pattern, subject))
 }
 
 /// The first entry of `patterns` naming `subject` as a path, in the order the
@@ -1441,11 +1439,13 @@ fn matched_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a Stri
 ///
 /// Reference `matches_sensitive_pattern` (`vibe/core/tools/utils.py`) lowers
 /// both sides before `PurePath.match`, so `.ENV` is as sensitive as `.env`.
+/// `PurePath` is the host flavor, so on Windows `\` separates as `/` does.
 fn matched_path_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a String> {
+    let flavor = PathFlavor::host();
     let subject = subject.to_lowercase();
     patterns
         .iter()
-        .find(|pattern| pure_path_match(&pattern.to_lowercase(), &subject))
+        .find(|pattern| flavor.pure_path_match(&pattern.to_lowercase(), &subject))
 }
 
 /// Whether a resolved absolute path is one a sensitive pattern names.
@@ -1457,54 +1457,103 @@ pub fn matches_sensitive_pattern(patterns: &[String], resolved: &Path) -> bool {
     matched_path_pattern(patterns, &resolved.display().to_string()).is_some()
 }
 
-/// Whether `pattern` names `subject` under `PurePath.match`.
-///
-/// Reference `resolve_file_tool_permission` runs `sensitive_patterns` through
-/// it, and [`path_pattern_matches`] runs an absolute allowlist glob through it,
-/// while the denylist stays on `fnmatch`. This matcher compares component by
-/// component and anchors on the right: `.env` names a file called `.env` at any
-/// depth, `/etc/*` names only a direct child of `/etc`, and a `*` never crosses
-/// a separator the way `fnmatch` lets it.
-///
-/// A pattern naming no component matches nothing. Upstream raises `ValueError`
-/// there; failing to read a pattern is a reason to raise no requirement from
-/// it, never a reason to drop the ones the other patterns raise.
-fn pure_path_match(pattern: &str, subject: &str) -> bool {
-    let expected = path_components(pattern);
-    let Some(width) = (!expected.is_empty()).then_some(expected.len()) else {
-        return false;
-    };
-    let found = path_components(subject);
-    if pattern.starts_with('/') {
-        // An anchored pattern compares against the whole path, root included.
-        return found.len() == width && components_match(&expected, &found);
-    }
-    let Some(tail) = found
-        .len()
-        .checked_sub(width)
-        .and_then(|start| found.get(start..))
-    else {
-        return false;
-    };
-    components_match(&expected, tail)
+/// The `PurePath` class a match reads its paths under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathFlavor {
+    Posix,
+    Windows,
 }
 
-/// The components `PurePath` compares by, keeping the root as an empty leading
-/// component so an absolute path and an absolute pattern line up.
-///
-/// Only `/` separates: the reference dispatches on the host flavor, and the
-/// oracle measures the POSIX one.
-fn path_components(value: &str) -> Vec<&str> {
-    let mut components = Vec::new();
-    if value.starts_with('/') {
-        components.push("");
+impl PathFlavor {
+    /// `PurePath` itself, which the reference instantiates on the host flavor.
+    fn host() -> Self {
+        if cfg!(windows) {
+            Self::Windows
+        } else {
+            Self::Posix
+        }
     }
-    components.extend(
-        value
-            .split('/')
-            .filter(|component| !component.is_empty() && *component != "."),
-    );
-    components
+
+    /// Whether `pattern` names `subject` under `PurePath.match`.
+    ///
+    /// Reference `resolve_file_tool_permission` runs `sensitive_patterns`
+    /// through it, and [`path_pattern_matches`] runs an absolute POSIX
+    /// allowlist glob through it, while the denylist stays on `fnmatch`. This
+    /// matcher compares component by component and anchors on the right:
+    /// `.env` names a file called `.env` at any depth, `/etc/*` names only a
+    /// direct child of `/etc`, and a `*` never crosses a separator the way
+    /// `fnmatch` lets it.
+    ///
+    /// Under the Windows flavor `\` and `/` both separate, the drive is the
+    /// first component, a pattern carrying a drive is anchored like one
+    /// carrying a root, and case never matters, so `C:\PROJ\.ENV` is named
+    /// by `**/.env` and a pattern on `D:` never names a path on `C:`.
+    ///
+    /// A pattern naming no component matches nothing. Upstream raises
+    /// `ValueError` there; failing to read a pattern is a reason to raise no
+    /// requirement from it, never a reason to drop the ones the other patterns
+    /// raise.
+    fn pure_path_match(self, pattern: &str, subject: &str) -> bool {
+        let (pattern, subject) = match self {
+            Self::Posix => (pattern.to_owned(), subject.to_owned()),
+            Self::Windows => {
+                let fold = |value: &str| value.replace('\\', "/").to_lowercase();
+                (fold(pattern), fold(subject))
+            }
+        };
+        let expected = self.components(&pattern);
+        let Some(width) = (!expected.is_empty()).then_some(expected.len()) else {
+            return false;
+        };
+        let found = self.components(&subject);
+        if self.is_anchored(&pattern) {
+            // An anchored pattern compares against the whole path, root
+            // included.
+            return found.len() == width && components_match(&expected, &found);
+        }
+        let Some(tail) = found
+            .len()
+            .checked_sub(width)
+            .and_then(|start| found.get(start..))
+        else {
+            return false;
+        };
+        components_match(&expected, tail)
+    }
+
+    /// Whether a pattern carries a drive or a root, which `PurePath.match`
+    /// matches from the start rather than from the right.
+    fn is_anchored(self, pattern: &str) -> bool {
+        pattern.starts_with('/') || (self == Self::Windows && pattern.chars().nth(1) == Some(':'))
+    }
+
+    /// The components `PurePath` compares by, keeping the root as an empty
+    /// leading component so an absolute path and an absolute pattern line up.
+    ///
+    /// Only `/` separates: the Windows flavor has turned every `\` into one
+    /// already, and its drive (`c:`) is the leading component a root
+    /// follows, as `str(PureWindowsPath)` spells it. A UNC path keeps both
+    /// leading separators, as an empty component each.
+    fn components(self, value: &str) -> Vec<&str> {
+        let mut components = Vec::new();
+        if self == Self::Windows && value.starts_with("//") {
+            components.extend(["", ""]);
+        } else if value.starts_with('/') {
+            components.push("");
+        }
+        components.extend(
+            value
+                .split('/')
+                .filter(|component| !component.is_empty() && *component != "."),
+        );
+        components
+    }
+}
+
+/// `PurePosixPath.match`, which [`path_pattern_matches`] reads an absolute
+/// POSIX glob with whatever the host.
+fn pure_path_match(pattern: &str, subject: &str) -> bool {
+    PathFlavor::Posix.pure_path_match(pattern, subject)
 }
 
 /// Whether every pattern component names the component facing it.

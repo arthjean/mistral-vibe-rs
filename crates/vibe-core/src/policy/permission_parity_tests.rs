@@ -609,10 +609,6 @@ fn every_wildcard_verdict_matches_the_reference() {
 /// US-108: the sensitive requirement the shared file-tool chain produces
 /// carries the reference scope, patterns and label shape.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: sensitive patterns split on `/` only and miss a Windows path (US-011)"
-)]
 fn the_file_tool_chain_produces_the_reference_requirements() {
     let corpus = corpus();
     let chain = &corpus.file_tool_chain;
@@ -639,12 +635,12 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
     check_against_ledger(
         "/fileToolChain/sensitiveInvocationPattern",
         &chain.sensitive_invocation_pattern,
-        &requirement.invocation_pattern.replace(&root, "<workdir>"),
+        &posix_spelling(&requirement.invocation_pattern.replace(&root, "<workdir>")),
     );
     check_against_ledger(
         "/fileToolChain/sensitiveSessionPattern",
         &chain.sensitive_session_pattern,
-        &requirement.session_pattern.replace(&escaped, "<workdir>"),
+        &posix_spelling(&requirement.session_pattern.replace(&escaped, "<workdir>")),
     );
     assert_eq!(
         requirement.label,
@@ -654,6 +650,19 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
         sensitive.permission.map(permission_label),
         Some(chain.permission.as_str())
     );
+}
+
+/// `answer` in the separators the corpus was captured with.
+///
+/// The corpus is captured on Linux. The reference on Windows spells the same
+/// requirement with `\` (`docs/parity.md`, "Windows observations"), so a
+/// Windows answer is compared once its separators are folded back.
+fn posix_spelling(answer: &str) -> String {
+    if cfg!(windows) {
+        answer.replace('\\', "/")
+    } else {
+        answer.to_owned()
+    }
 }
 
 /// A store trusting `root`, which is what a session opening a workspace does.
@@ -699,10 +708,6 @@ async fn chain_answer(
 /// resolved path, granted by its exact encoded path, and offers a recursive
 /// grant root only when it is a directory.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: outside requirements are spelled with Windows separators the policy does not normalize (US-011)"
-)]
 async fn an_outside_target_raises_the_reference_requirement() {
     let corpus = corpus();
     let outside_cases = &corpus.file_tool_chain.outside;
@@ -747,7 +752,15 @@ async fn an_outside_target_raises_the_reference_requirement() {
                 case.target, resolution.required_permissions
             );
         };
-        let placeholder = |value: &str| value.replace(&root, "<outside>");
+        // On Windows an encoded grant is also case folded, as the reference
+        // folds it there (`docs/parity.md`, "Windows observations").
+        let placeholder = |value: &str| {
+            posix_spelling(
+                &value
+                    .replace(&root, "<outside>")
+                    .replace(&root.to_lowercase(), "<outside>"),
+            )
+        };
         assert_eq!(wire_scope(requirement.scope), case.scope);
         assert_eq!(
             placeholder(&requirement.invocation_pattern),
@@ -1034,10 +1047,6 @@ fn every_covers_verdict_matches_the_reference() {
 /// `fnmatch`, and a path outside the working directory that no entry grants
 /// is still asked about.
 #[tokio::test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: allowlist and denylist patterns do not match Windows paths (US-011)"
-)]
 async fn the_list_chain_answers_like_the_reference() {
     let corpus = corpus();
     assert_eq!(corpus.list_chain.len(), corpus.counts.list_chain_cases);
@@ -1099,10 +1108,6 @@ async fn the_list_chain_answers_like_the_reference() {
 /// US-263: the whole chain, not just the matcher, raises what the reference
 /// raises for a sensitive pattern.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: sensitive patterns split on `/` only and miss a Windows path (US-011)"
-)]
 fn the_sensitive_chain_answers_like_the_reference() {
     let corpus = corpus();
     assert_eq!(
@@ -1183,10 +1188,6 @@ fn the_shipped_sensitive_defaults_still_name_a_dotenv_file() {
 /// US-263: a pattern nothing can read raises nothing and never panics, and the
 /// scan still stops on the first pattern that does name the path.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: sensitive patterns split on `/` only and miss a Windows path (US-011)"
-)]
 fn an_unreadable_sensitive_pattern_raises_nothing_and_stops_nothing() {
     let workspace = tempfile::tempdir().expect("workspace");
     let file = workspace.path().join(".env");

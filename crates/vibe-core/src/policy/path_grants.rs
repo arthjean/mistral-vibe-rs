@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{PermissionRequirement, PermissionScope};
-use crate::matching::pattern_matches;
+use crate::matching::{fnmatch, pattern_matches};
 
 /// The word every encoded grant starts with.
 const PATH_GRANT_PREFIX: &str = "vibe-path";
@@ -104,7 +104,7 @@ pub fn path_pattern_matches(path: &str, pattern: &str) -> bool {
     if pattern.starts_with('/') {
         return super::pure_path_match(pattern, &normalized);
     }
-    pattern_matches(pattern, &normalized)
+    fnmatch(pattern, &normalized)
 }
 
 /// Whether a shell allowlist entry `pattern` grants `path`.

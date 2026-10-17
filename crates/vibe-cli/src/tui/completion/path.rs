@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use super::fuzzy::fuzzy_match_score;
 use super::{CompletionCandidate, CompletionKind};
 use crate::tui::input::InputError;
-use vibe_core::matching::pattern_matches;
+use vibe_core::matching::fnmatch;
 use vibe_core::workspace::text_file;
 use vibe_core::worktree::trusted_git_executable;
 
@@ -1047,17 +1047,8 @@ impl IgnoreRule {
         } else {
             rel
         };
-        if cfg!(windows) {
-            // `fnmatch.fnmatch` applies `os.path.normcase` to both sides, which
-            // on Windows folds case and turns `/` into `\`.
-            return pattern_matches(&normcase(&self.pattern), &normcase(target));
-        }
-        pattern_matches(&self.pattern, target)
+        fnmatch(&self.pattern, target)
     }
-}
-
-fn normcase(value: &str) -> String {
-    value.replace('/', "\\").to_lowercase()
 }
 
 /// The boundaries `str.splitlines` splits on once newlines are normalized.
