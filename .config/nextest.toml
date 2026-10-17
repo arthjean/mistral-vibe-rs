@@ -4,6 +4,13 @@
 # The CI job installs exactly this release.
 nextest-version = "0.9.146"
 
+# The 10,000-character paste is a latency bound a person sees on an idle
+# machine, about 1.7 s against 2 s in a debug build, so it runs with no other
+# test beside it: under the whole suite's load it measures past 3 s.
+[[profile.default.overrides]]
+filter = "binary(tui_conpty) & test(=a_ten_thousand_character_paste_lands_within_two_seconds)"
+threads-required = "num-cpus"
+
 # A test that fails is rerun twice before it fails the job, as the reference
 # reruns its last-failed tests, because windows-2022's pseudoconsole host
 # sometimes stalls a session's teardown. A rerun that passes is reported as
