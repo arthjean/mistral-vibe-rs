@@ -1,14 +1,4 @@
-use std::path::PathBuf;
-
 use super::*;
-use crate::path_resources::{PathResourceKind, build_path_prompt_payload};
-
-/// A PNG fixture under `directory`, named as the operator would see it.
-fn image(directory: &Path, name: &str) -> PathBuf {
-    let path = directory.join(name);
-    std::fs::write(&path, b"image").expect("image fixture");
-    path
-}
 
 fn spelled(path: &Path) -> String {
     path.to_string_lossy().into_owned()
@@ -35,7 +25,17 @@ fn a_unc_share_is_quoted_like_every_windows_root() {
 
 #[cfg(windows)]
 mod windows {
+    use std::path::PathBuf;
+
     use super::*;
+    use crate::path_resources::{PathResourceKind, build_path_prompt_payload};
+
+    /// A PNG fixture under `directory`, named as the operator would see it.
+    fn image(directory: &Path, name: &str) -> PathBuf {
+        let path = directory.join(name);
+        std::fs::write(&path, b"image").expect("image fixture");
+        path
+    }
 
     #[test]
     fn a_dropped_path_with_a_space_becomes_a_quoted_mention() {
