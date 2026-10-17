@@ -8,7 +8,7 @@
   "epics": [
     {"id": "EP-001", "title": "Trustworthy Windows Verification Signal", "status": "DONE", "priority": "P0", "stories_total": 7, "stories_done": 7},
     {"id": "EP-002", "title": "Path and Home Identity", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4},
-    {"id": "EP-003", "title": "Security Boundaries on Windows", "status": "TODO", "priority": "P0", "stories_total": 4, "stories_done": 0},
+    {"id": "EP-003", "title": "Security Boundaries on Windows", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4},
     {"id": "EP-004", "title": "Process Execution on Windows", "status": "TODO", "priority": "P0", "stories_total": 3, "stories_done": 0},
     {"id": "EP-005", "title": "TUI Input on Windows", "status": "TODO", "priority": "P0", "stories_total": 4, "stories_done": 0},
     {"id": "EP-006", "title": "Windows Distribution and Polish", "status": "TODO", "priority": "P1", "stories_total": 3, "stories_done": 0}
@@ -25,10 +25,10 @@
     {"id": "US-009", "title": "Normalize verbatim paths at the core boundary", "epic": "EP-002", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": [], "started_at": "2026-10-16", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
     {"id": "US-010", "title": "Publish non-verbatim paths from every crate", "epic": "EP-002", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-009"], "started_at": "2026-10-16", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
     {"id": "US-025", "title": "Share stored credentials with the reference on Windows", "epic": "EP-002", "status": "DONE", "priority": "P1", "size": "S", "blocked_by": [], "started_at": "2026-10-16", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
-    {"id": "US-011", "title": "Match permission patterns with Windows path semantics", "epic": "EP-003", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-006", "US-009"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-012", "title": "Detect outside paths and home operands in Windows shell commands", "epic": "EP-003", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-008", "US-011"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-013", "title": "Open URLs without a command interpreter", "epic": "EP-003", "status": "TODO", "priority": "P0", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-014", "title": "Launch MCP stdio servers through PATHEXT", "epic": "EP-003", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
+    {"id": "US-011", "title": "Match permission patterns with Windows path semantics", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-006", "US-009"], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
+    {"id": "US-012", "title": "Detect outside paths and home operands in Windows shell commands", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-008", "US-011"], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
+    {"id": "US-013", "title": "Open URLs without a command interpreter", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "S", "blocked_by": [], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
+    {"id": "US-014", "title": "Launch MCP stdio servers through PATHEXT", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": [], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
     {"id": "US-015", "title": "Run harness processes under a Windows shell", "epic": "EP-004", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-006"], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-016", "title": "Preserve quoting in the cmd.exe fallback", "epic": "EP-004", "status": "TODO", "priority": "P1", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-017", "title": "Drain ConPTY output and kill whole process trees", "epic": "EP-004", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
