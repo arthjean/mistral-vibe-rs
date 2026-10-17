@@ -146,7 +146,8 @@ jobs:
           {
             echo "### Windows ignore tags: ${count} (plus ${by_design} by design)"
             echo
-            printf '%s\n' "${tags}" | grep -oE 'US-[0-9]+' | sort | uniq -c \
+            # No tag left is a count of zero, not a failure.
+            { printf '%s\n' "${tags}" | grep -oE 'US-[0-9]+' || true; } | sort | uniq -c \
               | awk '{ print "- " $2 ": " $1 }'
           } >> "${GITHUB_STEP_SUMMARY}"
       - name: Upload the test log
