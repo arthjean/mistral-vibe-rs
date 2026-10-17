@@ -9,9 +9,10 @@
     {"id": "EP-001", "title": "Trustworthy Windows Verification Signal", "status": "DONE", "priority": "P0", "stories_total": 7, "stories_done": 7},
     {"id": "EP-002", "title": "Path and Home Identity", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4},
     {"id": "EP-003", "title": "Security Boundaries on Windows", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4},
-    {"id": "EP-004", "title": "Process Execution on Windows", "status": "TODO", "priority": "P0", "stories_total": 3, "stories_done": 0},
+    {"id": "EP-004", "title": "Process Execution on Windows", "status": "DONE", "priority": "P0", "stories_total": 3, "stories_done": 3},
     {"id": "EP-005", "title": "TUI Input on Windows", "status": "TODO", "priority": "P0", "stories_total": 4, "stories_done": 0},
-    {"id": "EP-006", "title": "Windows Distribution and Polish", "status": "TODO", "priority": "P1", "stories_total": 3, "stories_done": 0}
+    {"id": "EP-006", "title": "Windows Distribution and Polish", "status": "TODO", "priority": "P1", "stories_total": 3, "stories_done": 0},
+    {"id": "EP-007", "title": "Linux Non-Regression", "status": "TODO", "priority": "P0", "stories_total": 1, "stories_done": 0}
   ],
   "stories": [
     {"id": "US-001", "title": "Pin line endings in the repository", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "S", "blocked_by": [], "started_at": "2026-10-15", "completed_at": "2026-10-16", "reviewed_at": "2026-10-16"},
@@ -29,15 +30,16 @@
     {"id": "US-012", "title": "Detect outside paths and home operands in Windows shell commands", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-008", "US-011"], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
     {"id": "US-013", "title": "Open URLs without a command interpreter", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "S", "blocked_by": [], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
     {"id": "US-014", "title": "Launch MCP stdio servers through PATHEXT", "epic": "EP-003", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": [], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
-    {"id": "US-015", "title": "Run harness processes under a Windows shell", "epic": "EP-004", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-006"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-016", "title": "Preserve quoting in the cmd.exe fallback", "epic": "EP-004", "status": "TODO", "priority": "P1", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-017", "title": "Drain ConPTY output and kill whole process trees", "epic": "EP-004", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
+    {"id": "US-015", "title": "Run harness processes under a Windows shell", "epic": "EP-004", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-006"], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
+    {"id": "US-016", "title": "Preserve quoting in the cmd.exe fallback", "epic": "EP-004", "status": "DONE", "priority": "P1", "size": "S", "blocked_by": [], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
+    {"id": "US-017", "title": "Drain ConPTY output and kill whole process trees", "epic": "EP-004", "status": "DONE", "priority": "P1", "size": "L", "blocked_by": [], "started_at": "2026-10-17", "completed_at": "2026-10-17", "reviewed_at": "2026-10-17"},
     {"id": "US-018", "title": "Type AltGr characters in the TUI", "epic": "EP-005", "status": "TODO", "priority": "P0", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-019", "title": "Paste multi-line text on Windows", "epic": "EP-005", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-020", "title": "Accept Windows paths in mentions and image attachments", "epic": "EP-005", "status": "TODO", "priority": "P1", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-021", "title": "Open the external editor on Windows", "epic": "EP-005", "status": "TODO", "priority": "P1", "size": "S", "blocked_by": ["US-006"], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-022", "title": "Ship and smoke-test the Windows package", "epic": "EP-006", "status": "TODO", "priority": "P1", "size": "M", "blocked_by": ["US-007"], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-023", "title": "Copy Unicode text to the Windows clipboard", "epic": "EP-006", "status": "TODO", "priority": "P2", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-024", "title": "Harden vibe-acp children and environment on Windows", "epic": "EP-006", "status": "TODO", "priority": "P2", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null}
+    {"id": "US-024", "title": "Harden vibe-acp children and environment on Windows", "epic": "EP-006", "status": "TODO", "priority": "P2", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
+    {"id": "US-026", "title": "Verify Linux behavior after the Windows epics", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-015", "US-016", "US-017", "US-018", "US-019", "US-020", "US-021", "US-022", "US-023", "US-024"], "started_at": null, "completed_at": null, "reviewed_at": null}
   ]
 }
