@@ -24,11 +24,17 @@ mod support;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 const STEP: Duration = Duration::from_secs(30);
+
+/// One console at a time: these tests type at a person's pace and time a
+/// paste, which a TUI stalled by its neighbors would not see as a person
+/// sees it. nextest runs them alone for the same reason.
+static ONE_CONSOLE: Mutex<()> = Mutex::new(());
 
 /// `LEFT_CTRL_PRESSED`, and AltGr as Windows reports it: `RIGHT_ALT_PRESSED`
 /// with `LEFT_CTRL_PRESSED`.
@@ -102,12 +108,14 @@ struct Console {
     receiver: Receiver<Vec<u8>>,
     transcript: Vec<u8>,
     directory: PathBuf,
+    _alone: MutexGuard<'static, ()>,
 }
 
 impl Console {
     /// Starts `vibe` in `directory/workspace` with its home in
     /// `directory/home` and `VISUAL` set to `visual`.
     fn start(directory: &Path, visual: &str) -> Self {
+        let alone = ONE_CONSOLE.lock().unwrap_or_else(PoisonError::into_inner);
         let workspace = directory.join("workspace");
         let home = directory.join("home");
         std::fs::create_dir_all(&workspace).expect("workspace");
@@ -158,6 +166,7 @@ impl Console {
             receiver,
             transcript: Vec::new(),
             directory: directory.to_path_buf(),
+            _alone: alone,
         };
         console.wait_for("Type /help for more information");
         console
