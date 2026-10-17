@@ -910,7 +910,14 @@ fn resolve_tool_path(raw: &str, cwd: &Path) -> PathBuf {
     if raw.is_empty() {
         return cwd.to_path_buf();
     }
-    let expanded = PathBuf::from(expand_home(raw));
+    // `_make_absolute` folds a Git Bash drive path (`/c/work`) first on
+    // Windows, where the host would otherwise root it on the current drive.
+    let raw = if cfg!(windows) {
+        crate::workspace::tool_path::fold_msys_drive(raw)
+    } else {
+        raw.to_owned()
+    };
+    let expanded = PathBuf::from(expand_home(&raw));
     let joined = if expanded.is_absolute() {
         expanded
     } else {
@@ -999,7 +1006,7 @@ fn collect_outside_paths(
             continue;
         };
         for token in path_candidates(&tokens, inspects_paths(program)) {
-            if !looks_like_path(&token) {
+            if !looks_like_path(flavor, &token) {
                 continue;
             }
             if let Some(path) = escaping_path(flavor, context, &token) {
@@ -1028,12 +1035,23 @@ fn retain_ungranted(outside: &mut Vec<String>, lists: &ShellCommandLists) {
 
 /// Reference `_collect_outside_paths`: only a token shaped like a path is
 /// resolved, so a `grep` pattern and a `chmod` mode never become directories.
-fn looks_like_path(token: &str) -> bool {
+///
+/// Git Bash also reads a token opening with a drive (`C:`, `C:notes.txt`) as a
+/// path on that drive's current directory, which the reference skips and the
+/// policy cannot position, so it is asked about here rather than granted.
+fn looks_like_path(flavor: ShellFlavor, token: &str) -> bool {
     token.starts_with('/')
         || token.starts_with('~')
         || token.starts_with('.')
         || token.contains('/')
         || token.contains('\\')
+        || (flavor == ShellFlavor::GitBash && has_drive_prefix(token))
+}
+
+/// Whether `token` opens with a drive letter and its colon.
+fn has_drive_prefix(token: &str) -> bool {
+    let bytes = token.as_bytes();
+    bytes.first().is_some_and(u8::is_ascii_alphabetic) && bytes.get(1) == Some(&b':')
 }
 
 /// The path grammar an operand of `flavor` is written in.
@@ -1147,8 +1165,14 @@ fn render_policy_path(path: &PolicyPath) -> String {
 ///
 /// Reference `_collect_outside_paths` calls `Path.expanduser` before resolving,
 /// without which `cat ~/.ssh/id_rsa` would position under a literal `~`
-/// directory inside the workspace and never raise a requirement.
+/// directory inside the workspace and never raise a requirement. On Windows
+/// `expanduser` also reads `~\`, and joins the rest under the Windows home.
 fn expand_home(token: &str) -> String {
+    if cfg!(windows) {
+        return crate::platform::expand_home(Path::new(token))
+            .to_string_lossy()
+            .into_owned();
+    }
     if token != "~" && !token.starts_with("~/") {
         return token.to_owned();
     }
@@ -1841,35 +1865,79 @@ mod tests {
         );
     }
 
+    /// The analysis a call gets on this host's shell: Git Bash over a Windows
+    /// working directory on Windows, which is what the published family runs
+    /// there, and [`analyze`] elsewhere.
+    fn analyze_on_host(command: &str) -> ShellAnalysis {
+        if !cfg!(windows) {
+            return analyze(command);
+        }
+        let context = ShellPolicyContext::new(
+            Platform::Windows,
+            parse_policy_path(Platform::Windows, r"C:\work\project").expect("working directory"),
+        );
+        analyze_shell(ShellFlavor::GitBash, command, &context, &posix_lists())
+    }
+
     /// US-111: a `~` operand is expanded before it is positioned, so a home-relative
     /// read is measured where it actually reads.
+    ///
+    /// On Windows the home is the one every entry point resolves. Git Bash
+    /// reads `~\` as an escape, so the reference extracts no operand from
+    /// `cat ~\.ssh\id_rsa` and asks about the unmodeled word, while PowerShell
+    /// expands `~\` as it expands `~/`.
     #[test]
-    #[cfg_attr(
-        windows,
-        ignore = "windows: `~` operands expand against `HOME`, not the Windows home (US-012)"
-    )]
     fn a_home_relative_operand_is_expanded_before_it_is_positioned() {
         let Some(home) = crate::config::user_home_directory() else {
             eprintln!("skipping: the environment names no home directory");
             return;
         };
-        let analysis = analyze("cat ~/.ssh/id_rsa");
+        let expected = crate::platform::strip_verbatim_prefix(
+            &crate::worktree::resolve_lenient(&home.join(".ssh").join("id_rsa")).to_string_lossy(),
+        );
+        let names_the_home = |analysis: &ShellAnalysis| {
+            analysis
+                .requirements
+                .iter()
+                .any(|requirement| requirement.invocation_pattern == expected)
+        };
+        let analysis = analyze_on_host("cat ~/.ssh/id_rsa");
         assert_eq!(
             analysis.mode,
             PermissionMode::Ask,
             "{:?}",
             analysis.rationale
         );
-        let expected = crate::worktree::resolve_lenient(&home.join(".ssh").join("id_rsa"))
-            .display()
-            .to_string();
         assert!(
-            analysis
-                .requirements
-                .iter()
-                .any(|requirement| requirement.invocation_pattern == expected),
+            names_the_home(&analysis),
             "expected `{expected}` among {:?}",
             analysis.requirements
+        );
+        if !cfg!(windows) {
+            return;
+        }
+        let escaped = analyze_on_host(r"cat ~\.ssh\id_rsa");
+        assert_eq!(
+            escaped.mode,
+            PermissionMode::Ask,
+            "an escaped home operand is asked about, never granted: {:?}",
+            escaped.rationale
+        );
+        let context = ShellPolicyContext::new(
+            Platform::Windows,
+            parse_policy_path(Platform::Windows, r"C:\work\project").expect("working directory"),
+        );
+        let powershell = analyze_shell(
+            ShellFlavor::PowerShell,
+            r"Get-Content ~\.ssh\id_rsa",
+            &context,
+            &posix_lists(),
+        );
+        assert_eq!(powershell.mode, PermissionMode::Ask, "{powershell:?}");
+        assert!(
+            names_the_home(&powershell),
+            "expected `{expected}` among {:?}",
+            powershell.requirements
         );
     }
 

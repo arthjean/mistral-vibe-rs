@@ -104,17 +104,43 @@ fn parse_windows(raw: &str) -> Result<PolicyPath, PathPolicyError> {
     })
 }
 
+/// A Git Bash path, read the same way on every host.
+///
+/// Git Bash accepts both separators and both spellings of a drive: a path
+/// opening with a drive letter or a pair of separators is read as Windows
+/// reads it (`C:\work`, `C:/work`, `\\server\share`), so a drive without a
+/// root (`C:`, `C:work`) is refused rather than positioned. Anything else is
+/// split on either separator, an absolute path whose first component is one
+/// letter naming that drive (`/c/work` is `C:\work`), and a relative path
+/// staying relative.
 fn parse_git_bash(raw: &str) -> Result<PolicyPath, PathPolicyError> {
-    let parsed = parse_posix(raw)?;
-    let mut components = parsed.components;
-    let root = components
-        .first()
-        .filter(|drive| drive.len() == 1 && drive.as_bytes()[0].is_ascii_alphabetic())
-        .map(|drive| format!("{}:\\", drive.to_ascii_uppercase()))
-        .unwrap_or_else(|| "/".to_owned());
-    if root.ends_with(":\\") && !components.is_empty() {
-        components.remove(0);
+    let bytes = raw.as_bytes();
+    let separator = |byte: Option<&u8>| matches!(byte, Some(b'/' | b'\\'));
+    let drive = bytes.first().is_some_and(u8::is_ascii_alphabetic) && bytes.get(1) == Some(&b':');
+    if drive || (separator(bytes.first()) && separator(bytes.get(1))) {
+        return parse_windows(raw).map(|parsed| PolicyPath {
+            platform: Platform::GitBash,
+            ..parsed
+        });
     }
+    let mut components = Vec::new();
+    for part in raw.split(['/', '\\']) {
+        match part {
+            "" | "." => {}
+            ".." => return Err(PathPolicyError::ParentTraversal),
+            part => components.push(part.to_owned()),
+        }
+    }
+    let root = if !separator(bytes.first()) {
+        String::new()
+    } else if components
+        .first()
+        .is_some_and(|first| first.len() == 1 && first.as_bytes()[0].is_ascii_alphabetic())
+    {
+        format!("{}:\\", components.remove(0).to_ascii_uppercase())
+    } else {
+        "/".to_owned()
+    };
     Ok(PolicyPath {
         platform: Platform::GitBash,
         root,
@@ -150,5 +176,38 @@ mod tests {
             parse_policy_path(Platform::Windows, r"C:relative"),
             Err(PathPolicyError::MissingWindowsRoot)
         );
+    }
+
+    /// Git Bash reads both drive spellings and both separators the same way on
+    /// every host, keeps a relative path relative, and refuses a drive
+    /// without a root.
+    #[test]
+    fn a_git_bash_path_reads_every_windows_spelling() {
+        let parsed = |raw: &str| parse_policy_path(Platform::GitBash, raw);
+        for raw in [
+            r"C:\work\notes",
+            "C:/work/notes",
+            "/c/work/notes",
+            r"c:\work/notes",
+        ] {
+            let path = parsed(raw).expect(raw);
+            assert!(path.root.eq_ignore_ascii_case(r"C:\"), "{raw}: {path:?}");
+            assert_eq!(path.components, ["work", "notes"], "{raw}");
+        }
+        let relative = parsed(r"work\notes").expect("relative");
+        assert_eq!(relative.root, "");
+        assert_eq!(relative.components, ["work", "notes"]);
+        assert_eq!(parsed("/etc/passwd").expect("rooted").root, "/");
+        assert_eq!(
+            parsed(r"\\server\share\notes").expect("UNC").root,
+            r"\\server\share\"
+        );
+        for raw in ["C:", "C:notes.txt"] {
+            assert_eq!(
+                parsed(raw),
+                Err(PathPolicyError::MissingWindowsRoot),
+                "{raw}"
+            );
+        }
     }
 }

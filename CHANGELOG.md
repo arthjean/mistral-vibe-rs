@@ -34,6 +34,12 @@
   entry written `C:/proj/notes/*` refuses `C:\proj\notes\a.txt`. A pattern on
   another drive never matches.
 
+- On Windows, the Git Bash shell asks before touching a file outside the
+  workspace however its path is spelled (`C:\outside`, `C:/outside`,
+  `/c/outside`), expands `~` to the Windows home, and positions a relative
+  `cwd` on the workspace; a word opening with a drive and no root (`C:`,
+  `C:notes.txt`) is asked about rather than granted.
+
 - On Windows, sign-in and MCP authorization open their URL through the shell's
   URL association (`url.dll`) instead of `cmd /C start`, which cut the URL at
   its first `&` and ran the rest as a command. Every opener now refuses a URL

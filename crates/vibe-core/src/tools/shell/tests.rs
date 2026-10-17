@@ -702,7 +702,7 @@ async fn a_working_directory_under_a_revoked_root_is_asked_like_any_outside_one(
 #[tokio::test]
 #[cfg_attr(
     windows,
-    ignore = "windows: Git Bash grammar misreads a drive-letter cwd as POSIX (US-012)"
+    ignore = "windows: ConPTY stalls on an unanswered cursor-position request (US-017)"
 )]
 async fn a_working_directory_inside_the_session_root_does_not_ask() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::Deny).await;
@@ -2267,6 +2267,79 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         "another drive is outside the workspace: {:?}",
         outside.rationale
     );
+}
+
+/// US-012 (Windows support): the Git Bash family positions a drive-letter
+/// operand or `cwd` in either spelling on the Windows workspace, asks about
+/// one outside it, and never grants an operand it cannot position.
+#[test]
+fn a_git_bash_call_positions_windows_spellings_on_the_workspace() {
+    let lists = ShellCommandLists::from_config(&shell_settings());
+    let analyze = |command: &str, cwd: Option<&str>| {
+        super::policy::analyze(
+            ShellFlavor::GitBash,
+            Platform::Windows,
+            Path::new(r"C:\work"),
+            &[],
+            None,
+            command,
+            &lists,
+            cwd.map(|cwd| super::policy::CallOverrides {
+                cwd: Some(cwd.to_owned()),
+                requirements: Vec::new(),
+                environment: Vec::new(),
+            }),
+        )
+    };
+    let outside_paths = |analysis: &crate::shell::ShellAnalysis| {
+        analysis
+            .requirements
+            .iter()
+            .filter(|requirement| {
+                requirement.scope == crate::policy::PermissionScope::OutsideDirectory
+            })
+            .map(|requirement| requirement.invocation_pattern.clone())
+            .collect::<Vec<_>>()
+    };
+
+    for cwd in [
+        r"C:\work\inside",
+        "C:/work/inside",
+        "/c/work/inside",
+        "inside",
+    ] {
+        for command in ["pwd", "cat notes.txt"] {
+            let inside = analyze(command, Some(cwd));
+            assert!(outside_paths(&inside).is_empty(), "{cwd}: {inside:?}");
+        }
+    }
+    let outside_cwd = analyze("pwd", Some(r"C:\outside"));
+    assert_eq!(outside_cwd.mode, crate::policy::PermissionMode::Ask);
+    assert_eq!(outside_paths(&outside_cwd), [r"C:\outside"]);
+
+    // The legacy variant keeps a backslash literal on Windows, so both
+    // spellings name the file; Git Bash itself reads an unquoted `\` as an
+    // escape, which the managed variant follows, and the drive-relative word
+    // left behind cannot be positioned and is asked about as written.
+    for command in [r"cat C:\outside\secret.txt", "cat C:/outside/secret.txt"] {
+        for cwd in [None, Some(r"C:\work")] {
+            let analysis = analyze(command, cwd);
+            assert_eq!(
+                analysis.mode,
+                crate::policy::PermissionMode::Ask,
+                "{command} {cwd:?}"
+            );
+            assert_eq!(outside_paths(&analysis).len(), 1, "{command} {cwd:?}");
+        }
+    }
+    for command in ["cat C:", "cat C:notes.txt", r"cat '\\?\C:\work\notes.txt'"] {
+        let analysis = analyze(command, None);
+        assert_eq!(
+            analysis.mode,
+            crate::policy::PermissionMode::Ask,
+            "`{command}` is asked about, never granted: {analysis:?}"
+        );
+    }
 }
 
 // --------------------------------------------------------------------------

@@ -559,7 +559,18 @@ struct OperandWorkspace {
 
 impl OperandWorkspace {
     fn build() -> Self {
-        let root = tempfile::tempdir().expect("operand root");
+        // The corpus climbs four levels out of the workspace and expects to
+        // stand on the root, which a capture under `/tmp` does. The Windows
+        // temporary directory sits deeper, so the tree hangs off its drive
+        // root there instead.
+        let root = if cfg!(windows) {
+            let temporary = std::env::temp_dir();
+            let drive = temporary.ancestors().last().unwrap_or(&temporary);
+            tempfile::tempdir_in(drive)
+        } else {
+            tempfile::tempdir()
+        }
+        .expect("operand root");
         let workdir = root.path().join("workspace");
         let outside = root.path().join("elsewhere");
         let scratchpad = workdir.join(".vibe").join("scratchpad");
@@ -582,6 +593,16 @@ impl OperandWorkspace {
             )
             .expect("approved link");
         }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::symlink_dir;
+            symlink_dir(&outside, workdir.join("escape")).expect("escape link");
+            symlink_dir(
+                outside.join("nested"),
+                outside.join("approved").join("link"),
+            )
+            .expect("approved link");
+        }
         Self {
             _root: root,
             workdir,
@@ -592,6 +613,10 @@ impl OperandWorkspace {
 
     /// The host paths each recorded placeholder stands for, longest first so a
     /// nested directory is substituted before its parent.
+    ///
+    /// On Windows a path is spelled with `/`, which Git Bash reads as it reads
+    /// `\` and which its POSIX word splitting, like the reference's, leaves
+    /// intact where it would consume a backslash.
     fn placeholders(&self) -> Vec<(&'static str, String)> {
         let mut pairs = vec![
             ("<scratchpad>", canonical(&self.scratchpad)),
@@ -600,6 +625,11 @@ impl OperandWorkspace {
         ];
         if let Some(home) = crate::config::user_home_directory() {
             pairs.push(("<home>", canonical(&home)));
+        }
+        if cfg!(windows) {
+            for (_, host) in &mut pairs {
+                *host = host.replace('\\', "/");
+            }
         }
         pairs.sort_by_key(|(_, host)| std::cmp::Reverse(host.len()));
         pairs
@@ -614,21 +644,88 @@ impl OperandWorkspace {
     }
 
     /// `text` with every host path replaced by its placeholder.
+    ///
+    /// On Windows the reference names a resolved path with `\` and folds the
+    /// case of an encoded grant (`docs/parity.md`, "Windows observations"), so
+    /// every one of those spellings is replaced, and the separators after a
+    /// placeholder are folded back to the `/` the corpus was captured with.
     fn normalize(&self, text: &str) -> String {
         let mut normalized = text.to_owned();
         for (placeholder, host) in self.placeholders() {
             normalized = normalized.replace(&host, placeholder);
+            if cfg!(windows) {
+                let native = host.replace('/', "\\");
+                for spelling in [native.to_lowercase(), native, host.to_lowercase()] {
+                    normalized = normalized.replace(&spelling, placeholder);
+                }
+            }
+        }
+        if cfg!(windows) {
+            normalized = fold_placeholder_separators(&normalized);
         }
         normalized
     }
 
     fn context(&self) -> ShellPolicyContext {
+        let platform = if cfg!(windows) {
+            Platform::Windows
+        } else {
+            Platform::Posix
+        };
         ShellPolicyContext::new(
-            Platform::Posix,
-            parse_policy_path(Platform::Posix, &canonical(&self.workdir)).expect("workdir"),
+            platform,
+            parse_policy_path(platform, &canonical(&self.workdir)).expect("workdir"),
         )
         .with_scratchpad(Some(self.scratchpad.clone()))
     }
+}
+
+/// The shell family a replay runs under: the one the capture ran on Linux, and
+/// on Windows the Git Bash family a host with Git Bash publishes.
+fn replay_flavor() -> ShellFlavor {
+    if cfg!(windows) {
+        ShellFlavor::GitBash
+    } else {
+        ShellFlavor::Posix
+    }
+}
+
+/// `text` with every `\` in the path run that follows a placeholder turned
+/// into `/`, the run ending where a path cannot continue.
+///
+/// A root without a drive (`/etc/passwd`) resolves on the current drive, as
+/// `Path.resolve()` anchors it on Windows, so that drive's root is folded
+/// back to the bare `/` the corpus records.
+fn fold_placeholder_separators(text: &str) -> String {
+    let drive = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| cwd.to_str().and_then(|cwd| cwd.get(..3)).map(str::to_owned))
+        .unwrap_or_default();
+    let text = text
+        .replace(&drive, "/")
+        .replace(&drive.to_lowercase(), "/");
+    let mut folded = String::with_capacity(text.len());
+    let mut in_path = false;
+    for character in text.chars() {
+        if character == '/' {
+            in_path = true;
+        }
+        match character {
+            '>' => {
+                in_path = ["<scratchpad", "<outside", "<workdir", "<home"]
+                    .iter()
+                    .any(|opening| folded.ends_with(opening));
+            }
+            ' ' | ')' | ']' | '|' | '\'' | '"' | '\n' | '<' => in_path = false,
+            '\\' if in_path => {
+                folded.push('/');
+                continue;
+            }
+            _ => {}
+        }
+        folded.push(character);
+    }
+    folded
 }
 
 fn canonical(path: &Path) -> String {
@@ -641,10 +738,6 @@ fn canonical(path: &Path) -> String {
 /// US-111: the paths a call reaches outside the workspace are the
 /// reference's, each named by where it resolves.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: shell operands outside the workspace are not detected in Windows spelling (US-012)"
-)]
 fn every_escaping_operand_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(corpus.outside_paths.len(), corpus.counts.outside_path_cases);
@@ -654,7 +747,7 @@ fn every_escaping_operand_matches_the_reference() {
 
     for case in &corpus.outside_paths {
         let command = workspace.expand(&case.command);
-        let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+        let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
         let reached = analysis
             .requirements
             .iter()
@@ -878,10 +971,6 @@ fn every_requirement_ledger_entry_names_a_corpus_case() {
 /// directions: a listed case that stopped diverging fails, so the list cannot
 /// rot.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
-)]
 fn every_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(corpus.resolutions.len(), corpus.counts.resolution_cases);
@@ -891,7 +980,7 @@ fn every_resolution_matches_the_reference() {
     let mut replay = Replay::default();
     for case in &corpus.resolutions {
         let command = workspace.expand(&case.command);
-        let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+        let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
         replay.compare(
             &case.command,
             &analysis,
@@ -919,10 +1008,6 @@ fn every_resolution_matches_the_reference() {
 /// and keyed to the repository it reads where the configuration could run a
 /// helper.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
-)]
 fn every_repository_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(
@@ -942,7 +1027,7 @@ fn every_repository_resolution_matches_the_reference() {
             .filter(|case| case.fixture == fixture)
         {
             let command = workspace.expand(&case.command);
-            let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+            let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
             replay.compare(
                 &repository_key(case),
                 &analysis,
@@ -968,10 +1053,6 @@ fn every_repository_resolution_matches_the_reference() {
 /// The managed resolver: a call's `cwd`, custom shell and custom environment
 /// are read with its command, and the denylist also matches a basename.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
-)]
 fn every_managed_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(
@@ -984,11 +1065,11 @@ fn every_managed_resolution_matches_the_reference() {
     for case in &corpus.managed_resolutions {
         let cwd = case.cwd.as_deref().map(|cwd| workspace.expand(cwd));
         let context = workspace.context().managed(
-            ShellFlavor::Posix,
+            replay_flavor(),
             cwd.as_deref(),
             override_requirements(case.shell.as_deref(), &case.env),
         );
-        let analysis = analyze_shell(ShellFlavor::Posix, &case.command, &context, &lists);
+        let analysis = analyze_shell(replay_flavor(), &case.command, &context, &lists);
         replay.compare(
             &managed_key(case),
             &analysis,
@@ -1004,10 +1085,6 @@ fn every_managed_resolution_matches_the_reference() {
 /// A path grant in the shell's allowlist clears the outside paths it covers,
 /// and nothing else in the allowlist does, under both resolvers.
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: shell operands are positioned with POSIX path rules (US-012)"
-)]
 fn every_allowlist_grant_resolution_matches_the_reference() {
     let corpus = corpus();
     assert_eq!(
@@ -1030,11 +1107,11 @@ fn every_allowlist_grant_resolution_matches_the_reference() {
                 let cwd = case.cwd.as_deref().map(|cwd| workspace.expand(cwd));
                 workspace
                     .context()
-                    .managed(ShellFlavor::Posix, cwd.as_deref(), Vec::new())
+                    .managed(replay_flavor(), cwd.as_deref(), Vec::new())
             }
             other => panic!("unknown resolver {other}"),
         };
-        let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+        let analysis = analyze_shell(replay_flavor(), &command, &context, &lists);
         replay.compare(
             &grant_key(case),
             &analysis,

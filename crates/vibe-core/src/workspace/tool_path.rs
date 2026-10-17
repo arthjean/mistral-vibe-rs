@@ -43,7 +43,7 @@ pub fn normalized(argument: &str, raw: &str) -> Result<String, ToolError> {
 ///
 /// Reference `_MSYS_DRIVE`: one ASCII letter after the leading slash, then
 /// nothing or a separator and the rest of the path.
-fn fold_msys_drive(path: &str) -> String {
+pub(crate) fn fold_msys_drive(path: &str) -> String {
     let mut characters = path.chars();
     let (Some('/'), Some(letter)) = (characters.next(), characters.next()) else {
         return path.to_owned();
