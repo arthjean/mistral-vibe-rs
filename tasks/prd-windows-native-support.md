@@ -13,6 +13,7 @@
 | 1.5 | 2026-10-17 | Arthur Jean | EP-004 implementation: of US-017's 14 cursor-position tags, `a_command_writing_utf16_reaches_the_model_as_text` became `windows by design` (ConPTY re-renders the child's bytes through the console code page, so a UTF-16 byte-order mark never reaches the reader); a Git Bash background job leaves the leader's Windows process tree at Cygwin's `exec`, so closing the pseudoconsole, not `taskkill /T`, is what ends it; the reference measured on Windows prints `\"a b\"` through the `cmd.exe` fallback and returns ConPTY's own requests in session output, so US-016 and the console filter are ledgered divergences |
 | 1.6 | 2026-10-17 | Arthur Jean | Linux verification moved out of the Windows epics: from EP-004 on, a story's gates run on Windows only, and EP-007 (US-026) verifies on Linux, once EP-004 to EP-006 are in review, that Linux and macOS behavior is unchanged |
 | 1.7 | 2026-10-17 | Arthur Jean | EP-004 review: US-017's cursor-position criterion restated as 13 tests untagged and the UTF-16 test `windows by design`, as decided in the 1.5 measurement; the windows-2022 job, red since EP-003 on fixture paths that assumed the checkout and the temporary directory share a drive and carry no 8.3 short name, fixed so the job can certify US-017 |
+| 1.8 | 2026-10-17 | Arthur Jean | EP-005 implementation: the US-021 default-editor question answered (match the reference: `nano` on every platform, and an editor that cannot start is named on the diagnostics line); the paste-burst detector lives in the event loop, ahead of `accepts_key_event`, because it needs a timer and must see every key before any consumer; a Windows path in the composer, the key burst read as a paste and the named editor failure are ledgered divergences; US-019's 10,000-character paste measures 1.5 s against its 1 s target, because crossterm 0.29 reads the console one record per call (about 75 us each under ConPTY, 20,000 records for 10,000 characters, measured in a release build with the records already buffered), so the maintainer restated the target to 2 s rather than own the Windows console input reader |
 
 ## Problem Statement
 
@@ -442,7 +443,7 @@ Make the composer accept every character and every paste a Windows user produces
 
 **Acceptance Criteria:**
 - [ ] Given a 50-line clipboard pasted with Ctrl+V or right-click in Windows Terminal and in conhost, when the paste completes, then the composer holds all 50 lines and nothing is submitted.
-- [ ] Given a 10,000-character paste, when it completes, then all characters are present within 1 s.
+- [ ] Given a 10,000-character paste, when it completes, then all characters are present within 2 s. Restated from 1 s on 2026-10-17: crossterm 0.29 reads the Windows console one record per call, which puts the floor near 1.5 s.
 - [ ] Given a person typing with at least 20 ms between keys and pressing Enter, when Enter is pressed, then the prompt is submitted.
 - [ ] Given a paste containing Tab or Esc characters, when it lands, then it neither triggers completion nor cancels the composer.
 - [ ] Given a paste ending with a newline, when the burst ends, then the trailing newline is inserted rather than submitting.
@@ -469,7 +470,7 @@ Make the composer accept every character and every paste a Windows user produces
 **Dependencies:** Blocked by US-006
 
 **Acceptance Criteria:**
-- [ ] Given Windows with neither `VISUAL` nor `EDITOR` set, when the external editor is requested, then `notepad.exe` opens. US-006 measured that the reference falls back to `nano` on every platform (a spawn that fails on stock Windows); decision required before this story starts: match the reference, or keep `notepad.exe` with a ledger row.
+- [ ] Given Windows with neither `VISUAL` nor `EDITOR` set, when the external editor is requested, then `nano` is started, as the reference does on every platform (US-006), and where it does not exist the next criterion applies. Decided on 2026-10-17: match the reference rather than open `notepad.exe`.
 - [ ] Given `EDITOR="C:\Program Files\Microsoft VS Code\bin\code.cmd" --wait`, when the editor is requested, then the executable path keeps its backslashes and `--wait` is passed as an argument (`crates/vibe-cli/src/tui/input.rs:934`).
 - [ ] Given `EDITOR` naming a missing executable, when the editor is requested, then an error names the executable and the composer content is unchanged.
 
@@ -564,7 +565,7 @@ Verify on Linux, once, that the Windows epics left Linux and macOS behavior unch
 
 ## Non-Functional Requirements
 
-- **Performance:** The required Windows CI job completes in ≤ 90 min on windows-2022; no single test binary exceeds 15 min. A 10,000-character paste lands in ≤ 1 s. Vibe home resolution adds ≤ 1 ms to startup.
+- **Performance:** The required Windows CI job completes in ≤ 90 min on windows-2022; no single test binary exceeds 15 min. A 10,000-character paste lands in ≤ 2 s. Vibe home resolution adds ≤ 1 ms to startup.
 - **Security:** 0 call sites spawn `cmd` with user-, model-, or server-controlled data except the shell tools, hooks, and fallback shell whose contract is to run commands; sensitive-pattern matching on Windows detects 100% of the cases in the policy tests across `\`, `/`, and case variants; 0 regressions in Linux policy parity replays.
 - **Accessibility:** 100% of printable characters on the US, French AZERTY, and German QWERTZ layouts are typeable in the composer; every action reachable by keyboard on Linux stays reachable on Windows.
 - **Scalability:** Path normalization handles paths up to 32,767 characters (the Windows extended-length limit) without error; paste detection handles bursts of 100,000 characters without dropping input.
@@ -657,5 +658,5 @@ Frame as questions for engineering input, not mandates:
 - ~~Should the Unified Harness shell tool on Windows stay PowerShell while `process.*` follows the Git Bash first ladder?~~ Answered by US-006: the reference uses one ladder for both.
 - ~~Should users with state stranded in `<cwd>\.vibe` get a one-time notice, given that the directory doubles as project config?~~ Answered by the maintainer on 2026-10-16: no notice and no migration; `CHANGELOG.md` documents the manual move.
 - ~~Does the port's Windows keyring entry interoperate with the reference's?~~ Answered by US-006: it does not (the reference stores the key under target `ai.mistral.vibe`, user `MISTRAL_API_KEY`; the port under `MISTRAL_API_KEY.ai.mistral.vibe`). US-025 owns the fix.
-- US-013 (browser launcher failure) and US-021 (default editor) each need a decision between matching the reference US-006 measured and keeping this PRD's behavior with a ledger row. Owner: maintainer, before those stories start. US-013 answered on 2026-10-17: match the reference (sign-in stops with `OPEN_BROWSER_FAILED`; MCP authorization keeps the URL printed and waits).
+- US-013 (browser launcher failure) and US-021 (default editor) each need a decision between matching the reference US-006 measured and keeping this PRD's behavior with a ledger row. Owner: maintainer, before those stories start. US-013 answered on 2026-10-17: match the reference (sign-in stops with `OPEN_BROWSER_FAILED`; MCP authorization keeps the URL printed and waits). US-021 answered on 2026-10-17: match the reference (`nano` on every platform).
 [/PRD]
