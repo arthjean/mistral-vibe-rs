@@ -46,7 +46,7 @@ impl Write for Sink {
 /// the session sees and what was written back to the console.
 fn drain(chunks: &[&[u8]]) -> (Vec<u8>, Vec<u8>) {
     let sink = Sink::default();
-    let writer: SharedWriter = Arc::new(Mutex::new(Some(Box::new(sink.clone()))));
+    let writer: SharedWriter = Arc::new(Mutex::new(Box::new(sink.clone())));
     let mut reader = ConsoleReader::new(
         Box::new(Chunks(chunks.iter().map(|chunk| chunk.to_vec()).collect())),
         writer,

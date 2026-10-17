@@ -313,5 +313,9 @@ pub(crate) enum TerminationError {
     #[error("the process group did not exit before the cleanup deadline")]
     Deadline,
     #[error("the pseudoconsole did not close: {0}")]
+    #[cfg_attr(
+        not(windows),
+        expect(dead_code, reason = "only a pseudoconsole is closed before it drops")
+    )]
     Console(String),
 }

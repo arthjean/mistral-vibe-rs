@@ -466,12 +466,19 @@ impl PtyTerminal {
     /// the console closes, not when the child exits.
     ///
     /// `ClosePseudoConsole` blocks until the console host is gone, so it runs
-    /// on a blocking task and a close that outlasts `grace` is a failure. A
-    /// POSIX terminal has nothing to close before it drops.
+    /// on a thread of its own and a close that outlasts `grace` is a failure.
+    /// The thread is detached rather than a blocking task: a runtime waits for
+    /// its blocking tasks as it shuts down, so a close that never returns would
+    /// hold the whole process. A POSIX terminal has nothing to close before it
+    /// drops.
     pub(crate) async fn close_console(&mut self, grace: Duration) -> Result<(), TerminationError> {
         #[cfg(windows)]
         if let Some(master) = self.master.take() {
-            let closing = tokio::task::spawn_blocking(move || drop(master));
+            let (closed, closing) = tokio::sync::oneshot::channel();
+            std::thread::spawn(move || {
+                drop(master);
+                let _ = closed.send(());
+            });
             return match tokio::time::timeout(grace, closing).await {
                 Ok(Ok(())) => Ok(()),
                 Ok(Err(error)) => Err(TerminationError::Console(error.to_string())),

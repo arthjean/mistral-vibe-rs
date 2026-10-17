@@ -42,15 +42,19 @@ const MAX_SEQUENCE: usize = 4096;
 
 /// The writing half of a pseudoconsole, shared with the reader that answers
 /// the console on the terminal's behalf.
-type SharedWriter = Arc<Mutex<Option<Box<dyn Write + Send>>>>;
+type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;
 
 /// The two halves of a pseudoconsole as a session reads and writes them.
 ///
 /// Off Windows both come back unchanged, since a POSIX terminal neither asks
 /// nor paints anything of its own. On Windows the reader answers the cursor
-/// request through the writer and drops the console's exchange with its host,
-/// and the writer handed back closes the shared one when dropped, so releasing
-/// it still ends the child's input.
+/// request through the writer and drops the console's exchange with its host.
+///
+/// The console's input stays open until both halves are gone, so dropping the
+/// writer handed back only stops the session writing. Closing the input pipe
+/// delivers no end of file to a ConPTY child: the console host reads it as its
+/// own end, and on Windows Server 2022 a pseudoconsole whose input closed
+/// before it did never returns from `ClosePseudoConsole`.
 #[must_use]
 pub fn pseudoconsole_streams(
     reader: Box<dyn Read + Send>,
@@ -59,10 +63,10 @@ pub fn pseudoconsole_streams(
     if !cfg!(windows) {
         return (reader, writer);
     }
-    let shared: SharedWriter = Arc::new(Mutex::new(Some(writer)));
+    let shared: SharedWriter = Arc::new(Mutex::new(writer));
     (
         Box::new(ConsoleReader::new(reader, Arc::clone(&shared))),
-        Box::new(ClosingWriter(shared)),
+        Box::new(ConsoleWriter(shared)),
     )
 }
 
@@ -129,9 +133,7 @@ impl ConsoleReader {
     }
 
     fn answer(&self) {
-        if let Ok(mut writer) = self.writer.lock()
-            && let Some(writer) = writer.as_mut()
-        {
+        if let Ok(mut writer) = self.writer.lock() {
             let _ = writer
                 .write_all(CURSOR_POSITION_REPORT)
                 .and_then(|()| writer.flush());
@@ -177,32 +179,22 @@ impl Read for ConsoleReader {
     }
 }
 
-struct ClosingWriter(SharedWriter);
+struct ConsoleWriter(SharedWriter);
 
-impl Write for ClosingWriter {
+impl Write for ConsoleWriter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
         self.0
             .lock()
             .map_err(|_| std::io::Error::other("the terminal writer lock is poisoned"))?
-            .as_mut()
-            .ok_or_else(|| std::io::Error::other("the terminal writer is closed"))?
             .write(bytes)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
         match self.0.lock() {
-            Ok(mut writer) => writer.as_mut().map_or(Ok(()), |writer| writer.flush()),
+            Ok(mut writer) => writer.flush(),
             Err(_) => Err(std::io::Error::other(
                 "the terminal writer lock is poisoned",
             )),
-        }
-    }
-}
-
-impl Drop for ClosingWriter {
-    fn drop(&mut self) {
-        if let Ok(mut writer) = self.0.lock() {
-            writer.take();
         }
     }
 }
