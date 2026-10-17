@@ -63,8 +63,8 @@ pub use provider_credentials::{
 pub use sign_in::{
     CODE_CHALLENGE_METHOD, MAX_CONSECUTIVE_POLL_FAILURES, POLL_INTERVAL_SECONDS, SignInAttempt,
     SignInError, SignInErrorCode, SignInEvent, SignInGateway, SignInPoll, SignInProcess,
-    SignInService, SignInStatus, SystemSignInRuntime, UtcTimestamp, code_challenge,
-    generate_code_verifier, open_system_browser,
+    SignInService, SignInStatus, SystemSignInRuntime, UtcTimestamp, browser_launch_candidates,
+    code_challenge, generate_code_verifier, open_system_browser, openable_browser_url,
 };
 pub use sign_in_http::{
     DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, HttpSignInGateway,

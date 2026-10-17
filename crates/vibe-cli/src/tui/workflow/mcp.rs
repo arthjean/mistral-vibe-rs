@@ -2,7 +2,6 @@ use std::future::Future;
 use std::pin::Pin;
 
 use serde_json::{Value, json};
-use url::Url;
 
 use super::super::clipboard::copy_text_bounded;
 use super::super::command_handlers::mcp_authenticated;
@@ -615,21 +614,16 @@ fn execute_refresh_all(
 /// this port shows it the same way but opens only a web page, so a server
 /// cannot make the terminal launch a `file:` or custom-scheme handler.
 pub(in crate::tui) fn openable_auth_url(value: &str) -> bool {
-    Url::parse(value).is_ok_and(|url| matches!(url.scheme(), "https" | "http"))
+    vibe_core::auth::openable_browser_url(value)
 }
 
+/// Opens an authentication URL through the shared launcher table, waiting on
+/// each candidate so one that exits in failure hands over to the next.
 pub(super) async fn open_auth_url(url: String) -> Result<(), String> {
     if !openable_auth_url(&url) {
         return Err("Only an http or https authentication URL can be opened".to_owned());
     }
-    let candidates: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
-        &[("open", &[])]
-    } else if cfg!(target_os = "windows") {
-        &[("cmd", &["/C", "start", ""])]
-    } else {
-        &[("xdg-open", &[]), ("gio", &["open"])]
-    };
-    for (program, arguments) in candidates {
+    for (program, arguments) in vibe_core::auth::browser_launch_candidates() {
         let mut arguments = arguments.to_vec();
         arguments.push(&url);
         if super::super::external_action::run_command(program, &arguments, None)

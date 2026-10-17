@@ -27,6 +27,11 @@
   between the two no longer asks to sign in again. A key an earlier build
   stored under `MISTRAL_API_KEY.ai.mistral.vibe` is found and moved.
 
+- On Windows, sign-in and MCP authorization open their URL through the shell's
+  URL association (`url.dll`) instead of `cmd /C start`, which cut the URL at
+  its first `&` and ran the rest as a command. Every opener now refuses a URL
+  that is not `http` or `https` and leaves it printed.
+
 - Interrupting a turn while a hook runs now stops the hook on Linux and
   macOS, as the reference does: the whole process group is killed, where only
   the shell that launched the hook command was before.

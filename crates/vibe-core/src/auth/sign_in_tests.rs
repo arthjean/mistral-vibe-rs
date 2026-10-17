@@ -11,7 +11,8 @@ use serde_json::json;
 
 use super::sign_in::{
     SignInErrorCode, SignInEvent, SignInService, UtcTimestamp, browser_launch_candidates,
-    code_challenge, generate_code_verifier, launch_detached,
+    code_challenge, generate_code_verifier, launch_detached, open_system_browser,
+    openable_browser_url,
 };
 use super::testing::{ScriptedOpener, ScriptedSignInGateway, ScriptedSignInRuntime};
 
@@ -225,13 +226,108 @@ fn the_launch_candidates_match_the_platform() {
     if cfg!(target_os = "macos") {
         assert_eq!(candidates, [("open", &[] as &[&str])]);
     } else if cfg!(windows) {
-        assert_eq!(candidates, [("cmd", &["/C", "start", ""] as &[&str])]);
+        assert_eq!(
+            candidates,
+            [("rundll32.exe", &["url.dll,FileProtocolHandler"] as &[&str])]
+        );
     } else {
         assert_eq!(
             candidates,
             [("xdg-open", &[] as &[&str]), ("gio", &["open"] as &[&str])]
         );
     }
+}
+
+/// US-013 (Windows support): no candidate is a command interpreter, so a
+/// URL carrying shell syntax reaches the opener as one literal argument, and
+/// the URL survives the scheme check byte for byte.
+#[test]
+fn no_launcher_hands_the_url_to_a_command_interpreter() {
+    let interpreters = [
+        "cmd",
+        "cmd.exe",
+        "powershell",
+        "powershell.exe",
+        "pwsh",
+        "sh",
+        "bash",
+    ];
+    for (program, arguments) in browser_launch_candidates() {
+        assert!(
+            !interpreters.contains(&program.to_ascii_lowercase().as_str()),
+            "`{program}` interprets its command line"
+        );
+        assert!(
+            arguments
+                .iter()
+                .all(|argument| !argument.eq_ignore_ascii_case("start")),
+            "`{program}` is driven through `start`"
+        );
+    }
+    let hostile =
+        r"https://auth.example/authorize?a=1&b=2|c^d%PATH%&echo pwned>%TEMP%\vibe-pwned.txt";
+    assert!(openable_browser_url(hostile));
+    assert_eq!(
+        url::Url::parse(hostile).expect("the URL parses").scheme(),
+        "https"
+    );
+}
+
+/// US-013 (Windows support): only an `http` or `https` URL reaches a
+/// launcher; anything else is refused before a process exists, which leaves
+/// the caller holding the URL to print.
+#[test]
+fn a_url_that_is_not_a_web_page_is_refused_before_any_launch() {
+    assert!(openable_browser_url("https://auth.example/authorize"));
+    assert!(openable_browser_url("http://127.0.0.1:8765/callback"));
+    for refused in [
+        "file:///C:/Windows/System32/calc.exe",
+        "vscode://callback",
+        "ms-settings:display",
+        "javascript:alert(1)",
+        "not a URL",
+    ] {
+        assert!(!openable_browser_url(refused), "{refused}");
+        assert!(
+            !open_system_browser(refused),
+            "{refused} reached a launcher"
+        );
+    }
+}
+
+/// US-013 (Windows support): no production source drives `cmd` through
+/// `start`, the launch that let a URL's `&` run a command.
+#[test]
+fn no_production_source_launches_through_cmd_start() {
+    let crates = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut pending = vec![crates];
+    let mut offenders = Vec::new();
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).expect("the source tree reads") {
+            let path = entry.expect("a directory entry").path();
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or_default();
+            if path.is_dir() {
+                if name != "tests" && name != "target" {
+                    pending.push(path);
+                }
+                continue;
+            }
+            if !name.ends_with(".rs") || name.ends_with("_tests.rs") || name == "tests.rs" {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("a source file reads");
+            if source.contains(r#""/C", "start""#) || source.contains(r#""/c", "start""#) {
+                offenders.push(path.display().to_string());
+            }
+        }
+    }
+    assert!(
+        offenders.is_empty(),
+        "`cmd /C start` launches: {offenders:?}"
+    );
 }
 
 #[test]

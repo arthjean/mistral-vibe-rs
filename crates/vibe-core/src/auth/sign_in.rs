@@ -448,19 +448,41 @@ impl SignInRuntime for SystemSignInRuntime {
 
 /// Launches the system browser detached: the child's stdio is discarded so it
 /// can never draw over the terminal, and the spawn is not waited on so a
-/// launcher that blocks never stalls the sign-in. `false` when no candidate
-/// launcher could be spawned.
+/// launcher that blocks never stalls the sign-in. `false` when the URL is not
+/// one [`openable_browser_url`] accepts or no candidate launcher could be
+/// spawned; either way the caller still holds the URL to print.
 pub fn open_system_browser(url: &str) -> bool {
-    browser_launch_candidates()
-        .iter()
-        .any(|(program, arguments)| launch_detached(program, arguments, url).is_ok())
+    openable_browser_url(url)
+        && browser_launch_candidates()
+            .iter()
+            .any(|(program, arguments)| launch_detached(program, arguments, url).is_ok())
 }
 
-pub(crate) fn browser_launch_candidates() -> &'static [(&'static str, &'static [&'static str])] {
+/// Whether `url` may be handed to the system opener: an `http` or `https`
+/// URL only.
+///
+/// The reference passes any URL to `webbrowser.open`, which opens every
+/// scheme. A URL can come from a remote MCP server, so this port refuses to
+/// let one launch a `file:` or custom-scheme handler and leaves it printed
+/// for the operator instead.
+#[must_use]
+pub fn openable_browser_url(url: &str) -> bool {
+    url::Url::parse(url).is_ok_and(|parsed| matches!(parsed.scheme(), "https" | "http"))
+}
+
+/// The programs that open a URL on this host, each with the arguments that
+/// precede the URL, in the order they are tried.
+///
+/// The URL is always one argument of its own and no candidate is a command
+/// interpreter, so nothing in it (`&`, `|`, `^`, `%VAR%`) is ever parsed as
+/// shell syntax. On Windows `url.dll`'s `FileProtocolHandler` hands it to the
+/// shell's URL association, as the reference's `os.startfile` does.
+#[must_use]
+pub fn browser_launch_candidates() -> &'static [(&'static str, &'static [&'static str])] {
     if cfg!(target_os = "macos") {
         &[("open", &[])]
     } else if cfg!(windows) {
-        &[("cmd", &["/C", "start", ""])]
+        &[("rundll32.exe", &["url.dll,FileProtocolHandler"])]
     } else {
         &[("xdg-open", &[]), ("gio", &["open"])]
     }
