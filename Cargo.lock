@@ -5768,6 +5768,7 @@ dependencies = [
  "hex",
  "nix 0.31.3",
  "notify",
+ "portable-pty",
  "ratatui",
  "reqwest",
  "secrecy",

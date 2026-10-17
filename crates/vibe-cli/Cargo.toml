@@ -41,5 +41,8 @@ tempfile.workspace = true
 [target.'cfg(unix)'.dev-dependencies]
 nix = { workspace = true, features = ["term"] }
 
+[target.'cfg(windows)'.dev-dependencies]
+portable-pty.workspace = true
+
 [lints]
 workspace = true

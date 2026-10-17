@@ -2,6 +2,17 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::images::ImageFormat;
 
+#[cfg(test)]
+mod path_mentions_tests;
+
+/// Whether `byte` can mark a path the composer rewrites into a mention: the
+/// reference's `/`, `~` and quotes, and on Windows the backslash every native
+/// path carries. Text without one skips the filesystem walk.
+#[must_use]
+pub const fn is_path_syntax(byte: u8) -> bool {
+    matches!(byte, b'/' | b'~' | b'\'' | b'"') || (cfg!(windows) && byte == b'\\')
+}
+
 /// Normalizes a bracketed paste before it is inserted.
 ///
 /// Reference `maybe_prepend_at_for_path`
@@ -166,7 +177,7 @@ fn scan_pasted_path(text: &str, start: usize) -> Option<(String, usize)> {
             content_end.saturating_add(head.len_utf8()),
         ));
     }
-    if !matches!(head, '/' | '~') {
+    if !matches!(head, '/' | '~') && !opens_windows_root(&text[start..]) {
         return None;
     }
 
@@ -213,8 +224,12 @@ fn is_image_file(candidate: &str) -> bool {
 /// Reference `_quote_if_needed`: a path made only of alphanumerics and the
 /// unquoted mention characters stays bare; otherwise it takes the first quote
 /// it does not contain, escaping single quotes when it contains both.
+///
+/// A Windows-rooted path is always quoted: a drive carries a colon no bare
+/// mention reads, and a UNC share is quoted alike so every native path a drop
+/// or a paste inserts reads the same way.
 fn quote_path_if_needed(path: &str) -> String {
-    if path.chars().all(is_mention_path_character) {
+    if path.chars().all(is_mention_path_character) && !opens_windows_root(path) {
         return path.to_owned();
     }
     if !path.contains('\'') {
@@ -227,7 +242,7 @@ fn quote_path_if_needed(path: &str) -> String {
 }
 
 fn rewrite_bare_image_paths(text: &str) -> String {
-    if !text.contains(['/', '~', '\'', '"']) {
+    if !text.bytes().any(is_path_syntax) {
         return text.to_owned();
     }
     let mut output = String::with_capacity(text.len());
@@ -249,6 +264,19 @@ fn rewrite_bare_image_paths(text: &str) -> String {
         cursor = cursor.saturating_add(character.len_utf8());
     }
     output
+}
+
+/// Whether `text` opens with a Windows root a bare path starts from: a drive
+/// (`C:\`, `C:/`) or a UNC share (`\\server`). Reference `_extract_path_token`
+/// starts one from `/` and `~` only, which on Windows leaves a typed native
+/// path as text.
+fn opens_windows_root(text: &str) -> bool {
+    cfg!(windows)
+        && match text.as_bytes() {
+            [b'\\', b'\\', ..] => true,
+            [drive, b':', b'\\' | b'/', ..] => drive.is_ascii_alphabetic(),
+            _ => false,
+        }
 }
 
 fn is_path_token_boundary(text: &str, byte: usize) -> bool {

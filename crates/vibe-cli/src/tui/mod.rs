@@ -33,6 +33,7 @@ pub use vibe_voice::narrator;
 pub mod onboarding;
 #[cfg(test)]
 mod onboarding_parity_tests;
+mod paste_burst;
 mod path_normalization;
 pub mod pickers;
 mod plan_review;

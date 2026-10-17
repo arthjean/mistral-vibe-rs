@@ -146,6 +146,7 @@ pub(super) async fn handle_terminal_event(
         }
         Event::Mouse(mouse) => handle_mouse(mouse.kind, mouse.column, mouse.row, context).await,
         Event::Key(key) if accepts_key_event(key.kind) => {
+            let key = typed_key(key);
             if should_defer_submission(key, context.path_normalization.has_pending()) {
                 *context.deferred_enter = Some(key);
                 return Ok(false);
@@ -239,6 +240,38 @@ async fn handle_mouse(kind: MouseEventKind, column: u16, row: u16, context: &mut
 
 pub(super) const fn accepts_key_event(kind: KeyEventKind) -> bool {
     matches!(kind, KeyEventKind::Press | KeyEventKind::Repeat)
+}
+
+/// The key as the operator typed it.
+///
+/// Windows reports AltGr as `Ctrl+Alt` beside the character the layout
+/// produced, so `AltGr+0` on French AZERTY arrives as `Ctrl+Alt+@`. Left as a
+/// chord it is swallowed with every other unclaimed `Ctrl` chord; read through
+/// [`altgr_text`] it is the `@` that was typed. Other platforms deliver AltGr
+/// characters without modifiers and keep their keys as they come.
+pub(super) fn typed_key(key: KeyEvent) -> KeyEvent {
+    if cfg!(windows) {
+        altgr_text(key).unwrap_or(key)
+    } else {
+        key
+    }
+}
+
+/// A `Ctrl+Alt` key that carries a printable character, as text.
+///
+/// An ASCII letter is the exception: `Ctrl+Alt+A` reports its own unshifted
+/// key, `a`, and no AZERTY, QWERTZ or US AltGr position produces one, so it
+/// stays a chord.
+pub(super) fn altgr_text(key: KeyEvent) -> Option<KeyEvent> {
+    let KeyCode::Char(character) = key.code else {
+        return None;
+    };
+    let altgr = KeyModifiers::CONTROL | KeyModifiers::ALT;
+    (key.modifiers.contains(altgr) && !character.is_control() && !character.is_ascii_alphabetic())
+        .then(|| KeyEvent {
+            modifiers: key.modifiers.difference(altgr),
+            ..key
+        })
 }
 
 pub(super) fn should_defer_submission(key: KeyEvent, normalization_pending: bool) -> bool {
@@ -526,10 +559,15 @@ fn open_external_editor(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<(
         .map_err(|error| CliError::Terminal(error.to_string()))?;
     let mut external = SystemExternalEditor::from_environment();
     // Reference `ExternalEditor.edit`: an editor that fails or changes nothing
-    // leaves the prompt as it was, without a word.
-    let edited = ExternalEditorPort::edit(&mut external, &text)
-        .ok()
-        .filter(|edited| *edited != text);
+    // leaves the prompt as it was, without a word. One that cannot start, as
+    // the `nano` fallback on a stock Windows, is named here instead.
+    let edited = match ExternalEditorPort::edit(&mut external, &text) {
+        Ok(edited) => edited.filter(|edited| *edited != text),
+        Err(error) => {
+            context.state.push_diagnostic(error);
+            None
+        }
+    };
     context
         .terminal_guard
         .resume()
@@ -851,6 +889,55 @@ mod tests {
         assert!(accepts_key_event(KeyEventKind::Press));
         assert!(accepts_key_event(KeyEventKind::Repeat));
         assert!(!accepts_key_event(KeyEventKind::Release));
+    }
+
+    const ALTGR: KeyModifiers = KeyModifiers::CONTROL.union(KeyModifiers::ALT);
+
+    #[test]
+    fn altgr_characters_of_azerty_and_qwertz_are_text() {
+        // French AZERTY AltGr with `0 3 4 5 6 8 = ) 2 E`, then German QWERTZ
+        // AltGr with `Q 7 0`, as Windows reports them.
+        for character in "@#{[|\\}]~€@{}".chars() {
+            let key = KeyEvent::new(KeyCode::Char(character), ALTGR);
+            assert_eq!(
+                altgr_text(key),
+                Some(KeyEvent::new(KeyCode::Char(character), KeyModifiers::NONE)),
+                "AltGr {character:?} was not read as text",
+            );
+        }
+    }
+
+    #[test]
+    fn a_ctrl_alt_letter_stays_a_chord() {
+        for character in ['a', 'A', 'z'] {
+            let key = KeyEvent::new(KeyCode::Char(character), ALTGR);
+            assert_eq!(altgr_text(key), None);
+            assert_eq!(typed_key(key), key);
+        }
+        let control = KeyEvent::new(KeyCode::Char('@'), KeyModifiers::CONTROL);
+        assert_eq!(altgr_text(control), None);
+    }
+
+    #[test]
+    fn a_synthetic_altgr_at_sign_is_typed_and_opens_mention_completion() {
+        let key = KeyEvent::new(KeyCode::Char('@'), ALTGR);
+        let typed = typed_key(key);
+        if !cfg!(windows) {
+            assert_eq!(typed, key, "only Windows reports AltGr as Ctrl+Alt");
+            return;
+        }
+        let mut input = ChatInputState::new();
+        // The composer's own effects, before the session dispatches the
+        // completion request they carry.
+        let effects = input.apply(normalized_input_event(typed).expect("a composer key"));
+        assert_eq!(input.editor().text(), "@");
+        assert!(
+            effects.iter().any(|effect| matches!(
+                effect,
+                InputEffect::RequestCompletion { request } if request.query == "@"
+            )),
+            "the mention completion did not open: {effects:?}",
+        );
     }
 
     #[test]

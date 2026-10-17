@@ -40,6 +40,40 @@ fn external_editor_prefers_visual_parses_arguments_and_defaults_to_nano() {
 }
 
 #[test]
+fn a_quoted_windows_editor_path_keeps_its_backslashes_and_arguments() {
+    let editor = SystemExternalEditor::from_sources(
+        None,
+        Some(r#""C:\Program Files\Microsoft VS Code\bin\code.cmd" --wait"#.to_owned()),
+    );
+    assert_eq!(
+        editor.command_parts(),
+        Ok(vec![
+            r"C:\Program Files\Microsoft VS Code\bin\code.cmd".to_owned(),
+            "--wait".to_owned(),
+        ])
+    );
+}
+
+#[test]
+fn an_editor_that_cannot_start_is_named_and_one_that_fails_changes_nothing() {
+    let mut missing =
+        SystemExternalEditor::from_sources(Some("vibe-missing-editor-0 --wait".to_owned()), None);
+    let error = ExternalEditorPort::edit(&mut missing, "draft").expect_err("no such editor");
+    assert!(
+        error.contains("`vibe-missing-editor-0`"),
+        "the error does not name the executable: {error}"
+    );
+
+    let failing = if cfg!(windows) {
+        "cmd.exe /d /c exit 3"
+    } else {
+        "false"
+    };
+    let mut failing = SystemExternalEditor::from_sources(Some(failing.to_owned()), None);
+    assert_eq!(ExternalEditorPort::edit(&mut failing, "draft"), Ok(None));
+}
+
+#[test]
 fn paste_above_the_old_rust_boundary_is_accepted_atomically() {
     let mut editor = PromptEditor::default();
     editor.insert("keep");

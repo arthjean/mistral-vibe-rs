@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// What Windows needs in any child environment, carried over from the parent.
-const WINDOWS_BASE: [&str; 7] = [
+pub const WINDOWS_BASE: [&str; 7] = [
     "SystemRoot",
     "SystemDrive",
     "windir",

@@ -940,7 +940,7 @@ fn char_offset(text: &str, graphemes: usize) -> usize {
 /// The decision is deliberately free of filesystem access: resolving the path
 /// is the adapter's job, requested through [`InputEffect::NormalizePastedPath`].
 fn is_path_candidate(text: &str) -> bool {
-    text.contains(['/', '~', '\'', '"'])
+    text.bytes().any(vibe_core::path_mentions::is_path_syntax)
 }
 
 #[cfg(test)]

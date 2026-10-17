@@ -75,7 +75,7 @@ struct SyntaxCounts {
 impl SyntaxCounts {
     fn in_text(text: &str) -> Self {
         text.bytes().fold(Self::default(), |mut counts, byte| {
-            if matches!(byte, b'/' | b'~' | b'\'' | b'"') {
+            if vibe_core::path_mentions::is_path_syntax(byte) {
                 counts.path = counts.path.saturating_add(1);
             }
             if byte == b'@' {
@@ -908,7 +908,9 @@ pub(crate) fn grapheme_cell_width(grapheme: &str, column: usize) -> usize {
 }
 
 pub trait ExternalEditorPort {
-    fn edit(&mut self, initial: &str) -> Result<String, String>;
+    /// Edits `initial` and answers the edited text, or `None` when the editor
+    /// ran and failed. An editor that cannot run at all is an error naming it.
+    fn edit(&mut self, initial: &str) -> Result<Option<String>, String>;
 }
 
 pub struct SystemExternalEditor {
@@ -958,13 +960,17 @@ impl SystemExternalEditor {
             .args(&command[1..])
             .arg(path)
             .status()
-            .map_err(|error| format!("External editor could not start: {error}"))?;
+            .map_err(|error| unstartable(&command[0], &error))?;
         fs::read_to_string(path).map_err(|error| error.to_string())
     }
 }
 
+fn unstartable(program: &str, error: &std::io::Error) -> String {
+    format!("External editor `{program}` could not start: {error}")
+}
+
 impl ExternalEditorPort for SystemExternalEditor {
-    fn edit(&mut self, initial: &str) -> Result<String, String> {
+    fn edit(&mut self, initial: &str) -> Result<Option<String>, String> {
         let command = self.command_parts()?;
         let stamp = vibe_core::clock::now_nanos();
         let path = std::env::temp_dir().join(format!(
@@ -987,12 +993,14 @@ impl ExternalEditorPort for SystemExternalEditor {
             .args(&command[1..])
             .arg(&path)
             .status();
+        // Reference `ExternalEditor.edit`: an editor that exits with a failure
+        // leaves the prompt as it was.
         let edited = match result {
             Ok(status) if status.success() => fs::read_to_string(&path)
-                .map(|content| content.trim_end().to_owned())
+                .map(|content| Some(content.trim_end().to_owned()))
                 .map_err(|error| error.to_string()),
-            Ok(status) => Err(format!("External editor exited with {status}")),
-            Err(error) => Err(format!("External editor could not start: {error}")),
+            Ok(_) => Ok(None),
+            Err(error) => Err(unstartable(&command[0], &error)),
         };
         let _ = fs::remove_file(&path);
         edited

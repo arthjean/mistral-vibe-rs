@@ -7,7 +7,7 @@
 
 use std::ops::ControlFlow;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
@@ -31,6 +31,7 @@ use super::hydration::hydrate_initial_state;
 use super::narration::{
     apply_narrator_effect, apply_speech_event, record_audio_telemetry, record_narrator_telemetry,
 };
+use super::paste_burst::PasteBurst;
 use super::path_normalization::PathNormalizationManager;
 use super::plan_review::PlanReviewMonitor;
 use super::prompt::PromptContext;
@@ -600,6 +601,8 @@ pub async fn run_interactive(
     let mut loop_ticker = tokio::time::interval(Duration::from_secs(1));
     loop_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+    let mut paste_burst = PasteBurst::for_platform();
+
     let event_loop = async {
         let mut exit = false;
         while !exit {
@@ -611,7 +614,19 @@ pub async fn run_interactive(
                     shortcuts::handle_terminal_event(Event::Key(key), &mut session.keys()).await?;
                 continue;
             }
-            session.draw()?;
+            // One released event per pass, so a submission deferred by one
+            // holds back the events behind it.
+            if session.deferred_enter.is_none()
+                && let Some(event) = paste_burst.next_ready()
+            {
+                exit = shortcuts::handle_terminal_event(event, &mut session.keys()).await?;
+                continue;
+            }
+            // Held keys have not changed the screen, and a repaint between two
+            // reads would space a paste's keys out past the burst window.
+            if !paste_burst.is_collecting() {
+                session.draw()?;
+            }
             if session.mounted_startup.needs_fatal_render() {
                 match drain_ready_terminal_events(&mut events)? {
                     ReadyInputDrain::Empty => {
@@ -639,6 +654,7 @@ pub async fn run_interactive(
             if session.mounted_startup.needs_fatal_render() {
                 continue;
             }
+            let burst_deadline = paste_burst.deadline();
             tokio::select! {
                 signal = interrupt.as_mut() => {
                     signal.map_err(|error| CliError::Terminal(error.to_string()))?;
@@ -656,18 +672,18 @@ pub async fn run_interactive(
                         }
                         Some(Ok(_)) if session.mounted_startup.is_fatal() => {}
                         Some(Ok(event)) => {
-                            exit = shortcuts::handle_terminal_event(event, &mut session.keys())
-                                .await?;
+                            paste_burst.push(event, Instant::now());
+                            if let Some(error) = drain_ready_into(&mut events, &mut paste_burst) {
+                                session.lose_transport(error)?;
+                                exit = true;
+                            }
                         }
                         Some(Err(error)) => {
                             session.lose_transport(error.to_string())?;
                             exit = true;
                         }
                         None => {
-                            session.lose_transport(
-                                "Terminal input ended; recoverable session state was preserved"
-                                    .to_owned(),
-                            )?;
+                            session.lose_transport(INPUT_ENDED.to_owned())?;
                             exit = true;
                         }
                     }
@@ -707,6 +723,16 @@ pub async fn run_interactive(
                         &session.working_directory,
                         &mut session.state,
                     )?;
+                }
+                () = tokio::time::sleep_until(
+                    tokio::time::Instant::from_std(burst_deadline.unwrap_or_else(Instant::now)),
+                ), if burst_deadline.is_some() => {
+                    if let Some(error) = drain_ready_into(&mut events, &mut paste_burst) {
+                        session.lose_transport(error)?;
+                        exit = true;
+                    } else {
+                        paste_burst.expire(Instant::now());
+                    }
                 }
                 _ = ticker.tick() => {
                     if let Some(runtime) = session.runtime.as_mut() {
@@ -934,6 +960,10 @@ fn warn_about_untrusted_config(
 /// one acknowledgment. Input queued before the failure would answer that prompt
 /// for the operator, so it is drained first.
 const MAX_FATAL_INPUT_DRAIN: usize = 256;
+const INPUT_ENDED: &str = "Terminal input ended; recoverable session state was preserved";
+/// How long a drain waits for the next key of a burst: far below the burst
+/// window, far above the gap between two keys of one console paste.
+const NEXT_KEY_WAIT: Duration = Duration::from_millis(2);
 const MAX_READY_INTERRUPTS_TO_DRAIN: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -958,6 +988,30 @@ where
         }
     }
     Ok(ReadyInputDrain::Saturated)
+}
+
+/// Feeds the paste detector the events that arrive while it collects, so a
+/// console paste is read as it arrives rather than one pass of the event loop
+/// per key. Answers the transport failure that ended the drain, if one did.
+///
+/// The console host types a paste a key at a time, so the drain waits up to
+/// [`NEXT_KEY_WAIT`] for the next one. Readiness is asked of crossterm before
+/// the stream is polled: a stream polled empty here would hand its wake-up to
+/// a waker nothing listens to.
+fn drain_ready_into<S>(events: &mut S, burst: &mut PasteBurst) -> Option<String>
+where
+    S: futures_util::Stream<Item = std::io::Result<Event>> + Unpin,
+{
+    use futures_util::FutureExt;
+    while burst.is_collecting() && crossterm::event::poll(NEXT_KEY_WAIT).unwrap_or(false) {
+        match events.next().now_or_never() {
+            Some(Some(Ok(event))) => burst.push(event, Instant::now()),
+            Some(Some(Err(error))) => return Some(error.to_string()),
+            Some(None) => return Some(INPUT_ENDED.to_owned()),
+            None => break,
+        }
+    }
+    None
 }
 
 fn drain_ready_interrupts<F, E, R>(
