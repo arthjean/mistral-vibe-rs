@@ -10,6 +10,9 @@
 | 1.2 | 2026-10-16 | Arthur Jean | EP-001 review: US-017 names the ConPTY cursor-position stall and the teardown tags it owns; US-025 added to EP-002 for the keyring divergence US-006 measured |
 | 1.3 | 2026-10-16 | Arthur Jean | EP-002 implementation: the stranded-state notice question answered (no notice, manual move documented in `CHANGELOG.md`); persisted path comparisons checked before US-010; US-017 also owns the ACP unified replay, whose bash scenarios time out on windows-2022 |
 | 1.4 | 2026-10-17 | Arthur Jean | EP-003 implementation: the US-013 launcher-failure question answered (match the reference); US-017 owns a 14th ConPTY stall tag, the managed `cwd` test US-012 unblocked, whose command then stalls under ConPTY |
+| 1.5 | 2026-10-17 | Arthur Jean | EP-004 implementation: of US-017's 14 cursor-position tags, `a_command_writing_utf16_reaches_the_model_as_text` became `windows by design` (ConPTY re-renders the child's bytes through the console code page, so a UTF-16 byte-order mark never reaches the reader); a Git Bash background job leaves the leader's Windows process tree at Cygwin's `exec`, so closing the pseudoconsole, not `taskkill /T`, is what ends it; the reference measured on Windows prints `\"a b\"` through the `cmd.exe` fallback and returns ConPTY's own requests in session output, so US-016 and the console filter are ledgered divergences |
+| 1.6 | 2026-10-17 | Arthur Jean | Linux verification moved out of the Windows epics: from EP-004 on, a story's gates run on Windows only, and EP-007 (US-026) verifies on Linux, once EP-004 to EP-006 are in review, that Linux and macOS behavior is unchanged |
+| 1.7 | 2026-10-17 | Arthur Jean | EP-004 review: US-017's cursor-position criterion restated as 13 tests untagged and the UTF-16 test `windows by design`, as decided in the 1.5 measurement; the windows-2022 job, red since EP-003 on fixture paths that assumed the checkout and the temporary directory share a drive and carry no 8.3 short name, fixed so the job can certify US-017 |
 
 ## Problem Statement
 
@@ -26,11 +29,11 @@ Mistral Vibe RS compiles on Windows and ships a `windows-x86_64` package with a 
 
 ## Overview
 
-This PRD makes Mistral Vibe RS behave on native Windows 10 and 11 the way the Python reference behaves there, at the same public boundaries the project already measures: commands, flags, configuration, persisted state, tool semantics, permission decisions, and user-visible output. It does so in six epics ordered by dependency and risk: first a Windows test signal that can be trusted, then path and home identity, then the security boundaries, then process execution, then TUI input, then distribution polish.
+This PRD makes Mistral Vibe RS behave on native Windows 10 and 11 the way the Python reference behaves there, at the same public boundaries the project already measures: commands, flags, configuration, persisted state, tool semantics, permission decisions, and user-visible output. It does so in seven epics ordered by dependency and risk: first a Windows test signal that can be trusted, then path and home identity, then the security boundaries, then process execution, then TUI input, then distribution polish, and last a Linux pass that verifies the Windows work left Linux and macOS unchanged.
 
 The key decisions: (a) the Windows CI job is required from the start, and every test that fails because of a product defect owned by a story here carries `#[cfg_attr(windows, ignore = "windows: <cause> (US-NNN)")]`, so the 2403 tests that pass today are protected immediately and the backlog is mechanically countable; (b) platform knowledge is consolidated in `vibe-core` (layer 1), where the correct home resolver, the verbatim strip, and the Windows shell ladder already live, and the adapters stop reimplementing it; (c) the permission matcher adopts Windows path semantics (both separators, case-insensitive, verbatim prefix removed) on Windows only, so Linux parity corpora replay unchanged; (d) no command interpreter ever parses a URL or a user-controlled string for launching; (e) a validation spike stands up the pinned reference on Windows before the stories whose target behavior depends on it.
 
-Delivery is phased. **Release 1** holds the 17 P0 stories (US-001 to US-015, US-018, US-019) and ends when a Windows user can sign in safely, keep state in `%USERPROFILE%\.vibe`, rely on `.env` protection, run MCP servers through `npx`, run harness processes, create worktrees, type AltGr characters, and paste multi-line text. **Release 2** holds the 8 P1 and P2 stories (US-016, US-017, US-020 to US-025).
+Delivery is phased. **Release 1** holds the 17 P0 stories (US-001 to US-015, US-018, US-019) and ends when a Windows user can sign in safely, keep state in `%USERPROFILE%\.vibe`, rely on `.env` protection, run MCP servers through `npx`, run harness processes, create worktrees, type AltGr characters, and paste multi-line text. **Release 2** holds the 8 P1 and P2 stories (US-016, US-017, US-020 to US-025). US-026 closes the PRD: it runs on Linux once EP-004 to EP-006 are in review, and neither release ships before it is done.
 
 ## Goals
 
@@ -94,7 +97,7 @@ Key findings that informed this PRD:
 
 ### Hard Constraints
 - Licensing boundary (`NOTICE`, `AGENTS.md`): no reference source, prompt, or tool description text enters the repository; Windows observations are committed only as names, JSON pointers, and normalized observations.
-- Linux and macOS behavior is unchanged: every committed corpus replays identically on Linux; no corpus is regenerated outside a re-pin.
+- Linux and macOS behavior is unchanged: every committed corpus replays identically on Linux; no corpus is regenerated outside a re-pin. From EP-004 on, US-026 proves it on Linux.
 - `unsafe_code = forbid` at workspace level (`Cargo.toml:76`): no direct FFI; Windows APIs are reached through std or existing dependencies.
 - Dependency layering (`Cargo.toml:88`): shared platform logic lives in `vibe-core`; adapters never gain an edge to a later layer.
 - Parity discipline: a kept divergence gets a ledger row in `docs/parity.md` that `ledger_tests` resolves; work that moves a part's parity restates its row and the weighted total (`scorecard_tests`).
@@ -107,6 +110,8 @@ These commands must pass for every user story:
 - `cargo check --workspace --all-targets --all-features` - compilation of every target and feature
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings` - lints with warnings denied
 - `env -u FORCE_COLOR VIBE_HOME="$(mktemp -d)" cargo test --workspace --all-features --no-fail-fast` - the full workspace suite, run on ubuntu-22.04 and, once US-007 lands, on windows-2022 from Git Bash
+
+From EP-004 on, these gates run on Windows only, natively and on the windows-2022 job. The Linux run, and every criterion of EP-004 to EP-006 that states Linux or macOS behavior is unchanged, is proven once by US-026 (EP-007) on Linux.
 
 For TUI stories (US-018 to US-021, US-023), additional gates:
 - Manual verification in Windows Terminal and in conhost on Windows 11 with the French AZERTY and US layouts, recorded in the story's PR description.
@@ -401,7 +406,7 @@ Make every process the agent starts run under a resolvable shell with intact arg
 - [ ] Given a PTY session whose child exits after printing 1 MiB, when the session completes, then the reader reaches EOF within 2 s of the exit, `output_dropped` is false, and the full output is returned in 50 of 50 runs.
 - [ ] Given a PTY session that started a background grandchild, when the session is killed or times out, then no descendant process survives 2 s later (`crates/vibe-core/src/pty.rs:385` and `crates/vibe-harness/src/processes.rs:1039`).
 - [ ] Given the pseudoconsole cannot be closed without error, when the session ends, then the session reports an error and the child tree is still killed.
-- [ ] Given a pseudoconsole created with `PSEUDOCONSOLE_INHERIT_CURSOR` (the portable-pty 0.9 default), when it sends its startup cursor-position request (`ESC[6n`), then the session answers it, the child's first output arrives without waiting on the answer, and the 14 tests tagged "ConPTY stalls on an unanswered cursor-position request (US-017)" in `crates/vibe-core/src/tools/shell/tests.rs` pass on windows-2022 with their tags removed.
+- [ ] Given a pseudoconsole created with `PSEUDOCONSOLE_INHERIT_CURSOR` (the portable-pty 0.9 default), when it sends its startup cursor-position request (`ESC[6n`), then the session answers it, the child's first output arrives without waiting on the answer, and of the 14 tests tagged "ConPTY stalls on an unanswered cursor-position request (US-017)" in `crates/vibe-core/src/tools/shell/tests.rs`, 13 pass on windows-2022 with their tags removed and `a_command_writing_utf16_reaches_the_model_as_text` no longer stalls and carries a `windows by design` tag (ConPTY renders the child's bytes through the console code page).
 - [ ] Given the 9 tests tagged "a ConPTY session outlives its teardown on Windows Server 2022 (US-017)" in the same file, when this story lands, then they pass on windows-2022 with their tags removed.
 - [ ] Given `acp_parity_tests::the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names` in `crates/vibe-acp/tests/`, tagged "the bash scenarios time out under ConPTY on Windows Server 2022 (US-017)" after EP-002 measured `prompt/bash-approved*` failing on windows-2022 while passing on Windows 11, when this story lands, then it passes on windows-2022 with its tag removed.
 - [ ] Given `docs/parity.md` "The Windows terminal ladder is one rung" (row at line 367), when this story lands, then the ledger row still holds.
@@ -513,6 +518,28 @@ Make the installed Windows package reachable, verified at release, and free of c
 - [ ] Given `vibe-acp` launched by an editor without a console, when it starts shell, MCP, or git children, then no console window appears.
 - [ ] Given the `vibe` TUI running in a console, when it starts children, then interactive commands still share the console.
 - [ ] Given an environment variable whose value is not valid Unicode, when `vibe-acp` reads its environment (`crates/vibe-acp/src/auth/environment.rs:57`), then it skips or reports the variable and does not panic.
+
+---
+
+### EP-007: Linux Non-Regression
+
+Verify on Linux, once, that the Windows epics left Linux and macOS behavior unchanged, so the Windows work could be gated on Windows alone.
+
+**Definition of Done:** the four quality gates pass on Linux over the tree that holds EP-004 to EP-006, and every committed corpus replays byte-identically there.
+
+#### US-026: Verify Linux behavior after the Windows epics
+**Description:** As a maintainer, I want one Linux pass over the Windows work so that the hard constraint "Linux and macOS behavior is unchanged" is proven rather than assumed.
+
+**Priority:** P0
+**Size:** M (3 pts)
+**Dependencies:** Blocked by US-015 to US-024
+
+**Acceptance Criteria:**
+- [ ] Given a Linux host (Fedora or ubuntu-22.04) with the ALSA headers, when the four quality gates run over the tree holding EP-004 to EP-006, then all four pass, the live parity probes included where the reference checkout is at the pin.
+- [ ] Given the `cfg(unix)` code and tests EP-004 to EP-006 changed (for example `crates/vibe-harness/src/processes/processes_tests.rs`, `crates/vibe-core/src/pty.rs`, the POSIX branch of `HostShells::command_shell`), when they compile and run on Linux, then they pass with no new ignore tag.
+- [ ] Given every committed corpus, when it replays on Linux, then nothing drifts and no ledger entry was added to absorb a Linux difference.
+- [ ] Given each criterion of EP-004 to EP-006 that states Linux or macOS behavior is unchanged, when this story ends, then each one is checked off here with its proof.
+- [ ] Given a Linux regression found here, when it is fixed, then the fix lands in this story and the owning Windows story is not reopened unless its Windows behavior changes.
 
 ---
 
