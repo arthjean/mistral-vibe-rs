@@ -177,6 +177,58 @@ fn a_paste_read_after_a_slow_repaint_stays_one_paste() {
 }
 
 #[test]
+fn typing_that_resumes_after_a_drained_console_leaves_the_burst() {
+    let mut detector = PasteBurst::new(true);
+    let start = Instant::now();
+    // Three keys typed during a stall reach the session together and open a
+    // burst; the session then finds the console empty.
+    let stalled = type_text(&mut detector, "abc", start, PASTED);
+    detector.input_drained();
+    let typed = Duration::from_millis(25);
+    let last = type_text(
+        &mut detector,
+        "d
+",
+        stalled + typed,
+        typed,
+    );
+    detector.expire(last + BURST_WINDOW);
+    assert_eq!(
+        drain(&mut detector),
+        vec![
+            Event::Paste("abc".to_owned()),
+            press(KeyCode::Char('d')),
+            press(KeyCode::Enter),
+        ]
+    );
+}
+
+#[test]
+fn a_chunk_read_soon_after_a_drained_console_extends_the_paste() {
+    let mut detector = PasteBurst::new(true);
+    let start = Instant::now();
+    let first = type_text(
+        &mut detector,
+        "one
+",
+        start,
+        PASTED,
+    );
+    detector.input_drained();
+    let resumed = first + BURST_WINDOW - Duration::from_millis(1);
+    let last = type_text(&mut detector, "two", resumed, PASTED);
+    detector.expire(last + BURST_SILENCE);
+    assert_eq!(
+        drain(&mut detector),
+        vec![Event::Paste(
+            "one
+two"
+            .to_owned()
+        )]
+    );
+}
+
+#[test]
 fn a_disabled_detector_passes_every_event_through_in_order() {
     let mut detector = PasteBurst::new(false);
     let start = Instant::now();

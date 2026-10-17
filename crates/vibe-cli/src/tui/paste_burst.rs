@@ -12,8 +12,11 @@
 //! Silence is measured from when the session looked for more input and found
 //! none, never between two reads: a repaint can keep the session from reading
 //! while the rest of a paste already waits in the console, so the session
-//! drains what is waiting before it calls [`PasteBurst::expire`], and a key
-//! read into an open burst always extends it.
+//! drains what is waiting before it calls [`PasteBurst::expire`]. A key read
+//! into an open burst extends it, unless the session found the console empty
+//! since the burst's last key and the key came [`BURST_WINDOW`] or more after
+//! it: a console paste is waiting in full, while keys typed during a stall
+//! that opened a burst keep arriving at a person's pace and must type again.
 //!
 //! Other platforms receive bracketed pastes, so there the detector is off and
 //! every event passes through in order, untouched.
@@ -45,6 +48,8 @@ pub(super) struct PasteBurst {
     held: Vec<(KeyEvent, Instant)>,
     /// The text of the open burst and when its last key arrived.
     burst: Option<(String, Instant)>,
+    /// Whether the session found the console empty since the burst's last key.
+    drained: bool,
     /// Events released to the session, in arrival order.
     ready: VecDeque<Event>,
 }
@@ -60,6 +65,7 @@ impl PasteBurst {
             enabled,
             held: Vec::new(),
             burst: None,
+            drained: false,
             ready: VecDeque::new(),
         }
     }
@@ -88,9 +94,18 @@ impl PasteBurst {
             self.ready.push_back(Event::Key(key));
             return;
         }
+        if self.drained
+            && self
+                .burst
+                .as_ref()
+                .is_some_and(|(_, last)| now.saturating_duration_since(*last) >= BURST_WINDOW)
+        {
+            self.release();
+        }
         if let Some((burst, last)) = &mut self.burst {
             burst.push_str(&text);
             *last = now;
+            self.drained = false;
             return;
         }
         self.held.push((key, now));
@@ -126,6 +141,11 @@ impl PasteBurst {
             .extend(self.held.drain(..stale).map(|(key, _)| Event::Key(key)));
     }
 
+    /// Records that the session looked for more input and found none.
+    pub(super) fn input_drained(&mut self) {
+        self.drained = self.burst.is_some();
+    }
+
     /// When [`Self::expire`] next has something to release.
     pub(super) fn deadline(&self) -> Option<Instant> {
         match (&self.burst, self.held.first()) {
@@ -151,6 +171,7 @@ impl PasteBurst {
         if let Some((text, _)) = self.burst.take() {
             self.ready.push_back(Event::Paste(text));
         }
+        self.drained = false;
         self.ready
             .extend(self.held.drain(..).map(|(key, _)| Event::Key(key)));
     }

@@ -1003,7 +1003,11 @@ where
     S: futures_util::Stream<Item = std::io::Result<Event>> + Unpin,
 {
     use futures_util::FutureExt;
-    while burst.is_collecting() && crossterm::event::poll(NEXT_KEY_WAIT).unwrap_or(false) {
+    while burst.is_collecting() {
+        if !crossterm::event::poll(NEXT_KEY_WAIT).unwrap_or(false) {
+            burst.input_drained();
+            break;
+        }
         match events.next().now_or_never() {
             Some(Some(Ok(event))) => burst.push(event, Instant::now()),
             Some(Some(Err(error))) => return Some(error.to_string()),
