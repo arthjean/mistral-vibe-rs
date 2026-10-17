@@ -12,11 +12,11 @@
 //! Silence is measured from when the session looked for more input and found
 //! none, never between two reads: a repaint can keep the session from reading
 //! while the rest of a paste already waits in the console, so the session
-//! drains what is waiting before it calls [`PasteBurst::expire`]. A key read
-//! into an open burst extends it, unless the session found the console empty
-//! since the burst's last key and the key came [`BURST_WINDOW`] or more after
-//! it: a console paste is waiting in full, while keys typed during a stall
-//! that opened a burst keep arriving at a person's pace and must type again.
+//! drains what is waiting before it calls [`PasteBurst::expire`], and a key
+//! read into an open burst always extends it. Keys typed while the session
+//! stalls therefore queue up and read as a burst too; a short one made only of
+//! characters is handed on as the keys it was, and a longer one is a paste, so
+//! an Enter among them breaks a line rather than submitting.
 //!
 //! Other platforms receive bracketed pastes, so there the detector is off and
 //! every event passes through in order, untouched.
@@ -42,14 +42,20 @@ pub(super) const BURST_SILENCE: Duration = Duration::from_millis(30);
 /// The key events that open a burst before it is one.
 const BURST_KEYS: usize = 3;
 
+/// A burst shorter than this, made only of characters, is handed on as the
+/// keys it was: keys typed during a stall reach the session together and
+/// would otherwise skip what typing does, such as rewriting a typed path, and
+/// so short a paste reads the same either way.
+const SHORT_BURST: usize = 16;
+
 pub(super) struct PasteBurst {
     enabled: bool,
     /// Keys that may still open a burst, with when each arrived.
     held: Vec<(KeyEvent, Instant)>,
     /// The text of the open burst and when its last key arrived.
     burst: Option<(String, Instant)>,
-    /// Whether the session found the console empty since the burst's last key.
-    drained: bool,
+    /// The open burst's keys while it is short and holds only characters.
+    typed: Option<Vec<KeyEvent>>,
     /// Events released to the session, in arrival order.
     ready: VecDeque<Event>,
 }
@@ -65,7 +71,7 @@ impl PasteBurst {
             enabled,
             held: Vec::new(),
             burst: None,
-            drained: false,
+            typed: None,
             ready: VecDeque::new(),
         }
     }
@@ -94,27 +100,28 @@ impl PasteBurst {
             self.ready.push_back(Event::Key(key));
             return;
         }
-        if self.drained
-            && self
-                .burst
-                .as_ref()
-                .is_some_and(|(_, last)| now.saturating_duration_since(*last) >= BURST_WINDOW)
-        {
-            self.release();
-        }
         if let Some((burst, last)) = &mut self.burst {
             burst.push_str(&text);
             *last = now;
-            self.drained = false;
+            self.typed = self
+                .typed
+                .take()
+                .filter(|keys| keys.len() + 1 < SHORT_BURST && is_character(key))
+                .map(|mut keys| {
+                    keys.push(key);
+                    keys
+                });
             return;
         }
         self.held.push((key, now));
         if self.held.len() >= BURST_KEYS {
+            let keys = self.held.drain(..).map(|(key, _)| key).collect::<Vec<_>>();
             let mut opened = String::new();
-            for (key, _) in self.held.drain(..) {
-                extend_burst(&mut opened, key);
+            for key in &keys {
+                extend_burst(&mut opened, *key);
             }
             self.burst = Some((opened, now));
+            self.typed = keys.iter().copied().all(is_character).then_some(keys);
         }
     }
 
@@ -141,11 +148,6 @@ impl PasteBurst {
             .extend(self.held.drain(..stale).map(|(key, _)| Event::Key(key)));
     }
 
-    /// Records that the session looked for more input and found none.
-    pub(super) fn input_drained(&mut self) {
-        self.drained = self.burst.is_some();
-    }
-
     /// When [`Self::expire`] next has something to release.
     pub(super) fn deadline(&self) -> Option<Instant> {
         match (&self.burst, self.held.first()) {
@@ -166,15 +168,25 @@ impl PasteBurst {
         self.ready.pop_front()
     }
 
-    /// Releases the open burst as a paste and the held keys as typed.
+    /// Releases the open burst as a paste, or a short one as its keys, and the
+    /// held keys as typed.
     fn release(&mut self) {
         if let Some((text, _)) = self.burst.take() {
-            self.ready.push_back(Event::Paste(text));
+            match self.typed.take() {
+                Some(keys) => self.ready.extend(keys.into_iter().map(Event::Key)),
+                None => self.ready.push_back(Event::Paste(text)),
+            }
         }
-        self.drained = false;
         self.ready
             .extend(self.held.drain(..).map(|(key, _)| Event::Key(key)));
     }
+}
+
+/// Whether `key` types a character, as every key of a short burst must for it
+/// to be handed on as keys: a line break, a tab or an escape acts differently
+/// typed than pasted.
+fn is_character(key: KeyEvent) -> bool {
+    matches!(key.code, KeyCode::Char(_))
 }
 
 /// Appends what `key` contributes to a paste, or answers `false` when the

@@ -139,11 +139,11 @@ fn a_trailing_newline_is_part_of_the_paste() {
 fn a_key_no_paste_types_closes_the_burst_before_it_is_handled() {
     let mut detector = PasteBurst::new(true);
     let start = Instant::now();
-    let last = type_text(&mut detector, "abc", start, PASTED);
+    let last = type_text(&mut detector, "ab\nc", start, PASTED);
     detector.push(press(KeyCode::Backspace), last + PASTED);
     assert_eq!(
         drain(&mut detector),
-        vec![Event::Paste("abc".to_owned()), press(KeyCode::Backspace)]
+        vec![Event::Paste("ab\nc".to_owned()), press(KeyCode::Backspace)]
     );
 }
 
@@ -177,55 +177,21 @@ fn a_paste_read_after_a_slow_repaint_stays_one_paste() {
 }
 
 #[test]
-fn typing_that_resumes_after_a_drained_console_leaves_the_burst() {
+fn a_short_burst_of_characters_is_handed_on_as_its_keys() {
     let mut detector = PasteBurst::new(true);
     let start = Instant::now();
-    // Three keys typed during a stall reach the session together and open a
-    // burst; the session then finds the console empty.
-    let stalled = type_text(&mut detector, "abc", start, PASTED);
-    detector.input_drained();
-    let typed = Duration::from_millis(25);
-    let last = type_text(
-        &mut detector,
-        "d
-",
-        stalled + typed,
-        typed,
-    );
-    detector.expire(last + BURST_WINDOW);
-    assert_eq!(
-        drain(&mut detector),
-        vec![
-            Event::Paste("abc".to_owned()),
-            press(KeyCode::Char('d')),
-            press(KeyCode::Enter),
-        ]
-    );
-}
-
-#[test]
-fn a_chunk_read_soon_after_a_drained_console_extends_the_paste() {
-    let mut detector = PasteBurst::new(true);
-    let start = Instant::now();
-    let first = type_text(
-        &mut detector,
-        "one
-",
-        start,
-        PASTED,
-    );
-    detector.input_drained();
-    let resumed = first + BURST_WINDOW - Duration::from_millis(1);
-    let last = type_text(&mut detector, "two", resumed, PASTED);
+    let short = "x".repeat(SHORT_BURST - 1);
+    let last = type_text(&mut detector, &short, start, PASTED);
     detector.expire(last + BURST_SILENCE);
     assert_eq!(
         drain(&mut detector),
-        vec![Event::Paste(
-            "one
-two"
-            .to_owned()
-        )]
+        vec![press(KeyCode::Char('x')); SHORT_BURST - 1]
     );
+
+    let long = "x".repeat(SHORT_BURST);
+    let last = type_text(&mut detector, &long, start, PASTED);
+    detector.expire(last + BURST_SILENCE);
+    assert_eq!(drain(&mut detector), vec![Event::Paste(long)]);
 }
 
 #[test]
