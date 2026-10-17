@@ -646,11 +646,13 @@ fn a_scratchpad_path_is_granted_before_any_list_is_consulted() {
 #[test]
 fn the_denylist_is_consulted_before_the_allowlist() {
     let workspace = tempdir().expect("workspace");
-    let path = workspace.path().join("notes.txt");
+    // The patterns name the resolved directory, which the subject resolves to.
+    let root = crate::platform::canonicalize(workspace.path()).expect("canonical root");
+    let path = root.join("notes.txt");
     std::fs::write(&path, "notes").expect("write");
     let mut settings = settings_for("read_file");
-    settings.allowlist = vec![format!("{}/*", workspace.path().display())];
-    settings.denylist = vec![format!("{}/notes.txt", workspace.path().display())];
+    settings.allowlist = vec![format!("{}/*", root.display())];
+    settings.denylist = vec![format!("{}/notes.txt", root.display())];
 
     let denied = resolve_file_tool_permission(&path, "read_file", &settings, None);
     assert_eq!(denied.permission, Some(PermissionMode::Never));
@@ -800,20 +802,18 @@ fn a_path_below_a_missing_directory_resolves_without_admitting_a_traversal() {
 #[tokio::test]
 async fn an_allowlisted_subject_is_granted_whatever_its_root_trust() {
     let directory = tempdir().expect("tempdir");
+    // The pattern names the resolved directory, which the subject resolves to.
+    let root = crate::platform::canonicalize(directory.path()).expect("canonical root");
     let store = PermissionStore::default();
     store
-        .set_trust(
-            directory.path(),
-            TrustDecision::Untrusted,
-            TrustRootKind::Workspace,
-        )
+        .set_trust(&root, TrustDecision::Untrusted, TrustRootKind::Workspace)
         .await
         .expect("trust");
     let mut settings = store.tool_settings("read_file");
-    settings.allowlist = vec![format!("{}/*", directory.path().display())];
+    settings.allowlist = vec![format!("{}/*", root.display())];
 
     for name in ["notes.txt", ".env"] {
-        let path = directory.path().join(name);
+        let path = root.join(name);
         std::fs::write(&path, "content").expect("write");
         let mut context = resolve_file_tool_permission(&path, "read_file", &settings, None);
         context.paths = vec![path];

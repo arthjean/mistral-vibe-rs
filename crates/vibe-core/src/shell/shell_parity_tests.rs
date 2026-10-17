@@ -694,16 +694,30 @@ fn replay_flavor() -> ShellFlavor {
 /// into `/`, the run ending where a path cannot continue.
 ///
 /// A root without a drive (`/etc/passwd`) resolves on the current drive, as
-/// `Path.resolve()` anchors it on Windows, so that drive's root is folded
-/// back to the bare `/` the corpus records.
+/// `Path.resolve()` anchors it on Windows, and a climb out of the workspace
+/// stops at the root of the drive the operand tree hangs off, the temporary
+/// directory's. The two differ on a host whose checkout and temporary
+/// directory sit on separate drives (`D:` and `C:` on windows-2022), so both
+/// roots are folded back to the bare `/` the corpus records.
 fn fold_placeholder_separators(text: &str) -> String {
-    let drive = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| cwd.to_str().and_then(|cwd| cwd.get(..3)).map(str::to_owned))
-        .unwrap_or_default();
-    let text = text
-        .replace(&drive, "/")
-        .replace(&drive.to_lowercase(), "/");
+    let drive = |path: Option<std::path::PathBuf>| {
+        path.and_then(|path| {
+            path.to_str()
+                .and_then(|path| path.get(..3))
+                .map(str::to_owned)
+        })
+        .unwrap_or_default()
+    };
+    let mut drives = vec![
+        drive(std::env::current_dir().ok()),
+        drive(Some(std::env::temp_dir())),
+    ];
+    drives.retain(|drive| !drive.is_empty());
+    drives.dedup_by(|left, right| left.eq_ignore_ascii_case(right));
+    let mut text = text.to_owned();
+    for drive in &drives {
+        text = text.replace(drive, "/").replace(&drive.to_lowercase(), "/");
+    }
     let mut folded = String::with_capacity(text.len());
     let mut in_path = false;
     for character in text.chars() {
