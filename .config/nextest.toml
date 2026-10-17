@@ -8,7 +8,7 @@ nextest-version = "0.9.146"
 # machine, about 1.7 s against 2 s in a debug build, so it runs with no other
 # test beside it: under the whole suite's load it measures past 3 s.
 [[profile.default.overrides]]
-filter = "binary(tui_conpty) & test(=a_ten_thousand_character_paste_lands_within_two_seconds)"
+filter = "binary(tui_conpty) & test(=a_ten_thousand_character_paste_lands_within_its_latency_bound)"
 threads-required = "num-cpus"
 
 # A test that fails is rerun twice before it fails the job, as the reference
