@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- On Windows, text copied from the TUI pastes back unchanged: accented, CJK
+  and emoji text used to arrive as mojibake, because `clip.exe` read it in the
+  console code page.
+
 - On Windows, `vibe-acp` started by an editor with no console no longer opens
   a console window for each shell, MCP server or git call it starts, and an
   environment variable whose value is not valid Unicode no longer stops it, or

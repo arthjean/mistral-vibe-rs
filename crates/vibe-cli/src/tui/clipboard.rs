@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use thiserror::Error;
+use vibe_core::platform::BackgroundCommand as _;
 
 use super::command_handlers::NATIVE_COPY_HINT;
 use super::state::{INLINE_NOTICE_MS, TuiState};
@@ -17,7 +18,11 @@ use super::state::{INLINE_NOTICE_MS, TuiState};
 /// `_clipboard_notice_message`: a copy is never refused, and the notice says
 /// whether the platform clipboard confirmed it.
 pub(in crate::tui) fn copy_and_notify(state: &mut TuiState, text: &str) {
-    let notice = if copy_text_verified(text) {
+    notify_copied(state, copy_text_verified(text));
+}
+
+fn notify_copied(state: &mut TuiState, verified: bool) {
+    let notice = if verified {
         "Copied to clipboard".to_owned()
     } else {
         format!("Copied \u{b7} {NATIVE_COPY_HINT}")
@@ -29,6 +34,10 @@ pub(in crate::tui) fn copy_and_notify(state: &mut TuiState, text: &str) {
 /// is tried first, and only its success counts as verified; the terminal
 /// escape is written either way, so a copy is never refused outright.
 pub(in crate::tui) fn copy_text_verified(text: &str) -> bool {
+    copy_verified_through(copy_commands(), text)
+}
+
+fn copy_verified_through(commands: &[(&str, &[&str])], text: &str) -> bool {
     if text.is_empty() {
         return false;
     }
@@ -36,7 +45,7 @@ pub(in crate::tui) fn copy_text_verified(text: &str) -> bool {
         .into_iter()
         .any(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()));
     let verified = !ssh
-        && copy_commands()
+        && commands
             .iter()
             .any(|(program, arguments)| write_command(program, arguments, text.as_bytes()).is_ok());
     drop(write_osc52(text));
@@ -176,6 +185,7 @@ fn write_osc52(text: &str) -> Result<(), ClipboardError> {
 
 fn write_command(program: &str, arguments: &[&str], content: &[u8]) -> Result<(), ClipboardError> {
     let mut child = Command::new(program)
+        .in_background()
         .args(arguments)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
@@ -196,6 +206,15 @@ fn write_command(program: &str, arguments: &[&str], content: &[u8]) -> Result<()
         .ok_or(ClipboardError::Unavailable)
 }
 
+/// Reads the text as UTF-8 bytes from standard input and sets it as the
+/// clipboard's Unicode text, which is what the reference's `pyperclip` writes
+/// through the Win32 clipboard. `clip.exe` decodes its input in the console's
+/// code page, so UTF-8 arrives as mojibake, and it takes UTF-16 only when a
+/// statistical guess says so, which misreads short CJK text and emoji, or keeps
+/// the byte-order mark that settles the guess as a character of the text.
+#[cfg(target_os = "windows")]
+const WINDOWS_COPY_SCRIPT: &str = "$i = [Console]::OpenStandardInput(); $m = New-Object IO.MemoryStream; $i.CopyTo($m); Set-Clipboard -Value ([Text.UTF8Encoding]::new($false).GetString($m.ToArray()))";
+
 fn copy_commands() -> &'static [(&'static str, &'static [&'static str])] {
     #[cfg(target_os = "macos")]
     {
@@ -203,7 +222,15 @@ fn copy_commands() -> &'static [(&'static str, &'static [&'static str])] {
     }
     #[cfg(target_os = "windows")]
     {
-        &[("clip.exe", &[])]
+        &[(
+            "powershell.exe",
+            &[
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                WINDOWS_COPY_SCRIPT,
+            ],
+        )]
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
@@ -604,5 +631,60 @@ mod tests {
             & 0o777;
         assert_eq!(directory_mode, 0o700);
         assert_eq!(file_mode, 0o600);
+    }
+
+    #[test]
+    fn a_copy_no_helper_can_take_reports_the_native_copy_hint() {
+        let verified = copy_verified_through(
+            &[("vibe-clipboard-helper-that-does-not-exist", &[])],
+            "\u{e9}",
+        );
+        assert!(!verified);
+
+        let mut state = TuiState::new("session");
+        notify_copied(&mut state, verified);
+        assert_eq!(
+            state.inline_notice.map(|notice| notice.text),
+            Some(format!("Copied \u{b7} {NATIVE_COPY_HINT}"))
+        );
+    }
+
+    /// The clipboard as Notepad pastes it: its Unicode text, read back through
+    /// `Get-Clipboard` and carried as Base64 so no console code page touches it.
+    #[cfg(windows)]
+    fn windows_clipboard_text() -> String {
+        let output = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Clipboard -Raw)))",
+            ])
+            .output()
+            .expect("powershell.exe reads the clipboard");
+        let encoded = String::from_utf8(output.stdout).expect("Base64 is ASCII");
+        let decoded = STANDARD
+            .decode(encoded.trim())
+            .expect("the clipboard reads back as Base64");
+        String::from_utf8(decoded).expect("the clipboard text is UTF-8 once re-encoded")
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unicode_text_survives_a_copy_to_the_windows_clipboard() {
+        // `clip.exe`, the helper this replaced, turned the first text into
+        // console code page mojibake and read the second as other CJK text.
+        let texts = [
+            "\u{e9} \u{fc} \u{6f22}\u{5b57} \u{1f642}",
+            "\u{6f22}\u{5b57}\u{6f22}\u{5b57}\u{6f22}\u{5b57}\u{6f22}\u{5b57}",
+            "two\r\nlines",
+        ];
+        for text in texts {
+            assert!(
+                copy_text_verified(text),
+                "the copy of {text:?} was not confirmed"
+            );
+            assert_eq!(windows_clipboard_text(), text);
+        }
     }
 }
