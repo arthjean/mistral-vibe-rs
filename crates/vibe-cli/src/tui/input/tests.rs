@@ -74,6 +74,20 @@ fn an_editor_that_cannot_start_is_named_and_one_that_fails_changes_nothing() {
 }
 
 #[test]
+fn an_editor_script_path_that_holds_no_file_is_named() {
+    let directory = tempfile::tempdir().expect("editor directory");
+    let missing = directory.path().join("bin").join("code.cmd");
+    let missing = missing.to_string_lossy().into_owned();
+    let mut editor =
+        SystemExternalEditor::from_sources(Some(format!("\"{missing}\" --wait")), None);
+    let error = ExternalEditorPort::edit(&mut editor, "draft").expect_err("no such editor");
+    assert!(
+        error.contains(&format!("`{missing}`")),
+        "the error does not name the script: {error}"
+    );
+}
+
+#[test]
 fn paste_above_the_old_rust_boundary_is_accepted_atomically() {
     let mut editor = PromptEditor::default();
     editor.insert("keep");

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::fs;
 use std::fs::OpenOptions;
 use std::ops::Range;
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 use std::sync::Arc;
 
 use thiserror::Error;
@@ -956,13 +956,22 @@ impl SystemExternalEditor {
         }
         // Reference `ExternalEditor.edit_file(check=False)`: only an editor
         // that cannot start fails; its exit status is not read.
-        Command::new(&command[0])
-            .args(&command[1..])
-            .arg(path)
-            .status()
-            .map_err(|error| unstartable(&command[0], &error))?;
+        run_editor(&command, path).map_err(|error| unstartable(&command[0], &error))?;
         fs::read_to_string(path).map_err(|error| error.to_string())
     }
+}
+
+/// Runs the editor `command` on `path` and waits for it.
+///
+/// std hands a `.cmd` or `.bat` program to `cmd.exe`, which starts even when
+/// the script is missing, so an editor named by a path that holds no file
+/// cannot start, whatever its extension.
+fn run_editor(command: &[String], path: &std::path::Path) -> std::io::Result<ExitStatus> {
+    let program = std::path::Path::new(&command[0]);
+    if program.components().count() > 1 && !program.is_file() {
+        return Err(std::io::ErrorKind::NotFound.into());
+    }
+    Command::new(program).args(&command[1..]).arg(path).status()
 }
 
 fn unstartable(program: &str, error: &std::io::Error) -> String {
@@ -989,10 +998,7 @@ impl ExternalEditorPort for SystemExternalEditor {
             .map_err(|error| error.to_string())?;
         file.sync_all().map_err(|error| error.to_string())?;
         drop(file);
-        let result = Command::new(&command[0])
-            .args(&command[1..])
-            .arg(&path)
-            .status();
+        let result = run_editor(&command, &path);
         // Reference `ExternalEditor.edit`: an editor that exits with a failure
         // leaves the prompt as it was.
         let edited = match result {
