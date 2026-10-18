@@ -186,21 +186,28 @@ impl PasteBurst {
 /// to be handed on as keys: a line break, a tab or an escape acts differently
 /// typed than pasted.
 fn is_character(key: KeyEvent) -> bool {
-    matches!(key.code, KeyCode::Char(_))
+    let key = typed_key(key);
+    matches!(key.code, KeyCode::Char(_)) && key.modifiers.difference(KeyModifiers::SHIFT).is_empty()
 }
 
 /// Appends what `key` contributes to a paste, or answers `false` when the
 /// key cannot belong to one.
 ///
 /// Enter is a line break and Tab a tab, so neither submits nor completes from
-/// inside a paste. Esc contributes nothing: a pasted escape character must not
-/// cancel the composer, and painting one would corrupt the terminal.
+/// inside a paste. A terminal that pastes line feeds rather than carriage
+/// returns, as Paneflow does, reaches the console host as `Ctrl+J` or
+/// `Ctrl+Enter`, the keys the host types for a line feed: a line break too.
+/// Esc contributes nothing: a pasted escape character must not cancel the
+/// composer, and painting one would corrupt the terminal.
 fn extend_burst(text: &mut String, key: KeyEvent) -> bool {
     let key = typed_key(key);
     let plain = key.modifiers.difference(KeyModifiers::SHIFT).is_empty();
+    let line_feed = key.modifiers == KeyModifiers::CONTROL
+        && matches!(key.code, KeyCode::Enter | KeyCode::Char('j'));
     match key.code {
         KeyCode::Char(character) if plain => text.push(character),
         KeyCode::Enter if plain => text.push('\n'),
+        _ if line_feed => text.push('\n'),
         KeyCode::Tab if plain => text.push('\t'),
         KeyCode::Esc if key.modifiers.is_empty() => {}
         _ => return false,

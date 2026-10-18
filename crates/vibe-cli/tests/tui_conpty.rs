@@ -344,6 +344,15 @@ fn tab_and_escape_inside_a_paste_neither_complete_nor_cancel() {
 }
 
 #[test]
+fn a_bracketed_paste_of_line_feeds_keeps_its_lines() {
+    let (_directory, mut console) = session(quoted_editor);
+    // Paneflow pastes line feeds where Windows Terminal pastes carriage
+    // returns, and frames them as a bracketed paste.
+    console.write(b"\x1b[200~first\nsecond\nthird\x1b[201~");
+    assert_eq!(console.composer_text(), "first\nsecond\nthird");
+}
+
+#[test]
 fn a_paste_ending_with_a_newline_keeps_it() {
     let (_directory, mut console) = session(quoted_editor);
     console.write(b"first\rsecond\r");

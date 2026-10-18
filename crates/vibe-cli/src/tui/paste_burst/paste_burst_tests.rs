@@ -177,6 +177,29 @@ fn a_paste_read_after_a_slow_repaint_stays_one_paste() {
 }
 
 #[test]
+fn a_pasted_line_feed_is_a_line_break() {
+    let mut detector = PasteBurst::new(true);
+    let start = Instant::now();
+    let keys = [
+        press(KeyCode::Char('a')),
+        Event::Key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::CONTROL)),
+        press(KeyCode::Char('b')),
+        Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL)),
+        press(KeyCode::Char('c')),
+    ];
+    let mut now = start;
+    for key in keys {
+        detector.push(key, now);
+        now += PASTED;
+    }
+    detector.expire(now + BURST_SILENCE);
+    assert_eq!(
+        drain(&mut detector),
+        vec![Event::Paste("a\nb\nc".to_owned())]
+    );
+}
+
+#[test]
 fn a_short_burst_of_characters_is_handed_on_as_its_keys() {
     let mut detector = PasteBurst::new(true);
     let start = Instant::now();
