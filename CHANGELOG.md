@@ -8,7 +8,8 @@
   stays a chord. A multi-line paste in Windows Terminal or conhost lands in the
   composer as one paste instead of submitting each line, Tab and Esc inside it
   neither complete nor cancel, and a dropped or typed Windows path (`C:\...`,
-  `\\server\share\...`) becomes a quoted mention or image attachment. An
+  `\\server\share\...`), quoted for PowerShell or not, becomes a quoted
+  mention or image attachment. An
   external editor that cannot start, such as the `nano` fallback on a stock
   Windows when neither `VISUAL` nor `EDITOR` is set, is named on the
   diagnostics line instead of doing nothing.

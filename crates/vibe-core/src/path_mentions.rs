@@ -200,17 +200,24 @@ fn scan_pasted_path(text: &str, start: usize) -> Option<(String, usize)> {
 }
 
 fn unescaped_path_candidate(value: &str) -> String {
-    let unquoted = ['\'', '"']
+    let (quote, unquoted) = ['\'', '"']
         .into_iter()
         .find_map(|quote| {
             value
                 .strip_prefix(quote)
                 .and_then(|inner| inner.strip_suffix(quote))
+                .map(|inner| (Some(quote), inner))
         })
-        .unwrap_or(value);
-    // Reference `_unescape_spaces` leaves Windows paths as typed.
+        .unwrap_or((None, value));
+    // Reference `_unescape_spaces` leaves Windows paths as typed. A terminal
+    // that quotes a dropped path for PowerShell, as Paneflow does, doubles an
+    // apostrophe inside single quotes.
     if cfg!(windows) {
-        unquoted.to_owned()
+        if quote == Some('\'') {
+            unquoted.replace("''", "'")
+        } else {
+            unquoted.to_owned()
+        }
     } else {
         unquoted.replace("\\ ", " ")
     }

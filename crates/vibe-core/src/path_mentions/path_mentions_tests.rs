@@ -81,6 +81,14 @@ mod windows {
     }
 
     #[test]
+    fn a_path_quoted_for_powershell_reads_a_doubled_apostrophe_as_one() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let path = spelled(&image(workspace.path(), "Capture d'écran.png"));
+        let dropped = format!("'{}'", path.replace('\'', "''"));
+        assert_eq!(normalize_pasted_text(&dropped), format!("@\"{path}\""));
+    }
+
+    #[test]
     fn a_dropped_unc_path_becomes_a_quoted_mention() {
         let workspace = tempfile::tempdir().expect("workspace");
         let local = image(workspace.path(), "a.png");
