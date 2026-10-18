@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- On Windows, `install.ps1` adds the install directory to the user `PATH`,
+  once, keeping the entries already there and their `%VAR%` references, so
+  `vibe` resolves in any new terminal; `-Uninstall` removes the entry. When the
+  user `PATH` cannot be written, the installer prints the command that adds it
+  and exits non-zero.
+
 - On Windows, text copied from the TUI pastes back unchanged: accented, CJK
   and emoji text used to arrive as mojibake, because `clip.exe` read it in the
   console code page.

@@ -6,11 +6,53 @@ param(
 
 $ErrorActionPreference = "Stop"
 $completionDirectory = if ($env:VIBE_COMPLETION_DIR) { $env:VIBE_COMPLETION_DIR } else { Join-Path $env:LOCALAPPDATA "MistralVibeRS\completions" }
+# The registry key, under HKEY_CURRENT_USER, that holds the user PATH a new
+# shell starts with. `scripts/ci/verify-install-ps1.ps1` points it at a scratch
+# key so a verification run never edits the PATH of the machine it runs on.
+$userEnvironmentKey = if ($env:VIBE_USER_ENVIRONMENT_KEY) { $env:VIBE_USER_ENVIRONMENT_KEY } else { "Environment" }
+$pathEntry = [System.IO.Path]::GetFullPath($InstallDirectory).TrimEnd("\")
+
+# The user PATH entries as stored, `%VAR%` references unexpanded, so a rewrite
+# keeps them expandable.
+function Get-UserPathEntries {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($userEnvironmentKey)
+    if ($null -eq $key) {
+        return @()
+    }
+    try {
+        $value = [string]$key.GetValue("Path", "", [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    } finally {
+        $key.Close()
+    }
+    @($value -split ";" | Where-Object { $_ })
+}
+
+function Test-InstallPathEntry([string]$Entry) {
+    [Environment]::ExpandEnvironmentVariables($Entry).TrimEnd("\") -eq $pathEntry
+}
+
+function Set-UserPathEntries([string[]]$Entries) {
+    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($userEnvironmentKey)
+    try {
+        $key.SetValue("Path", ($Entries -join ";"), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+    } finally {
+        $key.Close()
+    }
+    # A user variable set through .NET broadcasts WM_SETTINGCHANGE, which is
+    # what makes Explorer, and every shell it starts afterward, read PATH again.
+    # Removing a variable nothing sets sends that broadcast and changes nothing.
+    [Environment]::SetEnvironmentVariable("MISTRAL_VIBE_RS_PATH_REFRESH", $null, "User")
+}
 
 if ($Uninstall) {
     @("vibe.exe", "vibe-acp.exe", "vibe.exe.previous", "vibe-acp.exe.previous") |
         ForEach-Object { Remove-Item -LiteralPath (Join-Path $InstallDirectory $_) -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $completionDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    $entries = @(Get-UserPathEntries)
+    $kept = @($entries | Where-Object { -not (Test-InstallPathEntry $_) })
+    if ($kept.Count -ne $entries.Count) {
+        Set-UserPathEntries $kept
+    }
     Write-Output "Mistral Vibe RS removed from $InstallDirectory"
     exit 0
 }
@@ -116,6 +158,19 @@ try {
     & (Join-Path $InstallDirectory "vibe.exe") --version
     & (Join-Path $InstallDirectory "vibe-acp.exe") --help | Out-Null
     Write-Output "Mistral Vibe RS $Version installed in $InstallDirectory"
+    try {
+        $entries = @(Get-UserPathEntries)
+        if (-not ($entries | Where-Object { Test-InstallPathEntry $_ })) {
+            Set-UserPathEntries (@($pathEntry) + $entries)
+            Write-Output "Added $pathEntry to the user PATH; open a new terminal to use vibe"
+        }
+    } catch {
+        $quoted = $pathEntry.Replace("'", "''")
+        Write-Output "Could not add $pathEntry to the user PATH: $($_.Exception.Message)"
+        Write-Output "Add it yourself, then open a new terminal:"
+        Write-Output "  [Environment]::SetEnvironmentVariable('Path', '$quoted;' + [Environment]::GetEnvironmentVariable('Path', 'User'), 'User')"
+        throw "The user PATH could not be updated; vibe is installed in $pathEntry"
+    }
 } finally {
     Remove-Item -LiteralPath $temporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }

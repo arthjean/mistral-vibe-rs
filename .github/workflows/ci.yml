@@ -204,3 +204,13 @@ jobs:
             -Version $env:RELEASE_VERSION `
             -InstallDirectory (Join-Path $env:RUNNER_TEMP "vibe-install") `
             -CompletionDirectory (Join-Path $env:RUNNER_TEMP "vibe-completions")
+      # Windows PowerShell 5.1 ships with every supported Windows and is what
+      # `irm | iex` runs under on a machine without PowerShell 7.
+      - name: Verify install.ps1 under Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          ./scripts/ci/verify-install-ps1.ps1 `
+            -ReleaseDirectory (Join-Path $env:GITHUB_WORKSPACE "dist/release-assets") `
+            -Version $env:RELEASE_VERSION `
+            -InstallDirectory (Join-Path $env:RUNNER_TEMP "vibe-install-5.1") `
+            -CompletionDirectory (Join-Path $env:RUNNER_TEMP "vibe-completions-5.1")

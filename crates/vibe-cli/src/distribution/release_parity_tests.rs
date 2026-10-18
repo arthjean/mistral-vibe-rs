@@ -49,8 +49,8 @@ const CI_WORKFLOW: &str = ".github/workflows/ci.yml";
 /// delivery path a Linux runner cannot execute.
 const WINDOWS_INSTALLER_JOB: &str = "windows-installer";
 
-/// The script that job runs. It drives `scripts/install.ps1` through the four
-/// paths a Windows installation takes.
+/// The script that job runs. It drives `scripts/install.ps1` through the paths
+/// a Windows installation takes, the user PATH update among them.
 const INSTALLER_VERIFICATION: &str = "scripts/ci/verify-install-ps1.ps1";
 
 /// The longest the Windows job may be allowed to run.
@@ -583,6 +583,22 @@ fn the_installer_verification_refuses_on_the_words_the_installer_throws() {
             "--version",
             "the verification must run the installed binary",
         ),
+        (
+            "VIBE_USER_ENVIRONMENT_KEY",
+            "the verification must hand the installer a scratch user PATH, never the real one",
+        ),
+        (
+            "Invoke-FreshShell",
+            "the verification must resolve vibe the way a new shell does, from the user PATH",
+        ),
+        (
+            "Get-InstallEntryCount",
+            "the verification must assert that a reinstall leaves the PATH entry single",
+        ),
+        (
+            "SetEnvironmentVariable('Path'",
+            "the verification must assert the manual command an unwritable PATH prints",
+        ),
     ];
     for (needle, why) in required {
         assert!(
@@ -590,6 +606,10 @@ fn the_installer_verification_refuses_on_the_words_the_installer_throws() {
             "{INSTALLER_VERIFICATION} is missing `{needle}`: {why}"
         );
     }
+    assert!(
+        installer.contains("$env:VIBE_USER_ENVIRONMENT_KEY"),
+        "scripts/install.ps1 must read the user PATH key the verification points at a scratch key"
+    );
 }
 
 /// Every binary a release archive carries. The reference publishes a third
