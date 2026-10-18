@@ -259,8 +259,6 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
 pub fn kill_tree(pid: u32) -> std::io::Result<()> {
     use std::os::windows::process::CommandExt as _;
 
-    /// `CREATE_NO_WINDOW`: a console-less host never flashes one for this.
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let program = std::env::var_os("SystemRoot").map_or_else(
         || std::path::PathBuf::from("taskkill.exe"),
         |root| {
@@ -274,7 +272,8 @@ pub fn kill_tree(pid: u32) -> std::io::Result<()> {
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
+        // A console-less host never flashes a window for this.
+        .creation_flags(crate::platform::CREATE_NO_WINDOW)
         .status()
         .map(drop)
 }

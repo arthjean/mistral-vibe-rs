@@ -9,6 +9,9 @@
 
 use std::sync::OnceLock;
 
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+use crate::platform::BackgroundCommand as _;
+
 /// Reference `get_platform_id`: the canonical lowercase platform identifier.
 /// Rust names macOS `macos` where the reference names it `darwin`, and agrees
 /// everywhere else.
@@ -82,6 +85,7 @@ fn resolve_platform_version() -> Option<String> {
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 fn command_output(program: &str, arguments: &[&str]) -> Option<String> {
     let output = std::process::Command::new(program)
+        .in_background()
         .args(arguments)
         .output()
         .ok()?;

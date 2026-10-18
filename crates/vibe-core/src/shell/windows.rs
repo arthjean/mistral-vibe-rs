@@ -787,7 +787,7 @@ pub(super) fn analyze_powershell(
     // The host environment with the call's overrides merged in: an override
     // replaces a variable spelled the same way in place, and the first entry
     // matching a name case-insensitively is the one read.
-    let mut environment = std::env::vars().collect::<Vec<_>>();
+    let mut environment = crate::platform::unicode_vars().collect::<Vec<_>>();
     for (key, value) in &context.environment {
         match environment.iter_mut().find(|(existing, _)| existing == key) {
             Some((_, slot)) => slot.clone_from(value),

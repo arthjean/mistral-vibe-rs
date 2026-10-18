@@ -31,6 +31,7 @@ use thiserror::Error;
 
 use crate::atomic_file::{self, AtomicWriteError, create_private_file, write_atomically};
 use crate::events::ModelMessage;
+use crate::platform::BackgroundCommand as _;
 use crate::text::hex_encode;
 
 mod canonical_json;
@@ -1796,6 +1797,7 @@ fn git_metadata(working_directory: &Path) -> (Option<String>, Option<String>) {
         return (None, None);
     }
     let output = std::process::Command::new("git")
+        .in_background()
         .args(["rev-parse", "HEAD", "--abbrev-ref", "HEAD"])
         .current_dir(working_directory)
         .stdin(std::process::Stdio::null())

@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt};
+use vibe_core::platform::BackgroundCommand as _;
 use vibe_core::tools::shell::HostShells;
 
 use crate::state::ToolResult;
@@ -84,6 +85,7 @@ async fn run(arguments: &Value, context: &ShellContext) -> Result<Value, String>
     let shell = context.host.command_shell(context.shell.as_deref(), &env)?;
     let mut process = tokio::process::Command::new(&shell.executable);
     process
+        .in_background()
         .args(&shell.arguments)
         .arg(&command)
         .current_dir(&context.cwd)
@@ -176,7 +178,7 @@ fn kill_group(pid: Option<u32>) {
 /// The environment a command sees: no terminal, no pager, no prompt.
 #[must_use]
 pub fn shell_env(extra: &BTreeMap<String, String>) -> BTreeMap<String, String> {
-    let mut env: BTreeMap<String, String> = std::env::vars().collect();
+    let mut env: BTreeMap<String, String> = vibe_core::platform::unicode_vars().collect();
     env.insert("CI".to_owned(), "true".to_owned());
     env.insert("NONINTERACTIVE".to_owned(), "1".to_owned());
     env.insert("NO_TTY".to_owned(), "1".to_owned());

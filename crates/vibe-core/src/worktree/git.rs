@@ -22,6 +22,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use super::WorktreeError;
+use crate::platform::BackgroundCommand as _;
 
 #[cfg(test)]
 mod git_tests;
@@ -147,6 +148,7 @@ pub(crate) fn output<'a>(
 pub(crate) fn command(executable: &Path, directory: &Path) -> Command {
     let mut command = Command::new(executable);
     command
+        .in_background()
         .arg("-C")
         .arg(directory)
         .args(["-c", "core.fsmonitor="])

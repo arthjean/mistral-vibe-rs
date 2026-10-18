@@ -54,7 +54,7 @@ impl ProductionAuthEnvironment {
         Self {
             env_file: vibe_core::config::global_env_file(&vibe_home),
             store,
-            initial_environment: std::env::vars().collect(),
+            initial_environment: vibe_core::platform::unicode_vars().collect(),
             overlay: Mutex::new(BTreeMap::new()),
             working_directory,
             vibe_home,
@@ -86,7 +86,7 @@ impl ProductionAuthEnvironment {
     }
 
     fn environ(&self) -> BTreeMap<String, String> {
-        let mut environ: BTreeMap<String, String> = std::env::vars().collect();
+        let mut environ: BTreeMap<String, String> = vibe_core::platform::unicode_vars().collect();
         if let Ok(overlay) = self.overlay.lock() {
             for (key, value) in overlay.iter() {
                 environ.insert(key.clone(), value.clone());

@@ -29,6 +29,7 @@ use regex::Regex;
 
 use super::WorktreeError;
 use super::git::{GitRepo, NO_HOOKS_PATH, search_trusted_path};
+use crate::platform::BackgroundCommand as _;
 
 /// How long a refresh may take before it is abandoned, which the reference
 /// bounds the same way (`vibe/core/git/repo.py:29,440-456`).
@@ -108,6 +109,7 @@ pub(crate) fn fetch_branch(
     let refspec = format!("+refs/heads/{branch}:refs/remotes/{remote}/{branch}");
     let mut command = Command::new(repo.executable());
     command
+        .in_background()
         .arg("-C")
         .arg(repo.working_dir())
         .args(["fetch", "--no-recurse-submodules", "--no-auto-maintenance"])
@@ -159,6 +161,7 @@ pub fn fetch_remote_heads(working_dir: &Path, remote: &str) -> Result<(), String
     let refspec = format!("+refs/heads/*:refs/remotes/{remote}/*");
     let mut command = Command::new(repo.executable());
     command
+        .in_background()
         .arg("-C")
         .arg(repo.working_dir())
         .args(["fetch", "--no-recurse-submodules", "--no-auto-maintenance"])
@@ -543,6 +546,7 @@ fn inspect_fetch_config(
         .map_err(|_| unreadable())?;
     let mut command = Command::new(repo.executable());
     command
+        .in_background()
         .arg(format!("--git-dir={git_dir}"))
         .arg(format!("--work-tree={}", project.display()))
         .args(["config", "--includes", "--show-scope", "--null", "--list"])
@@ -707,6 +711,7 @@ fn trusted_git_exec_path(executable: &Path) -> Result<String, UnsafeFetch> {
     }
     let mut command = Command::new(executable);
     command
+        .in_background()
         .arg("--exec-path")
         .env_remove("GIT_EXEC_PATH")
         .stdin(Stdio::null())

@@ -20,6 +20,8 @@ use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::{Duration, Instant};
 
+use crate::platform::BackgroundCommand as _;
+
 /// The ceiling reference `_fetch_git_status` puts on every call, whatever
 /// `project_context.timeout_seconds` says.
 const MAX_TIMEOUT_SECONDS: f64 = 10.0;
@@ -251,6 +253,7 @@ pub fn parse_git_log(output: &str) -> Vec<String> {
 /// running a command of its choosing, and waits for it up to `timeout`.
 fn run_git(git: &Path, root: &Path, arguments: &[&str], timeout: Duration) -> CallOutcome {
     let spawned = Command::new(git)
+        .in_background()
         .args(["-c", "core.fsmonitor=", "--no-optional-locks"])
         .args(arguments)
         .current_dir(root)

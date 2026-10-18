@@ -3,10 +3,14 @@ use std::path::{Component, Path};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod console;
 mod executables;
 mod home;
 mod paths;
 
+pub use console::{BackgroundCommand, unicode_vars};
+#[cfg(windows)]
+pub use console::{CREATE_NO_WINDOW, background_creation_flags};
 pub use executables::{executable_names, find_executable, is_executable_file, path_candidates};
 pub use home::{
     HomeNotFound, VIBE_HOME_ENV_VAR, expand_home, user_home, vibe_home, vibe_home_or_local,

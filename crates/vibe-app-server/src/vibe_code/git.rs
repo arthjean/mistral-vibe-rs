@@ -15,6 +15,7 @@ use std::time::Duration;
 
 use regex::Regex;
 use tokio::process::Command;
+use vibe_core::platform::BackgroundCommand as _;
 
 /// How long one git command may run. The reference runs its slow commands on
 /// an executor bounded the same way (`vibe/core/teleport/git.py:67`).
@@ -458,6 +459,7 @@ impl GitRepository {
     ) -> std::io::Result<Output> {
         let mut command = Command::new(&self.executable);
         command
+            .in_background()
             .args(arguments)
             .current_dir(&self.directory)
             .stdin(Stdio::null())

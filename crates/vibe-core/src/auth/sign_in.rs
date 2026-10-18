@@ -21,6 +21,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use sha2::{Digest, Sha256};
 
+use crate::platform::BackgroundCommand as _;
+
 /// Seconds between polls. The reference polls at 3.0 with no backoff, and the
 /// deviation from RFC 8628's 5-second recommendation is deliberate: a
 /// different interval issues a different number of requests over the same
@@ -490,6 +492,7 @@ pub fn browser_launch_candidates() -> &'static [(&'static str, &'static [&'stati
 
 pub(crate) fn launch_detached(program: &str, arguments: &[&str], url: &str) -> io::Result<()> {
     let mut child = Command::new(program)
+        .in_background()
         .args(arguments)
         .arg(url)
         .stdin(Stdio::null())

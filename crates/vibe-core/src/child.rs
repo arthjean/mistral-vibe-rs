@@ -96,7 +96,10 @@ impl ChildGroup {
         #[cfg(windows)]
         let mut child = {
             let mut group = command.group();
-            group.kill_on_drop(true);
+            // The group sets the creation flags itself, over any the command holds.
+            group
+                .kill_on_drop(true)
+                .creation_flags(crate::platform::background_creation_flags());
             group.spawn()?
         };
         let group = child.id().and_then(|id| i32::try_from(id).ok());

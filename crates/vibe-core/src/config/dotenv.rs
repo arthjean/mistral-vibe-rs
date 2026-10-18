@@ -96,7 +96,7 @@ impl DotenvValues {
     #[must_use]
     pub fn environment(&self) -> BTreeMap<String, String> {
         let mut merged = self.values.clone();
-        for (key, value) in std::env::vars() {
+        for (key, value) in crate::platform::unicode_vars() {
             if !value.is_empty() {
                 merged.insert(key, value);
             }

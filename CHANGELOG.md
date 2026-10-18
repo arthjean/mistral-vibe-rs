@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- On Windows, `vibe-acp` started by an editor with no console no longer opens
+  a console window for each shell, MCP server or git call it starts, and an
+  environment variable whose value is not valid Unicode no longer stops it, or
+  the shell tools, from starting.
+
 - On Windows, the composer accepts AltGr characters (`@ # { } [ ] | \ ~ €` on
   French AZERTY, `@ { }` on German QWERTZ), which Windows reports as
   `Ctrl+Alt` chords and the terminal used to swallow; `Ctrl+Alt` with a letter

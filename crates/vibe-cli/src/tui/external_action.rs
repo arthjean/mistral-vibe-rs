@@ -4,6 +4,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+use vibe_core::platform::BackgroundCommand as _;
 
 pub(super) const EXTERNAL_ACTION_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -34,6 +35,7 @@ async fn run_command_with_timeout(
     timeout: Duration,
 ) -> Result<(), ExternalActionError> {
     let mut child = Command::new(program)
+        .in_background()
         .args(arguments)
         .stdin(if input.is_some() {
             Stdio::piped()

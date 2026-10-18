@@ -217,7 +217,7 @@ fn process_environment(
             left == right
         }
     };
-    let mut merged: BTreeMap<String, String> = std::env::vars().collect();
+    let mut merged: BTreeMap<String, String> = vibe_core::platform::unicode_vars().collect();
     let defaults: &[(&str, &str)] = if environment == CommandEnvironment::PowerShell {
         &POWERSHELL_ENVIRONMENT
     } else {
