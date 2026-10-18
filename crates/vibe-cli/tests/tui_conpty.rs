@@ -369,6 +369,45 @@ fn typing_with_pauses_and_enter_submits_the_prompt() {
 }
 
 #[test]
+fn a_character_outside_the_basic_plane_reaches_the_composer() {
+    // The console host delivers U+1F642 as two key events, one per UTF-16
+    // surrogate, each pressed and released.
+    let text = "\u{e9} \u{fc} \u{6f22}\u{5b57} \u{1f642}";
+    let (_directory, mut console) = session(quoted_editor);
+    console.write(text.as_bytes());
+    assert_eq!(console.composer_text(), text);
+}
+
+/// Windows Terminal sends a character outside the basic plane, typed or picked
+/// from the emoji panel, as one win32-input-mode key per UTF-16 surrogate,
+/// each pressed then released. crossterm 0.29 pairs the release of the first
+/// half with its press and drops both (crossterm-rs/crossterm#1073).
+#[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: crossterm 0.29 pairs a surrogate's key release with its press and drops the character (US-023)"
+)]
+fn a_surrogate_pair_in_win32_input_mode_reaches_the_composer() {
+    let (_directory, mut console) = session(quoted_editor);
+    let mut sequence = Vec::new();
+    for unit in "\u{1f642}".encode_utf16() {
+        for down in [1, 0] {
+            sequence.extend(format!("\x1b[0;0;{unit};{down};0;1_").into_bytes());
+        }
+    }
+    console.write(&sequence);
+    assert_eq!(console.composer_text(), "\u{1f642}");
+}
+
+#[test]
+fn a_character_outside_the_basic_plane_typed_alone_reaches_the_composer() {
+    let text = "\u{e9} \u{fc} \u{6f22}\u{5b57} \u{1f642}";
+    let (_directory, mut console) = session(quoted_editor);
+    console.type_slowly(text);
+    assert_eq!(console.composer_text(), text);
+}
+
+#[test]
 fn a_dropped_windows_path_with_a_space_becomes_a_quoted_mention() {
     let (_directory, mut console) = session(quoted_editor);
     let image = console.workspace().join("image one.png");
