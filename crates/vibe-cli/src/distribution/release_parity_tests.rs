@@ -28,11 +28,12 @@ const VERSION_CARRIERS: [&str; 5] = [
 
 /// Release machinery that resolves the version at run time. A literal appearing
 /// here is a sixth copy the bump would not reach.
-const VERSION_FREE_SOURCES: [&str; 4] = [
+const VERSION_FREE_SOURCES: [&str; 5] = [
     ".github/workflows/release.yml",
     "scripts/ci/package-release.sh",
     CI_WORKFLOW,
     INSTALLER_VERIFICATION,
+    PROGRAMMATIC_SMOKE,
 ];
 
 /// The two scripts a user runs to install, both of which resolve a release
@@ -52,6 +53,10 @@ const WINDOWS_INSTALLER_JOB: &str = "windows-installer";
 /// The script that job runs. It drives `scripts/install.ps1` through the paths
 /// a Windows installation takes, the user PATH update among them.
 const INSTALLER_VERIFICATION: &str = "scripts/ci/verify-install-ps1.ps1";
+
+/// The programmatic turn the release smoke job runs against a local stub
+/// backend once a published package is installed.
+const PROGRAMMATIC_SMOKE: &str = "scripts/ci/smoke-programmatic.py";
 
 /// The longest the Windows job may be allowed to run.
 const WINDOWS_INSTALLER_BUDGET_MINUTES: u32 = 20;
@@ -609,6 +614,50 @@ fn the_installer_verification_refuses_on_the_words_the_installer_throws() {
     assert!(
         installer.contains("$env:VIBE_USER_ENVIRONMENT_KEY"),
         "scripts/install.ps1 must read the user PATH key the verification points at a scratch key"
+    );
+}
+
+#[test]
+fn the_release_smoke_job_runs_every_installed_package_through_a_programmatic_turn() {
+    // The smoke job is the only check a published release gets, and it runs on
+    // a tag push alone, so its shape is asserted where every change can see it.
+    let job = workflow_job(&read(RELEASE_WORKFLOW), "smoke");
+    let required = [
+        (
+            "- target: windows-x86_64",
+            "the windows-x86_64 package must be installed from the published release",
+        ),
+        (
+            "runner: windows-2022",
+            "the Windows package must be smoke-tested on a Windows runner",
+        ),
+        (
+            "./scripts/install.ps1",
+            "the Windows leg must install through install.ps1",
+        ),
+        (
+            "sh scripts/install.sh",
+            "the POSIX legs must install through install.sh",
+        ),
+        ("--version", "every leg must run the installed binary"),
+        (
+            "GetEnvironmentVariable(\"Path\", \"User\")",
+            "the Windows leg must resolve vibe from the user PATH a new shell starts with",
+        ),
+        (
+            PROGRAMMATIC_SMOKE,
+            "every leg must run one programmatic turn against a local stub backend",
+        ),
+    ];
+    for (needle, why) in required {
+        assert!(
+            job.contains(needle),
+            "{RELEASE_WORKFLOW} job smoke is missing `{needle}`: {why}"
+        );
+    }
+    assert!(
+        repo_root().join(PROGRAMMATIC_SMOKE).is_file(),
+        "{RELEASE_WORKFLOW} runs {PROGRAMMATIC_SMOKE}, which this repository does not publish"
     );
 }
 

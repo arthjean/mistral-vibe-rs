@@ -8,6 +8,9 @@
   user `PATH` cannot be written, the installer prints the command that adds it
   and exits non-zero.
 
+- Every release now installs the `windows-x86_64` package in its smoke job and
+  runs one `vibe -p` turn against a local stub backend on each platform.
+
 - On Windows, text copied from the TUI pastes back unchanged: accented, CJK
   and emoji text used to arrive as mojibake, because `clip.exe` read it in the
   console code page.

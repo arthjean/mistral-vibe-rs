@@ -175,8 +175,13 @@ jobs:
         include:
           - target: linux-x86_64
             runner: ubuntu-24.04
+            python: python3
           - target: macos-aarch64
             runner: macos-15
+            python: python3
+          - target: windows-x86_64
+            runner: windows-2022
+            python: python
     env:
       VIBE_INSTALL_DIR: ${{ github.workspace }}/installed/bin
       VIBE_COMPLETION_DIR: ${{ github.workspace }}/installed/completions
@@ -187,10 +192,36 @@ jobs:
       # No `VIBE_RELEASE_BASE_URL`: this resolves the committed default, which is
       # the path a reader of the README actually takes.
       - name: Install with the committed default release base
+        if: ${{ !startsWith(matrix.target, 'windows-') }}
         run: sh scripts/install.sh
+      - name: Install with the committed default release base
+        if: startsWith(matrix.target, 'windows-')
+        shell: pwsh
+        run: ./scripts/install.ps1
       - name: Verify the installed binaries
+        shell: bash
         env:
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
         run: |
           "${VIBE_INSTALL_DIR}/vibe" --version | grep -F "${RELEASE_VERSION}"
           "${VIBE_INSTALL_DIR}/vibe-acp" --help > /dev/null
+      # A step inherits the runner's environment, not the user PATH the
+      # installer wrote, so the PATH a new shell would start with is composed
+      # from the registry the way Explorer composes it.
+      - name: Resolve vibe from the user PATH in a new shell
+        if: startsWith(matrix.target, 'windows-')
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+          $user = [Environment]::GetEnvironmentVariable("Path", "User")
+          $env:Path = "$machine;$user"
+          $resolved = (Get-Command vibe -CommandType Application).Source
+          $expected = Join-Path ([System.IO.Path]::GetFullPath($env:VIBE_INSTALL_DIR)) "vibe.exe"
+          if ($resolved -ne $expected) { throw "a new shell resolves vibe to $resolved rather than $expected" }
+          $reported = (pwsh -NoProfile -Command "vibe --version") -join " "
+          if (-not $reported.Contains($env:RELEASE_VERSION)) { throw "vibe --version printed '$reported'" }
+      - name: Run one programmatic turn against a local stub backend
+        shell: bash
+        run: ${{ matrix.python }} scripts/ci/smoke-programmatic.py "${VIBE_INSTALL_DIR}/vibe"
