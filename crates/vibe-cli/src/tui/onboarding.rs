@@ -183,14 +183,7 @@ pub async fn run_onboarding(
     let workspace = startup::startup_host(arguments, working_directory)
         .into_workspace(arguments.trust)
         .map_err(startup::StartupError::from)?;
-    // Reference `OnboardingContext.load` falls back to the shipped defaults
-    // rather than failing when the configuration cannot be read.
-    let document = workspace.config_document().ok();
-    let context = OnboardingContext::from_effective_config(
-        document
-            .as_ref()
-            .and_then(|document| document.get("config")),
-    );
+    let context = onboarding_context(&workspace);
     let telemetry = crate::telemetry_observer(arguments, &workspace).ok();
     let mut ports = ProductionPorts {
         store: credential_store,
@@ -210,6 +203,22 @@ pub async fn run_onboarding(
         Some(code) => OnboardingConclusion::Exit(code),
         None => OnboardingConclusion::Continue,
     })
+}
+
+/// The context the screens run on, read from the workspace's configuration.
+///
+/// Reference `OnboardingContext.load` falls back to the shipped defaults
+/// rather than failing when the configuration cannot be read. The effective
+/// table is read unredacted: the public view redacts `api_key_env_var`, and
+/// the key would be persisted under `[redacted]` instead of the variable
+/// startup resolves.
+fn onboarding_context(workspace: &WorkspaceService) -> OnboardingContext {
+    let config = workspace
+        .layered_config()
+        .load()
+        .ok()
+        .and_then(|snapshot| serde_json::to_value(snapshot.effective).ok());
+    OnboardingContext::from_effective_config(config.as_ref())
 }
 
 fn global_env_file(vibe_home: &Path) -> PathBuf {

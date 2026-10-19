@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Onboarding saves the API key under the variable the provider names. It used
+  to save it, typed or from a browser sign-in, under `[redacted]`, so the next
+  launch found no key and the session never started; run setup again to store
+  it correctly.
+
 - On Windows, `install.ps1` adds the install directory to the user `PATH`,
   once, keeping the entries already there and their `%VAR%` references, so
   `vibe` resolves in any new terminal; `-Uninstall` removes the entry. When the

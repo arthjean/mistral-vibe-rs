@@ -120,3 +120,31 @@ fn the_configured_custom_domain_ignores_the_shipped_default() {
         Some("https://console.internal.example")
     );
 }
+
+/// The screens persist the key under the variable the active provider names,
+/// and startup resolves it under that same name. Reading the redacted public
+/// view instead turned `api_key_env_var` into `[redacted]`, so the saved key
+/// was never found and the session never started.
+#[test]
+fn the_workspace_context_keeps_the_provider_key_variable_unredacted() {
+    let temporary = tempfile::tempdir().expect("a temporary vibe home");
+    let vibe_home = temporary.path().join("vibe-home");
+    std::fs::create_dir_all(&vibe_home).expect("the vibe home is created");
+    let workspace = vibe_app_server::workspace::WorkspaceService::new(
+        vibe_app_server::workspace::WorkspacePaths {
+            session_root: vibe_home.join("sessions"),
+            working_directory: temporary.path().join("workspace"),
+            vibe_home,
+        },
+        true,
+    )
+    .expect("the workspace service builds");
+    let context = super::onboarding_context(&workspace);
+    assert_eq!(
+        context
+            .provider
+            .get("api_key_env_var")
+            .and_then(Value::as_str),
+        Some("MISTRAL_API_KEY")
+    );
+}
