@@ -12,7 +12,7 @@
     {"id": "EP-004", "title": "Process Execution on Windows", "status": "DONE", "priority": "P0", "stories_total": 3, "stories_done": 3},
     {"id": "EP-005", "title": "TUI Input on Windows", "status": "DONE", "priority": "P0", "stories_total": 4, "stories_done": 4},
     {"id": "EP-006", "title": "Windows Distribution and Polish", "status": "DONE", "priority": "P1", "stories_total": 3, "stories_done": 3},
-    {"id": "EP-007", "title": "Linux Non-Regression", "status": "TODO", "priority": "P0", "stories_total": 1, "stories_done": 0}
+    {"id": "EP-007", "title": "Linux Non-Regression", "status": "DONE", "priority": "P0", "stories_total": 1, "stories_done": 1}
   ],
   "stories": [
     {"id": "US-001", "title": "Pin line endings in the repository", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "S", "blocked_by": [], "started_at": "2026-10-15", "completed_at": "2026-10-16", "reviewed_at": "2026-10-16"},
@@ -40,6 +40,6 @@
     {"id": "US-022", "title": "Ship and smoke-test the Windows package", "epic": "EP-006", "status": "DONE", "priority": "P1", "size": "M", "blocked_by": ["US-007"], "started_at": "2026-10-18", "completed_at": "2026-10-18", "reviewed_at": "2026-10-18"},
     {"id": "US-023", "title": "Copy Unicode text to the Windows clipboard", "epic": "EP-006", "status": "DONE", "priority": "P2", "size": "S", "blocked_by": [], "started_at": "2026-10-18", "completed_at": "2026-10-19", "reviewed_at": "2026-10-19"},
     {"id": "US-024", "title": "Harden vibe-acp children and environment on Windows", "epic": "EP-006", "status": "DONE", "priority": "P2", "size": "S", "blocked_by": [], "started_at": "2026-10-18", "completed_at": "2026-10-18", "reviewed_at": "2026-10-18"},
-    {"id": "US-026", "title": "Verify Linux behavior after the Windows epics", "epic": "EP-007", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-015", "US-016", "US-017", "US-018", "US-019", "US-020", "US-021", "US-022", "US-023", "US-024"], "started_at": null, "completed_at": null, "reviewed_at": null}
+    {"id": "US-026", "title": "Verify Linux behavior after the Windows epics", "epic": "EP-007", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-015", "US-016", "US-017", "US-018", "US-019", "US-020", "US-021", "US-022", "US-023", "US-024"], "started_at": "2026-10-19", "completed_at": "2026-10-19", "reviewed_at": "2026-10-19"}
   ]
 }
