@@ -830,6 +830,58 @@ fn a_submitted_command_line_is_echoed_in_the_running_tui() {
     assert!(status.success(), "the TUI did not quit cleanly: {status}");
 }
 
+/// US-026: a bracketed paste reaches the composer whole off Windows, where the
+/// key-burst reader of US-019 stays disabled. The external editor receives the
+/// prompt as it stands, so the copy it writes is the composer's exact text, and
+/// a line break that had submitted would have left it holding the last line.
+#[test]
+fn a_bracketed_paste_keeps_its_lines_and_submits_nothing() {
+    let temporary = tempfile::tempdir().expect("temporary TUI home");
+    let workspace = temporary.path().join("workspace");
+    let home = temporary.path().join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&home).expect("home");
+    let captured = temporary.path().join("captured.md");
+    let editor = temporary.path().join("editor.sh");
+    std::fs::write(
+        &editor,
+        format!("#!/bin/sh\ncp \"$1\" '{}'\n", captured.display()),
+    )
+    .expect("editor script");
+    std::fs::set_permissions(&editor, std::fs::Permissions::from_mode(0o755))
+        .expect("editor is executable");
+    let mut process = PtyProcess::spawn_with_environment(
+        &workspace,
+        &home,
+        &["--trust", "--api-base", "http://127.0.0.1:9/v1"],
+        &[("EDITOR", editor.to_string_lossy().into_owned())],
+    );
+    process.wait_for_visible("Type /help for more information", STEP);
+
+    process.write(b"\x1b[200~first\nsecond\nthird\x1b[201~");
+    process.wait_for_visible("third", STEP);
+    process.write(b"\x07");
+    let deadline = Instant::now() + STEP;
+    let composer = loop {
+        if let Ok(text) = std::fs::read_to_string(&captured) {
+            break text;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the editor never received the prompt"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(composer, "first\nsecond\nthird");
+
+    process.write(b"\x03");
+    process.write(b"\x04");
+    process.wait_for_visible("Press Ctrl+D again to quit", STEP);
+    process.write(b"\x04");
+    let (status, _) = process.wait(STEP);
+    assert!(status.success(), "the TUI did not quit cleanly: {status}");
+}
+
 #[test]
 fn sigint_after_mount_restores_terminal() {
     let temporary = tempfile::tempdir().expect("temporary TUI home");
