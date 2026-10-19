@@ -240,7 +240,9 @@ impl HostShells {
     ///
     /// # Errors
     ///
-    /// When no shell resolves, naming the configured one or the ones searched.
+    /// When no shell resolves: on Windows naming the configured one or the
+    /// ones searched, on POSIX with the reference backend's own sentence,
+    /// which names neither and which `file_system.bash` reports as it is.
     pub fn command_shell(
         &self,
         configured: Option<&str>,
@@ -331,7 +333,8 @@ impl CommandEnvironment {
 }
 
 /// Reference `PosixTerminalBackend.resolve_shell`: the configured shell, else
-/// zsh, bash and sh on `PATH`, else at their usual absolute places.
+/// zsh, bash and sh on `PATH`, else at their usual absolute places, failing
+/// with that backend's sentences.
 fn posix_command_shell(
     configured: Option<&str>,
     environment: &BTreeMap<String, String>,
@@ -349,8 +352,7 @@ fn posix_command_shell(
             .find(|candidate| is_executable_file(candidate))
     };
     if let Some(configured) = configured {
-        return which(configured)
-            .ok_or_else(|| format!("configured shell is not executable: {configured}"));
+        return which(configured).ok_or_else(|| "configured shell is not executable".to_owned());
     }
     ["zsh", "bash", "sh"]
         .into_iter()
@@ -368,7 +370,7 @@ fn posix_command_shell(
             .map(PathBuf::from)
             .find(|candidate| is_executable_file(candidate))
         })
-        .ok_or_else(|| "no POSIX shell found; tried zsh, bash, sh".to_owned())
+        .ok_or_else(|| "no POSIX shell found".to_owned())
 }
 
 /// Reference `get_windows_bash_path`.

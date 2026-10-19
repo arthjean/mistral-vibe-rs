@@ -501,8 +501,17 @@ impl ProcessManager {
         {
             Ok(shell) => shell,
             // The reference's message carries no reason; naming the shell that
-            // was tried is this port's addition (`docs/parity.md`).
+            // was tried is this port's addition (`docs/parity.md`). The POSIX
+            // reason is the reference backend's sentence, which names neither.
             Err(reason) => {
+                let configured = shell.shell.as_deref().filter(|value| !value.is_empty());
+                let reason = match (shell.host.command_environment(), configured) {
+                    (CommandEnvironment::Unix, Some(configured)) => {
+                        format!("{reason}: {configured}")
+                    }
+                    (CommandEnvironment::Unix, None) => format!("{reason}; tried zsh, bash, sh"),
+                    _ => reason,
+                };
                 return failure(
                     "process_start_failed",
                     &format!("Background process could not be started: {reason}"),

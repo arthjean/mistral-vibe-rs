@@ -158,7 +158,8 @@ fn a_configured_shell_that_does_not_exist_fails_the_start_naming_it() {
     );
     assert!(message.contains(&missing), "{message}");
     // The shell tool resolves through the same ladder and refuses the same
-    // path.
+    // path, which off Windows it reports as reference
+    // `PosixTerminalBackend.resolve_shell` words it, naming no path.
     let refused = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -170,7 +171,11 @@ fn a_configured_shell_that_does_not_exist_fails_the_start_naming_it() {
     let ToolResult::Failure { message, .. } = refused else {
         unreachable!("the shell tool cannot run under a missing shell");
     };
-    assert!(message.contains(&missing), "{message}");
+    if cfg!(windows) {
+        assert!(message.contains(&missing), "{message}");
+    } else {
+        assert_eq!(message, "configured shell is not executable");
+    }
 }
 
 #[cfg(windows)]
