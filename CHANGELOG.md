@@ -41,6 +41,13 @@
   resolve now fails naming it. Manual `!` commands also prefer Git Bash over
   `cmd.exe`.
 
+- On Linux and macOS, the Unified Harness shell tool and `process.*` read the
+  `shell` key of the `bash` tool, as the reference does, where they used to
+  ignore it; a background process whose shell does not resolve fails naming
+  it. On every platform, an external editor that cannot start is named on the
+  diagnostics line, and an environment variable whose name or value is not
+  valid Unicode is left out of a child's environment instead of panicking.
+
 - On Windows, terminal sessions no longer stall on ConPTY's startup cursor
   request, return everything the command wrote without the console's own
   escape sequences, and end the command's background jobs when they are
