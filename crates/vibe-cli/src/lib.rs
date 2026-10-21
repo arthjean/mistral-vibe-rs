@@ -15,6 +15,7 @@ pub mod distribution;
 pub mod mcp_command;
 mod programmatic;
 pub mod tui;
+pub mod update_notifier;
 
 use std::collections::BTreeMap;
 use std::io::Write;

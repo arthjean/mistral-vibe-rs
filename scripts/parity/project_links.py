@@ -4,7 +4,7 @@
 Every scenario serves an app server over stdio in a fresh home, with a set of
 directories laid out beside its workspace (plain directories, Git checkouts in
 several states, a bare repository, a file), behind the scripted stand-in
-``scripts/parity/teleport.py`` already plays for the Vibe Code projects
+``scripts/parity/vibe_code.py`` plays for the Vibe Code projects
 endpoint. It drives the nine ``projectLinks/*`` methods row 25 of
 ``docs/parity.md`` is about, and reads back the link store they share with
 the ``vibeCode/projects/*`` picker, ``projects.toml`` under the vibe home.

@@ -30,6 +30,6 @@ pub use auth::{
 pub use client_tools::{AcpClientFuture, AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEOUT};
 pub use protocol::{
     ACP_PROTOCOL_VERSION, AcpError, AcpForkSession, AcpInitializeRequest, AcpListSessions,
-    AcpLoadSession, AcpLoadedSession, AcpNewSession, AcpSessionUpdate,
+    AcpLoadSession, AcpNewSession, AcpSessionUpdate,
 };
 pub use router::Followups;

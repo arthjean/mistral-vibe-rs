@@ -53,7 +53,7 @@ impl ConfigSnapshot {
             "activeModelPinned": self.active_model_pinned(),
             "imagesSupported": images_supported,
             "awaitingExperimentModel": self.awaiting_experiment_model,
-            "defaultModelAlias": super::effective::default_model_alias(&self.effective)
+            "defaultModelAlias": super::models::default_model_alias(&self.effective)
                 .unwrap_or(super::registry::DEFAULT_ACTIVE_MODEL_ALIAS),
             "defaultAgent": self.string_field("default_agent", "accept-edits"),
             "theme": self.string_field("theme", "default"),
@@ -217,33 +217,18 @@ impl ConfigSnapshot {
             .map(ToOwned::to_owned)
     }
 
-    /// The active model entry, keyed by the alias the active model resolves to.
+    /// The active model entry, carrying the alias the active model resolves to.
     ///
-    /// `models` is written as an array and read back keyed by alias, so both
-    /// forms are resolved here rather than at every call site, and so is the
-    /// unpinned sentinel the merged document carries.
+    /// Both persisted forms of `models` and the unpinned sentinel the merged
+    /// document carries are resolved by [`super::models::active_model_entry`],
+    /// the one lookup every reader of the active model shares.
     pub(super) fn active_model(&self) -> Option<Table> {
         let alias = self.active_model_alias()?;
-        match self.effective.get("models") {
-            Some(Value::Table(models)) => {
-                models
-                    .get(alias)
-                    .and_then(Value::as_table)
-                    .cloned()
-                    .map(|mut entry| {
-                        entry
-                            .entry("alias".to_owned())
-                            .or_insert_with(|| Value::String(alias.to_owned()));
-                        entry
-                    })
-            }
-            Some(Value::Array(models)) => models
-                .iter()
-                .filter_map(Value::as_table)
-                .find(|entry| entry.get("alias").and_then(Value::as_str) == Some(alias))
-                .cloned(),
-            _ => None,
-        }
+        let mut entry = super::models::active_model_entry(&self.effective)?.clone();
+        entry
+            .entry("alias".to_owned())
+            .or_insert_with(|| Value::String(alias.to_owned()));
+        Some(entry)
     }
 
     fn active_model_view(&self) -> JsonValue {
@@ -312,14 +297,14 @@ impl ConfigSnapshot {
         };
         match models {
             Value::Table(models) => {
-                let order = super::effective::model_order(&self.layer_values);
+                let order = super::models::model_order(&self.layer_values);
                 let rank = |alias: &str| {
                     order
                         .iter()
                         .position(|declared| declared == alias)
                         .unwrap_or(order.len())
                 };
-                let available = super::effective::available_model_aliases(&self.effective);
+                let available = super::models::available_model_aliases(&self.effective);
                 let mut entries = models
                     .iter()
                     .filter(|(alias, _)| available.contains(&alias.as_str()))

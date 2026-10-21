@@ -5,6 +5,7 @@
 //! is a property of the running process, so the layer is proved through the real
 //! load rather than through a fixture file.
 
+use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::registry::default_document;

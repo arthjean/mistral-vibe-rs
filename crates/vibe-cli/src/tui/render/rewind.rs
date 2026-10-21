@@ -1,9 +1,8 @@
+use super::overlays::{draw_panel, panel_area, panel_width};
 use super::*;
 
 pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: ResolvedTheme) {
-    let outer = frame.area();
-    let width = outer.width.saturating_sub(4).clamp(1, 86);
-    let inner_width = usize::from(width.saturating_sub(4).max(1));
+    let (width, inner_width) = panel_width(frame.area(), 86);
     let target = rewind.target();
     let (position, count) = rewind.target_position();
     let mut lines = Vec::new();
@@ -65,31 +64,12 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
         .iter()
         .map(|line| line.width().max(1).div_ceil(inner_width.max(1)))
         .sum::<usize>();
-    let content_height = u16::try_from(visual_rows)
-        .unwrap_or(u16::MAX)
-        .saturating_add(2);
-    let height = content_height.min(outer.height.saturating_sub(2).max(1));
-    let area = Rect::new(
-        outer
-            .x
-            .saturating_add(outer.width.saturating_sub(width) / 2),
-        outer
-            .y
-            .saturating_add(outer.height.saturating_sub(height) / 2),
+    let area = panel_area(
+        frame.area(),
         width,
-        height,
+        u16::try_from(visual_rows)
+            .unwrap_or(u16::MAX)
+            .saturating_add(2),
     );
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Edit an earlier message ")
-                    .padding(Padding::horizontal(1))
-                    .style(theme.base()),
-            )
-            .wrap(Wrap { trim: false }),
-        area,
-    );
+    draw_panel(frame, area, "Edit an earlier message", lines, theme);
 }

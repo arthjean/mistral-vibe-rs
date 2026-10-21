@@ -47,12 +47,13 @@ use crate::experiments::{
     BUCKETING_KEY_LENGTH, EVAL_CACHE_FILE_NAME, EVAL_CACHE_TTL, EVAL_PATH_TEMPLATE,
     EVAL_REQUEST_TIMEOUT, EXPERIMENT_IDENTITY_TIMEOUT, EvalCache, EvalPayload, EvalResponse,
     ExperimentAttributes, ExperimentManager, ExperimentName, ExperimentSurface, FeatureDefinition,
-    JsonValue, OrderedMap, PlanSources, RemoteEvalClient, build_attributes, build_eval_url,
-    hash_api_key, hydrate_experiments_from_session, initialize_experiments,
+    PlanSources, RemoteEvalClient, build_attributes, build_eval_url, hash_api_key,
+    hydrate_experiments_from_session, initialize_experiments,
 };
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::pycompat::{Dumps, dumps};
 use crate::telemetry::{
     ExperimentAssignment, HARNESS_LEGACY, LaunchContext, platform_arch, platform_id, version,
 };
@@ -252,12 +253,6 @@ fn corpus_text() -> String {
         .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()))
 }
 
-/// The corpus with every object key in the order the capture wrote it, which is
-/// what an input carrying a wire order is read from. See [`Case`].
-fn ordered_corpus(raw: &str) -> JsonValue {
-    serde_json::from_str(raw).expect("the experiments corpus parses in order")
-}
-
 fn corpus() -> Map<String, Value> {
     let raw = corpus_text();
     let parsed: Value = serde_json::from_str(&raw).expect("the experiments corpus parses");
@@ -434,27 +429,26 @@ fn sentinel_variable(value: &str) -> Option<&'static str> {
         .map(|(name, _)| name)
 }
 
-/// One case, as the corpus object the answers are compared against and as the
-/// ordered value its inputs were written in.
+/// One case, as the corpus object its inputs are read from and its answers
+/// compared against.
 ///
-/// Both readings are needed. The comparison machinery works on
-/// [`serde_json::Value`], whose objects are sorted, which is harmless for an
-/// answer because a map compares the same either way. An *input* is different:
-/// an eval response is re-serialized on the way into this build, and a variant
-/// resolving to an object answers the text of that serialization, so the order
-/// the capture wrote is part of the question.
+/// The object keeps every key in the order the capture wrote it, because the
+/// workspace builds `serde_json` with `preserve_order`. An answer compares the
+/// same either way, but an *input* does not: an eval response is re-serialized
+/// on the way into this build, and a variant resolving to an object answers the
+/// text of that serialization, so the order the capture wrote is part of the
+/// question.
 struct Case<'a> {
     id: &'a str,
     object: &'a Map<String, Value>,
-    ordered: &'a JsonValue,
 }
 
 impl Case<'_> {
     /// One input field as the JSON text it was written as, keys in order, or
     /// [`None`] when the field is absent or null.
     fn input_text(&self, field: &str) -> Option<String> {
-        let value = self.ordered.as_object()?.get(field)?;
-        (!value.is_null()).then(|| value.python_json())
+        let value = self.object.get(field)?;
+        (!value.is_null()).then(|| dumps(value, Dumps::DEFAULT))
     }
 
     /// One input field as a string.
@@ -503,11 +497,6 @@ fn answered(field: &str, value: Value) -> Map<String, Value> {
     answers
 }
 
-/// A [`JsonValue`] as the value the comparison works on.
-fn as_value(value: &JsonValue) -> Value {
-    serde_json::to_value(value).unwrap_or(Value::Null)
-}
-
 /// A map keyed by experiment name, which is the shape several families answer.
 fn by_experiment<F: Fn(ExperimentName) -> Value>(answer: F) -> Value {
     Value::Object(
@@ -528,7 +517,7 @@ fn constants_answer(case: &str) -> Option<Map<String, Value>> {
                 .map(|name| Value::String(name.key().to_owned()))
                 .collect(),
         ),
-        "defaultVariants" => by_experiment(|name| as_value(&name.default_variant())),
+        "defaultVariants" => by_experiment(ExperimentName::default_variant),
         // The reference ties its names to its defaults with a module-level
         // assertion. Here `default_variant` is an exhaustive match, so a name
         // added without a default does not compile and this answer is a
@@ -916,8 +905,8 @@ fn eval_failures_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
                 .map_or(0, |recorder| recorder.request_count()),
         ),
     );
-    let variants = by_experiment(|name| as_value(&manager.variant(name)));
-    let defaults = by_experiment(|name| as_value(&name.default_variant()));
+    let variants = by_experiment(|name| manager.variant(name));
+    let defaults = by_experiment(ExperimentName::default_variant);
     answers.insert(
         "variantsAreDefaults".to_owned(),
         Value::Bool(variants == defaults),
@@ -929,7 +918,7 @@ fn eval_failures_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
     );
     answers.insert(
         "configVariants".to_owned(),
-        as_value(&JsonValue::Object(manager.config_variants())),
+        Value::Object(manager.config_variants()),
     );
 
     // The same scenario a second time, through the seam that hands the failure
@@ -981,7 +970,7 @@ fn authored_feature(case: &Case<'_>, field: &str) -> FeatureDefinition {
 
 fn feature_resolution_answer(case: &Case<'_>) -> Map<String, Value> {
     let definition = authored_feature(case, "definition");
-    answered("resolved", as_value(definition.resolved_value()))
+    answered("resolved", definition.resolved_value().clone())
 }
 
 // -- variantResolution, configVariants and variantLabels ------------------
@@ -1048,22 +1037,22 @@ fn variant_resolution_answer(case: &Case<'_>) -> Map<String, Value> {
     answers.insert(
         "knownFeatures".to_owned(),
         manager.export_state().map_or(Value::Null, |state| {
-            let mut keys = state.features.keys().map(str::to_owned).collect::<Vec<_>>();
+            let mut keys = state
+                .features
+                .iter()
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
             keys.sort();
             Value::Array(keys.into_iter().map(Value::String).collect())
         }),
     );
     answers.insert(
         "variants".to_owned(),
-        by_experiment(|name| as_value(&manager.variant(name))),
+        by_experiment(|name| manager.variant(name)),
     );
     answers.insert(
         "variantsOrNone".to_owned(),
-        by_experiment(|name| {
-            manager
-                .variant_or_none(name)
-                .map_or(Value::Null, |value| as_value(&value))
-        }),
+        by_experiment(|name| manager.variant_or_none(name).unwrap_or(Value::Null)),
     );
     answers
 }
@@ -1077,7 +1066,7 @@ fn config_variants_answer(case: &Case<'_>) -> Map<String, Value> {
     );
     answers.insert(
         "configVariants".to_owned(),
-        as_value(&JsonValue::Object(manager.config_variants())),
+        Value::Object(manager.config_variants()),
     );
     answers
 }
@@ -1116,11 +1105,10 @@ fn prompt_resolves(prompt_id: &str) -> bool {
 
 /// The configuration variants one case is driven over, typed and in the order
 /// the capture wrote them.
-fn case_variants(case: &Case<'_>) -> OrderedMap<JsonValue> {
-    case.ordered
-        .as_object()
-        .and_then(|fields| fields.get("variants"))
-        .and_then(JsonValue::as_object)
+fn case_variants(case: &Case<'_>) -> Map<String, Value> {
+    case.object
+        .get("variants")
+        .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default()
 }
@@ -1817,12 +1805,11 @@ fn eval_cache_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value> {
             // The body in the order the capture wrote it, which is the order
             // the stored payload keeps.
             let body = case
-                .ordered
-                .as_object()
-                .and_then(|fields| fields.get("response"))
-                .and_then(JsonValue::as_object)
+                .object
+                .get("response")
+                .and_then(Value::as_object)
                 .and_then(|response| response.get("body"))
-                .map(JsonValue::python_json)
+                .map(|body| dumps(body, Dumps::DEFAULT))
                 .unwrap_or_default();
             let outcome = match scenario.get("status").and_then(Value::as_u64) {
                 Some(status) => Outcome::Answer {
@@ -1914,7 +1901,6 @@ fn without_reference_nulls(value: &Value) -> Value {
 /// Replays one family, comparing every answer field of every case.
 fn run_family(
     corpus: &Map<String, Value>,
-    ordered: &JsonValue,
     family: &Family,
     runtime: &Runtime,
     report: &mut Report,
@@ -1925,15 +1911,7 @@ fn run_family(
         .chain(family.answers.iter())
         .copied()
         .collect::<BTreeSet<_>>();
-    let ordered_cases = ordered
-        .as_object()
-        .and_then(|corpus| corpus.get(family.name))
-        .and_then(|cases| match cases {
-            JsonValue::Array(items) => Some(items),
-            _ => None,
-        })
-        .unwrap_or_else(|| panic!("the ordered corpus carries the {} family", family.name));
-    for (position, case) in cases(corpus, family.name).iter().enumerate() {
+    for case in cases(corpus, family.name) {
         let object = case
             .as_object()
             .unwrap_or_else(|| panic!("{} cases are objects", family.name));
@@ -1950,23 +1928,10 @@ fn run_family(
             case_id(case),
             carried.difference(&declared).collect::<Vec<_>>()
         );
-        let ordered_case = ordered_cases
-            .get(position)
-            .unwrap_or_else(|| panic!("the two readings of {} agree in length", family.name));
         let identifier = case_id(case);
-        assert_eq!(
-            ordered_case
-                .as_object()
-                .and_then(|entry| entry.get("id"))
-                .and_then(JsonValue::as_str),
-            Some(identifier),
-            "the two readings of {} agree case by case",
-            family.name
-        );
         let read = Case {
             id: identifier,
             object,
-            ordered: ordered_case,
         };
         let answers = port_case(family.name, &read, runtime);
         for field in family.answers {
@@ -2095,8 +2060,6 @@ fn a_reference_null_compares_equal_to_the_absent_key_toml_leaves() {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
-    let raw = corpus_text();
-    let ordered = ordered_corpus(&raw);
     let corpus = corpus();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()
@@ -2112,7 +2075,7 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for family in FAMILIES {
         let mut report = Report::default();
-        run_family(&corpus, &ordered, family, &runtime, &mut report);
+        run_family(&corpus, family, &runtime, &mut report);
         let total = settle(&report, family.name);
         counts.insert(family.name, total);
         comparisons += total;

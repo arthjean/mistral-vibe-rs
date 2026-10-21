@@ -39,18 +39,35 @@ pub(in crate::tui) fn copy_text_verified(text: &str) -> bool {
 }
 
 fn copy_verified_through(commands: &[(&str, &[&str])], text: &str) -> bool {
-    if text.is_empty() {
-        return false;
+    !text.is_empty() && settle_copy(text, copy_natively(commands, text)).unwrap_or(false)
+}
+
+/// The rest of reference `copy_to_clipboard` once the platform commands
+/// answered whether one took the text: the OSC 52 escape is written either
+/// way, and the copy failed only when neither route took it.
+fn settle_copy(text: &str, verified: bool) -> Result<bool, ClipboardError> {
+    let escape = write_osc52(text);
+    if verified {
+        Ok(true)
+    } else {
+        escape.map(|()| false)
     }
-    let ssh = ["SSH_CONNECTION", "SSH_TTY"]
+}
+
+/// Reference `_is_ssh_session`, where no platform command is tried: the
+/// clipboard it reaches is the remote host's, not the operator's.
+fn is_ssh_session() -> bool {
+    ["SSH_CONNECTION", "SSH_TTY"]
         .into_iter()
-        .any(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()));
-    let verified = !ssh
+        .any(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
+}
+
+/// Whether one of `commands`, tried in turn, took `text`.
+fn copy_natively(commands: &[(&str, &[&str])], text: &str) -> bool {
+    !is_ssh_session()
         && commands
             .iter()
-            .any(|(program, arguments)| write_command(program, arguments, text.as_bytes()).is_ok());
-    drop(write_osc52(text));
-    verified
+            .any(|(program, arguments)| write_command(program, arguments, text.as_bytes()).is_ok())
 }
 
 #[cfg(test)]
@@ -78,6 +95,8 @@ pub enum ClipboardError {
 }
 
 pub trait SystemClipboardPort {
+    /// Copies `text` the way [`copy_text_verified`] does, failing only when
+    /// neither a platform command nor the terminal escape took it.
     fn copy_text(&self, text: &str) -> Result<(), ClipboardError>;
     fn paste_image(&self) -> Result<Option<Vec<u8>>, ClipboardError>;
     fn supports_images(&self) -> bool;
@@ -91,12 +110,7 @@ impl SystemClipboardPort for SystemClipboard {
         if text.is_empty() {
             return Err(ClipboardError::Unavailable);
         }
-        for (program, arguments) in copy_commands() {
-            if write_command(program, arguments, text.as_bytes()).is_ok() {
-                return Ok(());
-            }
-        }
-        write_osc52(text)
+        settle_copy(text, copy_natively(copy_commands(), text)).map(drop)
     }
 
     fn paste_image(&self) -> Result<Option<Vec<u8>>, ClipboardError> {
@@ -108,19 +122,29 @@ impl SystemClipboardPort for SystemClipboard {
     }
 }
 
+/// [`SystemClipboardPort::copy_text`] with every platform command bounded in
+/// time, for a copy that must not hold the event loop.
 pub(crate) async fn copy_text_bounded(text: String) -> Result<(), ClipboardError> {
     if text.is_empty() {
         return Err(ClipboardError::Unavailable);
     }
-    for (program, arguments) in copy_commands() {
-        if super::external_action::run_command(program, arguments, Some(text.as_bytes().to_vec()))
+    let mut verified = false;
+    if !is_ssh_session() {
+        for (program, arguments) in copy_commands() {
+            if super::external_action::run_command(
+                program,
+                arguments,
+                Some(text.as_bytes().to_vec()),
+            )
             .await
             .is_ok()
-        {
-            return Ok(());
+            {
+                verified = true;
+                break;
+            }
         }
     }
-    write_osc52(&text)
+    settle_copy(&text, verified).map(drop)
 }
 
 #[derive(Debug)]

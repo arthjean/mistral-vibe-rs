@@ -13,7 +13,7 @@ use serde_json::Value;
 
 use super::validate::{self, validate_at};
 use super::{
-    DEFAULT_MAX_TOOL_OUTPUT_BYTES, MAX_TOOL_ERROR_BYTES, ToolApproval, ToolAvailability, ToolError,
+    DEFAULT_MAX_TOOL_OUTPUT_BYTES, MAX_TOOL_ERROR_BYTES, ToolAvailability, ToolError,
     ToolExecutionOutput, ToolHandler, ToolInvocation, ToolOutputSink, ToolSource, ToolSpec,
     apply_defaults, coerce_and_validate, descriptions,
 };
@@ -435,15 +435,15 @@ impl ToolRegistry {
         Ok(true)
     }
 
-    /// Decides a call to `name` the way invoking it would, without running
-    /// it: `None` when the tool is not published, its arguments do not
-    /// validate, or nothing guards it.
-    pub async fn authorize(
+    /// What the policy in front of `name` makes of a call, the way invoking
+    /// it would read it, without asking anyone or running it: `None` when the
+    /// tool is not published, its arguments do not validate, or nothing
+    /// guards it.
+    pub async fn resolve_permission(
         &self,
         name: &str,
         mut invocation: ToolInvocation,
-        approval: &dyn crate::policy::ApprovalAgent,
-    ) -> Option<Result<ToolApproval, crate::policy::PolicyError>> {
+    ) -> Option<Result<crate::policy::PermissionOutcome, crate::policy::PolicyError>> {
         let registered = {
             let tools = self.tools.read().ok()?;
             tools.get(name).cloned()?
@@ -458,7 +458,7 @@ impl ToolRegistry {
         )
         .ok()?;
         apply_defaults(&mut invocation.arguments, &registered.spec.input_schema);
-        let decided = registered.handler.authorize(&invocation, approval)?;
+        let decided = registered.handler.resolve_permission(&invocation)?;
         Some(decided.await)
     }
 

@@ -9,20 +9,27 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
+use std::sync::LazyLock;
 
 use blake2::Blake2sVar;
 use blake2::digest::{Update, VariableOutput};
+use regex::Regex;
 use serde_json::Value;
 
-use super::paths::{is_relative_to, resolve_strict};
-use crate::hooks::HookConfig;
+use super::paths::{is_relative_to, path_text, resolve_strict};
+use crate::hooks::{HookConfig, HookProtocol};
+use crate::platform::resolve_lenient;
 use crate::pycompat;
 use crate::skills::SkillScope;
 
 pub const NATIVE_SCHEMA: &str = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json";
 const AGENT_PLUGIN_SCHEMA_PREFIX: &str = "https://agent-plugins.org/schemas/";
 const MAX_SKILL_NAME_LENGTH: usize = 64;
-const OPENCODE_CODE_SUFFIXES: [&str; 8] = ["cjs", "cts", "js", "jsx", "mjs", "mts", "ts", "tsx"];
+
+#[expect(clippy::expect_used, reason = "compile-time constant pattern")]
+static HTTP_HEADER_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$").expect("header pattern compiles")
+});
 
 /// The format a plugin directory was detected as. Reference
 /// `DetectedPluginFormat`.
@@ -289,7 +296,7 @@ impl AdaptedSkill {
 pub struct AdaptedHook {
     pub config: HookConfig,
     pub source_path: PathBuf,
-    pub protocol: String,
+    pub protocol: HookProtocol,
 }
 
 /// A diagnostic a foreign adapter raised. Reference `PluginAdapterDiagnostic`.
@@ -301,6 +308,15 @@ pub struct PluginAdapterDiagnostic {
     pub message: String,
     pub fatal: bool,
     pub component: String,
+}
+
+impl PluginAdapterDiagnostic {
+    /// The same report, marked as having dropped the plugin.
+    #[must_use]
+    pub fn fatal(mut self) -> Self {
+        self.fatal = true;
+        self
+    }
 }
 
 /// A component a foreign adapter recognized and could not carry. Reference
@@ -568,6 +584,58 @@ pub fn read_text(path: &Path) -> std::io::Result<String> {
     Ok(crate::workspace::text_file::decode(&bytes).text)
 }
 
+/// Whether the model may invoke a plugin skill by its OpenAI metadata, which
+/// has to resolve inside the plugin at `root`. Reference
+/// `load_openai_skill_metadata` with a root.
+pub(super) fn openai_policy(path: &Path, root: &Path) -> Result<bool, String> {
+    if let Some(metadata) = crate::skills::openai_metadata_path(path)
+        && metadata.is_file()
+    {
+        let resolved = resolve_strict(&metadata)
+            .map_err(|error| format!("agents/openai.yaml cannot be read: {error}"))?;
+        if !is_relative_to(&resolved, &resolve_lenient(root)) {
+            return Err("agents/openai.yaml has to resolve inside the plugin".to_owned());
+        }
+    }
+    crate::skills::openai_invocation_policy(path)
+}
+
+/// A stdio command a plugin declares: a bare executable, or a `./` path that
+/// resolves inside the plugin. Reference `_resolve_plugin_command` and the
+/// Codex adapter's `_resolve_command`.
+pub(super) fn resolve_stdio_command(root: &Path, command: &str) -> Result<String, String> {
+    if let Some(relative) = command.strip_prefix("./") {
+        let resolved = resolve_lenient(&root.join(relative));
+        if !is_relative_to(&resolved, root) {
+            return Err("a stdio command has to resolve inside the plugin".to_owned());
+        }
+        return Ok(path_text(&resolved));
+    }
+    if command.contains('/') || command.contains('\\') || command == "." || command == ".." {
+        return Err("a stdio command must be a bare executable or start with './'".to_owned());
+    }
+    Ok(command.to_owned())
+}
+
+/// Checks one HTTP header name against the token grammar and, case
+/// insensitively, against the names `seen` before it. Reference
+/// `_validate_http_headers` and `MCPStaticAuth._validate_headers`.
+pub(super) fn check_header_name(name: &str, seen: &mut BTreeSet<String>) -> Result<(), String> {
+    if !HTTP_HEADER_NAME.is_match(name) {
+        return Err(format!(
+            "{} is not a valid HTTP header name",
+            pycompat::repr_str(name)
+        ));
+    }
+    if !seen.insert(name.to_lowercase()) {
+        return Err(format!(
+            "the HTTP header {} is repeated",
+            pycompat::repr_str(name)
+        ));
+    }
+    Ok(())
+}
+
 fn read_schema_id(path: &Path) -> Option<String> {
     if !path.is_file() {
         return None;
@@ -594,15 +662,11 @@ fn opencode_markers(root: &Path) -> Vec<PathBuf> {
         let mut found = Vec::new();
         walk_files(&directory, &mut found);
         found.sort();
-        markers.extend(found.into_iter().filter(|path| {
-            path.is_file()
-                && path
-                    .extension()
-                    .and_then(|extension| extension.to_str())
-                    .is_some_and(|extension| {
-                        OPENCODE_CODE_SUFFIXES.contains(&extension.to_lowercase().as_str())
-                    })
-        }));
+        markers.extend(
+            found
+                .into_iter()
+                .filter(|path| path.is_file() && super::opencode::has_code_suffix(path)),
+        );
     }
     let package_path = root.join("package.json");
     if let Some(marker) = opencode_package_marker(root, &package_path)

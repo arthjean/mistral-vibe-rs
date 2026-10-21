@@ -1,4 +1,5 @@
-//! Portable references to files inside a plugin.
+//! Portable references to files inside a plugin, and the `pathlib` reads the
+//! resolver and the adapters share.
 //!
 //! Reference `vibe/core/plugins/_paths.py`: a snapshot never carries a host
 //! path, only a plugin name and a POSIX path relative to that plugin's root,
@@ -87,4 +88,27 @@ pub fn resolve_strict(path: &Path) -> std::io::Result<PathBuf> {
 #[must_use]
 pub fn is_relative_to(path: &Path, root: &Path) -> bool {
     path.starts_with(root)
+}
+
+/// `path.exists() or path.is_symlink()`: a dangling link still counts, so the
+/// component it names is reported rather than skipped.
+pub(super) fn exists_or_link(path: &Path) -> bool {
+    path.exists() || is_symlink(path)
+}
+
+/// Python's `Path.is_symlink`.
+pub(super) fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
+}
+
+/// Python's `Path.name`, empty for a path that ends in `..` or a root.
+pub(super) fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// A host path as text, Python's `str(path)`.
+pub(super) fn path_text(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }

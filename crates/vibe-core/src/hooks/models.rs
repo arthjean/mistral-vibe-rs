@@ -53,6 +53,26 @@ impl From<HookType> for HookScope {
     }
 }
 
+/// Which answer format a hook speaks: this client's own, or the one of the
+/// foreign plugin format it was translated from. Reference `HookProtocol`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HookProtocol {
+    Vibe,
+    ClaudeCode,
+    KimiCode,
+}
+
+impl HookProtocol {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Vibe => "vibe",
+            Self::ClaudeCode => "claude_code",
+            Self::KimiCode => "kimi_code",
+        }
+    }
+}
+
 /// The timeout a hook runs under when its declaration names none, in seconds.
 /// Reference `_DEFAULT_HOOK_TIMEOUT`.
 pub const DEFAULT_HOOK_TIMEOUT: f64 = 60.0;

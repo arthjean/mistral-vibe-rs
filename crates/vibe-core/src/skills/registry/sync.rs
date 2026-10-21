@@ -15,8 +15,9 @@ use std::path::{Path, PathBuf};
 use futures_util::StreamExt as _;
 
 use super::client::{RegistrySkillsClient, RegistrySkillsError, RegistryTransport};
+use super::loader::{self, RecordedAlias};
 use super::manifest::{self, ManifestEntry, ManifestVersion, REGISTRY_LATEST_ALIAS};
-use super::service::{RegistryEndpoint, open_client};
+use super::service::{RegistryEndpoint, latest_versions, open_client};
 use super::{ledger, pins, store};
 
 /// How many versions download at once (reference `_MATERIALIZE_CONCURRENCY`).
@@ -181,31 +182,6 @@ fn latest_pinned_ids(scope: SyncScope<'_>) -> BTreeSet<String> {
         .collect()
 }
 
-/// Reference `_resolve_latest_versions`: the newest version of each id, one
-/// request per id; an id the registry no longer has is left out, and any
-/// other failure fails the sync.
-async fn latest_versions<T: RegistryTransport + Sync>(
-    client: &RegistrySkillsClient<T>,
-    skill_ids: &BTreeSet<String>,
-) -> Result<BTreeMap<String, i64>, RegistrySkillsError> {
-    let mut latest = BTreeMap::new();
-    for skill_id in skill_ids {
-        match client.get_skill(skill_id, None, None).await {
-            Ok(item) => {
-                let version = if item.metadata.latest_version > 0 {
-                    item.metadata.latest_version
-                } else {
-                    item.version
-                };
-                latest.insert(skill_id.clone(), version);
-            }
-            Err(error) if error.status == Some(404) => {}
-            Err(error) => return Err(error),
-        }
-    }
-    Ok(latest)
-}
-
 type Synced = (BTreeSet<(String, i64)>, usize, usize);
 
 /// Reference `_sync_pins`: every pin resolved and materialized, answering the
@@ -359,23 +335,6 @@ fn prune_safe(root: &Path, active: &BTreeSet<(String, i64)>) -> BTreeSet<(String
         .collect()
 }
 
-/// Reference `_pinned_version`: the version a pin currently claims, a custom
-/// alias reading the version it last resolved to.
-fn claimed_version(scope: SyncScope<'_>, root: &Path, entry: &ManifestEntry) -> Option<i64> {
-    let latest = || {
-        store::latest_materialized(root, &entry.skill_id)
-            .ok()
-            .flatten()
-    };
-    match &entry.version {
-        ManifestVersion::Frozen(version) => Some(*version),
-        ManifestVersion::Alias(alias) if alias == REGISTRY_LATEST_ALIAS => latest(),
-        ManifestVersion::Alias(alias) => {
-            pins::resolved_alias(scope.vibe_home, &entry.skill_id, alias).or_else(latest)
-        }
-    }
-}
-
 /// Reference `_scoped_active`: the versions the manifests at `paths` claim.
 fn scoped_active(scope: SyncScope<'_>, paths: &[PathBuf]) -> BTreeSet<(String, i64)> {
     let root = scope.store_root();
@@ -383,7 +342,8 @@ fn scoped_active(scope: SyncScope<'_>, paths: &[PathBuf]) -> BTreeSet<(String, i
         .entries(paths)
         .iter()
         .filter_map(|entry| {
-            claimed_version(scope, &root, entry).map(|version| (entry.skill_id.clone(), version))
+            loader::pinned_version(scope.vibe_home, &root, entry, RecordedAlias::Claimed)
+                .map(|version| (entry.skill_id.clone(), version))
         })
         .collect()
 }

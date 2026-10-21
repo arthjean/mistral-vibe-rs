@@ -31,17 +31,20 @@
 //! fails the replay, and so does an entry whose difference stopped reproducing.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::{Map, Value as JsonValue};
+use toml::Value;
 
 use super::registry::{FIELDS, MergeStrategy};
 use super::*;
 use crate::provider::config::{ModelRouting, UtilityFeature};
 
 use crate::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use crate::redaction::is_sensitive_key;
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";

@@ -18,10 +18,12 @@
 //!
 //! Reference: `vibe/core/config/layers/growthbook.py` at the pinned commit.
 
+use serde_json::{Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use toml::{Table, Value};
 
-use crate::experiments::{ExperimentName, JsonValue, OrderedMap};
+use crate::experiments::ExperimentName;
+use crate::pycompat::{Dumps, dumps};
 use crate::text::hex_encode;
 
 use super::effective::validate_model_definition;
@@ -96,10 +98,10 @@ impl ExperimentsLayer {
     /// field mapper refuses it.
     #[must_use]
     pub fn from_variants(
-        variants: &OrderedMap<JsonValue>,
+        variants: &Map<String, JsonValue>,
         prompt_resolves: PromptResolves,
     ) -> Self {
-        let mut data: OrderedMap<JsonValue> = OrderedMap::new();
+        let mut data: Map<String, JsonValue> = Map::new();
         for name in MAPPED_EXPERIMENTS {
             let Some(variant) = variants
                 .get(name.key())
@@ -184,7 +186,7 @@ fn mapped_field(
             let definition = payload.as_object()?.get("model_config")?;
             definition
                 .as_object()
-                .map(|_| JsonValue::String(definition.python_json()))
+                .map(|_| JsonValue::String(dumps(definition, Dumps::DEFAULT)))
         }
         "routed_extra_models" => {
             let payload = as_json_value(variant);
@@ -198,7 +200,8 @@ fn mapped_field(
                 .filter(|model| model.as_object().is_some())
                 .cloned()
                 .collect::<Vec<_>>();
-            (!models.is_empty()).then(|| JsonValue::String(JsonValue::Array(models).python_json()))
+            (!models.is_empty())
+                .then(|| JsonValue::String(dumps(&JsonValue::Array(models), Dumps::DEFAULT)))
         }
         // The reference compares against the managed arm and writes `True` for
         // it alone, so `legacy` writes nothing rather than writing `false`: the
@@ -248,8 +251,8 @@ fn as_json_value(variant: &JsonValue) -> JsonValue {
 /// validates.
 ///
 /// Reference `_routed_models`.
-fn routed_models(data: &OrderedMap<JsonValue>) -> OrderedMap<JsonValue> {
-    let mut models = OrderedMap::new();
+fn routed_models(data: &Map<String, JsonValue>) -> Map<String, JsonValue> {
+    let mut models = Map::new();
     for field in ["routed_model_config", "routed_extra_models"] {
         let Some(text) = data.get(field).and_then(JsonValue::as_str) else {
             continue;
@@ -269,9 +272,7 @@ fn routed_models(data: &OrderedMap<JsonValue>) -> OrderedMap<JsonValue> {
                 let name = entry.get("name").cloned().unwrap_or_default();
                 entry.insert("alias".to_owned(), name);
             }
-            let Some(validated) = serde_json::to_value(JsonValue::Object(entry.clone()))
-                .ok()
-                .and_then(|value| validate_model_definition(&value))
+            let Some(validated) = validate_model_definition(&JsonValue::Object(entry.clone()))
             else {
                 continue;
             };
@@ -313,9 +314,7 @@ fn toml_value(value: &JsonValue) -> Option<Value> {
 ///
 /// Reference `create_dict_fingerprint`: the SHA-256 of the JSON dump of the
 /// data, keys sorted and separators compact.
-fn fingerprint(data: &OrderedMap<JsonValue>) -> String {
-    let text = serde_json::to_value(JsonValue::Object(data.clone()))
-        .and_then(|value| serde_json::to_string(&value))
-        .unwrap_or_default();
+fn fingerprint(data: &Map<String, JsonValue>) -> String {
+    let text = serde_json::to_string(data).unwrap_or_default();
     hex_encode(&Sha256::digest(text.as_bytes()))
 }

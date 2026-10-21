@@ -52,8 +52,8 @@ binds no session directory, so those displays answer against the process cwd;
 its authored paths live under ``/workspace``, so only a cwd of ``/`` or
 ``/workspace`` would change it. The path family binds ``/workspace`` itself.
 
-The wrapper re-executes itself with the reference interpreter when the current
-one cannot import ``vibe``.
+The wrapper re-executes itself with the reference interpreter, importing the
+pinned commit extracted with ``git archive`` (``scripts/parity/reference.py``).
 """
 
 from __future__ import annotations

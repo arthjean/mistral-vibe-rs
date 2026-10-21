@@ -5,6 +5,10 @@
 //! what a corpus scenario cannot reach: the errors a malformed document raises,
 //! the path the write back takes, and the keys only this port declares.
 
+use std::fs;
+
+use toml::Value;
+
 use super::registry::default_document;
 use super::*;
 

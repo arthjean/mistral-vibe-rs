@@ -10,9 +10,11 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use serde_json::Value;
+use serde_json::{Map, Value};
 
 use super::*;
+use crate::compaction::CompactionStatus;
+use crate::engine::EventObserver;
 use crate::events::{EngineEvent, EventEnvelope};
 
 /// How the client reaches the configuration on every send. Reference

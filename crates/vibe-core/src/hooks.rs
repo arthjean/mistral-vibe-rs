@@ -26,8 +26,8 @@ pub use config::{load_hooks_file, load_hooks_file_with, load_hooks_from_fs};
 pub use manager::{HooksManager, MAX_RETRIES};
 pub use models::{
     DEFAULT_HOOK_TIMEOUT, HookConfig, HookConfigIssue, HookConfigResult, HookEvent,
-    HookExecutionResult, HookInvocation, HookSessionContext, HookSeverity, HookType, HookYield,
-    ToolStatus,
+    HookExecutionResult, HookInvocation, HookProtocol, HookSessionContext, HookSeverity, HookType,
+    HookYield, ToolStatus,
 };
 
 /// The file a directory's hooks are declared in.

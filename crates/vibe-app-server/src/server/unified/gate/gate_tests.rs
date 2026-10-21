@@ -1,4 +1,6 @@
-use vibe_core::policy::{PermissionStore, PolicyGuardedTool, ToolGuard};
+use vibe_core::policy::{
+    ApprovalAgent, ApprovalFuture, ApprovalRequest, PermissionStore, PolicyGuardedTool, ToolGuard,
+};
 use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler, ToolOutputSink,
     ToolPresentationKind, ToolSource, ToolSpec,
@@ -43,6 +45,16 @@ impl Approver for RecordingApprover {
     }
 }
 
+/// The agent the shells' guard carries, which the gate never consults: it
+/// decides a call without asking anyone.
+struct Unasked;
+
+impl ApprovalAgent for Unasked {
+    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
+        Box::pin(async { Ok(ApprovalDecision::Deny) })
+    }
+}
+
 /// A gate over a session that publishes `available` and configures nothing.
 fn gate(available: &[&str]) -> UnifiedGate {
     let available: Vec<String> = available.iter().map(|name| (*name).to_owned()).collect();
@@ -60,10 +72,7 @@ fn gate(available: &[&str]) -> UnifiedGate {
 /// context here and record approvals in `store`.
 fn shells(store: &PermissionStore, rules: &[(&str, PermissionContext)]) -> UnifiedGate {
     let registry = ToolRegistry::new(1024);
-    registry.set_guard(ToolGuard::new(
-        store.clone(),
-        Arc::new(ProbeAgent::default()),
-    ));
+    registry.set_guard(ToolGuard::new(store.clone(), Arc::new(Unasked)));
     for (name, context) in rules {
         let context = context.clone();
         let handler: Arc<dyn ToolHandler> = Arc::new(
@@ -74,7 +83,7 @@ fn shells(store: &PermissionStore, rules: &[(&str, PermissionContext)]) -> Unifi
         let guarded = PolicyGuardedTool::new(
             *name,
             store.clone(),
-            Arc::new(ProbeAgent::default()),
+            Arc::new(Unasked),
             Arc::new(move |_invocation| Ok(context.clone())),
             handler,
         );
@@ -368,6 +377,127 @@ async fn a_permanent_approval_is_kept_for_every_shell_unless_it_names_nothing_la
         [
             ("bash".to_owned(), vec!["./deploy.sh".to_owned()]),
             ("powershell".to_owned(), vec!["./deploy.sh".to_owned()]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_start_that_picks_its_environment_is_asked_about_unscoped() {
+    let gate = shells(
+        &PermissionStore::default(),
+        &[("bash", PermissionContext::asking(vec![scope("ls")]))],
+    );
+    let start = |arguments: Value| ToolAction {
+        arguments,
+        ..action("process.start")
+    };
+    let approver = RecordingApprover::approving_for_session();
+    // A store that authorized no working directory has none a start could
+    // match, so any `cwd` is somewhere else.
+    for call in [
+        start(json!({"command": "ls", "env": {"DEBUG": "1"}})),
+        start(json!({"command": "ls", "cwd": "/elsewhere"})),
+    ] {
+        assert_eq!(gate.check(&call, &approver).await, ran("user"));
+    }
+    // Neither answer granted the command, which still asks about its scope.
+    gate.check(&start(json!({"command": "ls"})), &approver)
+        .await;
+    assert_eq!(
+        approver.asked(),
+        [Vec::new(), Vec::new(), wire(&[scope("ls")])]
+    );
+}
+
+#[tokio::test]
+async fn a_start_from_the_shells_own_directory_hides_nothing() {
+    let root = tempfile::tempdir().expect("tempdir");
+    let store = PermissionStore::default();
+    store
+        .try_authorize_workspace(root.path(), &[])
+        .expect("the workspace is authorized");
+    let gate = shells(
+        &store,
+        &[("bash", PermissionContext::asking(vec![scope("ls")]))],
+    );
+    let approver = RecordingApprover::default();
+    for cwd in [".".to_owned(), root.path().display().to_string()] {
+        let call = ToolAction {
+            arguments: json!({"command": "ls", "cwd": cwd, "env": {}}),
+            ..action("process.start")
+        };
+        gate.check(&call, &approver).await;
+    }
+    assert_eq!(
+        approver.asked(),
+        [wire(&[scope("ls")]), wire(&[scope("ls")])]
+    );
+}
+
+#[tokio::test]
+async fn a_start_that_picks_its_environment_is_still_refused_by_a_shell() {
+    let gate = shells(
+        &PermissionStore::default(),
+        &[
+            ("bash", PermissionContext::asking(vec![scope("ls")])),
+            (
+                "powershell",
+                PermissionContext::settled(PermissionMode::Never).because("refused"),
+            ),
+        ],
+    );
+    let call = ToolAction {
+        arguments: json!({"command": "ls", "env": {"DEBUG": "1"}}),
+        ..action("process.start")
+    };
+    let approver = RecordingApprover::approving_for_session();
+    assert_eq!(
+        gate.check(&call, &approver).await,
+        refused_by_policy(Some("refused".to_owned()))
+    );
+    assert!(approver.asked().is_empty());
+}
+
+#[tokio::test]
+async fn a_permanent_approval_writes_only_what_each_allowlist_reads_back() {
+    let persisted = Arc::new(Mutex::new(Vec::new()));
+    let store = PermissionStore::default().with_allowlist_persistence(Arc::new({
+        let persisted = Arc::clone(&persisted);
+        move |tool: &str, patterns: &[String]| {
+            lock(&persisted).push((tool.to_owned(), patterns.to_vec()));
+            Ok(())
+        }
+    }));
+    // A command, a blank one, and a scope no shell allowlist reads.
+    let mixed = vec![
+        scope("ls"),
+        PermissionRequirement::exact_command(" "),
+        PermissionRequirement::url_pattern("https://example.com"),
+    ];
+    let approver = RecordingApprover::approving("approve_permanently");
+    let shell = shells(
+        &store,
+        &[("bash", PermissionContext::asking(mixed.clone()))],
+    );
+    assert_eq!(
+        shell.check(&action("file_system.bash"), &approver).await,
+        ran("user")
+    );
+    // Any other tool reads every scope back, and still no blank pattern.
+    let reader = shells(&store, &[("read_file", PermissionContext::asking(mixed))]);
+    let read = ToolAction {
+        arguments: json!({"path": "notes.txt"}),
+        ..action("file_system.read_file")
+    };
+    assert_eq!(reader.check(&read, &approver).await, ran("user"));
+    assert_eq!(
+        *lock(&persisted),
+        [
+            ("bash".to_owned(), vec!["ls *".to_owned()]),
+            (
+                "read_file".to_owned(),
+                vec!["https://example.com".to_owned(), "ls *".to_owned()]
+            ),
         ]
     );
 }

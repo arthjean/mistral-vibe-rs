@@ -27,6 +27,8 @@ where
     D: TurnDriver,
 {
     pub(crate) service: tokio::sync::Mutex<HeadlessService<D>>,
+    /// The one identity both the client and the app server address the
+    /// session by.
     pub(crate) session_id: String,
     pub(crate) cwd: String,
     /// This session's enrollment, held so the lookup it detached is cancelled
@@ -91,12 +93,6 @@ where
     /// Whether the session runs on the Unified Harness.
     pub(crate) fn is_unified(&self) -> bool {
         self.unified
-    }
-
-    /// The identity the app server knows the session by, which is the one
-    /// the client addresses.
-    pub(crate) fn canonical_id(&self) -> String {
-        self.session_id.clone()
     }
 
     /// Records `entry` as the version the client now holds, and returns the

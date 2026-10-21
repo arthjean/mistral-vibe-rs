@@ -5,7 +5,7 @@ use serde_json::json;
 use super::pydantic::{self, LineError};
 use super::{
     Dumps, dumps, isprintable, isspace, os_error, parse_float, parse_int, repr_float, repr_json,
-    repr_str, splitlines, str_json, strip, thousands, title,
+    repr_str, splitlines, str_json, strip, thousands, title, truthy,
 };
 
 #[test]
@@ -168,6 +168,32 @@ fn a_parsed_repeated_key_keeps_its_first_position_and_last_value() {
     let value: serde_json::Value =
         serde_json::from_str(r#"{"a": 1, "b": 2, "a": 3}"#).expect("fixture");
     assert_eq!(dumps(&value, Dumps::DEFAULT), r#"{"a": 3, "b": 2}"#);
+}
+
+#[test]
+fn truthiness_is_false_only_for_null_false_zero_and_empty() {
+    for falsy in [
+        json!(null),
+        json!(false),
+        json!(0),
+        json!(0.0),
+        json!(-0.0),
+        json!(""),
+        json!([]),
+        json!({}),
+    ] {
+        assert!(!truthy(&falsy), "{falsy}");
+    }
+    for truthy_value in [
+        json!(true),
+        json!(1),
+        json!(-2.5),
+        json!(" "),
+        json!([0]),
+        json!({"a": null}),
+    ] {
+        assert!(truthy(&truthy_value), "{truthy_value}");
+    }
 }
 
 #[test]

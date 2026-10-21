@@ -5,10 +5,9 @@
 //! or snooze, and then a small random chance. The timestamps live in the
 //! `user_feedback` section of the shared `cache.toml`.
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use crate::atomic_file::{FileMode, write_atomically};
+use crate::cache_store::CacheStore;
 
 /// Reference `FEEDBACK_PROBABILITY`.
 const FEEDBACK_PROBABILITY: f64 = 0.05;
@@ -58,14 +57,14 @@ impl FeedbackAction {
 /// The `user_feedback` section of `cache.toml` under one Vibe home.
 #[derive(Debug, Clone)]
 pub struct FeedbackCache {
-    path: PathBuf,
+    store: CacheStore,
 }
 
 impl FeedbackCache {
     #[must_use]
     pub fn new(vibe_home: &Path) -> Self {
         Self {
-            path: vibe_home.join("cache.toml"),
+            store: CacheStore::new(vibe_home),
         }
     }
 
@@ -93,38 +92,17 @@ impl FeedbackCache {
     }
 
     /// Reference `record_feedback_asked`, `record_feedback_given`, and
-    /// `record_feedback_snoozed`. A write that fails is dropped, as the
-    /// reference's cache store drops it.
+    /// `record_feedback_snoozed`. A write that fails is logged and dropped,
+    /// as the reference's cache store drops it.
     pub fn record(&self, action: FeedbackAction, now: i64) {
-        let mut document = self.read_document().unwrap_or_default();
-        let mut section = match document.remove(CACHE_SECTION) {
-            Some(toml::Value::Table(section)) => section,
-            _ => toml::Table::new(),
-        };
-        section.insert(action.key().to_owned(), toml::Value::Integer(now));
-        document.insert(CACHE_SECTION.to_owned(), toml::Value::Table(section));
-        if let Ok(encoded) = toml::to_string_pretty(&toml::Value::Table(document)) {
-            if let Some(parent) = self.path.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            let _ = write_atomically(
-                &self.path,
-                "cache.toml",
-                encoded.as_bytes(),
-                FileMode::Private,
-            );
-        }
+        let mut data = toml::Table::new();
+        data.insert(action.key().to_owned(), toml::Value::Integer(now));
+        self.store.write_section(CACHE_SECTION, data);
     }
 
     /// Reference `_is_within_cooldown`.
     fn within_cooldown(&self, now: i64) -> bool {
-        let section = self
-            .read_document()
-            .and_then(|mut document| match document.remove(CACHE_SECTION) {
-                Some(toml::Value::Table(section)) => Some(section),
-                _ => None,
-            })
-            .unwrap_or_default();
+        let section = self.store.read_section(CACHE_SECTION);
         let stamp = |key: &str| section.get(key).and_then(toml::Value::as_integer);
         if stamp(SNOOZED_AT_KEY)
             .is_some_and(|snoozed| now - snoozed < FEEDBACK_SNOOZED_COOLDOWN_SECONDS)
@@ -138,10 +116,6 @@ impl FeedbackCache {
         }
         stamp(LAST_SHOWN_KEY)
             .is_some_and(|shown| shown > 0 && now - shown < FEEDBACK_COOLDOWN_SECONDS)
-    }
-
-    fn read_document(&self) -> Option<toml::Table> {
-        toml::from_str(&fs::read_to_string(&self.path).ok()?).ok()
     }
 }
 

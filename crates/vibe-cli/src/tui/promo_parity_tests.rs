@@ -26,7 +26,8 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
-use vibe_core::updates::UpdateCacheStore;
+
+use crate::update_notifier::UpdateCacheStore;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/promo/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";

@@ -3,12 +3,14 @@
 
 use std::sync::Arc;
 
+use serde_json::{Map, Value};
+
+use super::ExperimentName;
 use super::client::RemoteEvalClient;
-use super::json::JsonValue;
 use super::manager::{BUCKETING_KEY_LENGTH, ExperimentManager, hash_api_key};
 use super::models::{EvalResponse, ExperimentAttributes};
 use super::recorder::{Outcome, RecordingTransport};
-use super::{ExperimentName, OrderedMap};
+use crate::pycompat::{Dumps, dumps};
 
 fn hydrated(document: &str) -> ExperimentManager {
     let mut manager = ExperimentManager::new(RemoteEvalClient::with_url(None));
@@ -17,12 +19,12 @@ fn hydrated(document: &str) -> ExperimentManager {
 }
 
 /// One JSON document as the typed value a variant is answered as.
-fn json(text: &str) -> JsonValue {
+fn json(text: &str) -> Value {
     serde_json::from_str(text).expect("the value parses")
 }
 
-fn text(value: &str) -> JsonValue {
-    JsonValue::String(value.to_owned())
+fn text(value: &str) -> Value {
+    Value::String(value.to_owned())
 }
 
 /// The label one experiment's exposure is reported under, if it is reported.
@@ -97,7 +99,11 @@ fn a_feature_this_build_does_not_know_is_dropped_on_the_way_in() {
     );
     let state = manager.export_state().expect("the state is kept");
     assert_eq!(
-        state.features.keys().collect::<Vec<_>>(),
+        state
+            .features
+            .iter()
+            .map(|(key, _)| key.as_str())
+            .collect::<Vec<_>>(),
         ["vibe_cli_system_prompt"]
     );
     assert_eq!(manager.variant(ExperimentName::SystemPrompt), text("tests"));
@@ -112,7 +118,7 @@ fn an_object_or_array_variant_answers_the_value_it_carries() {
     );
     let routed = manager.variant(ExperimentName::CliModelRouting);
     assert_eq!(
-        routed.python_json(),
+        dumps(&routed, Dumps::DEFAULT),
         r#"{"active_model": "alias", "model_config": {"name": "n", "provider": "p"}}"#,
         "the payload reaches the caller typed, in the order the wire carried"
     );
@@ -130,7 +136,7 @@ fn an_object_or_array_variant_answers_the_value_it_carries() {
     );
     assert_eq!(
         scalar.variant(ExperimentName::ManagedShellTools),
-        JsonValue::Bool(true)
+        Value::Bool(true)
     );
 }
 
@@ -143,7 +149,7 @@ fn a_feature_resolving_to_nothing_falls_back_to_the_default_variant() {
     assert_eq!(manager.variant(ExperimentName::SystemPrompt), text("cli"));
     assert_eq!(
         manager.variant(ExperimentName::CliModelRouting),
-        JsonValue::Object(OrderedMap::new()),
+        Value::Object(Map::new()),
         "a feature the response never carried falls back too"
     );
 }

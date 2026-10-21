@@ -9,8 +9,8 @@
 //! value, drop the features it does not know, and keep configuration and
 //! telemetry reading the same response differently.
 //!
-//! [`json`] holds the ordered JSON value the variants are carried as,
-//! [`models`] the payload shapes, [`client`] the lookup and its fail-open
+//! [`json`] holds Python's equality over the JSON values the variants are
+//! carried as, [`models`] the payload shapes, [`client`] the lookup and its fail-open
 //! contract, [`manager`] what a resolved response means, and [`cache`] the
 //! last response a user resolved, which the next session applies before its
 //! own lookup answers.
@@ -18,6 +18,8 @@
 //! Reference: `vibe/core/experiments/` at the pinned commit.
 
 use std::time::Duration;
+
+use serde_json::{Map, Value};
 
 mod cache;
 mod client;
@@ -28,7 +30,6 @@ mod session;
 
 pub use cache::{EVAL_CACHE_FILE_NAME, EVAL_CACHE_TTL, EvalCache};
 pub use client::{EvalPayload, RemoteEvalClient};
-pub use json::{JsonValue, OrderedMap};
 pub use manager::{BUCKETING_KEY_LENGTH, ExperimentManager, hash_api_key};
 pub use models::{
     EvalResponse, ExperimentAttributes, FeatureDefinition, FeatureRule, TrackData,
@@ -177,16 +178,16 @@ impl ExperimentName {
     ///
     /// Reference `DEFAULT_VARIANTS`.
     #[must_use]
-    pub fn default_variant(self) -> JsonValue {
+    pub fn default_variant(self) -> Value {
         match self {
-            Self::SystemPrompt => JsonValue::String("cli".to_owned()),
-            Self::RustTuiRollout => JsonValue::String("python".to_owned()),
+            Self::SystemPrompt => Value::String("cli".to_owned()),
+            Self::RustTuiRollout => Value::String("python".to_owned()),
             Self::ManagedShellTools | Self::UnifiedHarnessRollout => {
-                JsonValue::String("legacy".to_owned())
+                Value::String("legacy".to_owned())
             }
-            Self::CliModelRouting | Self::CliExtraModels => JsonValue::Object(OrderedMap::new()),
+            Self::CliModelRouting | Self::CliExtraModels => Value::Object(Map::new()),
             Self::SmartApprove | Self::SmartApproveDefault | Self::RegistrySkills => {
-                JsonValue::Bool(false)
+                Value::Bool(false)
             }
         }
     }

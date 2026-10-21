@@ -2,14 +2,14 @@
 """Black-box capture of the rewind methods served by the app server.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in ``acp.py`` already runs, drives real turns
-through it so the session holds real history and real file checkpoints, and
-then calls ``session/rewind/read`` and ``session/rewind``. What is recorded is
-what row 9 of ``docs/parity.md`` is about: each rewind answer, the notifications
-it raised, the files on disk afterward, and the conversation the model is sent
-on the next turn. Nothing is imported from the reference: the reference's own
-``vibe-app-server`` is the oracle, which is what makes the same scenarios
-replayable against this port by
+recording chat-completions stand-in of ``app_server_client.py``, drives real
+turns through it so the session holds real history and real file checkpoints,
+and then calls ``session/rewind/read`` and ``session/rewind``. What is recorded
+is what row 9 of ``docs/parity.md`` is about: each rewind answer, the
+notifications it raised, the files on disk afterward, and the conversation the
+model is sent on the next turn. Nothing is imported from the reference: the
+reference's own ``vibe-app-server`` is the oracle, which is what makes the same
+scenarios replayable against this port by
 ``crates/vibe-app-server/tests/rewind_parity_tests.rs``.
 
 Opening a session and starting a turn are the setup every scenario needs, not

@@ -18,12 +18,12 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use serde_json::{Value, json};
 use vibe_core::engine::CompletionProvider;
-use vibe_core::events::ModelMessage;
 use vibe_core::provider::config::ModelConfig;
-use vibe_core::provider::{ProviderChunk, ProviderInput, RequestDialect};
+use vibe_core::provider::{ProviderChunk, ProviderInput};
 use vibe_core::pycompat::{self, Dumps};
 
 use crate::engine::ConversationMessage;
+use crate::utility_call::UtilityCall;
 
 /// Reference `_CLASSIFY_TIMEOUT_S`.
 const CLASSIFY_TIMEOUT: Duration = Duration::from_secs(10);
@@ -237,44 +237,17 @@ impl Classifier {
         request: &ClassificationRequest,
         message_id: Option<&str>,
     ) -> Classification {
-        let mut model = self.model.clone();
-        model.temperature = 0.0;
-        "off".clone_into(&mut model.thinking);
-        let mut metadata = self.metadata.clone();
-        metadata.insert("call_type".to_owned(), "smart_approve".to_owned());
-        if let Some(message_id) = message_id {
-            metadata.insert("message_id".to_owned(), message_id.to_owned());
-        }
+        let call = UtilityCall {
+            model: &self.model,
+            metadata: &self.metadata,
+            session_id: &self.session_id,
+            call_type: "smart_approve",
+            message_id,
+            system_prompt: CLASSIFIER_PROMPT,
+        };
         let input = ProviderInput {
-            turn_id: None,
-            session_id: Some(self.session_id.clone()),
-            model_override: Some(model.alias.clone()),
-            model: Some(model),
-            messages: vec![
-                ModelMessage::System {
-                    content: CLASSIFIER_PROMPT.to_owned(),
-                },
-                ModelMessage::User {
-                    content: request.user_message_text(),
-                    injected: false,
-                    message_id: None,
-                    attachments: Vec::new(),
-                    user_display_content: None,
-                    input_text: None,
-                    manual_shell: None,
-                    compaction_boundary: false,
-                },
-            ],
             stream: true,
-            images: Vec::new(),
-            tools: Vec::new(),
-            tool_choice: None,
-            thinking: false,
-            reasoning_effort: None,
-            headers: BTreeMap::new(),
-            limits: Default::default(),
-            metadata,
-            dialect: RequestDialect::Unified,
+            ..call.input(request.user_message_text())
         };
         let streamed = async {
             let mut stream = self.provider.stream(&input).await?;

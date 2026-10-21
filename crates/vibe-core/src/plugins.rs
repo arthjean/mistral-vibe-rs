@@ -22,6 +22,7 @@ pub mod kimi;
 pub mod materialize;
 pub mod naming;
 pub mod native;
+pub mod opencode;
 pub mod paths;
 pub mod redaction;
 pub mod snapshot;

@@ -44,7 +44,7 @@ where
         if let Some(object) = params.as_object_mut() {
             object
                 .entry("sessionId")
-                .or_insert_with(|| json!(harness.canonical_id()));
+                .or_insert_with(|| json!(harness.session_id));
         }
         Ok(harness.service.lock().await.public_call(method, params)?)
     }
@@ -72,7 +72,7 @@ where
         if let Some(object) = params.as_object_mut() {
             object
                 .entry("sessionId")
-                .or_insert_with(|| json!(harness.canonical_id()));
+                .or_insert_with(|| json!(harness.session_id));
         }
         Ok(harness
             .service
@@ -250,7 +250,7 @@ where
                 .service
                 .lock()
                 .await
-                .unified_accounting(&harness.canonical_id());
+                .unified_accounting(&harness.session_id);
             if let Some(accounting) = published {
                 return accounting;
             }

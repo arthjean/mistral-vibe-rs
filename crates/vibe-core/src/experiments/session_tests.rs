@@ -178,7 +178,7 @@ fn a_configured_session_looks_the_rollout_up_once_and_persists_what_it_resolved(
     assert_eq!(attributes.harness, HARNESS_LEGACY);
     assert_eq!(
         run.manager.variant(super::ExperimentName::SystemPrompt),
-        super::JsonValue::String("tests".to_owned())
+        serde_json::Value::String("tests".to_owned())
     );
 }
 
@@ -321,7 +321,7 @@ fn a_failed_lookup_persists_nothing_and_asks_for_no_refresh() {
         assert_eq!(run.persisted, 0);
         assert_eq!(
             run.manager.variant(super::ExperimentName::SystemPrompt),
-            super::JsonValue::String("cli".to_owned()),
+            serde_json::Value::String("cli".to_owned()),
             "the session keeps its declared default"
         );
     }

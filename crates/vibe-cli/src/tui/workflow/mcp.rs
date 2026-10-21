@@ -299,7 +299,7 @@ pub(in crate::tui) fn execute_mcp_effect(
                 action.enable_on_complete,
                 !action.url_visible,
             );
-            overlay.select_id("auth:show");
+            overlay.select_by_id("auth:show");
             state.overlay = Some(overlay);
         }
         McpEffect::RefreshAll { detail } => {

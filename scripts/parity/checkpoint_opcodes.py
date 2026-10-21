@@ -32,8 +32,7 @@ Usage::
 
 ``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
 default path; ``--reference`` wins over it. The capture reads the pinned commit
-through ``git archive`` and never moves ``HEAD``, so a workstation whose
-checkout has moved on can still capture.
+through ``git archive`` and never moves ``HEAD``, which must sit at the pin.
 """
 
 from __future__ import annotations

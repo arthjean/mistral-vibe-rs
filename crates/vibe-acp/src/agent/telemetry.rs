@@ -63,7 +63,7 @@ where
         harness.service.lock().await.public_call(
             "telemetry/record",
             json!({
-                "sessionId": harness.canonical_id(),
+                "sessionId": harness.session_id,
                 "name": notification.event,
                 "properties": properties,
                 "correlateLastRequest": correlate,
@@ -81,7 +81,7 @@ where
             .service
             .lock()
             .await
-            .public_call("config/read", json!({"sessionId": harness.canonical_id()}))
+            .public_call("config/read", json!({"sessionId": harness.session_id}))
             .ok()
             .and_then(|result| {
                 result
@@ -107,7 +107,7 @@ where
         let _ = harness.service.lock().await.public_call(
             "telemetry/record",
             json!({
-                "sessionId": harness.canonical_id(),
+                "sessionId": harness.session_id,
                 "name": name,
                 "properties": properties,
             }),

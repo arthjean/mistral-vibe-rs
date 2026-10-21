@@ -12,7 +12,7 @@ use std::sync::Mutex;
 
 use serde_json::{Map, Value, json};
 use vibe_core::atomic_file::{FileMode, write_atomically};
-use vibe_core::pycompat::pydantic;
+use vibe_core::pycompat::{self, Dumps, pydantic};
 
 use crate::state::ToolResult;
 
@@ -573,7 +573,7 @@ impl ScheduledLoops {
         match outcome {
             Ok(payload) => ToolResult::Success {
                 content: vec![
-                    json!({"type": "text", "text": crate::tools::vibe::python_dumps(&payload)}),
+                    json!({"type": "text", "text": pycompat::dumps(&payload, Dumps::DEFAULT)}),
                 ],
                 structured_content: Some(payload),
                 meta: None,

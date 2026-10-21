@@ -11,7 +11,9 @@ use crate::tui::completion::active_token;
 use crate::tui::controls::ControlState;
 use crate::tui::input::PromptEditor;
 use crate::tui::shortcuts::{Chord, chord_of};
-use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
+use crate::tui::state::{
+    EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
+};
 use crate::tui::submission::{Submission, classify};
 use crate::tui::workflow::{LiveBackend, run_command};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -360,17 +362,22 @@ async fn the_help_document_survives_a_canonical_resync() {
     let mut state = TuiState::new("session");
     submit_help(&mut state).await;
 
-    let mut replacement = TuiState::new("session");
-    replacement.entries.push(TranscriptEntry {
-        id: "canonical".to_owned(),
-        revision: 1,
-        kind: TranscriptKind::UserMessage,
-        text: "hello".to_owned(),
-        status: EntryStatus::Completed,
-        source: EntrySource::Restored,
-    });
     state
-        .replace_projection_preserving_diagnostics(replacement)
+        .resync(TuiSnapshot {
+            session_id: "session".to_owned(),
+            event_id: 0,
+            entries: vec![TranscriptEntry {
+                id: "canonical".to_owned(),
+                revision: 1,
+                kind: TranscriptKind::UserMessage,
+                text: "hello".to_owned(),
+                status: EntryStatus::Completed,
+                source: EntrySource::Restored,
+            }],
+            cursor_before: None,
+            cursor_after: None,
+            waiting: false,
+        })
         .expect("same-session replacement");
 
     let documents = state

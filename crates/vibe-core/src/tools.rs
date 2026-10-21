@@ -457,9 +457,14 @@ pub async fn track_call_start<F: std::future::Future>(
     CALL_PROGRESS.scope(progress, future).await
 }
 
-/// What deciding a call without running it resolves to.
-pub type AuthorizeFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<ToolApproval, crate::policy::PolicyError>> + Send + 'a>>;
+/// What deciding a call without asking anyone or running it resolves to.
+pub type PermissionFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<crate::policy::PermissionOutcome, crate::policy::PolicyError>>
+            + Send
+            + 'a,
+    >,
+>;
 
 pub trait ToolHandler: Send + Sync {
     fn invoke<'a>(
@@ -468,20 +473,19 @@ pub trait ToolHandler: Send + Sync {
         output: ToolOutputSink,
     ) -> ToolHandlerFuture<'a>;
 
-    /// Decides whether `invocation` may run, asking `approval` when the policy
-    /// in front of the handler asks, without running it. `None` for a handler
-    /// that guards nothing of its own.
+    /// What the policy in front of the handler makes of `invocation`, without
+    /// asking anyone or running it. `None` for a handler that guards nothing
+    /// of its own.
     ///
     /// A backend that executes the call elsewhere still decides it here, so
     /// both backends answer an approval off the same rules and the same
     /// session grants (reference `UnifiedPermissionResolver`, which binds each
     /// tool's `resolve_permission` and the session's `PermissionStore` to the
     /// unified harness).
-    fn authorize<'a>(
+    fn resolve_permission<'a>(
         &'a self,
         _invocation: &'a ToolInvocation,
-        _approval: &'a dyn crate::policy::ApprovalAgent,
-    ) -> Option<AuthorizeFuture<'a>> {
+    ) -> Option<PermissionFuture<'a>> {
         None
     }
 }

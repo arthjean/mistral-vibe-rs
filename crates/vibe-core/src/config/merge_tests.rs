@@ -2,6 +2,9 @@
 //! merge is proved from the entry point that composes a real layer stack.
 
 use std::collections::BTreeMap;
+use std::fs;
+
+use toml::Value;
 
 use super::*;
 

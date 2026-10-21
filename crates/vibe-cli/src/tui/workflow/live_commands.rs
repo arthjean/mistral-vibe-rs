@@ -983,7 +983,7 @@ pub(in crate::tui) fn log_level_overlay(picker: &Picker) -> Overlay {
         })
         .collect();
     let mut overlay = Overlay::new(OverlayKind::LogLevel, "Log Level", items);
-    overlay.select_id(picker.highlighted().as_str());
+    overlay.select_by_id(picker.highlighted().as_str());
     overlay.notice = Some(format!(
         "{}\n↑↓/jk Navigate  ←/→ Switch badge  Enter Toggle  Esc Close",
         picker.subtitle()

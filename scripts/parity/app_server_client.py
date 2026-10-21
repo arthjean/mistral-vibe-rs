@@ -412,12 +412,15 @@ def run_steps(
 
 
 class Normalizer(blackbox.Normalizer):
+    #: The keys whose values are wall-clock readings.
+    time_keys = TIME_KEYS
+
     def value(self, value: Any, key: str | None = None) -> Any:
         if key in COUNTER_KEYS and isinstance(value, int):
             return "<nonzero>" if value else 0
         if key in DURATION_KEYS and isinstance(value, int | float):
             return "<duration>"
-        if key in TIME_KEYS and value is not None:
+        if key in self.time_keys and value is not None:
             return "<time>"
         if key in ID_KEYS and isinstance(value, str) and value:
             return self.identity(value)

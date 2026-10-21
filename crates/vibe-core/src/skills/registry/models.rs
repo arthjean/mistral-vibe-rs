@@ -202,6 +202,35 @@ impl RegistrySkillItem {
         }
         String::new()
     }
+
+    /// The version the item calls latest, its own when it names none.
+    ///
+    /// Reference `metadata.latest_version or item.version`, as the catalog
+    /// rows and the version details read it: any nonzero number counts as
+    /// named, a negative one included.
+    #[must_use]
+    pub fn latest_version(&self) -> i64 {
+        if self.metadata.latest_version != 0 {
+            self.metadata.latest_version
+        } else {
+            self.version
+        }
+    }
+
+    /// The newest version a pin can move to, its own when the item names no
+    /// positive one.
+    ///
+    /// Reference `_resolve_latest_versions`, which unlike
+    /// [`Self::latest_version`] compares with `> 0`, so a negative number
+    /// falls back to the item's version.
+    #[must_use]
+    pub fn newest_version(&self) -> i64 {
+        if self.metadata.latest_version > 0 {
+            self.metadata.latest_version
+        } else {
+            self.version
+        }
+    }
 }
 
 /// One catalog page.

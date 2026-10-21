@@ -6,13 +6,14 @@ use std::path::Path;
 
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::observability::{self, LogLevel};
-use vibe_core::updates::{
-    GitHubUpdateGateway, UpdateCacheStore, UpdateGateway, UpdateGatewayCause, dismiss_update,
-    get_update_if_available, pending_update_from_cache, run_upgrade_commands,
-};
+use vibe_core::upgrade::run_upgrade_commands;
 
 use crate::Arguments;
 use crate::distribution::{REPOSITORY_URL, upgrade_commands};
+use crate::update_notifier::{
+    GitHubUpdateGateway, UpdateCacheStore, UpdateGateway, UpdateGatewayCause, dismiss_update,
+    get_update_if_available, pending_update_from_cache,
+};
 
 use super::super::updates::{
     CheckUpgradeOutcome, UPDATING_MESSAGE, UpdateChoice, UpdatePromptMode, UpdatePromptResult,

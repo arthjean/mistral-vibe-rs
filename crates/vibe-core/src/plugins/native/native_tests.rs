@@ -2,6 +2,7 @@
 
 use std::fs;
 
+use super::mcp::private_server_alias;
 use super::*;
 
 const DEMO_MANIFEST: &str = r#"{"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": "demo", "version": "0.1.0", "description": "Probe plugin"}

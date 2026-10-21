@@ -137,71 +137,22 @@ pub fn model_tools(environment: CommandEnvironment) -> Vec<ModelTool> {
         ModelTool {
             name: "read_file",
             description: "Return the text of a file, optionally starting at a zero-based line and stopping after a number of lines.".to_owned(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "offset": {"type": "integer", "default": 0, "minimum": 0},
-                    "limit": {"type": ["integer", "null"], "default": null, "minimum": 1},
-                },
-                "required": ["path"],
-                "additionalProperties": false,
-            }),
+            parameters: read_file_schema(),
         },
         ModelTool {
             name: "write_file",
             description: "Write UTF-8 text to a file, replacing it if present.".to_owned(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string"},
-                    "content": {"type": "string"},
-                },
-                "required": ["path", "content"],
-                "additionalProperties": false,
-            }),
+            parameters: write_file_schema(),
         },
         ModelTool {
             name: "edit",
             description: EDIT_DESCRIPTION.to_owned(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "file_path": {
-                        "type": "string",
-                        "description": "The file to change, relative to the working directory or absolute.",
-                    },
-                    "old_string": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": "The text to find, character for character, whitespace and line endings included.",
-                    },
-                    "new_string": {
-                        "type": "string",
-                        "description": "What replaces the match. Empty deletes it; it has to differ from old_string.",
-                    },
-                    "replace_all": {
-                        "type": "boolean",
-                        "default": false,
-                        "description": "Replace every match instead of requiring exactly one.",
-                    },
-                },
-                "required": ["file_path", "old_string", "new_string"],
-                "additionalProperties": false,
-            }),
+            parameters: edit_schema(),
         },
         ModelTool {
             name: "bash",
             description: bash_description(environment).to_owned(),
-            parameters: json!({
-                "type": "object",
-                "properties": {
-                    "command": {"type": "string"},
-                    "timeout_seconds": {"type": "integer", "default": 300, "minimum": 1, "maximum": 300},
-                },
-                "required": ["command"],
-                "additionalProperties": false,
-            }),
+            parameters: bash_schema(),
         },
         ModelTool {
             name: "skill",
@@ -290,6 +241,76 @@ pub fn model_tools(environment: CommandEnvironment) -> Vec<ModelTool> {
     ]
 }
 
+/// The parameters of `read_file`, which `run_typescript` also takes.
+pub(crate) fn read_file_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "offset": {"type": "integer", "default": 0, "minimum": 0},
+            "limit": {"type": ["integer", "null"], "default": null, "minimum": 1},
+        },
+        "required": ["path"],
+        "additionalProperties": false,
+    })
+}
+
+/// The parameters of `write_file`, which `run_typescript` also takes.
+pub(crate) fn write_file_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "path": {"type": "string"},
+            "content": {"type": "string"},
+        },
+        "required": ["path", "content"],
+        "additionalProperties": false,
+    })
+}
+
+/// The parameters of `edit`, which `run_typescript` also takes.
+pub(crate) fn edit_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "file_path": {
+                "type": "string",
+                "description": "The file to change, relative to the working directory or absolute.",
+            },
+            "old_string": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The text to find, character for character, whitespace and line endings included.",
+            },
+            "new_string": {
+                "type": "string",
+                "description": "What replaces the match. Empty deletes it; it has to differ from old_string.",
+            },
+            "replace_all": {
+                "type": "boolean",
+                "default": false,
+                "description": "Replace every match instead of requiring exactly one.",
+            },
+        },
+        "required": ["file_path", "old_string", "new_string"],
+        "additionalProperties": false,
+    })
+}
+
+/// The parameters of `bash`, the same in every command environment, which
+/// `run_typescript` also takes.
+pub(crate) fn bash_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "command": {"type": "string"},
+            "timeout_seconds": {"type": "integer", "default": 300, "minimum": 1, "maximum": 300},
+        },
+        "required": ["command"],
+        "additionalProperties": false,
+    })
+}
+
 fn question_schema() -> Value {
     json!({
         "type": "object",
@@ -374,7 +395,8 @@ fn question_schema() -> Value {
     })
 }
 
-fn todo_schema() -> Value {
+/// The parameters of `todo`, which `run_typescript` also takes.
+pub(crate) fn todo_schema() -> Value {
     json!({
         "type": "object",
         "title": "TodoArgs",

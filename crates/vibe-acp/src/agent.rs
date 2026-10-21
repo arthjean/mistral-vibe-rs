@@ -278,27 +278,18 @@ where
     /// The live session the client names, or the reference's
     /// `SessionNotFoundError`.
     pub(crate) fn session_harness(&self, session_id: &str) -> Result<Arc<AcpHarness<D>>, AcpError> {
-        self.lock_state()?
-            .sessions
-            .get(session_id)
-            .cloned()
+        self.find_live_session(session_id)?
             .ok_or_else(|| AcpError::SessionNotFound(session_id.to_owned()))
     }
 
-    /// A live session addressed either by its ACP identity or by the canonical
-    /// identity it runs under. Reference `_find_live_session`.
+    /// The live session the client names, if any. Reference
+    /// `_find_live_session`: a session is keyed by the one identity both the
+    /// client and the app server address it by.
     pub(crate) fn find_live_session(
         &self,
         session_id: &str,
     ) -> Result<Option<Arc<AcpHarness<D>>>, AcpError> {
-        let state = self.lock_state()?;
-        Ok(state.sessions.get(session_id).cloned().or_else(|| {
-            state
-                .sessions
-                .values()
-                .find(|harness| harness.canonical_id() == session_id)
-                .cloned()
-        }))
+        Ok(self.lock_state()?.sessions.get(session_id).cloned())
     }
 
     pub(crate) fn lock_state(&self) -> Result<MutexGuard<'_, AgentState<D>>, AcpError> {

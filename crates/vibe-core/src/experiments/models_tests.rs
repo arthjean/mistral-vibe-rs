@@ -1,8 +1,10 @@
 //! What the eval models accept, what they ignore, and what a feature resolves
 //! to.
 
-use super::json::JsonValue;
+use serde_json::Value;
+
 use super::models::{EvalResponse, ExperimentAttributes, FeatureDefinition};
+use crate::pycompat::{Dumps, dumps};
 
 fn response(text: &str) -> EvalResponse {
     serde_json::from_str(text).expect("the authored response parses")
@@ -33,12 +35,11 @@ fn a_response_ignores_every_field_the_models_do_not_declare() {
         }"#,
     );
     let resolved = decoded
-        .features
-        .get("vibe_cli_system_prompt")
+        .feature("vibe_cli_system_prompt")
         .expect("the known feature survives")
         .resolved_value()
         .clone();
-    assert_eq!(resolved, JsonValue::String("tests".to_owned()));
+    assert_eq!(resolved, Value::String("tests".to_owned()));
 }
 
 #[test]
@@ -46,32 +47,29 @@ fn a_forced_rule_wins_over_the_default_value() {
     let definition = feature(r#"{"defaultValue": "cli", "rules": [{"force": "tests"}]}"#);
     assert_eq!(
         *definition.resolved_value(),
-        JsonValue::String("tests".to_owned())
+        Value::String("tests".to_owned())
     );
     // The first rule carrying a force wins, not the first rule.
     let later = feature(r#"{"defaultValue": "cli", "rules": [{}, {"force": "tests"}]}"#);
-    assert_eq!(
-        *later.resolved_value(),
-        JsonValue::String("tests".to_owned())
-    );
+    assert_eq!(*later.resolved_value(), Value::String("tests".to_owned()));
 }
 
 #[test]
 fn a_rule_without_a_force_falls_through_to_the_default_value() {
     let none = feature(r#"{"defaultValue": "cli", "rules": [{}, {"tracks": []}]}"#);
-    assert_eq!(*none.resolved_value(), JsonValue::String("cli".to_owned()));
+    assert_eq!(*none.resolved_value(), Value::String("cli".to_owned()));
     // A rule forcing null is a rule without a force, upstream as here.
     let forced_null = feature(r#"{"defaultValue": "cli", "rules": [{"force": null}]}"#);
     assert_eq!(
         *forced_null.resolved_value(),
-        JsonValue::String("cli".to_owned())
+        Value::String("cli".to_owned())
     );
     // And a null default resolves to null rather than to an error.
     let null_default = feature(r#"{"defaultValue": null, "rules": []}"#);
     assert!(null_default.resolved_value().is_null());
     // A feature carrying no rules key at all is a feature with no rules.
     let bare = feature(r#"{"defaultValue": "cli"}"#);
-    assert_eq!(*bare.resolved_value(), JsonValue::String("cli".to_owned()));
+    assert_eq!(*bare.resolved_value(), Value::String("cli".to_owned()));
 }
 
 #[test]
@@ -79,17 +77,17 @@ fn a_falsy_forced_value_is_still_a_force() {
     for (document, expected) in [
         (
             r#"{"defaultValue": "cli", "rules": [{"force": ""}]}"#,
-            JsonValue::String(String::new()),
+            Value::String(String::new()),
         ),
         (
             r#"{"defaultValue": "cli", "rules": [{"force": false}]}"#,
-            JsonValue::Bool(false),
+            Value::Bool(false),
         ),
     ] {
         assert_eq!(*feature(document).resolved_value(), expected);
     }
     let zero = feature(r#"{"defaultValue": "cli", "rules": [{"force": 0}]}"#);
-    assert_eq!(zero.resolved_value().python_json(), "0");
+    assert_eq!(dumps(zero.resolved_value(), Dumps::DEFAULT), "0");
 }
 
 #[test]

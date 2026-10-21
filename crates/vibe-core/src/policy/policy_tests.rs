@@ -7,14 +7,17 @@
 //! atomicity of a revocation, and the wiring from a registered tool to a
 //! decision.
 
+use super::store::SESSION_APPROVAL;
 use super::*;
 use crate::scratchpad::init_scratchpad;
+use crate::tools::config::{SharedToolConfig, ToolConfigResolver};
 use crate::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolPresentationKind,
-    ToolRegistry, ToolSource, ToolSpec,
+    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler, ToolInvocation,
+    ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, RwLock as StdRwLock};
 use tempfile::tempdir;
 use tokio::sync::Notify;
 

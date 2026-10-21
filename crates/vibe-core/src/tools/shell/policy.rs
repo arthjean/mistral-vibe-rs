@@ -19,8 +19,8 @@ use serde_json::Value;
 
 use crate::platform::{Platform, parse_policy_path};
 use crate::policy::{
-    ApprovalAgent, PermissionContext, PermissionMode, PermissionRequirement, PermissionStore,
-    PolicyGuardedTool,
+    ApprovalAgent, PermissionContext, PermissionMode, PermissionOutcome, PermissionRequirement,
+    PermissionStore, PolicyGuardedTool,
 };
 use crate::process::ClientToolIo;
 use crate::shell::{
@@ -122,23 +122,22 @@ struct ShellPolicyGuard {
 }
 
 impl ToolHandler for ShellPolicyGuard {
-    fn authorize<'a>(
+    fn resolve_permission<'a>(
         &'a self,
         invocation: &'a ToolInvocation,
-        approval: &'a dyn crate::policy::ApprovalAgent,
-    ) -> Option<crate::tools::AuthorizeFuture<'a>> {
+    ) -> Option<crate::tools::PermissionFuture<'a>> {
         Some(Box::pin(async move {
             let analysis = self
                 .policy
                 .analysis(&invocation.arguments)
                 .map_err(|error| crate::policy::PolicyError::Approval(error.to_string()))?;
             match analysis.mode {
-                PermissionMode::Always => Ok(self.guarded.allowed_outright()),
-                PermissionMode::Ask => match self.guarded.authorize(invocation, approval) {
+                PermissionMode::Always => Ok(PermissionOutcome::Cleared { covered: false }),
+                PermissionMode::Ask => match self.guarded.resolve_permission(invocation) {
                     Some(decided) => decided.await,
-                    None => Ok(self.guarded.allowed_outright()),
+                    None => Ok(PermissionOutcome::Cleared { covered: false }),
                 },
-                PermissionMode::Never => Err(crate::policy::PolicyError::Denied(format!(
+                PermissionMode::Never => Ok(PermissionOutcome::Refused(format!(
                     "the command is refused by the shell policy: {}",
                     analysis.rationale.join("; ")
                 ))),

@@ -10,25 +10,26 @@ disk under ``session_logging.save_dir``: the session directories, their
 ``meta.json`` and ``messages.jsonl``, the listing index, the last-session
 pointers and the session leases.
 
-The driver is the rewind oracle's (``rewind.py``): a fresh home per scenario,
-the scripted chat-completions stand-in, and the same abstract ``start`` and
-``turn`` steps rendered in the dialect of the server being driven. It adds
-what a saved session needs to be observed as saved: a ``restart`` that stops
-the server and opens a new one over the same home, a second server running
-beside the first (``"on": 2``), a ``seed`` that writes a session directory the
-way the reference lays one out, so both implementations read the same bytes,
-and a ``store`` step recording the session directory tree. Nothing is
-imported from the reference; its own ``vibe-app-server`` is the oracle, which
-is what lets ``crates/vibe-app-server/tests/session_parity_tests.rs`` replay
-the same scenarios against this port.
+The driver is built on ``app_server_client.py``, as the rewind capture is: a
+fresh home per scenario, the scripted chat-completions stand-in, and the same
+abstract ``start`` and ``turn`` steps rendered in the dialect of the server
+being driven. It adds what a saved session needs to be observed as saved: a
+``restart`` that stops the server and opens a new one over the same home, a
+second server running beside the first (``"on": 2``), a ``seed`` that writes a
+session directory the way the reference lays one out, so both implementations
+read the same bytes, and a ``store`` step recording the session directory
+tree. Nothing is imported from the reference; its own ``vibe-app-server`` is
+the oracle, which is what lets
+``crates/vibe-app-server/tests/session_parity_tests.rs`` replay the same
+scenarios against this port.
 
 A client names what an earlier answer told it, so a scenario can too: ``$S1``
 is the first session a state answered with, ``$U1`` the first user entry, and
 ``$C1`` the first page cursor an answer carried.
 
-Normalization is the rewind oracle's, plus the two opaque shapes this surface
-mints: a page cursor is replaced by the identity it encodes, and a session
-directory name keeps its layout with its timestamp and short identifier
+Normalization is ``app_server_client.py``'s, plus the two opaque shapes this
+surface mints: a page cursor is replaced by the identity it encodes, and a
+session directory name keeps its layout with its timestamp and short identifier
 replaced by placeholders.
 
 Usage::
@@ -102,7 +103,7 @@ TURN_BACKEND = [{"text": f"Answer {index}."} for index in range(1, 13)]
 
 
 class Sessions(app_server_client.Session):
-    """The rewind oracle's session, also learning page cursors and forks."""
+    """The shared app-server session, also learning page cursors and forks."""
 
     def __init__(self, root: Path) -> None:
         super().__init__(root)

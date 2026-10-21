@@ -1,6 +1,8 @@
 //! US-066: addressing configuration values by JSON Pointer, and the write path
 //! US-067 routes through it.
 
+use std::fs;
+
 use toml::{Table, Value};
 
 use super::patch::{

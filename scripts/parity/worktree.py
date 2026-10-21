@@ -82,8 +82,8 @@ Usage::
 ``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
 default path; ``--reference`` wins over it.
 
-The wrapper re-executes itself with the reference interpreter when the current
-one cannot import ``vibe``.
+The wrapper re-executes itself with the reference interpreter, importing the
+pinned commit extracted with ``git archive`` (``scripts/parity/reference.py``).
 """
 
 from __future__ import annotations

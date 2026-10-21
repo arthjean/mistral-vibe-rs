@@ -1,5 +1,9 @@
 //! US-068: describing the configuration surface for a settings screen.
 
+use std::fs;
+
+use toml::Value;
+
 use super::registry::default_document;
 use super::*;
 

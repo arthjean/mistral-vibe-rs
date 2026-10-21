@@ -162,105 +162,47 @@ fn set_index(parts: &mut [String], index: i64) {
 
 impl RawOperation {
     /// How this operation's own index shifts, and what it does to `index`,
-    /// when a `remove` at `index` under `parent` is taken back.
-    fn undo_remove(&mut self, parent: &[String], index: i64) -> i64 {
+    /// when the `undone` removal or addition at `index` under `parent` is
+    /// taken back: a removal taken back pushes the indexes after it up by
+    /// one, an addition pulls them down.
+    fn undo(&mut self, undone: Pending, parent: &[String], index: i64) -> i64 {
         let mut index = index;
+        let shift = match undone {
+            Pending::Removed => 1,
+            Pending::Added => -1,
+        };
+        // `removing`: whether `parts` is where this operation removes from
+        // (a removal's path, a move's source). A removal taken back at that
+        // very index shifts it too; an addition there keeps its place.
+        let mut adjust = |parts: &mut Vec<String>, removing: bool| {
+            if parent_of(parts) != parent {
+                return;
+            }
+            let Some(own) = index_of(parts) else {
+                return;
+            };
+            let after = if removing && matches!(undone, Pending::Removed) {
+                own >= index
+            } else {
+                own > index
+            };
+            if after {
+                set_index(parts, own + shift);
+            } else if removing {
+                index -= 1;
+            } else {
+                index += 1;
+            }
+        };
         match self.kind {
             Kind::Replace => {}
-            Kind::Remove => {
-                if parent_of(&self.parts) == parent
-                    && let Some(own) = index_of(&self.parts)
-                {
-                    if own >= index {
-                        set_index(&mut self.parts, own + 1);
-                    } else {
-                        index -= 1;
-                    }
-                }
-            }
-            Kind::Add => {
-                if parent_of(&self.parts) == parent
-                    && let Some(own) = index_of(&self.parts)
-                {
-                    if own > index {
-                        set_index(&mut self.parts, own + 1);
-                    } else {
-                        index += 1;
-                    }
-                }
-            }
+            Kind::Remove => adjust(&mut self.parts, true),
+            Kind::Add => adjust(&mut self.parts, false),
             Kind::Move => {
-                if let Some(from) = self.from.as_mut()
-                    && parent_of(from) == parent
-                    && let Some(own) = index_of(from)
-                {
-                    if own >= index {
-                        set_index(from, own + 1);
-                    } else {
-                        index -= 1;
-                    }
+                if let Some(from) = self.from.as_mut() {
+                    adjust(from, true);
                 }
-                if parent_of(&self.parts) == parent
-                    && let Some(own) = index_of(&self.parts)
-                {
-                    if own > index {
-                        set_index(&mut self.parts, own + 1);
-                    } else {
-                        index += 1;
-                    }
-                }
-            }
-        }
-        index
-    }
-
-    /// The same for an `add` at `index` under `parent` taken back.
-    fn undo_add(&mut self, parent: &[String], index: i64) -> i64 {
-        let mut index = index;
-        match self.kind {
-            Kind::Replace => {}
-            Kind::Remove => {
-                if parent_of(&self.parts) == parent
-                    && let Some(own) = index_of(&self.parts)
-                {
-                    if own > index {
-                        set_index(&mut self.parts, own - 1);
-                    } else {
-                        index -= 1;
-                    }
-                }
-            }
-            Kind::Add => {
-                if parent_of(&self.parts) == parent
-                    && let Some(own) = index_of(&self.parts)
-                {
-                    if own > index {
-                        set_index(&mut self.parts, own - 1);
-                    } else {
-                        index += 1;
-                    }
-                }
-            }
-            Kind::Move => {
-                if let Some(from) = self.from.as_mut()
-                    && parent_of(from) == parent
-                    && let Some(own) = index_of(from)
-                {
-                    if own > index {
-                        set_index(from, own - 1);
-                    } else {
-                        index -= 1;
-                    }
-                }
-                if parent_of(&self.parts) == parent
-                    && let Some(own) = index_of(&self.parts)
-                {
-                    if own > index {
-                        set_index(&mut self.parts, own - 1);
-                    } else {
-                        index += 1;
-                    }
-                }
+                adjust(&mut self.parts, false);
             }
         }
         index
@@ -353,7 +295,7 @@ impl<'a> DiffBuilder<'a> {
                     let own_parent = parent_of(&removed.parts).to_vec();
                     for later in self.later(slot) {
                         if let Some(operation) = self.operations[later].as_mut() {
-                            own = operation.undo_remove(&own_parent, own);
+                            own = operation.undo(Pending::Removed, &own_parent, own);
                         }
                     }
                     set_index(&mut removed.parts, own);
@@ -404,7 +346,7 @@ impl<'a> DiffBuilder<'a> {
             let own_parent = parent_of(&added.parts).to_vec();
             for later in self.later(added_slot) {
                 if let Some(operation) = self.operations[later].as_mut() {
-                    own = operation.undo_add(&own_parent, own);
+                    own = operation.undo(Pending::Added, &own_parent, own);
                 }
             }
             set_index(&mut added.parts, own);

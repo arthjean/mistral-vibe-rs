@@ -10,10 +10,11 @@ mod teleport;
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
-use vibe_app_server::client::{ClientError, TurnDriver};
+use vibe_app_server::client::TurnDriver;
 
 use crate::agent::AcpAgent;
 use crate::agent::sessions::history_entries;
+use crate::projection::text_content;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
 use vibe_core::session_id::uuid_v4;
@@ -342,11 +343,7 @@ where
     /// `resources.runtime.skills` reads them: a Unified Harness session
     /// answers them from `runtime/read`, a legacy one lists them.
     async fn session_skills(&self, harness: &AcpHarness<D>) -> Vec<Value> {
-        let unified = harness
-            .service
-            .lock()
-            .await
-            .is_unified(&harness.canonical_id());
+        let unified = harness.service.lock().await.is_unified(&harness.session_id);
         let (method, pointer) = if unified {
             ("runtime/read", "/runtime/skills")
         } else {
@@ -432,12 +429,11 @@ where
                 )],
             }),
         );
-        let session_id = harness.canonical_id();
         let result = harness
             .service
             .lock()
             .await
-            .compact(&session_id, instructions)
+            .compact(&harness.session_id, instructions)
             .await;
         if let Err(error) = result {
             let message = error.to_string();
@@ -551,7 +547,7 @@ where
     async fn mcp_status(&self, harness: &AcpHarness<D>) -> Value {
         let mut sources = match self.mcp_sources(harness).await {
             Ok(sources) => sources,
-            Err(error) => return self.reply(harness, &app_server_message(&error), None),
+            Err(error) => return self.reply(harness, &error.app_server_message(), None),
         };
         if sources.is_empty() {
             return self.reply(
@@ -584,7 +580,7 @@ where
             Ok(sources) => sources
                 .iter()
                 .any(|source| source.get("name").and_then(Value::as_str) == Some(alias)),
-            Err(error) => return self.reply(harness, &app_server_message(&error), None),
+            Err(error) => return self.reply(harness, &error.app_server_message(), None),
         };
         if !known {
             return self.reply(harness, &format!("Unknown MCP server: `{alias}`"), None);
@@ -594,11 +590,13 @@ where
         // is published.
         let pending = harness.service.lock().await.begin_public_call(
             "mcp_catalog/login",
-            json!({"sessionId": harness.canonical_id(), "name": alias}),
+            json!({"sessionId": harness.session_id, "name": alias}),
         );
         let pending = match pending {
             Ok(pending) => pending,
-            Err(error) => return self.reply(harness, &app_server_message(&error.into()), None),
+            Err(error) => {
+                return self.reply(harness, &AcpError::from(error).app_server_message(), None);
+            }
         };
         let (sender, mut urls) = tokio::sync::mpsc::unbounded_channel::<String>();
         let name = alias.to_owned();
@@ -632,7 +630,7 @@ where
                 &format!("MCP server `{alias}` authenticated."),
                 None,
             ),
-            Err(error) => self.reply(harness, &app_server_message(&error.into()), None),
+            Err(error) => self.reply(harness, &AcpError::from(error).app_server_message(), None),
         }
     }
 
@@ -642,7 +640,7 @@ where
             .await
         {
             Ok(_) => self.reply(harness, &format!("MCP server `{alias}` logged out."), None),
-            Err(error) => self.reply(harness, &app_server_message(&error), None),
+            Err(error) => self.reply(harness, &error.app_server_message(), None),
         }
     }
 
@@ -686,7 +684,7 @@ where
         {
             return Ok(self.reply(
                 harness,
-                &format!("Error: {}", app_server_message(&error)),
+                &format!("Error: {}", error.app_server_message()),
                 None,
             ));
         }
@@ -710,7 +708,7 @@ where
         };
         self.call(harness, method, json!({"agentName": "lean"}))
             .await
-            .map_err(|error| AcpError::InvalidParams(app_server_message(&error)))?;
+            .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?;
         self.send_config_options(harness).await?;
         let message = if installed {
             "The Lean agent is installed."
@@ -760,19 +758,6 @@ fn proxy_help(settings: &Value) -> String {
         lines.extend(configured);
     }
     lines.join("\n")
-}
-
-/// The message an app-server error carries, which is what the reference
-/// reads off `AppServerResponseError.error.message`.
-fn app_server_message(error: &AcpError) -> String {
-    match error {
-        AcpError::AppServer(ClientError::Protocol(_, message)) => message.clone(),
-        other => other.to_string(),
-    }
-}
-
-pub(crate) fn text_content(text: &str) -> Value {
-    json!({"type": "content", "content": {"type": "text", "text": text}})
 }
 
 /// A command's prompt response: no usage, since no model ran.

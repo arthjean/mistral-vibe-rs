@@ -3,6 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde_json::json;
+
 use super::registry::{
     FIELDS, FieldDefault, FieldKind, MergeStrategy, default_document, field, json_schema,
     schema_version,
@@ -176,7 +178,7 @@ fn realigned_defaults() -> BTreeMap<&'static str, (Option<JsonValue>, JsonValue)
 #[test]
 fn every_field_published_before_the_registry_keeps_its_shape() {
     let generated = LayeredConfig::schema();
-    let previous = LayeredConfig::schema_before_the_registry();
+    let previous = schema_before_the_registry();
     let realigned = realigned_defaults();
     let properties = previous["properties"]
         .as_object()
@@ -283,4 +285,96 @@ fn the_schema_is_emitted_identically_on_every_call() {
         .expect("the version names its algorithm");
     assert_eq!(algorithm, "sha256");
     assert_eq!(digest.len(), 64, "{digest}");
+}
+
+/// The schema literal this port published before the registry generated
+/// it, kept whole as the fixture these tests diff against so the generated
+/// surface is proved unchanged rather than assumed.
+fn schema_before_the_registry() -> JsonValue {
+    json!({
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+            "active_model": {"type": "string", "default": "", "description": "Model used for new turns."},
+            "thinking": {"enum": ["off", "low", "medium", "high", "max"], "default": "off", "description": "Reasoning effort for the active model."},
+            "theme": {"enum": THEME_VALUES, "default": "system", "description": "Terminal color theme."},
+            "notifications": {
+                "enum": ["off", "unfocused", "always"],
+                "default": "unfocused",
+                "description": "When desktop notifications may be sent."
+            },
+            "enable_update_checks": {"type": "boolean", "default": true, "description": "Check for new releases in the background."},
+            "show_thinking_nodes": {"type": "boolean", "default": true, "description": "Show reasoning regions in the transcript."},
+            "voice_mode_enabled": {"type": "boolean", "default": false, "description": "Enable voice input."},
+            "narrator_enabled": {"type": "boolean", "default": false, "description": "Read eligible assistant responses aloud."},
+            "proxy": {"type": ["string", "null"], "format": "uri", "description": "Legacy proxy URL. Prefer /proxy-setup for protocol-specific values."},
+            "tls_ca_path": {"type": ["string", "null"], "description": "Legacy TLS certificate path. Prefer /proxy-setup."},
+            "dotenv_path": {"type": ["string", "null"], "description": "Optional dotenv file loaded by the runtime."},
+            "enabled_tools": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": "Tool names or patterns to publish. When set, only matching tools are published. Globs and `re:` regular expressions are supported."
+            },
+            "disabled_tools": {
+                "type": "array",
+                "items": {"type": "string"},
+                "default": [],
+                "description": "Tool names or patterns to withhold, applied after `enabled_tools`. Globs and `re:` regular expressions are supported."
+            },
+            "mcp_servers": {
+                "type": "array",
+                "description": "MCP server definitions.",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name", "transport"],
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "transport": {"enum": ["stdio", "streamable-http"]},
+                        "command": {"type": "string", "minLength": 1},
+                        "url": {"type": "string", "format": "uri"},
+                        "headers": {"type": "object", "additionalProperties": {"type": "string"}},
+                        "args": {"type": "array", "items": {"type": "string"}},
+                        "env": {"type": "object", "additionalProperties": {"type": "string"}},
+                        "cwd": {"type": "string"},
+                        "disabled": {"type": "boolean"},
+                        "disabled_tools": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "startup_timeout_sec": {"type": "number", "exclusiveMinimum": 0},
+                        "tool_timeout_sec": {"type": "number", "exclusiveMinimum": 0}
+                    },
+                    "allOf": [
+                        {
+                            "if": {"properties": {"transport": {"const": "stdio"}}},
+                            "then": {"required": ["command"]}
+                        },
+                        {
+                            "if": {"properties": {"transport": {"const": "streamable-http"}}},
+                            "then": {"required": ["url"]}
+                        }
+                    ]
+                }
+            },
+            "connectors": {
+                "type": "array",
+                "description": "Persistent connector enablement preferences.",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name"],
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "disabled": {"type": "boolean"},
+                        "disabled_tools": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        }
+    })
 }

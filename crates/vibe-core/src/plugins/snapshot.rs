@@ -522,9 +522,9 @@ fn hooks(resolution: &ResolvedPluginSet) -> Vec<PluginHookSnapshot> {
             Some(PluginHookSnapshot {
                 plugin_name: normalize_nfc(&plugin.name),
                 declared_name: normalize_nfc(&definition.declared_name),
-                source: definition.source.clone(),
-                protocol: definition.protocol.clone(),
-                visibility: definition.visibility.clone(),
+                source: definition.source.as_str().to_owned(),
+                protocol: definition.protocol.as_str().to_owned(),
+                visibility: "private".to_owned(),
                 order: definition.order,
                 config: normalize_json(&config),
                 config_file: path_ref(plugin, &definition.config_file),

@@ -30,7 +30,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
-from reference import require_pin  # noqa: E402
+from reference import reexecute_pinned  # noqa: E402
 
 # The argument shapes the corpus replays, keyed by trace id.
 CASES: dict[str, dict[str, Any]] = {
@@ -182,8 +182,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=None)
     arguments = parser.parse_args()
 
-    commit = require_pin(arguments.reference, arguments.expected_commit)
-    sys.path.insert(0, str(arguments.reference))
+    commit, _ = reexecute_pinned(arguments.reference, arguments.expected_commit)
     from vibe.core.config.harness_files import init_harness_files_manager
 
     init_harness_files_manager()

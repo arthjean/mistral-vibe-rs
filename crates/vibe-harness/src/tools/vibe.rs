@@ -4,7 +4,8 @@
 //! legacy tool's semantics (`vibe/core/tools/builtins/todo.py`) in memory per
 //! session, and the scratchpad (`vibe/app_server/_unified_scratchpad.py`)
 //! keeps notes as files under the session's own storage. A success carries
-//! the result twice, as `json.dumps` text and as structured content.
+//! the result twice, as `json.dumps` text and as structured content, every
+//! payload built with its keys in the order its model declares them.
 
 use std::path::{Path, PathBuf};
 
@@ -17,16 +18,6 @@ use crate::state::ToolResult;
 const MAX_TODOS_DEFAULT: usize = 100;
 const TODO_STATUSES: [&str; 4] = ["pending", "in_progress", "completed", "cancelled"];
 const TODO_PRIORITIES: [&str; 3] = ["low", "medium", "high"];
-
-/// The field orders the payloads are declared in, which `json.dumps` writes
-/// them in whatever order a stored payload carries its keys.
-const FIELD_ORDERS: &[&[&str]] = &[
-    &["verb", "todos", "total_count", "message"],
-    &["id", "content", "status", "priority"],
-    &["verb", "path", "content", "files", "message"],
-    &["answers", "cancelled"],
-    &["question", "answer", "isOther"],
-];
 
 /// The answers a user-input callback returned, every default filled as the
 /// reference's `UserQuestionResult` model fills it.
@@ -50,38 +41,10 @@ pub fn question_result(result: &Value) -> Value {
     })
 }
 
-/// Python's `json.dumps` with its default separators and ASCII escaping,
-/// every object's keys in the order its model declares them.
-#[must_use]
-pub fn python_dumps(value: &Value) -> String {
-    pycompat::dumps(&ordered(value), Dumps::DEFAULT)
-}
-
-fn ordered(value: &Value) -> Value {
-    match value {
-        Value::Array(items) => Value::Array(items.iter().map(ordered).collect()),
-        Value::Object(map) => {
-            let order = FIELD_ORDERS
-                .iter()
-                .find(|order| map.keys().all(|key| order.contains(&key.as_str())));
-            let mut keys: Vec<&String> = map.keys().collect();
-            if let Some(order) = order {
-                keys.sort_by_key(|key| order.iter().position(|known| known == key));
-            }
-            Value::Object(
-                keys.into_iter()
-                    .map(|key| (key.clone(), ordered(&map[key])))
-                    .collect(),
-            )
-        }
-        other => other.clone(),
-    }
-}
-
 /// A provided tool's success: the payload as text and as structure.
 fn succeeded(payload: Value) -> ToolResult {
     ToolResult::Success {
-        content: vec![json!({"type": "text", "text": python_dumps(&payload)})],
+        content: vec![json!({"type": "text", "text": pycompat::dumps(&payload, Dumps::DEFAULT)})],
         structured_content: Some(payload),
         meta: None,
     }

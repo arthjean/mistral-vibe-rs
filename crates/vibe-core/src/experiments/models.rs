@@ -18,16 +18,15 @@
 //! exception: they are posted with `exclude_none=True`, so an absent field is
 //! left out.
 //!
-//! The values a rule forces are [`JsonValue`] rather than [`serde_json::Value`]
-//! because the reference answers an object-valued variant with `json.dumps` of
-//! the decoded payload, and that string carries the key order the wire carried.
-//! [`super::json`] explains what a sorted re-encode would change.
+//! The values a rule forces keep the key order the wire carried, because the
+//! reference answers an object-valued variant with `json.dumps` of the decoded
+//! payload: the workspace builds `serde_json` with `preserve_order`, and the
+//! features keep the order the response lists them in for the same reason.
 //!
 //! Reference: `vibe/core/experiments/models.py` at the pinned commit.
 
 use serde::{Deserialize, Serialize};
-
-use super::json::{JsonValue, OrderedMap};
+use serde_json::Value;
 
 /// The attributes the client posts for the proxy to evaluate against, which
 /// a telemetry census also carries as the snapshot exposures are segmented by.
@@ -108,7 +107,7 @@ pub struct TrackedExperimentResult {
     #[serde(rename = "variationId", default)]
     pub variation_id: Option<i64>,
     #[serde(default)]
-    pub value: JsonValue,
+    pub value: Value,
     #[serde(rename = "inExperiment", default)]
     pub in_experiment: Option<bool>,
     #[serde(rename = "hashAttribute", default)]
@@ -139,7 +138,7 @@ pub struct TrackData {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FeatureRule {
     #[serde(default)]
-    pub force: JsonValue,
+    pub force: Value,
     #[serde(default)]
     pub tracks: Vec<TrackData>,
 }
@@ -148,7 +147,7 @@ pub struct FeatureRule {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FeatureDefinition {
     #[serde(rename = "defaultValue", default)]
-    pub default_value: JsonValue,
+    pub default_value: Value,
     #[serde(default)]
     pub rules: Vec<FeatureRule>,
 }
@@ -163,7 +162,7 @@ impl FeatureDefinition {
     ///
     /// Reference `FeatureDefinition.resolved_value`.
     #[must_use]
-    pub fn resolved_value(&self) -> &JsonValue {
+    pub fn resolved_value(&self) -> &Value {
         self.rules
             .iter()
             .map(|rule| &rule.force)
@@ -181,6 +180,51 @@ impl FeatureDefinition {
 /// Reference `EvalResponse`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct EvalResponse {
-    #[serde(default)]
-    pub features: OrderedMap<FeatureDefinition>,
+    /// Every feature under its key, in the order the response lists them.
+    #[serde(default, with = "ordered_features")]
+    pub features: Vec<(String, FeatureDefinition)>,
+}
+
+impl EvalResponse {
+    /// The feature `key` names, or [`None`].
+    #[must_use]
+    pub fn feature(&self, key: &str) -> Option<&FeatureDefinition> {
+        self.features
+            .iter()
+            .find(|(candidate, _)| candidate == key)
+            .map(|(_, feature)| feature)
+    }
+}
+
+/// The features as the JSON object the wire carries, in its order.
+///
+/// The object is decoded as a [`serde_json::Map`] first, which keeps a
+/// repeated key at its first position with its last value, as the dict
+/// `json.loads` builds does, and each value then reads as a feature.
+mod ordered_features {
+    use serde::de::Error as _;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use serde_json::{Map, Value};
+
+    use super::FeatureDefinition;
+
+    pub(super) fn serialize<S: Serializer>(
+        features: &[(String, FeatureDefinition)],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.collect_map(features.iter().map(|(key, feature)| (key, feature)))
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Vec<(String, FeatureDefinition)>, D::Error> {
+        Map::<String, Value>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(key, value)| {
+                FeatureDefinition::deserialize(value)
+                    .map(|feature| (key, feature))
+                    .map_err(D::Error::custom)
+            })
+            .collect()
+    }
 }

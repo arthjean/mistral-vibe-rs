@@ -5768,6 +5768,7 @@ dependencies = [
  "notify",
  "portable-pty",
  "ratatui",
+ "regex",
  "reqwest",
  "secrecy",
  "serde",

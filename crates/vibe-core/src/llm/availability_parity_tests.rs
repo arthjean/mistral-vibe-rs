@@ -18,7 +18,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use super::availability::{CACHE_FILE, ModelAvailability, cache_key};
 use super::backend_parity_tests::{
@@ -28,7 +28,7 @@ use super::backend_parity_tests::{
 use super::retry::{Clock, SleepFuture, SleepKind};
 use super::utility::{self, UtilityFeature};
 use super::{BackendContext, Credentials, MapCredentials};
-use crate::experiments::{JsonValue, OrderedMap};
+use crate::credential_cache::read_entries;
 use crate::provider::config::{
     ApiSettings, BackendKind, ModelConfig, ModelRouting, ProviderConfig, UtilityModels,
 };
@@ -258,14 +258,7 @@ fn every_verdict_is_cached_under_the_recorded_key() {
 /// The cache entries a seed describes, written the way the oracle's
 /// `write_seed` writes them through the reference's own `_write_entries`.
 fn write_seed(path: &Path, seed: &Value, labels: &BTreeMap<String, String>, now: u64) {
-    let mut entries = std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<JsonValue>(&text).ok())
-        .and_then(|value| match value {
-            JsonValue::Object(entries) => Some(entries),
-            _ => None,
-        })
-        .unwrap_or_default();
+    let mut entries = read_entries(path);
     for item in seed.as_array().expect("a seed") {
         if let Some(raw) = item["raw"].as_str() {
             let key = if raw == "$FIRST" {
@@ -273,28 +266,30 @@ fn write_seed(path: &Path, seed: &Value, labels: &BTreeMap<String, String>, now:
             } else {
                 raw.to_owned()
             };
-            let value: JsonValue =
-                serde_json::from_value(item["value"].clone()).expect("a raw entry");
-            entries.insert(key, value);
+            entries.insert(key, item["value"].clone());
         } else {
-            let mut fields = OrderedMap::new();
+            let mut fields = Map::new();
             fields.insert(
                 "available".to_owned(),
-                JsonValue::Bool(item["available"].as_bool().expect("a verdict")),
+                Value::Bool(item["available"].as_bool().expect("a verdict")),
             );
             let age = item["age"].as_u64().expect("an age");
-            fields.insert(
-                "stored_at_timestamp".to_owned(),
-                JsonValue::Number((now - age).into()),
-            );
+            fields.insert("stored_at_timestamp".to_owned(), Value::from(now - age));
             entries.insert(
                 labels[item["model"].as_str().expect("a model")].clone(),
-                JsonValue::Object(fields),
+                Value::Object(fields),
             );
         }
     }
     std::fs::create_dir_all(path.parent().expect("a parent")).expect("the home exists");
-    std::fs::write(path, JsonValue::Object(entries).python_json_compact()).expect("a seed writes");
+    let text = crate::pycompat::dumps(
+        &Value::Object(entries),
+        crate::pycompat::Dumps {
+            separators: Some((",", ":")),
+            ..crate::pycompat::Dumps::DEFAULT
+        },
+    );
+    std::fs::write(path, text).expect("a seed writes");
 }
 
 /// The platform a request names is the capturing machine's.

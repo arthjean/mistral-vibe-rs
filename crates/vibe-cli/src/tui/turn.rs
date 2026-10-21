@@ -299,18 +299,16 @@ pub(super) fn drain_update_receiver(
             } => {
                 let mut transcript = history_entry(*entry);
                 transcript.id = format!("{turn_id}:{}", transcript.id);
-                let previous_text = state
-                    .entries
-                    .iter()
-                    .find(|current| current.id == transcript.id)
-                    .map(|current| current.text.clone());
-                track_narrated_entry(state, &transcript, previous_text.as_deref());
-                let existing = state
-                    .entries
-                    .iter()
-                    .find(|current| current.id == transcript.id);
-                if let Some(current) = existing {
-                    transcript.revision = current.revision.saturating_add(1);
+                let current = state
+                    .entry(&transcript.id)
+                    .map(|current| (current.text.clone(), current.revision));
+                track_narrated_entry(
+                    state,
+                    &transcript,
+                    current.as_ref().map(|(text, _)| text.as_str()),
+                );
+                if let Some((_, revision)) = current {
+                    transcript.revision = revision.saturating_add(1);
                     ServerEvent::EntryUpdated {
                         event_id,
                         entry: transcript,

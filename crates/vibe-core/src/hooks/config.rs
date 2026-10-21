@@ -67,10 +67,10 @@ pub fn load_hooks_file_with(path: &Path, strict: bool) -> HookConfigResult {
         }
     };
     if strict {
-        let extra: Vec<FieldError> = data
+        let extra: Vec<FieldError<'_>> = data
             .keys()
             .filter(|key| key.as_str() != "hooks")
-            .map(|key| (leak_location(key), EXTRA_FORBIDDEN.to_owned()))
+            .map(|key| (key.as_str(), EXTRA_FORBIDDEN.to_owned()))
             .collect();
         if !extra.is_empty() {
             result
@@ -152,8 +152,9 @@ fn toml_error_message(error: &toml::de::Error) -> String {
     message
 }
 
-/// One validation error: where it happened, and Pydantic's message.
-type FieldError = (&'static str, String);
+/// One validation error: where it happened, a declared field or a key the
+/// document holds, and Pydantic's message.
+type FieldError<'a> = (&'a str, String);
 
 const FIELD_REQUIRED: &str = "Field required";
 const VALID_STRING: &str = "Input should be a valid string";
@@ -175,22 +176,16 @@ const DECLARED_FIELDS: [&str; 7] = [
     "description",
 ];
 
-/// A location for an undeclared key. Locations are `'static` because the
-/// declared ones are; an undeclared key is rare enough to leak its name.
-fn leak_location(key: &str) -> &'static str {
-    Box::leak(key.to_owned().into_boxed_str())
-}
-
 /// Reference `_StrictHookConfig`: the lax entry model that also forbids keys it
 /// does not declare.
-fn validate_strict_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError>> {
-    let extra: Vec<FieldError> = entry
+fn validate_strict_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError<'_>>> {
+    let extra: Vec<FieldError<'_>> = entry
         .as_table()
         .map(|table| {
             table
                 .keys()
                 .filter(|key| !DECLARED_FIELDS.contains(&key.as_str()))
-                .map(|key| (leak_location(key), EXTRA_FORBIDDEN.to_owned()))
+                .map(|key| (key.as_str(), EXTRA_FORBIDDEN.to_owned()))
                 .collect()
         })
         .unwrap_or_default();
@@ -206,7 +201,7 @@ fn validate_strict_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError>> {
 
 /// Reference `_format_validation_error`: `loc: msg` per error, joined by
 /// ` ; `, with the root label standing in for an empty location.
-fn format_errors(errors: &[FieldError], root_label: &str) -> String {
+fn format_errors(errors: &[FieldError<'_>], root_label: &str) -> String {
     errors
         .iter()
         .map(|(location, message)| {
@@ -275,7 +270,7 @@ fn python_repr(value: &Value) -> String {
 }
 
 /// Reference `HookConfig.model_validate` in lax mode.
-fn validate_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError>> {
+fn validate_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError<'static>>> {
     let Some(table) = entry.as_table() else {
         return Err(vec![("", VALID_ENTRY.to_owned())]);
     };
@@ -368,7 +363,7 @@ fn validate_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError>> {
 fn required_string(
     table: &toml::Table,
     key: &'static str,
-    errors: &mut Vec<FieldError>,
+    errors: &mut Vec<FieldError<'static>>,
 ) -> Option<String> {
     match table.get(key) {
         None => {
@@ -386,7 +381,7 @@ fn required_string(
 fn optional_string(
     table: &toml::Table,
     key: &'static str,
-    errors: &mut Vec<FieldError>,
+    errors: &mut Vec<FieldError<'static>>,
 ) -> Option<String> {
     match table.get(key) {
         None => None,

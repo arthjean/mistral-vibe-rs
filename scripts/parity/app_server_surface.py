@@ -23,8 +23,8 @@ default path; ``--reference`` wins over it. The checkout must sit exactly on the
 pinned commit: a corpus captured from any other revision is not an oracle for
 the replay that reads it, so the script refuses to write one.
 
-The wrapper re-executes itself with an interpreter that can import ``vibe`` when
-the current one cannot.
+The wrapper re-executes itself with the reference interpreter, importing the
+pinned commit extracted with ``git archive`` (``scripts/parity/reference.py``).
 """
 
 from __future__ import annotations

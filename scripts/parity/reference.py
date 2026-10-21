@@ -19,8 +19,8 @@ the tree supplies ``vibe`` exactly as committed, so an untracked module or a
 stray edit in the checkout never reaches a corpus, and the checkout itself is
 only read.
 
-Oracles that live outside ``scripts/parity`` reach this module through
-:func:`pin.load`.
+Oracles that live outside ``scripts/parity`` reach this module by inserting
+this directory on ``sys.path``.
 """
 
 from __future__ import annotations

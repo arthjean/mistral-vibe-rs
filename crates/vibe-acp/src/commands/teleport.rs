@@ -13,8 +13,9 @@ use vibe_app_server::client::{
     LiveNotificationListener, ProgrammaticTeleportEvent, PublicNotification, TurnDriver,
 };
 
-use super::{app_server_message, end_turn, text_content};
+use super::end_turn;
 use crate::agent::AcpAgent;
+use crate::projection::text_content;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
 use vibe_core::session_id::uuid_v4;
@@ -165,7 +166,7 @@ where
             Err(error) => {
                 return Ok(self.reply(
                     harness,
-                    &app_server_message(&error),
+                    &error.app_server_message(),
                     Some(status_meta("unavailable")),
                 ));
             }
@@ -305,7 +306,7 @@ where
         let pending = harness.service.lock().await.begin_public_call(
             "vibeCode/teleport/start",
             json!({
-                "sessionId": harness.canonical_id(),
+                "sessionId": harness.session_id,
                 "pickerId": picker_id,
                 "operationId": operation_id,
                 "prompt": null,
@@ -319,7 +320,7 @@ where
     fn teleport_failed(&self, harness: &AcpHarness<D>, call_id: &str, error: &AcpError) -> Value {
         self.session_update(
             &harness.session_id,
-            failed_update(call_id, &app_server_message(error)),
+            failed_update(call_id, &error.app_server_message()),
         );
         end_turn(Some(status_meta("failed")))
     }

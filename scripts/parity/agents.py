@@ -2,7 +2,7 @@
 """Black-box capture of agent profiles, their selection and delegation.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in the hooks oracle already runs, lays out the
+scripted chat-completions stand-in of ``subagent_client.py``, lays out the
 agent files it declares (the workspace's ``.vibe/agents``, the user's
 ``$VIBE_HOME/agents`` and any ``agent_paths`` directory), and drives the
 methods and turns row 20 of ``docs/parity.md`` is about:

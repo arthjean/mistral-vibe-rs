@@ -12,22 +12,24 @@
 //! knows nothing about where the layers came from or how they are persisted.
 
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 use serde_json::Value as JsonValue;
 use toml::{Table, Value};
 
-use super::{
-    ACTIVE_MODEL_FIELD, ConfigError, ConfigLayer, ROUTED_DEFAULT_MODEL_FIELD,
-    ROUTED_MODEL_CONFIG_FIELD, merge, registry,
+use super::models::{
+    ALLOWED_MODELS_FIELD, active_model_alias, active_model_entry, allowed_aliases,
+    allowed_model_patterns, available_model_aliases, default_model_alias,
 };
-use crate::matching::NameFilter;
+use super::{
+    ACTIVE_MODEL_FIELD, ConfigError, ROUTED_DEFAULT_MODEL_FIELD, ROUTED_MODEL_CONFIG_FIELD, merge,
+    registry,
+};
 use crate::provider::config::{ACTIVE_MODEL_SELECTOR, UtilityFeature, UtilityModels};
 use crate::pycompat::pydantic;
 
 /// The models an experiment adds to the picker without changing the default.
 const ROUTED_EXTRA_MODELS_FIELD: &str = "routed_extra_models";
-/// The patterns narrowing which configured models may be selected.
-const ALLOWED_MODELS_FIELD: &str = "allowed_models";
 /// The image-capable model that describes images for a blind active model.
 const VISION_MODEL_FIELD: &str = "vision_model";
 /// The model conversations are compacted with.
@@ -223,18 +225,26 @@ fn coerce_routed_model_config(effective: &mut Table) -> Option<String> {
 /// model. Its compaction threshold stays unset: the copy injected into
 /// `models` resolves one, and the field itself keeps the `ModelConfig` default.
 fn complete_model_definition(entry: &mut Table) {
-    // Unreachable in a passing suite: `registry_tests` parses the literal.
-    let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
-        .ok()
-        .and_then(|value| Value::try_from(value).ok())
-        .and_then(|value| value.as_table().cloned())
-    else {
-        return;
-    };
-    for (key, value) in &defaults {
+    for (key, value) in model_defaults() {
         entry.entry(key.clone()).or_insert_with(|| value.clone());
     }
     settle_thinking(entry);
+}
+
+/// [`registry::MODEL_DEFAULTS`] as a table, parsed once per process. Empty
+/// only for a literal that does not parse, which `registry_tests` rules out.
+fn model_defaults() -> &'static Table {
+    static DEFAULTS: LazyLock<Table> = LazyLock::new(|| {
+        serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
+            .ok()
+            .and_then(|value| Value::try_from(value).ok())
+            .and_then(|value| match value {
+                Value::Table(table) => Some(table),
+                _ => None,
+            })
+            .unwrap_or_default()
+    });
+    &DEFAULTS
 }
 
 /// One JSON object read as reference `ModelConfig`, or `None` where the model
@@ -401,108 +411,6 @@ fn inject_routed_model(effective: &mut Table) {
     models.insert(alias, Value::Table(injected));
 }
 
-/// Reference `available_models`: the aliases of the configured models whose
-/// name `allowed_models` admits, in the order they are configured. An empty
-/// list admits every model, and so does a list that admits none, which the
-/// load reports as a warning rather than leaving no model to select.
-///
-/// The reference fails closed instead where the organization's managed layer
-/// enforces the list, and the load refuses such a list before any reader sees
-/// it ([`require_admin_allowlist_match`]), so a loaded document never reaches
-/// the degraded branch under an enforced list.
-#[must_use]
-pub fn available_model_aliases(effective: &Table) -> Vec<&str> {
-    let Some(models) = effective.get(merge::MODELS_FIELD).and_then(Value::as_table) else {
-        return Vec::new();
-    };
-    let every = models.keys().map(String::as_str).collect::<Vec<_>>();
-    let patterns = allowed_model_patterns(effective);
-    if patterns.is_empty() {
-        return every;
-    }
-    let allowed = allowed_aliases(models, &patterns);
-    if allowed.is_empty() { every } else { allowed }
-}
-
-/// The aliases of the models whose name one of `patterns` admits.
-fn allowed_aliases<'a>(models: &'a Table, patterns: &[String]) -> Vec<&'a str> {
-    let filter = NameFilter::new(patterns);
-    models
-        .iter()
-        .filter(|(alias, entry)| filter.matches(model_name(alias, entry)))
-        .map(|(alias, _)| alias.as_str())
-        .collect()
-}
-
-/// The API name of a merged entry, which is what `allowed_models` matches. An
-/// entry is completed from its layers before any reader runs; a hand-built one
-/// naming nothing is addressed by its alias.
-fn model_name<'a>(alias: &'a str, entry: &'a Value) -> &'a str {
-    entry.get("name").and_then(Value::as_str).unwrap_or(alias)
-}
-
-/// The `allowed_models` entries, blank ones included: the filter skips them.
-fn allowed_model_patterns(effective: &Table) -> Vec<String> {
-    effective
-        .get(ALLOWED_MODELS_FIELD)
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(str::to_owned)
-        .collect()
-}
-
-/// Reference `resolve_default_model_alias`: the routed alias when it names an
-/// available model, the shipped default alias when that one is available or
-/// nothing is, and the first available model otherwise.
-#[must_use]
-pub fn default_model_alias(effective: &Table) -> Option<&str> {
-    let models = effective.get(merge::MODELS_FIELD)?.as_table()?;
-    let available = available_model_aliases(effective);
-    let routed = effective
-        .get(ROUTED_DEFAULT_MODEL_FIELD)
-        .and_then(Value::as_str)
-        .filter(|alias| !alias.is_empty() && available.contains(alias));
-    routed
-        .or_else(|| {
-            (available.contains(&registry::DEFAULT_ACTIVE_MODEL_ALIAS) || available.is_empty())
-                .then_some(registry::DEFAULT_ACTIVE_MODEL_ALIAS)
-                .filter(|alias| models.contains_key(*alias))
-        })
-        .or_else(|| available.first().copied())
-}
-
-/// Reference `get_active_model`'s alias step: the pinned alias while
-/// `allowed_models` admits it, or the resolved default when the operator
-/// pinned nothing or pinned a model the list excludes. A pin naming no
-/// configured model resolves to nothing, where the reference raises; the load
-/// unpins such a pin, so only a table built by hand reaches that branch.
-///
-/// Every reader of the active model goes through this rather than through
-/// `active_model` itself, because the merged document carries the reference's
-/// unpinned sentinel where an installation was never pinned.
-#[must_use]
-pub fn active_model_alias(effective: &Table) -> Option<&str> {
-    let pinned = effective
-        .get(ACTIVE_MODEL_FIELD)
-        .and_then(Value::as_str)
-        .filter(|alias| *alias != registry::UNPINNED_ACTIVE_MODEL);
-    if let Some(alias) = pinned {
-        let configured = effective
-            .get(merge::MODELS_FIELD)
-            .and_then(Value::as_table)
-            .is_some_and(|models| models.contains_key(alias));
-        if !configured {
-            return None;
-        }
-        if available_model_aliases(effective).contains(&alias) {
-            return Some(alias);
-        }
-    }
-    default_model_alias(effective)
-}
-
 /// Reference `_warn_cross_provider_compaction_model`: a configured compaction
 /// model must name a provider the configuration declares, and one served from
 /// another provider than the active model is reported, since compaction rides
@@ -540,7 +448,6 @@ fn cross_provider_compaction_model(effective: &Table) -> Result<Option<String>, 
     let active = active_model_entry(effective);
     let field = |key: &str| {
         active
-            .as_ref()
             .and_then(|entry| entry.get(key))
             .and_then(Value::as_str)
             .unwrap_or_default()
@@ -561,7 +468,6 @@ fn cross_provider_compaction_model(effective: &Table) -> Result<Option<String>, 
 /// it with anything, which is the reference's answer when looking it up raises.
 fn shares_active_provider(effective: &Table, provider: &str) -> bool {
     active_model_entry(effective)
-        .as_ref()
         .and_then(|entry| entry.get("provider"))
         .and_then(Value::as_str)
         .filter(|name| declares_provider(effective, name))
@@ -598,48 +504,15 @@ fn declares_provider(effective: &Table, name: &str) -> bool {
         })
 }
 
-/// The merged entry the active model resolves to, in either persisted shape.
-///
-/// Reference `_check_compaction_model_provider` compares against
-/// `get_active_model`, so the sentinel resolves here rather than reading as an
-/// alias no model carries.
-fn active_model_entry(effective: &Table) -> Option<Table> {
-    let alias = active_model_alias(effective)?;
-    match effective.get(merge::MODELS_FIELD) {
-        Some(Value::Table(models)) => models.get(alias).and_then(Value::as_table).cloned(),
-        Some(Value::Array(models)) => models
-            .iter()
-            .filter_map(Value::as_table)
-            .find(|entry| {
-                ["alias", "name"]
-                    .into_iter()
-                    .any(|key| entry.get(key).and_then(Value::as_str) == Some(alias))
-            })
-            .cloned(),
-        _ => None,
-    }
-}
-
 /// Fills each merged model entry with the per-entry defaults the reference
 /// `ModelConfig` supplies, so a sparse entry reaches a consumer complete.
 fn complete_model_entries(effective: &mut Table) {
-    // Unreachable in a passing suite: `registry_tests` parses the literal.
-    let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
-        .ok()
-        .and_then(|value| Value::try_from(value).ok())
-        .and_then(|value| value.as_table().cloned())
-    else {
-        return;
-    };
     let Some(models) = effective.get_mut("models").and_then(Value::as_table_mut) else {
         return;
     };
     for (_, entry) in models.iter_mut() {
         if let Some(model) = entry.as_table_mut() {
-            for (key, value) in &defaults {
-                model.entry(key.clone()).or_insert_with(|| value.clone());
-            }
-            settle_thinking(model);
+            complete_model_definition(model);
         }
     }
 }
@@ -691,14 +564,6 @@ fn settle_thinking(model: &mut Table) {
 /// threshold on the entries of `models` only, so a model field keeps the
 /// `ModelConfig` default it was declared with.
 fn complete_model_field(effective: &mut Table, field: &str) {
-    // Unreachable in a passing suite: `registry_tests` parses the literal.
-    let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
-        .ok()
-        .and_then(|value| Value::try_from(value).ok())
-        .and_then(|value| value.as_table().cloned())
-    else {
-        return;
-    };
     let Some(compaction) = effective.get_mut(field).and_then(Value::as_table_mut) else {
         return;
     };
@@ -708,12 +573,7 @@ fn complete_model_field(effective: &mut Table, field: &str) {
         let name = name.to_owned();
         compaction.insert("alias".to_owned(), Value::String(name));
     }
-    for (key, value) in &defaults {
-        compaction
-            .entry(key.clone())
-            .or_insert_with(|| value.clone());
-    }
-    settle_thinking(compaction);
+    complete_model_definition(compaction);
 }
 
 /// Reference `SessionLoggingConfig`: an unset directory falls back to the vibe
@@ -1002,36 +862,4 @@ fn impose_global_threshold(effective: &mut Table) {
             model.insert("auto_compact_threshold".to_owned(), Value::Integer(global));
         }
     }
-}
-
-/// The aliases in the order the layers declare them, lowest layer first.
-///
-/// The merged model map is keyed rather than ordered, so the order a persisted
-/// list was written in is recovered here; it is what "the first configured
-/// model" means when an `active_model` has to fall back.
-pub(super) fn model_order(layers: &[ConfigLayer]) -> Vec<String> {
-    let mut order: Vec<String> = Vec::new();
-    for layer in layers {
-        let aliases = match layer.values.get("models") {
-            Some(Value::Array(entries)) => entries
-                .iter()
-                .filter_map(|entry| {
-                    let table = entry.as_table()?;
-                    table
-                        .get("alias")
-                        .or_else(|| table.get("name"))?
-                        .as_str()
-                        .map(str::to_owned)
-                })
-                .collect::<Vec<_>>(),
-            Some(Value::Table(entries)) => entries.keys().cloned().collect(),
-            _ => Vec::new(),
-        };
-        for alias in aliases {
-            if !order.contains(&alias) {
-                order.push(alias);
-            }
-        }
-    }
-    order
 }

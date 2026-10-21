@@ -13,6 +13,7 @@ the reference.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import copy
 import http.server
 import json
@@ -303,73 +304,6 @@ def connect(scenario: dict[str, Any], command: list[str], env: dict[str, str],
     return server
 
 
-def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-loop-oracle-")).resolve()
-    session = Session(root)
-    world = session.world
-    try:
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        backend.utility = session.substitute(copy.deepcopy(scenario.get("utility", [])))
-        # The scenario's keys lead, so none of them lands inside the provider
-        # table the base configuration ends on.
-        (world.vibe_home / "config.toml").write_text(
-            session.substitute(scenario.get("config", "")) + blackbox.base_config(backend)
-            + session.substitute(scenario.get("tables", "")),
-            encoding="utf-8",
-            newline="",
-        )
-        if scenario.get("trusted", True):
-            (world.vibe_home / "trusted_folders.toml").write_text(
-                f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
-                encoding="utf-8",
-                newline="",
-            )
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        (root / "hook.py").write_text(hook_recorder.host_recorder(), encoding="utf-8", newline="")
-        hook_recorder.write_responses(root, scenario.get("responses", {}))
-        hook_recorder.write_hooks(session, scenario.get("hooks", {}))
-        env = {
-            **host_env.isolated(
-                world.home,
-                world.vibe_home,
-                MISTRAL_API_KEY="oracle-key",
-                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-            ),
-            **({} if scenario.get("titles") else {"VIBE_TEST_DISABLE_AUTO_TITLE": "1"}),
-        }
-        steps: list[dict[str, Any]] = []
-        holder: dict[str, Server] = {}
-        try:
-            holder["server"] = connect(scenario, command, env, world, quiet)
-            run_steps(scenario, holder, command, env, session, steps, quiet)
-        except OracleError as error:
-            steps.append({"failure": str(error)})
-        finally:
-            if "server" in holder:
-                holder["server"].stop()
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "callbacks": holder["server"].callback_log if "server" in holder else [],
-            "requests": [
-                {"utility": entry["utility"], **request_view(entry["body"], entry["utility"])}
-                for entry in backend.bodies
-            ],
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
-
-
 def request_view(body: dict[str, Any], utility: bool) -> dict[str, Any]:
     """The conversation a request carried; for a model step, also its tools."""
 
@@ -402,6 +336,7 @@ def run_steps(
     session: Session,
     steps: list[dict[str, Any]],
     quiet: float,
+    persisted: Callable[[blackbox.World], Any],
 ) -> None:
     world = session.world
     identifier = 100
@@ -568,6 +503,89 @@ def persisted(world: blackbox.World) -> list[dict[str, Any]]:
     return [item["record"] for item in found]
 
 
+def run_scenario(
+    scenario: dict[str, Any],
+    command: list[str],
+    quiet: float,
+    *,
+    session_class: type[Session] = Session,
+    persisted: Callable[[blackbox.World], Any] = persisted,
+    request_view: Callable[[dict[str, Any], bool], dict[str, Any]] = request_view,
+) -> dict[str, Any]:
+    """Runs one scenario against a fresh server.
+
+    The Unified Harness capture learns more from the answers and reads the
+    store and the requests its own way, so it passes its session class and its
+    two views in place of :class:`Session`, :func:`persisted` and
+    :func:`request_view`.
+    """
+
+    backend = Backend()
+    root = Path(tempfile.mkdtemp(prefix="vibe-loop-oracle-")).resolve()
+    session = session_class(root)
+    world = session.world
+    try:
+        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
+        backend.utility = session.substitute(copy.deepcopy(scenario.get("utility", [])))
+        # The scenario's keys lead, so none of them lands inside the provider
+        # table the base configuration ends on.
+        (world.vibe_home / "config.toml").write_text(
+            session.substitute(scenario.get("config", "")) + blackbox.base_config(backend)
+            + session.substitute(scenario.get("tables", "")),
+            encoding="utf-8",
+            newline="",
+        )
+        if scenario.get("trusted", True):
+            (world.vibe_home / "trusted_folders.toml").write_text(
+                f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
+                encoding="utf-8",
+                newline="",
+            )
+        blackbox.write_tree(world.workspace, scenario.get("files", {}))
+        (root / "hook.py").write_text(hook_recorder.host_recorder(), encoding="utf-8", newline="")
+        hook_recorder.write_responses(root, scenario.get("responses", {}))
+        hook_recorder.write_hooks(session, scenario.get("hooks", {}))
+        env = {
+            **host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            ),
+            **({} if scenario.get("titles") else {"VIBE_TEST_DISABLE_AUTO_TITLE": "1"}),
+        }
+        steps: list[dict[str, Any]] = []
+        holder: dict[str, Server] = {}
+        try:
+            holder["server"] = connect(scenario, command, env, world, quiet)
+            run_steps(scenario, holder, command, env, session, steps, quiet, persisted)
+        except OracleError as error:
+            steps.append({"failure": str(error)})
+        finally:
+            if "server" in holder:
+                holder["server"].stop()
+        return {
+            "steps": steps,
+            "sessions": session.sessions,
+            "callbacks": holder["server"].callback_log if "server" in holder else [],
+            "requests": [
+                {"utility": entry["utility"], **request_view(entry["body"], entry["utility"])}
+                for entry in backend.bodies
+            ],
+            "paths": {
+                "workspace": str(world.workspace),
+                "vibeHome": str(world.vibe_home),
+                "home": str(world.home),
+                "root": str(root),
+                "bin": str(Path(command[0]).parent),
+                "backend": backend.base,
+            },
+        }
+    finally:
+        backend.close()
+        shutil.rmtree(root, ignore_errors=True)
+
+
 # --------------------------------------------------------------------------
 # Normalization
 # --------------------------------------------------------------------------
@@ -610,6 +628,9 @@ CHILD_DIRECTORY = re.compile(r"((?:^|/)agents/[A-Za-z0-9_.-]+?_)(?:\d{8}_\d{6}|<
 
 
 class Normalizer(subagent_client.Normalizer):
+    #: The keys whose string values are identities.
+    id_keys = ID_KEYS
+
     def value(self, value: Any, key: str | None = None) -> Any:
         if key in RATE_KEYS and isinstance(value, int | float) and not isinstance(value, bool):
             return "<rate>" if value else 0
@@ -617,7 +638,7 @@ class Normalizer(subagent_client.Normalizer):
             value = PLAN_FILE.sub("plans/<plan>.md", value)
         if isinstance(value, str) and CHILD_DIRECTORY.search(value):
             value = CHILD_DIRECTORY.sub(r"\1<time>_<short>", value)
-        if key in ID_KEYS and isinstance(value, str) and value:
+        if key in self.id_keys and isinstance(value, str) and value:
             if value in self.authored:
                 return value
             return self.identity(value)
@@ -632,16 +653,16 @@ class Normalizer(subagent_client.Normalizer):
             for item in value:
                 self.collect_ids(item, key)
             return
-        if key in ID_KEYS and isinstance(value, str) and value and value not in self.authored:
+        if key in self.id_keys and isinstance(value, str) and value and value not in self.authored:
             self.identity(value)
             return
         super().collect_ids(value, key)
 
 
-def reduce_notification(message: dict[str, Any]) -> dict[str, Any]:
+def reduce_notification(message: dict[str, Any], time_keys: set[str]) -> dict[str, Any]:
     params = {k: v for k, v in (message.get("params") or {}).items() if k not in DROPPED}
     for operation in params.get("patch") or []:
-        if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS:
+        if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in time_keys:
             operation["value"] = "<time>"
     return {"method": message.get("method"), "params": params}
 
@@ -679,7 +700,14 @@ def lands_in_background(message: dict[str, Any]) -> bool:
     return False
 
 
-def reduce_turn(scenario: dict[str, Any], messages: list[dict[str, Any]]) -> list[Any]:
+def reduce_turn(
+    scenario: dict[str, Any],
+    messages: list[dict[str, Any]],
+    time_keys: set[str] = app_server_client.TIME_KEYS,
+) -> list[Any]:
+    """A turn's notifications in the loop's families, patch operations on
+    ``time_keys`` reduced to a placeholder and background title work last."""
+
     kept, landed = [], []
     for message in messages:
         method = str(message.get("method", ""))
@@ -687,7 +715,7 @@ def reduce_turn(scenario: dict[str, Any], messages: list[dict[str, Any]]) -> lis
             continue
         if scenario.get("observe") and not any(method.startswith(m) for m in scenario["observe"]):
             continue
-        reduced = reduce_notification(message)
+        reduced = reduce_notification(message, time_keys)
         if method == "session/state":
             reduced["params"] = reduce_state(reduced["params"])
         if lands_in_background(reduced):

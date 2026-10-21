@@ -6,11 +6,22 @@
 //! supply none, and which entries load at all, so they live beside the store
 //! rather than at the call sites that add or read a server.
 
-use super::*;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use toml::{Table, Value};
+use url::Url;
+
+use super::ConfigError;
+use super::integrations::{
+    IntegrationCollection, config_array, optional_mcp_bool, optional_mcp_environment_at,
+    optional_mcp_string, optional_mcp_strings, optional_mcp_timeout, required_mcp_string,
+};
 use crate::mcp::{
     DEFAULT_MCP_API_KEY_FORMAT, DEFAULT_MCP_API_KEY_HEADER, DEFAULT_MCP_OAUTH_REDIRECT_PORT,
-    MCP_TOKEN_PLACEHOLDER, McpAuthConfig, McpDeclared, McpDeclaredCommand, McpOAuthConfig,
-    McpStaticAuth,
+    DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, MCP_TOKEN_PLACEHOLDER,
+    McpAuthConfig, McpDeclared, McpDeclaredCommand, McpOAuthConfig, McpServerConfig, McpStaticAuth,
+    McpTransportConfig,
 };
 
 /// The greatest length a normalized alias keeps.

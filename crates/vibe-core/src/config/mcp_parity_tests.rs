@@ -12,8 +12,10 @@
 //! prose `NOTICE` forbids shipping.
 
 use std::collections::BTreeMap;
+use std::fs;
 
 use serde::Deserialize;
+use url::Url;
 
 use super::mcp::{
     mcp_server_url_key, normalize_mcp_server_name, normalize_mcp_server_url,

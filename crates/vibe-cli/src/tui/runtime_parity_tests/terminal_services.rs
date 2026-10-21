@@ -5,11 +5,6 @@ use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::Value;
-use vibe_core::updates::{
-    CachePlan, UpdateAvailability, UpdateCache, UpdateCacheStore, UpdateError, UpdateGatewayCause,
-    UpdateGatewayError, Version, plan_update_check, resolve_fetch, resolve_github_response,
-    resolve_pypi_response,
-};
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::attention::{AttentionNotifier, DEFAULT_TITLE, NotificationContext, THROTTLE_MS};
@@ -24,6 +19,11 @@ use crate::tui::themes::{AUTO_THEME, sorted_theme_names, theme_polarity};
 use crate::tui::updates::{
     CACHE_WRITE_FAILED_MESSAGE, UPDATE_DIALOG_TITLE, UpdateChoice, UpdatePromptMode,
     check_failed_message, up_to_date_message, update_failed_message, version_line,
+};
+use crate::update_notifier::{
+    CachePlan, UpdateAvailability, UpdateCache, UpdateCacheStore, UpdateError, UpdateGatewayCause,
+    UpdateGatewayError, Version, plan_update_check, resolve_fetch, resolve_github_response,
+    resolve_pypi_response,
 };
 
 #[derive(Debug, Deserialize)]
@@ -388,15 +388,17 @@ impl Replay {
                 dismiss,
             } => {
                 let mut cache = cache.as_ref().map(UpdateCache::from);
-                let mut pending =
-                    vibe_core::updates::pending_update_from_cache(cache.as_ref(), &current_version);
+                let mut pending = crate::update_notifier::pending_update_from_cache(
+                    cache.as_ref(),
+                    &current_version,
+                );
                 if let Some(dismiss) = dismiss {
                     if let Some(dismissed) =
-                        vibe_core::updates::dismiss_update(cache.as_ref(), &dismiss)
+                        crate::update_notifier::dismiss_update(cache.as_ref(), &dismiss)
                     {
                         cache = Some(dismissed);
                     }
-                    pending = vibe_core::updates::pending_update_from_cache(
+                    pending = crate::update_notifier::pending_update_from_cache(
                         cache.as_ref(),
                         &current_version,
                     );
@@ -413,9 +415,9 @@ impl Replay {
             } => {
                 let mut cache = cache.as_ref().map(UpdateCache::from);
                 let shown =
-                    vibe_core::updates::should_show_whats_new(cache.as_ref(), &current_version);
+                    crate::update_notifier::should_show_whats_new(cache.as_ref(), &current_version);
                 if shown {
-                    cache = Some(vibe_core::updates::mark_version_as_seen(
+                    cache = Some(crate::update_notifier::mark_version_as_seen(
                         cache.as_ref(),
                         &current_version,
                         // The reference only stamps a timestamp when no cache

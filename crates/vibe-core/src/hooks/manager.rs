@@ -40,33 +40,30 @@ pub struct HooksManager {
     retries: Mutex<HashMap<String, u32>>,
 }
 
-/// What one hook's result makes the chain do. Reference `_HookAction`.
+/// What one hook's result makes the chain do. Reference `_HookAction`: the
+/// chain reports the hook completed with `status` and `content`, then yields
+/// `decision`.
 struct HookAction {
-    yields: Vec<HookYield>,
+    status: HookSeverity,
+    content: Option<String>,
+    decision: Option<HookYield>,
     /// The invocation the next hook receives, when this one changed it.
     next: Option<HookInvocation>,
     stop: bool,
 }
 
 impl HookAction {
-    fn completed(hook: &HookConfig, status: HookSeverity, content: Option<String>) -> Self {
+    /// A completion that decides nothing: the next hook receives the same
+    /// invocation.
+    const fn completed(status: HookSeverity, content: Option<String>) -> Self {
         Self {
-            yields: vec![completed(hook, status, content)],
+            status,
+            content,
+            decision: None,
             next: None,
             stop: false,
         }
     }
-}
-
-/// A completion event, routed by the caller once the chain knows its scope.
-fn completed(hook: &HookConfig, status: HookSeverity, content: Option<String>) -> HookYield {
-    HookYield::Event(HookEvent::Completed {
-        hook_name: hook.name.clone(),
-        status,
-        content,
-        scope: hook.hook_type,
-        tool_call_id: None,
-    })
 }
 
 /// The response a hook answers with on stdout. Reference
@@ -152,22 +149,14 @@ impl HooksManager {
                 )
                 .await;
             let action = self.process(hook, &current, &result);
-            for item in action.yields {
-                let item = match item {
-                    HookYield::Event(HookEvent::Completed {
-                        hook_name,
-                        status,
-                        content,
-                        ..
-                    }) => HookYield::Event(HookEvent::Completed {
-                        hook_name,
-                        status,
-                        content,
-                        scope: hook_type,
-                        tool_call_id: tool_call_id.clone(),
-                    }),
-                    other => other,
-                };
+            let completed = HookYield::Event(HookEvent::Completed {
+                hook_name: hook.name.clone(),
+                status: action.status,
+                content: action.content,
+                scope: hook_type,
+                tool_call_id: tool_call_id.clone(),
+            });
+            for item in std::iter::once(completed).chain(action.decision) {
                 if sink(item).is_break() {
                     return;
                 }
@@ -241,7 +230,7 @@ impl HooksManager {
             Ok(Some(response)) => self.on_allow(hook, invocation, response),
             Ok(None) => {
                 self.on_passthrough(hook);
-                HookAction::completed(hook, HookSeverity::Ok, None)
+                HookAction::completed(HookSeverity::Ok, None)
             }
         }
     }
@@ -260,7 +249,7 @@ impl HooksManager {
             return escalation;
         }
         self.on_passthrough(hook);
-        HookAction::completed(hook, HookSeverity::Warning, Some(warning.unwrap_or(reason)))
+        HookAction::completed(HookSeverity::Warning, Some(warning.unwrap_or(reason)))
     }
 
     /// Reference `on_passthrough`: only a post-agent hook remembers it.
@@ -282,17 +271,12 @@ impl HooksManager {
         let reason = response.reason.unwrap_or_default();
         match invocation {
             HookInvocation::PreTool { tool_name, .. } => HookAction {
-                yields: vec![
-                    completed(
-                        hook,
-                        HookSeverity::Error,
-                        Some(format!("Denied tool '{tool_name}'")),
-                    ),
-                    HookYield::ToolDenial {
-                        hook_name: hook.name.clone(),
-                        content: reason,
-                    },
-                ],
+                status: HookSeverity::Error,
+                content: Some(format!("Denied tool '{tool_name}'")),
+                decision: Some(HookYield::ToolDenial {
+                    hook_name: hook.name.clone(),
+                    content: reason,
+                }),
                 next: None,
                 stop: true,
             },
@@ -302,28 +286,22 @@ impl HooksManager {
                     None => reason,
                 };
                 HookAction {
-                    yields: vec![
-                        completed(
-                            hook,
-                            HookSeverity::Warning,
-                            Some(response.system_message.unwrap_or_else(|| {
-                                format!("Replaced tool result ({} chars)", text.chars().count())
-                            })),
-                        ),
-                        HookYield::TextReplacement(text.clone()),
-                    ],
+                    status: HookSeverity::Warning,
+                    content: Some(response.system_message.unwrap_or_else(|| {
+                        format!("Replaced tool result ({} chars)", text.chars().count())
+                    })),
+                    decision: Some(HookYield::TextReplacement(text.clone())),
                     next: Some(with_output_text(invocation, text)),
                     stop: false,
                 }
             }
             HookInvocation::PostAgent { .. } => {
                 let Ok(mut retries) = self.retries.lock() else {
-                    return HookAction::completed(hook, HookSeverity::Error, None);
+                    return HookAction::completed(HookSeverity::Error, None);
                 };
                 let used = retries.get(&hook.name).copied().unwrap_or_default();
                 if used >= MAX_RETRIES {
                     return HookAction::completed(
-                        hook,
                         HookSeverity::Error,
                         Some(format!(
                             "Failed, retries exhausted ({MAX_RETRIES}/{MAX_RETRIES})"
@@ -333,17 +311,12 @@ impl HooksManager {
                 let remaining = MAX_RETRIES - used;
                 retries.insert(hook.name.clone(), used.saturating_add(1));
                 HookAction {
-                    yields: vec![
-                        completed(
-                            hook,
-                            HookSeverity::Error,
-                            Some(format!(
-                                "Failed, retrying ({remaining} {} remaining)",
-                                if remaining == 1 { "retry" } else { "retries" }
-                            )),
-                        ),
-                        HookYield::UserMessage(reason),
-                    ],
+                    status: HookSeverity::Error,
+                    content: Some(format!(
+                        "Failed, retrying ({remaining} {} remaining)",
+                        if remaining == 1 { "retry" } else { "retries" }
+                    )),
+                    decision: Some(HookYield::UserMessage(reason)),
                     next: None,
                     stop: true,
                 }
@@ -367,23 +340,20 @@ impl HooksManager {
             } => {
                 // Reference `_on_allow` only logs a post-tool field a pre-tool hook sent.
                 let Some(rewrite) = response.tool_input else {
-                    return HookAction::completed(hook, HookSeverity::Ok, response.system_message);
+                    return HookAction::completed(HookSeverity::Ok, response.system_message);
                 };
                 let rewrite = Value::Object(rewrite);
                 HookAction {
-                    yields: vec![
-                        completed(
-                            hook,
-                            HookSeverity::Warning,
-                            Some(response.system_message.unwrap_or_else(|| {
-                                format!("Rewrote tool_input for '{tool_name}'")
-                            })),
-                        ),
-                        HookYield::ToolInputRewrite {
-                            hook_name: hook.name.clone(),
-                            tool_input: rewrite.clone(),
-                        },
-                    ],
+                    status: HookSeverity::Warning,
+                    content: Some(
+                        response
+                            .system_message
+                            .unwrap_or_else(|| format!("Rewrote tool_input for '{tool_name}'")),
+                    ),
+                    decision: Some(HookYield::ToolInputRewrite {
+                        hook_name: hook.name.clone(),
+                        tool_input: rewrite.clone(),
+                    }),
                     next: Some(HookInvocation::PreTool {
                         context: context.clone(),
                         tool_name: tool_name.clone(),
@@ -398,23 +368,18 @@ impl HooksManager {
             } => {
                 // Reference `_on_allow` only logs a pre-tool field a post-tool hook sent.
                 let Some(additional) = response.additional_context else {
-                    return HookAction::completed(hook, HookSeverity::Ok, response.system_message);
+                    return HookAction::completed(HookSeverity::Ok, response.system_message);
                 };
                 let text = append_text(tool_output_text, &additional);
                 HookAction {
-                    yields: vec![
-                        completed(
-                            hook,
-                            HookSeverity::Warning,
-                            Some(response.system_message.unwrap_or_else(|| {
-                                format!(
-                                    "Appended {} chars to tool result",
-                                    additional.chars().count()
-                                )
-                            })),
-                        ),
-                        HookYield::TextReplacement(text.clone()),
-                    ],
+                    status: HookSeverity::Warning,
+                    content: Some(response.system_message.unwrap_or_else(|| {
+                        format!(
+                            "Appended {} chars to tool result",
+                            additional.chars().count()
+                        )
+                    })),
+                    decision: Some(HookYield::TextReplacement(text.clone())),
                     next: Some(with_output_text(invocation, text)),
                     stop: false,
                 }
@@ -423,7 +388,7 @@ impl HooksManager {
                 if let Ok(mut retries) = self.retries.lock() {
                     retries.remove(&hook.name);
                 }
-                HookAction::completed(hook, HookSeverity::Ok, response.system_message)
+                HookAction::completed(HookSeverity::Ok, response.system_message)
             }
         }
     }
@@ -449,29 +414,19 @@ fn on_strict_failure(
 ) -> Option<HookAction> {
     match invocation {
         HookInvocation::PreTool { tool_name, .. } => Some(HookAction {
-            yields: vec![
-                completed(
-                    hook,
-                    HookSeverity::Error,
-                    Some(format!("Denied tool '{tool_name}' (strict)")),
-                ),
-                HookYield::ToolDenial {
-                    hook_name: hook.name.clone(),
-                    content: reason.to_owned(),
-                },
-            ],
+            status: HookSeverity::Error,
+            content: Some(format!("Denied tool '{tool_name}' (strict)")),
+            decision: Some(HookYield::ToolDenial {
+                hook_name: hook.name.clone(),
+                content: reason.to_owned(),
+            }),
             next: None,
             stop: true,
         }),
         HookInvocation::PostTool { .. } => Some(HookAction {
-            yields: vec![
-                completed(
-                    hook,
-                    HookSeverity::Error,
-                    Some("Cleared tool result (strict)".to_owned()),
-                ),
-                HookYield::TextReplacement(String::new()),
-            ],
+            status: HookSeverity::Error,
+            content: Some("Cleared tool result (strict)".to_owned()),
+            decision: Some(HookYield::TextReplacement(String::new())),
             next: Some(with_output_text(invocation, String::new())),
             stop: true,
         }),

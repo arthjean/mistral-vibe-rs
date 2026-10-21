@@ -33,9 +33,12 @@ use std::process::Command;
 
 use serde::Deserialize;
 
+use super::store::SESSION_APPROVAL;
+use super::tool_rules::{matched_path_pattern, pure_path_match};
 use super::*;
+use crate::matching::pattern_matches;
 use crate::parity::{off_pin_reason, pinned_interpreter, reference_root};
-use crate::tools::config::ToolConfigResolver;
+use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
 const CORPUS_RELATIVE: &str = "tests/permission-surface/vocabulary.json";

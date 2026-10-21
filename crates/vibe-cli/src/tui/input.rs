@@ -1,14 +1,19 @@
 use std::cell::RefCell;
-use std::fs;
 use std::ops::Range;
-use std::process::{Command, ExitStatus};
 use std::sync::Arc;
 
 use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+use unicode_width::UnicodeWidthChar;
 
 use super::click_chain::{Granularity, word_span};
+use layout::{CachedVisualLayout, build_visual_layout};
+
+mod external_editor;
+mod layout;
+
+pub use external_editor::{ExternalEditorPort, SystemExternalEditor};
+pub(crate) use layout::VisualLayout;
 
 pub(crate) const COMPOSER_HORIZONTAL_OVERHEAD: u16 = 9;
 
@@ -58,13 +63,6 @@ impl PartialEq for PromptEditor {
 
 impl Eq for PromptEditor {}
 
-#[derive(Debug, Clone)]
-struct CachedVisualLayout {
-    width: usize,
-    prefix: usize,
-    layout: Arc<VisualLayout>,
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct SyntaxCounts {
     path: usize,
@@ -94,109 +92,6 @@ impl SyntaxCounts {
         let removed = Self::in_text(text);
         self.path = self.path.saturating_sub(removed.path);
         self.mention = self.mention.saturating_sub(removed.mention);
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct VisualLayout {
-    graphemes: Vec<Range<usize>>,
-    lines: Vec<Range<usize>>,
-}
-
-impl VisualLayout {
-    #[must_use]
-    pub(crate) fn lines(&self) -> &[Range<usize>] {
-        &self.lines
-    }
-
-    #[must_use]
-    pub(crate) fn grapheme<'a>(&self, text: &'a str, index: usize) -> &'a str {
-        self.graphemes
-            .get(index)
-            .and_then(|range| text.get(range.clone()))
-            .unwrap_or_default()
-    }
-
-    #[must_use]
-    pub(crate) fn cell_width(&self, text: &str, range: Range<usize>) -> usize {
-        range.fold(0, |column, index| {
-            column.saturating_add(grapheme_cell_width(self.grapheme(text, index), column))
-        })
-    }
-
-    #[must_use]
-    pub(crate) fn cursor_cell(&self, text: &str, cursor: usize) -> (usize, usize) {
-        let row = self
-            .lines
-            .iter()
-            .rposition(|line| line.start <= cursor && cursor <= line.end)
-            .unwrap_or_default();
-        let column = self
-            .lines
-            .get(row)
-            .map_or(0, |line| self.cell_width(text, line.start..cursor));
-        (row, column)
-    }
-
-    #[must_use]
-    pub(crate) fn cursor_at_cell(&self, text: &str, line: Range<usize>, column: usize) -> usize {
-        let mut cursor = line.start;
-        let mut cells = 0usize;
-        while cursor < line.end {
-            let width = grapheme_cell_width(self.grapheme(text, cursor), cells);
-            if cells.saturating_add(width) > column {
-                break;
-            }
-            cells = cells.saturating_add(width);
-            cursor += 1;
-        }
-        cursor
-    }
-
-    #[must_use]
-    pub(crate) fn text_lines(&self, text: &str) -> Vec<String> {
-        self.lines
-            .iter()
-            .map(|line| {
-                line.clone()
-                    .map(|index| self.grapheme(text, index))
-                    .collect()
-            })
-            .collect()
-    }
-
-    fn refresh_appended(&mut self, text: &str, width: usize, prefix: usize) {
-        let rebuild_index = self.graphemes.len().saturating_sub(1);
-        let rebuild_byte = self
-            .graphemes
-            .get(rebuild_index)
-            .map_or(0, |grapheme| grapheme.start);
-        let line_index = self
-            .lines
-            .iter()
-            .rposition(|line| line.start <= rebuild_index)
-            .unwrap_or_default();
-        let line_start = self
-            .lines
-            .get(line_index)
-            .map_or(prefix.min(rebuild_index), |line| line.start);
-        self.lines.truncate(line_index);
-        self.graphemes.truncate(rebuild_index);
-        self.graphemes
-            .extend(
-                text[rebuild_byte..]
-                    .grapheme_indices(true)
-                    .map(|(byte, grapheme)| {
-                        let start = rebuild_byte.saturating_add(byte);
-                        start..start.saturating_add(grapheme.len())
-                    }),
-            );
-        self.lines.extend(build_visual_lines(
-            text,
-            &self.graphemes,
-            width.max(1),
-            line_start,
-        ));
     }
 }
 
@@ -798,205 +693,6 @@ fn is_word_grapheme(grapheme: &str) -> bool {
     grapheme
         .chars()
         .all(|character| character == '_' || character.is_alphanumeric())
-}
-
-fn build_visual_layout(text: &str, width: usize, prefix: usize) -> VisualLayout {
-    let graphemes = text
-        .grapheme_indices(true)
-        .map(|(byte, grapheme)| byte..byte.saturating_add(grapheme.len()))
-        .collect::<Vec<_>>();
-    let lines = build_visual_lines(text, &graphemes, width.max(1), prefix.min(graphemes.len()));
-    VisualLayout { graphemes, lines }
-}
-
-fn build_visual_lines(
-    text: &str,
-    graphemes: &[Range<usize>],
-    width: usize,
-    start: usize,
-) -> Vec<Range<usize>> {
-    let mut starts = vec![start];
-    let mut line_start = start;
-    let mut line_width = 0usize;
-    let mut last_break = None;
-    let mut index = start;
-    while index < graphemes.len() {
-        let grapheme = text.get(graphemes[index].clone()).unwrap_or_default();
-        if grapheme == "\n" {
-            let next = index.saturating_add(1);
-            starts.push(next);
-            line_start = next;
-            line_width = 0;
-            last_break = None;
-            index = next;
-            continue;
-        }
-        let grapheme_width = wrap_grapheme_width(grapheme);
-        if line_width.saturating_add(grapheme_width) > width {
-            let next = last_break
-                .filter(|candidate| *candidate > line_start)
-                .unwrap_or(index);
-            if starts.last().copied() != Some(next) {
-                starts.push(next);
-            }
-            line_start = next;
-            line_width = grapheme_range_wrap_width(text, graphemes, next..index);
-            last_break = (next..index)
-                .rev()
-                .find(|candidate| {
-                    text.get(graphemes[*candidate].clone())
-                        .is_some_and(|grapheme| grapheme.chars().all(char::is_whitespace))
-                })
-                .map(|candidate| candidate.saturating_add(1));
-        }
-        line_width = line_width.saturating_add(grapheme_width);
-        if grapheme.chars().all(char::is_whitespace) {
-            last_break = Some(index.saturating_add(1));
-        }
-        index += 1;
-    }
-    let end = graphemes.len();
-    starts
-        .iter()
-        .enumerate()
-        .map(|(index, start)| {
-            let mut line_end = starts.get(index + 1).copied().unwrap_or(end);
-            if line_end > *start
-                && graphemes
-                    .get(line_end - 1)
-                    .and_then(|range| text.get(range.clone()))
-                    == Some("\n")
-            {
-                line_end -= 1;
-            }
-            *start..line_end
-        })
-        .collect()
-}
-
-fn grapheme_range_wrap_width(text: &str, graphemes: &[Range<usize>], range: Range<usize>) -> usize {
-    range.fold(0, |column, index| {
-        let grapheme = graphemes
-            .get(index)
-            .and_then(|range| text.get(range.clone()))
-            .unwrap_or_default();
-        column.saturating_add(wrap_grapheme_width(grapheme))
-    })
-}
-
-fn wrap_grapheme_width(grapheme: &str) -> usize {
-    // Textual's word wrapper treats a tab as a four-cell token. Cursor and
-    // mouse coordinates below use the terminal's next-four-column tab stop.
-    if grapheme == "\t" {
-        4
-    } else if grapheme.chars().all(char::is_control) {
-        0
-    } else {
-        UnicodeWidthStr::width(grapheme).max(1)
-    }
-}
-
-pub(crate) fn grapheme_cell_width(grapheme: &str, column: usize) -> usize {
-    if grapheme == "\t" {
-        4 - (column % 4)
-    } else if grapheme.chars().all(char::is_control) {
-        0
-    } else {
-        UnicodeWidthStr::width(grapheme).max(1)
-    }
-}
-
-pub trait ExternalEditorPort {
-    /// Edits `initial` and answers the edited text, or `None` when the editor
-    /// ran and failed. An editor that cannot run at all is an error naming it.
-    fn edit(&mut self, initial: &str) -> Result<Option<String>, String>;
-}
-
-pub struct SystemExternalEditor {
-    command: String,
-}
-
-impl SystemExternalEditor {
-    #[must_use]
-    pub fn from_environment() -> Self {
-        Self::from_sources(std::env::var("VISUAL").ok(), std::env::var("EDITOR").ok())
-    }
-
-    fn from_sources(visual: Option<String>, editor: Option<String>) -> Self {
-        Self {
-            command: visual
-                .filter(|value| !value.trim().is_empty())
-                .or_else(|| editor.filter(|value| !value.trim().is_empty()))
-                .unwrap_or_else(|| "nano".to_owned()),
-        }
-    }
-
-    fn command_parts(&self) -> Result<Vec<String>, String> {
-        let parts = shlex::split(&self.command)
-            .filter(|parts| !parts.is_empty())
-            .ok_or_else(|| "External editor command is invalid".to_owned())?;
-        Ok(parts)
-    }
-
-    pub fn edit_file(&mut self, path: &std::path::Path) -> Result<String, String> {
-        let command = self.command_parts()?;
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        }
-        if !path.exists() {
-            vibe_core::atomic_file::create_private_file(path).map_err(|error| error.to_string())?;
-        }
-        // Reference `ExternalEditor.edit_file(check=False)`: only an editor
-        // that cannot start fails; its exit status is not read.
-        run_editor(&command, path).map_err(|error| unstartable(&command[0], &error))?;
-        fs::read_to_string(path).map_err(|error| error.to_string())
-    }
-}
-
-/// Runs the editor `command` on `path` and waits for it.
-///
-/// std hands a `.cmd` or `.bat` program to `cmd.exe`, which starts even when
-/// the script is missing, so an editor named by a path that holds no file
-/// cannot start, whatever its extension.
-fn run_editor(command: &[String], path: &std::path::Path) -> std::io::Result<ExitStatus> {
-    let program = std::path::Path::new(&command[0]);
-    if program.components().count() > 1 && !program.is_file() {
-        return Err(std::io::ErrorKind::NotFound.into());
-    }
-    Command::new(program).args(&command[1..]).arg(path).status()
-}
-
-fn unstartable(program: &str, error: &std::io::Error) -> String {
-    format!("External editor `{program}` could not start: {error}")
-}
-
-impl ExternalEditorPort for SystemExternalEditor {
-    fn edit(&mut self, initial: &str) -> Result<Option<String>, String> {
-        let command = self.command_parts()?;
-        let stamp = vibe_core::clock::now_nanos();
-        let path = std::env::temp_dir().join(format!(
-            "mistral-vibe-rs-editor-{}-{stamp}.md",
-            std::process::id()
-        ));
-        let mut file = vibe_core::atomic_file::create_private_file(&path)
-            .map_err(|error| error.to_string())?;
-        std::io::Write::write_all(&mut file, initial.as_bytes())
-            .map_err(|error| error.to_string())?;
-        file.sync_all().map_err(|error| error.to_string())?;
-        drop(file);
-        let result = run_editor(&command, &path);
-        // Reference `ExternalEditor.edit`: an editor that exits with a failure
-        // leaves the prompt as it was.
-        let edited = match result {
-            Ok(status) if status.success() => fs::read_to_string(&path)
-                .map(|content| Some(content.trim_end().to_owned()))
-                .map_err(|error| error.to_string()),
-            Ok(_) => Ok(None),
-            Err(error) => Err(unstartable(&command[0], &error)),
-        };
-        let _ = fs::remove_file(&path);
-        edited
-    }
 }
 
 #[derive(Debug, Error)]

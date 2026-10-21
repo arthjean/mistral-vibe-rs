@@ -23,7 +23,7 @@ use crate::parity::replay::{Capture, Prose, differences};
 use crate::plugins::compatibility::PluginMcpServer;
 use crate::plugins::diagnostics::PluginConfigIssue;
 use crate::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
-use crate::plugins::native::{PluginResolver, ResolvedPluginSet};
+use crate::plugins::native::{PLUGIN_AGENT_TYPE, PluginResolver, ResolvedPluginSet};
 
 const FIXTURES: &str = include_str!("../../tests/plugins-parity/fixtures.json");
 const CORPUS: &str = include_str!("../../tests/plugins-parity/corpus.json");
@@ -162,7 +162,7 @@ fn summarize(
                 "type": hook.config.hook_type.label(),
                 "match": hook.config.matcher,
                 "timeout": hook.config.timeout,
-                "protocol": hook.protocol,
+                "protocol": hook.protocol.as_str(),
                 "env": hook.environment.keys().collect::<Vec<_>>(),
                 "cwd": hook.cwd.as_deref().map(|cwd| relative(home, cwd)),
                 "config_file": relative(home, &hook.config_file),
@@ -246,7 +246,7 @@ fn summarize(
                 "display_name": item.display_name,
                 "description": item.description,
                 "safety": item.safety,
-                "agent_type": item.agent_type,
+                "agent_type": PLUGIN_AGENT_TYPE,
                 "instructions": item.instructions,
                 "overrides": item.overrides,
             })

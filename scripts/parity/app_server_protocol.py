@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Black-box capture of the app-server protocol itself.
 
-Row 17 of ``docs/parity.md`` is the wire a client speaks to the app server:
-the connection lifecycle, the envelope rules, how every declared method is
-routed and refused, and the methods no other row measures. The surface census
+Row 17 of ``docs/parity.md`` is the wire a client speaks to the app server: the
+connection lifecycle, the envelope rules, how every declared method is routed
+and refused, and the methods no other row measures. The surface census
 (``scripts/parity/app_server_surface.py``) compares names and shapes; this
 script compares answers. Every scenario serves an app server over stdio in a
-fresh home, behind the scripted chat-completions stand-in the rewind oracle
-runs, and records what the server wrote back: each response, the
-notifications it raised, and whether it still serves afterward.
+fresh home, behind the recording chat-completions stand-in of
+``app_server_client.py``, and records what the server wrote back: each
+response, the notifications it raised, and whether it still serves afterward.
 
 Three families:
 
@@ -38,9 +38,10 @@ reference; its ``vibe-app-server`` is the oracle, and
 ``crates/vibe-app-server/tests/protocol_parity_tests.rs`` replays the same
 scenarios against this port's ``vibe-app-server-stdio-fixture``.
 
-Normalization is the rewind oracle's: identities, paths and times become
-placeholders and every string a server authored is reduced to its length and
-SHA-256, which is what ``NOTICE`` requires of a committed corpus.
+Normalization is the one ``app_server_client.py`` shares: identities, paths
+and times become placeholders and every string a server authored is reduced
+to its length and SHA-256, which is what ``NOTICE`` requires of a committed
+corpus.
 
 Usage::
 
@@ -233,7 +234,7 @@ def start_params(world: blackbox.World, agent: str = "auto-approve") -> dict[str
 
 
 def oracle_config(backend: blackbox.Backend, extra: str) -> str:
-    """The rewind oracle's configuration, with every remote base URL the app
+    """The shared app-server configuration, with every remote base URL the app
     server may reach pointed at the stand-in, so no probe leaves the host."""
     return (
         app_server_client.base_config(backend, "")

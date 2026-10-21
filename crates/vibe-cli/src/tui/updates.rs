@@ -1,10 +1,12 @@
 //! Update presentation pinned to the reference `vibe.cli.cli` update routes and
 //! `vibe.setup.update_prompt` dialog.
 //!
-//! Discovery itself lives in `vibe_core::updates`; this module owns only what the
+//! Discovery itself lives in `crate::update_notifier`; this module owns only what the
 //! operator sees and the order in which the reference asks.
 
-use vibe_core::updates::{UpdateAvailability, UpdateError, UpgradeOutcome};
+use vibe_core::upgrade::UpgradeOutcome;
+
+use crate::update_notifier::{UpdateAvailability, UpdateError};
 
 /// Reference `UpdatePromptMode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -172,7 +174,7 @@ impl UpdatePromptResult {
 
 #[cfg(test)]
 mod tests {
-    use vibe_core::updates::UpdateAvailability;
+    use crate::update_notifier::UpdateAvailability;
 
     use super::*;
 

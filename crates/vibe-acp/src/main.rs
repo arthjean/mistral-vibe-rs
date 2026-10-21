@@ -124,14 +124,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let exposures = ExperimentExposures::default();
     let declared_launch = vibe_core::telemetry::DeclaredLaunch::default();
     let session_resets = vibe_core::telemetry::SessionResets::default();
+    let harness =
+        HarnessSelection::resolve(arguments.experimental_harness, arguments.legacy_harness);
     let telemetry = acp_telemetry_observer(
         &vibe_home,
         &dotenv,
         exposures.clone(),
         declared_launch.clone(),
         session_resets.clone(),
-        HarnessSelection::resolve(arguments.experimental_harness, arguments.legacy_harness)
-            .use_unified,
+        harness.use_unified,
     );
     let experiments = telemetry.as_ref().map(|_| vibe_acp::AcpExperiments {
         exposures,
@@ -156,8 +157,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             })
         }
     });
-    let harness =
-        HarnessSelection::resolve(arguments.experimental_harness, arguments.legacy_harness);
     run_stdio(
         BufReader::new(tokio::io::stdin()),
         tokio::io::stdout(),

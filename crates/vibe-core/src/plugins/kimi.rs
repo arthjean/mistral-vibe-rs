@@ -6,13 +6,12 @@
 //! hooks, which run under the `kimi_code` protocol.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::LazyLock;
 
 use regex::Regex;
 use serde_json::{Map, Value};
 
-use super::claude::hook_matcher;
 use super::compatibility::{
     AdaptedHook, AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
     DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, author_display_name,
@@ -20,16 +19,16 @@ use super::compatibility::{
 };
 use super::diagnostics::Severity;
 use super::foreign::{
-    adapt_mcp_servers, adapt_skill_file, adapt_static_command, aliased, command_source_name,
-    declared_paths, markdown_files_for_declared_path, mcp_mapping, skill_files_for_declared_path,
-    truthy, unsupported_component,
+    AliasedObject, adapt_command_path, adapt_mcp_servers, adapt_skill_file, aliased,
+    declared_paths, diagnostic, hook_matcher, hook_type, mcp_mapping, optional_aliased_string,
+    skill_files_for_declared_path, unsupported_component, unsupported_hook,
 };
 use super::strict::{self, ValidationErrors, char_len};
-use crate::hooks::{HookConfig, HookType};
-use crate::pycompat;
+use crate::hooks::{HookConfig, HookProtocol, HookType};
+use crate::pycompat::{self, truthy};
 use crate::skills::SkillScope;
 
-const FORMAT: &str = "kimi_code";
+const FORMAT: DetectedPluginFormat = DetectedPluginFormat::KimiCode;
 const MAX_HOOK_TIMEOUT_SECONDS: i64 = 600;
 /// The default timeout of a Kimi command hook, in seconds.
 const DEFAULT_HOOK_TIMEOUT: f64 = 30.0;
@@ -60,41 +59,11 @@ const FIELDS: [(&str, Option<&str>); 14] = [
 
 /// The manifest after validation. Reference `_KimiManifest`.
 struct Manifest {
-    raw: Map<String, Value>,
+    object: AliasedObject,
     name: String,
     version: Option<String>,
     description: Option<String>,
     skill_instructions: Option<String>,
-}
-
-impl Manifest {
-    /// A declared field as the model reads it: absent and `null` are both
-    /// `None`.
-    fn field(&self, alias: &str) -> Option<&Value> {
-        let name = FIELDS
-            .iter()
-            .find(|(key, _)| *key == alias)
-            .and_then(|(_, name)| *name)
-            .unwrap_or(alias);
-        aliased(&self.raw, alias, name).filter(|value| !value.is_null())
-    }
-
-    /// Reference `model_extra`.
-    fn extras(&self) -> Vec<String> {
-        let mut extras: Vec<String> = self
-            .raw
-            .keys()
-            .filter(|key| {
-                !FIELDS.iter().any(|(alias, name)| {
-                    key.as_str() == *alias
-                        || (Some(key.as_str()) == *name && !self.raw.contains_key(*alias))
-                })
-            })
-            .cloned()
-            .collect();
-        extras.sort();
-        extras
-    }
 }
 
 fn parse_manifest(raw: &Value) -> Result<Manifest, String> {
@@ -108,21 +77,12 @@ fn parse_manifest(raw: &Value) -> Result<Manifest, String> {
     {
         errors.push("name", "must hold 1 to 64 characters");
     }
-    let optional = |alias: &str, field: &str, errors: &mut ValidationErrors| match aliased(
-        map, alias, field,
-    ) {
-        None | Some(Value::Null) => Some(None),
-        Some(Value::String(text)) => Some(Some(text.clone())),
-        Some(_) => {
-            errors.push(alias, "must be a string or null");
-            None
-        }
-    };
-    let version = optional("version", "version", &mut errors);
-    let description = optional("description", "description", &mut errors);
-    optional("homepage", "homepage", &mut errors);
-    optional("license", "license", &mut errors);
-    let skill_instructions = optional("skillInstructions", "skill_instructions", &mut errors);
+    let version = optional_aliased_string(map, "version", "version", &mut errors);
+    let description = optional_aliased_string(map, "description", "description", &mut errors);
+    optional_aliased_string(map, "homepage", "homepage", &mut errors);
+    optional_aliased_string(map, "license", "license", &mut errors);
+    let skill_instructions =
+        optional_aliased_string(map, "skillInstructions", "skill_instructions", &mut errors);
     strict::string_list(map, "", "keywords", true, &mut errors);
     match aliased(map, "sessionStart", "session_start") {
         None | Some(Value::Null) => {}
@@ -141,7 +101,7 @@ fn parse_manifest(raw: &Value) -> Result<Manifest, String> {
                 );
             }
             Ok(Manifest {
-                raw: map.clone(),
+                object: AliasedObject::new(map.clone(), &FIELDS),
                 name,
                 version,
                 description,
@@ -150,16 +110,6 @@ fn parse_manifest(raw: &Value) -> Result<Manifest, String> {
         }
         _ => Err(errors.render("Kimi plugin manifest")),
     }
-}
-
-fn diagnostic(
-    suffix: &str,
-    path: &Path,
-    message: impl Into<String>,
-    component: &str,
-    severity: Severity,
-) -> PluginAdapterDiagnostic {
-    super::foreign::diagnostic(FORMAT, suffix, path, message, component, severity, false)
 }
 
 /// Reads a Kimi Code plugin. Reference `KimiPluginAdapter.adapt`.
@@ -175,6 +125,7 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let mut diagnostics = Vec::new();
     if root_manifest.is_file() && nested_manifest.is_file() {
         diagnostics.push(diagnostic(
+            FORMAT,
             "manifest_shadowed",
             &nested_manifest,
             "kimi.plugin.json wins over .kimi-plugin/plugin.json.",
@@ -190,15 +141,17 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let (resolved_manifest, manifest) = match loaded {
         Ok(loaded) => loaded,
         Err(error) => {
-            diagnostics.push(super::foreign::diagnostic(
-                FORMAT,
-                "manifest_invalid",
-                &manifest_path,
-                format!("Could not load the Kimi plugin manifest: {error}"),
-                "manifest",
-                Severity::Error,
-                true,
-            ));
+            diagnostics.push(
+                diagnostic(
+                    FORMAT,
+                    "manifest_invalid",
+                    &manifest_path,
+                    format!("Could not load the Kimi plugin manifest: {error}"),
+                    "manifest",
+                    Severity::Error,
+                )
+                .fatal(),
+            );
             return PluginAdapterResult {
                 package: None,
                 diagnostics,
@@ -230,7 +183,7 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let mut unsupported = Vec::new();
     let hooks = adapt_hooks(
         &resolved_manifest,
-        manifest.field("hooks"),
+        manifest.object.field("hooks"),
         &mut diagnostics,
         &mut unsupported,
     );
@@ -249,10 +202,10 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         package: Some(AdaptedPluginPackage {
             source_format: DetectedPluginFormat::KimiCode,
             manifest_path: resolved_manifest,
-            author: author_display_name(manifest.field("author")),
+            author: author_display_name(manifest.object.field("author")),
             private_metadata: BTreeMap::from([(
                 "kimiManifest".to_owned(),
-                Value::Object(manifest.raw.clone()),
+                Value::Object(manifest.object.raw.clone()),
             )]),
             name: manifest.name,
             version: manifest.version,
@@ -276,25 +229,27 @@ fn adapt_skills(
     manifest: &Manifest,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Vec<AdaptedSkill> {
-    let Some(mut paths) = declared_paths(manifest.field("skills")) else {
+    let Some(mut paths) = declared_paths(manifest.object.field("skills")) else {
         diagnostics.push(diagnostic(
+            FORMAT,
             "skills_declaration_invalid",
-            &root.join("kimi.plugin.json"),
+            root.join("kimi.plugin.json"),
             "Kimi skills have to be a relative path or a list of relative paths.",
             "skill",
             Severity::Error,
         ));
         return Vec::new();
     };
-    if manifest.field("skills").is_none() && root.join("SKILL.md").is_file() {
+    if manifest.object.field("skills").is_none() && root.join("SKILL.md").is_file() {
         paths = vec!["./SKILL.md".to_owned()];
     }
     let mut files = BTreeSet::new();
     for value in paths {
         let Some(relative) = value.strip_prefix("./") else {
             diagnostics.push(diagnostic(
+                FORMAT,
                 "skill_path_invalid",
-                &root.join(&value),
+                root.join(&value),
                 "A Kimi skill path has to start with './'.",
                 "skill",
                 Severity::Error,
@@ -311,8 +266,9 @@ fn adapt_skills(
         match found {
             Ok(found) => files.extend(found),
             Err(error) => diagnostics.push(diagnostic(
+                FORMAT,
                 "skill_path_invalid",
-                &root.join(relative),
+                root.join(relative),
                 format!("Could not import the Kimi skill: {error}"),
                 "skill",
                 Severity::Warning,
@@ -330,10 +286,11 @@ fn adapt_commands(
     manifest: &Manifest,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Vec<AdaptedSkill> {
-    let Some(paths) = declared_paths(manifest.field("commands")) else {
+    let Some(paths) = declared_paths(manifest.object.field("commands")) else {
         diagnostics.push(diagnostic(
+            FORMAT,
             "commands_declaration_invalid",
-            &root.join("kimi.plugin.json"),
+            root.join("kimi.plugin.json"),
             "Kimi commands have to be a relative path or a list of relative paths.",
             "command",
             Severity::Error,
@@ -344,39 +301,25 @@ fn adapt_commands(
     for value in paths {
         let Some(relative) = value.strip_prefix("./") else {
             diagnostics.push(diagnostic(
+                FORMAT,
                 "command_path_invalid",
-                &root.join(&value),
+                root.join(&value),
                 "A Kimi command path has to start with './'.",
                 "command",
                 Severity::Warning,
             ));
             continue;
         };
-        let found = markdown_files_for_declared_path(root, &value)
-            .and_then(|files| Ok((files, resolve_declared_path(root, &value)?)));
-        let (files, base) = match found {
-            Ok(found) => found,
-            Err(error) => {
-                diagnostics.push(diagnostic(
-                    "command_path_invalid",
-                    &root.join(relative),
-                    format!("Could not import the Kimi command: {error}"),
-                    "command",
-                    Severity::Warning,
-                ));
-                continue;
-            }
-        };
-        let base = if base.is_dir() {
-            base
-        } else {
-            base.parent().map_or_else(PathBuf::new, Path::to_path_buf)
-        };
-        for path in files {
-            let source_name = command_source_name(&path, &base);
-            if let Some(command) = adapt_static_command(&path, &source_name, FORMAT, diagnostics) {
-                commands.push(command);
-            }
+        match adapt_command_path(root, &value, FORMAT, diagnostics) {
+            Ok(found) => commands.extend(found),
+            Err(error) => diagnostics.push(diagnostic(
+                FORMAT,
+                "command_path_invalid",
+                root.join(relative),
+                format!("Could not import the Kimi command: {error}"),
+                "command",
+                Severity::Warning,
+            )),
         }
     }
     commands
@@ -389,10 +332,11 @@ fn adapt_mcp(
     manifest: &Manifest,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Vec<AdaptedMcpServer> {
-    let declared = manifest.field("mcpServers");
+    let declared = manifest.object.field("mcpServers");
     let Some(mapping) = mcp_mapping(declared) else {
         if declared.is_some() {
             diagnostics.push(diagnostic(
+                FORMAT,
                 "mcp_declaration_invalid",
                 manifest_path,
                 "Kimi mcpServers has to be an object.",
@@ -419,32 +363,21 @@ fn report_unsupported(
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
     unsupported: &mut Vec<AdaptedUnsupportedComponent>,
 ) {
-    if manifest.field("sessionStart").is_some() {
-        diagnostics.push(diagnostic(
-            "session_start_unsupported",
-            manifest_path,
-            "Kimi sessionStart.skill is kept privately; loading a skill at session start is not supported.",
-            "session_start",
-            Severity::Info,
-        ));
+    if manifest.object.field("sessionStart").is_some() {
+        diagnostics.push(diagnostic(FORMAT, "session_start_unsupported", manifest_path, "Kimi sessionStart.skill is kept privately; loading a skill at session start is not supported.", "session_start", Severity::Info));
         unsupported.push(unsupported_component(
             "session_start",
             manifest_path,
             "kimi_session_start_unsupported",
         ));
     }
-    if manifest.field("interface").is_some() {
-        diagnostics.push(diagnostic(
-            "install_ui_unsupported",
-            manifest_path,
-            "Kimi installation and interface metadata is kept privately and has no equivalent in this client.",
-            "interface",
-            Severity::Info,
-        ));
+    if manifest.object.field("interface").is_some() {
+        diagnostics.push(diagnostic(FORMAT, "install_ui_unsupported", manifest_path, "Kimi installation and interface metadata is kept privately and has no equivalent in this client.", "interface", Severity::Info));
     }
-    let extras = manifest.extras();
+    let extras = manifest.object.extras();
     if !extras.is_empty() {
         diagnostics.push(diagnostic(
+            FORMAT,
             "fields_unsupported",
             manifest_path,
             format!(
@@ -518,6 +451,7 @@ fn adapt_hooks(
         let Some(hook_type) = event.and_then(Value::as_str).and_then(hook_type) else {
             let shown = event.map_or_else(|| "None".to_owned(), Value::to_string);
             unsupported_hook(
+                FORMAT,
                 manifest_path,
                 format!("The Kimi hook event {shown} has no matching runtime lifecycle."),
                 "kimi_hook_lifecycle_unsupported",
@@ -529,6 +463,7 @@ fn adapt_hooks(
         let event = event.and_then(Value::as_str).unwrap_or_default();
         let Some(matcher) = hook_matcher(rule.get("matcher")) else {
             unsupported_hook(
+                FORMAT,
                 manifest_path,
                 format!(
                     "The Kimi matcher {} cannot be mapped onto runtime tool names.",
@@ -607,18 +542,8 @@ fn adapt_hook_rule(
             description: None,
         },
         source_path: manifest_path.to_path_buf(),
-        protocol: FORMAT.to_owned(),
+        protocol: HookProtocol::KimiCode,
     })
-}
-
-/// Reference `_kimi_hook_type`.
-fn hook_type(event: &str) -> Option<HookType> {
-    match event {
-        "PreToolUse" => Some(HookType::PreTool),
-        "PostToolUse" => Some(HookType::PostTool),
-        "Stop" => Some(HookType::PostAgent),
-        _ => None,
-    }
 }
 
 fn hooks_invalid(
@@ -626,24 +551,7 @@ fn hooks_invalid(
     message: impl Into<String>,
     severity: Severity,
 ) -> PluginAdapterDiagnostic {
-    diagnostic("hooks_invalid", path, message, "hook", severity)
-}
-
-fn unsupported_hook(
-    path: &Path,
-    message: String,
-    reason: &str,
-    diagnostics: &mut Vec<PluginAdapterDiagnostic>,
-    unsupported: &mut Vec<AdaptedUnsupportedComponent>,
-) {
-    diagnostics.push(diagnostic(
-        "hooks_partially_unsupported",
-        path,
-        message,
-        "hook",
-        Severity::Warning,
-    ));
-    unsupported.push(unsupported_component("hooks", path, reason));
+    diagnostic(FORMAT, "hooks_invalid", path, message, "hook", severity)
 }
 
 #[cfg(test)]

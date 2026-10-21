@@ -9,13 +9,12 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use crate::update_notifier::UpdateCacheStore;
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use serde_json::Value;
-use vibe_core::telemetry::TelemetryRecord;
-use vibe_core::updates::UpdateCacheStore;
 
 use super::callback::{
     drain_callback_requests, hold_for_typing, sync_active_callbacks, sync_callback_presentation,
@@ -57,6 +56,11 @@ use super::{
     configured_theme, exit, push_local_notice, shortcuts, startup, switching, unix_seconds,
     updates, workflow,
 };
+use drain::{
+    INPUT_ENDED, ReadyInputDrain, drain_ready_interrupts, drain_ready_into,
+    drain_ready_terminal_events,
+};
+use shutdown::shut_down;
 
 /// How an interactive launch ended.
 #[derive(Debug)]
@@ -780,138 +784,18 @@ pub async fn run_interactive(
     shut_down(session, event_loop, update_check).await
 }
 
-/// Restores the terminal, settles every worker the session started, and closes
-/// the session itself.
-///
-/// Every step runs whatever the loop answered, and the first failure among them
-/// is what the launch reports: a session that ended badly still restores the
-/// terminal it took over.
-async fn shut_down(
-    session: Session,
-    event_loop: Result<(), CliError>,
-    update_check: Option<tokio::task::JoinHandle<()>>,
-) -> Result<InteractiveExit, CliError> {
-    let Session {
-        mut runtime,
-        mut state,
-        active,
-        prompt_history,
-        mut clipboard_images,
-        mut path_normalization,
-        mut terminal_guard,
-        terminal,
-        mounted_startup,
-        ..
-    } = session;
-    drop(terminal);
-    let restoration = terminal_guard
-        .restore()
-        .map_err(|error| CliError::Terminal(error.to_string()));
-    for diagnostic in prompt_history.finish().await {
-        eprintln!("{diagnostic}");
-    }
-    let interrupt_result =
-        if let (Some(runtime), Some(active)) = (runtime.as_mut(), active.as_ref()) {
-            runtime
-                .service
-                .interrupt(&runtime.session_id, &active.turn_id)
-                .map(|_| ())
-                .map_err(CliError::from)
-        } else {
-            Ok(())
-        };
-    if let Some(active) = active {
-        active.join_before_exit(Duration::from_secs(2)).await;
-    }
-    if let Some(runtime) = runtime.as_mut() {
-        interrupt_shell(runtime, &mut state).await;
-        finish_shell(Some(runtime), &mut state).await;
-        runtime.voice.shutdown().await;
-        runtime.speech.shutdown().await;
-    }
-    let cleanup_result = clipboard_images
-        .shutdown()
-        .await
-        .map_err(CliError::Terminal);
-    path_normalization.shutdown();
-    // A discovery still in flight never delays the exit the operator asked for.
-    if let Some(update_check) = update_check {
-        update_check.abort();
-    }
-    let telemetry = runtime
-        .as_ref()
-        .and_then(|runtime| runtime.telemetry.clone());
-    // Reference `exit_summary`, read before the session closes.
-    let summary = runtime.as_mut().map(session_exit_summary);
-    let (close_result, shutdown_result) = if let Some(mut runtime) = runtime {
-        let session_id = runtime.session_id.clone();
-        // Reference `aclose` cancels the experiments task before it closes
-        // anything else, so a session that quits mid-lookup never waits on the
-        // request the lookup is holding.
-        if let Some(experiments) = runtime.experiments.take() {
-            experiments.close().await;
-        }
-        // Reference `emit_session_closed_telemetry`, raised before the session
-        // is closed so the census still names it.
-        runtime.report(&TelemetryRecord::SessionClosed);
-        let close = runtime
-            .service
-            .close_session(&session_id)
-            .await
-            .map_err(CliError::from);
-        let shutdown = runtime.service.shutdown().map_err(CliError::from);
-        (close, shutdown)
-    } else {
-        (Ok(()), Ok(()))
-    };
-    let result = event_loop
-        .and(restoration)
-        .and(interrupt_result)
-        .and(cleanup_result)
-        .and(close_result)
-        .and(shutdown_result);
-    if let Some(telemetry) = telemetry {
-        telemetry.flush().await;
-    }
-    result.map(|()| InteractiveExit {
-        initialization_error: mounted_startup.into_initialization_error(),
-        summary,
-        exit_code: None,
-    })
-}
-
-/// Reference `AppServerSession.exit_summary`: the session identity plus the
-/// tokens spent since the session baseline.
-fn session_exit_summary(runtime: &mut InteractiveRuntime) -> exit::SessionExitSummary {
-    let stats = runtime.session_stats();
-    let tokens = |key: &str| {
-        stats
-            .get(key)
-            .or_else(|| stats.get(super::pickers::to_camel_case(key).as_str()))
-            .and_then(Value::as_u64)
-            .unwrap_or_default()
-    };
-    exit::SessionExitSummary {
-        session_id: Some(runtime.session_id.clone()),
-        usage: exit::SessionUsage {
-            input_tokens: tokens("session_prompt_tokens"),
-            output_tokens: tokens("session_completion_tokens"),
-        },
-    }
-}
-
 /// Reference `_check_and_show_whats_new`: release notes appear once per version,
 /// and the version is marked as seen even when no notes ship.
 fn announce_release_notes(store: &UpdateCacheStore, state: &mut TuiState) {
     let version = env!("CARGO_PKG_VERSION");
     let cache = store.load();
-    if !vibe_core::updates::should_show_whats_new(cache.as_ref(), version) {
+    if !crate::update_notifier::should_show_whats_new(cache.as_ref(), version) {
         return;
     }
     if let Some(content) = updates::whats_new_content() {
         push_local_notice(state, content, EntryStatus::Completed);
     }
-    let seen = vibe_core::updates::mark_version_as_seen(
+    let seen = crate::update_notifier::mark_version_as_seen(
         cache.as_ref(),
         version,
         vibe_core::clock::now_seconds_signed(),
@@ -956,85 +840,8 @@ fn warn_about_untrusted_config(
     });
 }
 
-/// A launch that failed before it mounted paints its error and then waits for
-/// one acknowledgment. Input queued before the failure would answer that prompt
-/// for the operator, so it is drained first.
-const MAX_FATAL_INPUT_DRAIN: usize = 256;
-const INPUT_ENDED: &str = "Terminal input ended; recoverable session state was preserved";
-/// How long a drain waits for the next key of a burst: far below the burst
-/// window, far above the gap between two keys of one console paste.
-const NEXT_KEY_WAIT: Duration = Duration::from_millis(2);
-const MAX_READY_INTERRUPTS_TO_DRAIN: usize = 32;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ReadyInputDrain {
-    Empty,
-    Saturated,
-    Closed,
-}
-
-fn drain_ready_terminal_events<S, E>(events: &mut S) -> Result<ReadyInputDrain, CliError>
-where
-    S: futures_util::Stream<Item = Result<Event, E>> + Unpin,
-    E: std::fmt::Display,
-{
-    use futures_util::FutureExt;
-    for _ in 0..MAX_FATAL_INPUT_DRAIN {
-        match events.next().now_or_never() {
-            Some(Some(Ok(_))) => {}
-            Some(Some(Err(error))) => return Err(CliError::Terminal(error.to_string())),
-            Some(None) => return Ok(ReadyInputDrain::Closed),
-            None => return Ok(ReadyInputDrain::Empty),
-        }
-    }
-    Ok(ReadyInputDrain::Saturated)
-}
-
-/// Feeds the paste detector the events that arrive while it collects, so a
-/// console paste is read as it arrives rather than one pass of the event loop
-/// per key. Answers the transport failure that ended the drain, if one did.
-///
-/// The console host types a paste a key at a time, so the drain waits up to
-/// [`NEXT_KEY_WAIT`] for the next one. Readiness is asked of crossterm before
-/// the stream is polled: a stream polled empty here would hand its wake-up to
-/// a waker nothing listens to.
-fn drain_ready_into<S>(events: &mut S, burst: &mut PasteBurst) -> Option<String>
-where
-    S: futures_util::Stream<Item = std::io::Result<Event>> + Unpin,
-{
-    use futures_util::FutureExt;
-    while burst.is_collecting() && crossterm::event::poll(NEXT_KEY_WAIT).unwrap_or(false) {
-        match events.next().now_or_never() {
-            Some(Some(Ok(event))) => burst.push(event, Instant::now()),
-            Some(Some(Err(error))) => return Some(error.to_string()),
-            Some(None) => return Some(INPUT_ENDED.to_owned()),
-            None => break,
-        }
-    }
-    None
-}
-
-fn drain_ready_interrupts<F, E, R>(
-    interrupt: &mut std::pin::Pin<Box<F>>,
-    mut recreate: R,
-) -> Result<usize, CliError>
-where
-    F: std::future::Future<Output = Result<(), E>>,
-    E: std::fmt::Display,
-    R: FnMut() -> F,
-{
-    use futures_util::FutureExt;
-    let mut drained = 0;
-    while drained < MAX_READY_INTERRUPTS_TO_DRAIN {
-        let Some(signal) = interrupt.as_mut().now_or_never() else {
-            return Ok(drained);
-        };
-        signal.map_err(|error| CliError::Terminal(error.to_string()))?;
-        drained += 1;
-        interrupt.set(recreate());
-    }
-    Ok(drained)
-}
+mod drain;
+mod shutdown;
 
 #[cfg(test)]
 #[path = "interactive/interactive_tests.rs"]

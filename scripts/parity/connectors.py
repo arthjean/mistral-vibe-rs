@@ -3,7 +3,7 @@
 tools a session publishes and calls through it.
 
 Every scenario serves an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in the hooks oracle already runs. The same
+scripted chat-completions stand-in of ``subagent_client.py``. The same
 stand-in also plays the three Mistral endpoints connectors reach:
 
 - ``GET /v1/connectors/bootstrap``, answered from the scenario's scripted

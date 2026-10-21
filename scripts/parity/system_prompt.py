@@ -61,7 +61,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, reference_interpreter, require_pin  # noqa: E402
+from reference import OracleError, reexecute_pinned, reference_interpreter, require_pin  # noqa: E402
 import blackbox  # noqa: E402
 import host_env  # noqa: E402
 
@@ -792,7 +792,7 @@ def child_os(scenario: dict[str, Any]) -> dict[str, Any]:
     return {"section": {"kind": "operating_system", "text": digest(text), **os_data(text, recorded)}}
 
 
-def run_child(scenario: dict[str, Any], interpreter: Path) -> dict[str, Any]:
+def run_child(scenario: dict[str, Any], child: list[str]) -> dict[str, Any]:
     root = Path(tempfile.mkdtemp(prefix="vibe-system-prompt-oracle-")).resolve()
     try:
         if scenario["family"] == "compose":
@@ -803,7 +803,7 @@ def run_child(scenario: dict[str, Any], interpreter: Path) -> dict[str, Any]:
             cwd = root
             environment = environment_for({}, root)
         process = subprocess.run(
-            [str(interpreter), str(Path(__file__).resolve()), "--child", json.dumps(scenario), "--root", str(root)],
+            [*child, "--child", json.dumps(scenario), "--root", str(root)],
             cwd=cwd,
             env=environment,
             capture_output=True,
@@ -954,13 +954,13 @@ def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def capture(scenario: dict[str, Any], interpreter: Path | None, command: list[str]) -> dict[str, Any]:
+def capture(scenario: dict[str, Any], child: list[str] | None, command: list[str]) -> dict[str, Any]:
     if scenario["family"] == "live":
         observed = run_live(scenario, command)
     else:
-        if interpreter is None:
+        if child is None:
             raise OracleError("the compose and os families need the reference interpreter")
-        observed = run_child(scenario, interpreter)
+        observed = run_child(scenario, child)
     return {"name": scenario["name"], "family": scenario["family"], "scenario": scenario, "observed": observed}
 
 
@@ -986,6 +986,9 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         if arguments.child is not None:
+            # A child runs reference code, so like every capture that imports
+            # `vibe` it re-executes itself on the pinned tree.
+            reexecute_pinned(arguments.reference, arguments.expected_commit, override=Path(sys.executable))
             scenario = json.loads(arguments.child)
             result = child_os(scenario) if scenario["family"] == "os" else child_compose(scenario, arguments.root)
             print(json.dumps(result))
@@ -1005,14 +1008,23 @@ def main() -> int:
             print(f"captured {len(captured)} live scenarios into {arguments.output}")
             return 0
         reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-        interpreter = reference_interpreter(arguments.reference)
+        # A child re-executes itself on the pinned tree, so it is told the
+        # checkout and the pin.
+        child = [
+            str(reference_interpreter(arguments.reference)),
+            str(Path(__file__).resolve()),
+            "--reference",
+            str(arguments.reference.resolve()),
+            "--expected-commit",
+            arguments.expected_commit,
+        ]
         command = [str(arguments.reference / ".venv/bin/vibe"), *HARNESS_FLAGS]
         selected = [s for s in scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
         captured = []
         for chosen in selected:
-            entry = capture(chosen, interpreter, command)
+            entry = capture(chosen, child, command)
             if not arguments.check:
-                again = capture(chosen, interpreter, command)
+                again = capture(chosen, child, command)
                 if again["observed"] != entry["observed"]:
                     raise OracleError(f"{chosen['name']} is not deterministic across two captures")
             captured.append(entry)

@@ -7,8 +7,10 @@
 //! moved after the ones the user wrote.
 
 use base64::Engine;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
+use vibe_core::pycompat::truthy;
 
+use crate::projection::object;
 use crate::protocol::AcpError;
 
 /// Reference `MAX_IMAGES_PER_MESSAGE`.
@@ -193,27 +195,4 @@ pub(crate) fn validate_display_content(value: &Value) -> Result<(), String> {
         return Err(format!("`{extra}` is not a display content field"));
     }
     Ok(())
-}
-
-/// Python truthiness for a JSON value.
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(fields) => !fields.is_empty(),
-    }
-}
-
-/// An object without its `null` members.
-fn object<const N: usize>(fields: [(&str, Value); N]) -> Value {
-    Value::Object(
-        fields
-            .into_iter()
-            .filter(|(_, value)| !value.is_null())
-            .map(|(key, value)| (key.to_owned(), value))
-            .collect::<Map<_, _>>(),
-    )
 }

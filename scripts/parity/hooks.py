@@ -2,13 +2,13 @@
 """Black-box capture of the hooks the app server runs around tool calls and turns.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in ``acp.py`` already runs, writes the
+scripted chat-completions stand-in of ``subagent_client.py``, writes the
 ``hooks.toml`` files it declares (the workspace's ``.vibe/hooks.toml`` and the
 user's ``$VIBE_HOME/hooks.toml``), and drives real turns whose tool calls the
-hooks guard. Each hook is one command running a small recorder this script
-writes beside the scenario: it keeps the invocation it read on stdin and
-answers with what the scenario scripted for that call, so a hook can deny,
-rewrite, replace, append, fail, time out or answer garbage.
+hooks guard. Each hook is one command running the small recorder of
+``hook_recorder.py``, written beside the scenario: it keeps the invocation it
+read on stdin and answers with what the scenario scripted for that call, so a
+hook can deny, rewrite, replace, append, fail, time out or answer garbage.
 
 What is recorded is what row 18 of ``docs/parity.md`` is about: the hook
 notices each turn raised and where they fell among the transcript entries, the

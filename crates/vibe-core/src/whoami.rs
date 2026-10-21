@@ -17,10 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 
-use crate::atomic_file::{FileMode, write_atomically};
 use crate::clock::now_seconds_signed;
+use crate::credential_cache::TimedEntries;
 use crate::experiments::hash_api_key;
 use crate::identity::IdentityFuture;
 use crate::observability::{self, LogLevel};
@@ -273,30 +273,9 @@ pub fn whoami_cache_path(vibe_home: &Path) -> PathBuf {
     vibe_home.join(WHOAMI_CACHE_FILE)
 }
 
-fn read_entries(path: &Path) -> Map<String, Value> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-        .and_then(|value| match value {
-            Value::Object(entries) => Some(entries),
-            _ => None,
-        })
-        .unwrap_or_default()
-}
-
-/// Writes the entries through a sibling file and a rename, so a reader never
-/// sees half a document. Best effort: a failure leaves the previous file. The
-/// entries are keyed by credential, so the file is owner-only.
-fn write_entries(path: &Path, entries: &Map<String, Value>) {
-    let Ok(text) = serde_json::to_string(entries) else {
-        return;
-    };
-    if path
-        .parent()
-        .is_some_and(|parent| std::fs::create_dir_all(parent).is_ok())
-    {
-        let _ = write_atomically(path, "whoami", text.as_bytes(), FileMode::Private);
-    }
+/// The cache file at `path`, under the layout the eval cache shares.
+fn cached(path: &Path) -> TimedEntries {
+    TimedEntries::new(path.to_path_buf(), "whoami", WHOAMI_CACHE_TTL_SECONDS)
 }
 
 /// The cached account for one credential, while it is fresh.
@@ -305,16 +284,8 @@ fn write_entries(path: &Path, entries: &Map<String, Value>) {
 /// a stale one all answer [`None`], so the caller fetches.
 #[must_use]
 pub fn load_cached_whoami(path: &Path, api_key: &str) -> Option<WhoAmIResult> {
-    let entries = read_entries(path);
-    let entry = entries.get(&hash_api_key(api_key))?.as_object()?;
-    // The reference's `isinstance(stored_at, int)` admits an integer and
-    // nothing else, a float included.
-    let stored_at = entry.get("stored_at_timestamp")?.as_i64()?;
-    let payload = entry.get("payload")?.as_object()?;
-    if stored_at <= now_seconds_signed() - WHOAMI_CACHE_TTL_SECONDS {
-        return None;
-    }
-    serde_json::from_value(Value::Object(payload.clone())).ok()
+    let payload = cached(path).payload(&hash_api_key(api_key), now_seconds_signed())?;
+    serde_json::from_value(Value::Object(payload)).ok()
 }
 
 /// Records one account under the credential's digest. Reference
@@ -323,23 +294,12 @@ pub fn store_cached_whoami(path: &Path, api_key: &str, result: &WhoAmIResult) {
     let Ok(payload) = serde_json::to_value(result) else {
         return;
     };
-    let mut entries = read_entries(path);
-    let mut entry = Map::new();
-    entry.insert(
-        "stored_at_timestamp".to_owned(),
-        Value::from(now_seconds_signed()),
-    );
-    entry.insert("payload".to_owned(), payload);
-    entries.insert(hash_api_key(api_key), Value::Object(entry));
-    write_entries(path, &entries);
+    cached(path).store(hash_api_key(api_key), payload, now_seconds_signed());
 }
 
 /// Drops what was cached for one credential. Reference `clear_cached_whoami`.
 pub fn clear_cached_whoami(path: &Path, api_key: &str) {
-    let mut entries = read_entries(path);
-    if entries.remove(&hash_api_key(api_key)).is_some() {
-        write_entries(path, &entries);
-    }
+    cached(path).remove(&hash_api_key(api_key));
 }
 
 /// How a caller that needs the account asks for one, which is the seam the

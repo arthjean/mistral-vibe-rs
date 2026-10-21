@@ -9,12 +9,13 @@ and ``review/revert``, answered by a real server over stdio after real turns,
 hand edits, shell commands, a compaction and a rewind, together with the files
 on disk each decision leaves behind.
 
-The driver is the rewind oracle's (``rewind.py``): a fresh home per scenario,
-the scripted chat-completions stand-in, and the same abstract ``start`` and
-``turn`` steps rendered in the dialect of the server being driven. Nothing is
-imported from the reference; its own ``vibe-app-server`` is the oracle, which
-is what lets ``crates/vibe-app-server/tests/review_parity_tests.rs`` replay the
-same scenarios against this port.
+The driver is the one ``app_server_client.py`` shares with the rewind capture:
+a fresh home per scenario, the scripted chat-completions stand-in, and the same
+abstract ``start`` and ``turn`` steps rendered in the dialect of the server
+being driven. Nothing is imported from the reference; its own
+``vibe-app-server`` is the oracle, which is what lets
+``crates/vibe-app-server/tests/review_parity_tests.rs`` replay the same
+scenarios against this port.
 
 A client names a path, an owner or a region by what an earlier answer told it,
 so a scenario can too: ``$P1`` is the first path a ``review/state`` answer
@@ -23,9 +24,10 @@ ordinal of the first region, each numbered in the order the answers revealed
 them. A path can also be written out, ``$WS/notes.txt`` or ``notes.txt``, to
 pin what a server does with a path it never published.
 
-Normalization is the rewind oracle's, with one exception: a file's content is
-the scenario's own text, not something a server authored, so ``content``,
-``baseline`` and ``current`` are recorded verbatim rather than as digests.
+Normalization is ``app_server_client.py``'s, with one exception: a file's
+content is the scenario's own text, not something a server authored, so
+``content``, ``baseline`` and ``current`` are recorded verbatim rather than as
+digests.
 
 Usage::
 
@@ -72,7 +74,7 @@ TOKEN = re.compile(r"\$(O|V|N|P)(\d+)")
 
 
 class ReviewSession(app_server_client.Session):
-    """The rewind oracle's session, also learning what review answers name."""
+    """The shared app-server session, also learning what review answers name."""
 
     def __init__(self, root: Path) -> None:
         super().__init__(root)

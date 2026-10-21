@@ -2,6 +2,9 @@
 //! and writes the entries rather than through the helpers alone.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+
+use url::Url;
 
 use super::mcp::{
     McpRemoval, dedupe_mcp_server_name, mcp_server_url_key, normalize_mcp_server_name,

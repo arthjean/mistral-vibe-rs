@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{
-    HeadlessService, LiveTurnDriver, PublicDispatch, PublicNotification,
+    HeadlessService, LiveTurnDriver, PendingPublicCall, PublicDispatch, PublicNotification,
 };
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::telemetry::TelemetryRecord;
@@ -141,46 +141,23 @@ pub(super) fn published_config_view(
 pub(super) fn schedule_ui_call(
     runtime: &mut InteractiveRuntime,
     method: &str,
-    mut params: Value,
+    params: Value,
     operation: UiOperation,
     state: &mut TuiState,
 ) -> bool {
-    if runtime.active_ui_operation.is_some() {
-        state.push_diagnostic("An interactive operation is already in progress");
+    if !ui_slot_is_free(runtime, state) {
         return false;
     }
-    let sender = runtime.ui_operation_sender.clone();
-    let Some(params) = params.as_object_mut() else {
-        state.push_diagnostic("Interactive operation parameters must be an object");
+    let Some(pending) = begin_session_call(runtime, method, params, state) else {
         return false;
     };
-    params
-        .entry("sessionId")
-        .or_insert_with(|| json!(runtime.session_id));
-    let pending = match runtime
-        .service
-        .begin_public_call(method, Value::Object(params.clone()))
-    {
-        Ok(pending) => pending,
-        Err(error) => {
-            state.push_diagnostic(error.to_string());
-            return false;
-        }
-    };
-    runtime.ui_operation_generation = runtime.ui_operation_generation.saturating_add(1);
-    let generation = runtime.ui_operation_generation;
-    runtime.active_ui_operation = Some(generation);
-    tokio::spawn(async move {
-        let result = tokio::time::timeout(Duration::from_secs(30), pending.complete())
-            .await
-            .map_err(|_| "Interactive operation timed out".to_owned())
-            .and_then(|result| result.map_err(|error| error.to_string()));
-        let _ = sender.send(UiOperationCompletion {
-            generation: Some(generation),
-            operation,
-            result,
-        });
-    });
+    let generation = claim_ui_slot(runtime);
+    deliver_completion(
+        runtime,
+        Some(generation),
+        operation,
+        complete_within(pending, Duration::from_secs(30)),
+    );
     true
 }
 
@@ -198,27 +175,15 @@ const BACKGROUND_CALL_LIMIT: Duration = Duration::from_secs(330);
 pub(super) fn schedule_ui_background(
     runtime: &mut InteractiveRuntime,
     method: &str,
-    mut params: Value,
+    params: Value,
     progress: impl Fn(&PublicNotification) -> Option<UiOperation> + Send + Sync + 'static,
     operation: UiOperation,
     state: &mut TuiState,
 ) -> bool {
-    let Some(fields) = params.as_object_mut() else {
-        state.push_diagnostic("Interactive operation parameters must be an object");
+    let Some(pending) = begin_session_call(runtime, method, params, state) else {
         return false;
     };
-    fields
-        .entry("sessionId")
-        .or_insert_with(|| json!(runtime.session_id));
-    let pending = match runtime.service.begin_public_call(method, params) {
-        Ok(pending) => pending,
-        Err(error) => {
-            state.push_diagnostic(error.to_string());
-            return false;
-        }
-    };
-    let sender = runtime.ui_operation_sender.clone();
-    let live = sender.clone();
+    let live = runtime.ui_operation_sender.clone();
     let pending = pending.with_listener(Arc::new(move |notification: PublicNotification| {
         if let Some(operation) = progress(&notification) {
             let _ = live.send(UiOperationCompletion {
@@ -231,17 +196,12 @@ pub(super) fn schedule_ui_background(
             });
         }
     }));
-    tokio::spawn(async move {
-        let result = tokio::time::timeout(BACKGROUND_CALL_LIMIT, pending.complete())
-            .await
-            .map_err(|_| "Interactive operation timed out".to_owned())
-            .and_then(|result| result.map_err(|error| error.to_string()));
-        let _ = sender.send(UiOperationCompletion {
-            generation: None,
-            operation,
-            result,
-        });
-    });
+    deliver_completion(
+        runtime,
+        None,
+        operation,
+        complete_within(pending, BACKGROUND_CALL_LIMIT),
+    );
     true
 }
 
@@ -254,26 +214,89 @@ pub(super) fn schedule_ui_external<F>(
 where
     F: Future<Output = Result<(), String>> + Send + 'static,
 {
+    if !ui_slot_is_free(runtime, state) {
+        return false;
+    }
+    let generation = claim_ui_slot(runtime);
+    deliver_completion(runtime, Some(generation), operation, async move {
+        work.await.map(|()| PublicDispatch {
+            result: BTreeMap::new(),
+            notifications: Vec::new(),
+        })
+    });
+    true
+}
+
+/// Whether the interactive slot, which one operation holds at a time, is
+/// free. The operator is told when it is not.
+fn ui_slot_is_free(runtime: &InteractiveRuntime, state: &mut TuiState) -> bool {
     if runtime.active_ui_operation.is_some() {
         state.push_diagnostic("An interactive operation is already in progress");
         return false;
     }
-    let sender = runtime.ui_operation_sender.clone();
+    true
+}
+
+/// Claims the interactive slot under a new generation, which only the
+/// completion naming it releases.
+fn claim_ui_slot(runtime: &mut InteractiveRuntime) -> u64 {
     runtime.ui_operation_generation = runtime.ui_operation_generation.saturating_add(1);
-    let generation = runtime.ui_operation_generation;
-    runtime.active_ui_operation = Some(generation);
+    runtime.active_ui_operation = Some(runtime.ui_operation_generation);
+    runtime.ui_operation_generation
+}
+
+/// Starts `method` on the current session, which `params` name unless they
+/// name another. The operator is told when the call cannot start.
+fn begin_session_call(
+    runtime: &mut InteractiveRuntime,
+    method: &str,
+    mut params: Value,
+    state: &mut TuiState,
+) -> Option<PendingPublicCall> {
+    let Some(fields) = params.as_object_mut() else {
+        state.push_diagnostic("Interactive operation parameters must be an object");
+        return None;
+    };
+    fields
+        .entry("sessionId")
+        .or_insert_with(|| json!(runtime.session_id));
+    match runtime.service.begin_public_call(method, params) {
+        Ok(pending) => Some(pending),
+        Err(error) => {
+            state.push_diagnostic(error.to_string());
+            None
+        }
+    }
+}
+
+/// What `pending` answers, unless `limit` passes first.
+async fn complete_within(
+    pending: PendingPublicCall,
+    limit: Duration,
+) -> Result<PublicDispatch, String> {
+    tokio::time::timeout(limit, pending.complete())
+        .await
+        .map_err(|_| "Interactive operation timed out".to_owned())
+        .and_then(|result| result.map_err(|error| error.to_string()))
+}
+
+/// Delivers what `work` answers as the completion of `operation`, which the
+/// event loop applies through [`apply_ui_operation_completion`].
+fn deliver_completion(
+    runtime: &InteractiveRuntime,
+    generation: Option<u64>,
+    operation: UiOperation,
+    work: impl Future<Output = Result<PublicDispatch, String>> + Send + 'static,
+) {
+    let sender = runtime.ui_operation_sender.clone();
     tokio::spawn(async move {
-        let result = work.await.map(|()| PublicDispatch {
-            result: BTreeMap::new(),
-            notifications: Vec::new(),
-        });
+        let result = work.await;
         let _ = sender.send(UiOperationCompletion {
-            generation: Some(generation),
+            generation,
             operation,
             result,
         });
     });
-    true
 }
 
 pub(super) fn apply_ui_operation_completion(
@@ -438,13 +461,10 @@ pub(super) fn published_experimental_harness(
 }
 
 /// Reference `_refresh_command_registry` after a configuration change: the
-/// registry gate is re-read from the configuration the session now runs on.
-/// Reads `experimental_enable_registry_skills` out of a published or effective
-/// configuration view.
-pub(super) fn registry_skills_enabled(config: &Value) -> bool {
-    config
-        .get("experimental_enable_registry_skills")
-        .or_else(|| config.get("experimentalEnableRegistrySkills"))
+/// registry gate is re-read from the `ConfigView` the session now publishes.
+pub(super) fn registry_skills_enabled(config_view: &Value) -> bool {
+    config_view
+        .get("experimentalEnableRegistrySkills")
         .and_then(Value::as_bool)
         .unwrap_or(false)
 }

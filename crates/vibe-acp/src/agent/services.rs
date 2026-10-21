@@ -15,13 +15,22 @@ use vibe_protocol::{
 use vibe_core::telemetry::LaunchContext;
 
 use crate::agent::AcpAgent;
+use crate::client_tools::declared_client_tools;
+use crate::protocol::{AcpClientInfo, AcpError};
+use crate::session::AcpHarness;
 
 /// What the session's client descriptor names when the editor declared none.
 const ACP_CLIENT_NAME: &str = "vibe_acp_client";
 const ACP_CLIENT_VERSION: &str = "unknown";
-use crate::client_tools::declared_client_tools;
-use crate::protocol::AcpError;
-use crate::session::AcpHarness;
+
+/// The name and version the session's client descriptor carries: the
+/// editor's own, or this adapter's when the editor declared none.
+fn client_name_and_version(client_info: Option<&AcpClientInfo>) -> (String, String) {
+    client_info.map_or_else(
+        || (ACP_CLIENT_NAME.to_owned(), ACP_CLIENT_VERSION.to_owned()),
+        |info| (info.name.clone(), info.version.clone()),
+    )
+}
 
 impl<D> AcpAgent<D>
 where
@@ -41,15 +50,11 @@ where
         // Reference `_build_launch_context_from_services`: every session reports
         // the client descriptor the app server was handed, which for an editor
         // names the editor rather than this adapter.
-        let client_info = self.lock_state().ok()?.client_info.clone();
+        let (client_name, client_version) =
+            client_name_and_version(self.lock_state().ok()?.client_info.as_ref());
         let launch = LaunchContext {
-            client_name: client_info
-                .as_ref()
-                .map_or_else(|| ACP_CLIENT_NAME.to_owned(), |info| info.name.clone()),
-            client_version: client_info.as_ref().map_or_else(
-                || ACP_CLIENT_VERSION.to_owned(),
-                |info| info.version.clone(),
-            ),
+            client_name,
+            client_version,
             terminal_emulator: Some("unknown".to_owned()),
             ..experiments.launch.clone()
         };
@@ -89,6 +94,7 @@ where
             let state = self.lock_state()?;
             (state.capabilities(), state.client_info.clone())
         };
+        let (name, version) = client_name_and_version(client_info.as_ref());
         let mut server = AppServer::default()
             .using_client_telemetry(Arc::clone(&self.telemetry))
             .using_harness_selection(self.harness);
@@ -114,13 +120,8 @@ where
                 self.driver.clone(),
                 server,
                 ClientInfo {
-                    name: client_info
-                        .as_ref()
-                        .map_or_else(|| ACP_CLIENT_NAME.to_owned(), |info| info.name.clone()),
-                    version: client_info.as_ref().map_or_else(
-                        || ACP_CLIENT_VERSION.to_owned(),
-                        |info| info.version.clone(),
-                    ),
+                    name,
+                    version,
                     title: client_info.and_then(|info| info.title),
                     entrypoint: ClientEntrypoint::Acp,
                     terminal_emulator: TerminalEmulator::Unknown,

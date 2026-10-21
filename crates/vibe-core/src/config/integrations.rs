@@ -1,4 +1,19 @@
-use super::*;
+//! The two integration collections, MCP servers and connectors: how an entry
+//! is identified and what enablement it carries, and the store's writes that
+//! add, toggle and remove one.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+
+use toml::{Table, Value};
+use url::Url;
+
+use super::mcp::{self, mcp_server_table, preflight_mcp_add};
+use super::{
+    ConfigError, ConfigMutation, ConfigSnapshot, ConfigTarget, ConfigWrite, IntegrationPreference,
+    JsonPointer, LayeredConfig, patch,
+};
+use crate::mcp::{McpAuthConfig, McpServerConfig, McpTransportConfig};
 
 pub(super) fn config_array(
     table: &Table,
@@ -161,7 +176,7 @@ impl IntegrationCollection {
     pub(super) fn identity_key(self, table: &Table) -> Option<String> {
         let identity = self.identity(table)?;
         Some(match self {
-            Self::McpServers => super::mcp::normalize_mcp_server_name(identity),
+            Self::McpServers => mcp::normalize_mcp_server_name(identity),
             Self::Connectors => identity.to_owned(),
         })
     }
@@ -179,10 +194,7 @@ impl IntegrationCollection {
     /// `disabled` and `disabled_tools` are the pair this collection's doc names
     /// as shared, so both collections read them here rather than each spelling
     /// out the same two shapes with its own error vocabulary.
-    pub(super) fn preference(
-        self,
-        entry: &Table,
-    ) -> Result<super::IntegrationPreference, ConfigError> {
+    pub(super) fn preference(self, entry: &Table) -> Result<IntegrationPreference, ConfigError> {
         let label = self.field_label();
         let enabled = match entry.get("disabled") {
             None => true,
@@ -203,7 +215,7 @@ impl IntegrationCollection {
                 return Err(self.invalid(&format!("{label} `disabled_tools` must be an array")));
             }
         };
-        Ok(super::IntegrationPreference {
+        Ok(IntegrationPreference {
             enabled,
             disabled_tools,
         })
@@ -228,7 +240,7 @@ impl IntegrationCollection {
 /// identity an entry is keyed by, the enablement pair it carries, and the array
 /// it lives in. The store contributes the layering and the transaction; this
 /// contributes what an entry means.
-impl super::LayeredConfig {
+impl LayeredConfig {
     pub fn preflight_mcp_add(&self, config: &McpServerConfig) -> Result<(), ConfigError> {
         let snapshot = self.load()?;
         preflight_mcp_add(&snapshot.effective, config)
@@ -434,35 +446,7 @@ impl super::LayeredConfig {
         else {
             return Ok(());
         };
-        match tool_name {
-            Some(tool_name) => {
-                let mut tools = entry
-                    .get("disabled_tools")
-                    .and_then(Value::as_array)
-                    .map(|tools| {
-                        tools
-                            .iter()
-                            .filter_map(Value::as_str)
-                            .map(str::to_owned)
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                if disabled {
-                    if !tools.iter().any(|tool| tool == tool_name) {
-                        tools.push(tool_name.to_owned());
-                    }
-                } else {
-                    tools.retain(|tool| tool != tool_name);
-                }
-                entry.insert(
-                    "disabled_tools".to_owned(),
-                    Value::Array(tools.into_iter().map(Value::String).collect()),
-                );
-            }
-            None => {
-                entry.insert("disabled".to_owned(), Value::Boolean(disabled));
-            }
-        }
+        apply_toggle(entry, disabled, tool_name);
         self.replace_array_cas(
             target,
             snapshot.fingerprints.get(&target).cloned().flatten(),
@@ -488,56 +472,20 @@ impl super::LayeredConfig {
         let collection = IntegrationCollection::Connectors;
         let target = snapshot.selected_target;
         let mut entries = config_array_for_target(&snapshot, target, collection)?;
-        let existing = entries
+        let named = |entry: &Table| entry.get("name").and_then(Value::as_str) == Some(name);
+        if !entries.iter().filter_map(Value::as_table).any(named) {
+            // A toggle applied to an entry holding only the name writes exactly
+            // what a new entry carries.
+            let mut entry = Table::new();
+            entry.insert("name".to_owned(), Value::String(name.to_owned()));
+            entries.push(Value::Table(entry));
+        }
+        if let Some(entry) = entries
             .iter_mut()
             .filter_map(Value::as_table_mut)
-            .find(|entry| entry.get("name").and_then(Value::as_str) == Some(name));
-        match (existing, tool_name) {
-            (Some(entry), Some(tool_name)) => {
-                let mut tools = entry
-                    .get("disabled_tools")
-                    .and_then(Value::as_array)
-                    .map(|tools| {
-                        tools
-                            .iter()
-                            .filter_map(Value::as_str)
-                            .map(str::to_owned)
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                if disabled {
-                    if !tools.iter().any(|tool| tool == tool_name) {
-                        tools.push(tool_name.to_owned());
-                    }
-                } else {
-                    tools.retain(|tool| tool != tool_name);
-                }
-                entry.insert(
-                    "disabled_tools".to_owned(),
-                    Value::Array(tools.into_iter().map(Value::String).collect()),
-                );
-            }
-            (Some(entry), None) => {
-                entry.insert("disabled".to_owned(), Value::Boolean(disabled));
-            }
-            (None, tool_name) => {
-                let mut entry = toml::Table::new();
-                entry.insert("name".to_owned(), Value::String(name.to_owned()));
-                match tool_name {
-                    Some(tool_name) => {
-                        let tools = if disabled {
-                            vec![Value::String(tool_name.to_owned())]
-                        } else {
-                            Vec::new()
-                        };
-                        entry.insert("disabled_tools".to_owned(), Value::Array(tools));
-                    }
-                    None => {
-                        entry.insert("disabled".to_owned(), Value::Boolean(disabled));
-                    }
-                }
-                entries.push(Value::Table(entry));
-            }
+            .find(|entry| named(entry))
+        {
+            apply_toggle(entry, disabled, tool_name);
         }
         self.replace_array_cas(
             target,
@@ -734,6 +682,39 @@ impl super::LayeredConfig {
             mutations: vec![ConfigMutation::set([key], Value::Array(entries))],
         }])
     }
+}
+
+/// Writes one toggle into `entry`, touching only the field it is about:
+/// `tool_name` appended once to, or dropped from, `disabled_tools` in place, or
+/// `disabled` itself when no tool is named. Reference `persist_mcp_toggle` and
+/// `_persist_connector_toggle` share this shape.
+fn apply_toggle(entry: &mut Table, disabled: bool, tool_name: Option<&str>) {
+    let Some(tool_name) = tool_name else {
+        entry.insert("disabled".to_owned(), Value::Boolean(disabled));
+        return;
+    };
+    let mut tools = entry
+        .get("disabled_tools")
+        .and_then(Value::as_array)
+        .map(|tools| {
+            tools
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if disabled {
+        if !tools.iter().any(|tool| tool == tool_name) {
+            tools.push(tool_name.to_owned());
+        }
+    } else {
+        tools.retain(|tool| tool != tool_name);
+    }
+    entry.insert(
+        "disabled_tools".to_owned(),
+        Value::Array(tools.into_iter().map(Value::String).collect()),
+    );
 }
 
 /// The `collection` array `target` should hold once `name` carries `enabled`

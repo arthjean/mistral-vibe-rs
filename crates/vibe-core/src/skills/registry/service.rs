@@ -108,41 +108,33 @@ pub async fn list_catalog(
         .into_iter()
         .filter_map(|item| {
             let name = item.resolved_name()?;
-            let latest_version = if item.metadata.latest_version != 0 {
-                item.metadata.latest_version
-            } else {
-                item.version
-            };
             Some(CatalogItem {
                 name,
                 description: item.resolved_description(),
+                latest_version: item.latest_version(),
                 skill_id: item.skill_id,
-                latest_version,
                 sharing_scope: item.metadata.sharing_scope,
             })
         })
         .collect())
 }
 
-/// The newest version of each skill, one request per skill; a skill the
-/// registry no longer has is left out.
-async fn latest_versions(
-    client: &RegistrySkillsClient<HttpTransport>,
+/// Reference `_resolve_latest_versions`: the newest version of each id, one
+/// request per id; an id the registry no longer has is left out, and any
+/// other failure is the caller's to answer.
+pub(super) async fn latest_versions<T: RegistryTransport + Sync>(
+    client: &RegistrySkillsClient<T>,
     skill_ids: &BTreeSet<String>,
 ) -> Result<BTreeMap<String, i64>, RegistrySkillsError> {
     let mut latest = BTreeMap::new();
     for skill_id in skill_ids {
-        let item = match client.get_skill(skill_id, None, None).await {
-            Ok(item) => item,
-            Err(error) if error.status == Some(404) => continue,
+        match client.get_skill(skill_id, None, None).await {
+            Ok(item) => {
+                latest.insert(skill_id.clone(), item.newest_version());
+            }
+            Err(error) if error.status == Some(404) => {}
             Err(error) => return Err(error),
-        };
-        let version = if item.metadata.latest_version > 0 {
-            item.metadata.latest_version
-        } else {
-            item.version
-        };
-        latest.insert(skill_id.clone(), version);
+        }
     }
     Ok(latest)
 }

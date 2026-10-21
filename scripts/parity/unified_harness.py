@@ -7,13 +7,14 @@ Rows 1 to 35 of ``docs/parity.md`` measure that legacy backend through the
 flag; this capture measures the default one, row 36.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in ``agent_loop.py`` serves, and drives it the
-way that capture does: sessions, turns, callbacks, restarts and any method.
-What is recorded is what a client, the model and the disk see of the backend:
-the notifications each turn raised, every answer, each model request with its
-parameters, its tool catalog and its conversation, and the session store the
-backend keeps under ``logs/session/unified/``. A scenario may add flags to the
-server's command line, which is how the selection itself is measured.
+scripted chat-completions stand-in of ``loop_capture.py``, and drives it the
+way ``agent_loop.py`` does: sessions, turns, callbacks, restarts and any
+method. What is recorded is what a client, the model and the disk see of the
+backend: the notifications each turn raised, every answer, each model request
+with its parameters, its tool catalog and its conversation, and the session
+store the backend keeps under ``logs/session/unified/``. A scenario may add
+flags to the server's command line, which is how the selection itself is
+measured.
 
 Nothing is imported from the reference: its own ``vibe-app-server`` is the
 oracle, which is what makes the same scenarios replayable against this port by
@@ -246,7 +247,18 @@ TODAYS_DATE = re.compile(
     r"\b\d{4}-\d{2}-\d{2} \((?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\)")
 
 
+#: Keys whose string values are identities, beyond the loop's.
+ID_KEYS = loop_capture.ID_KEYS | {"message_id", "action_id", "lease_id", "inputEntryId",
+                                "queueItemId", "latestTurnId", "processId"}
+#: Keys whose values are wall-clock readings: a unified session's archive mark
+#: and its retry are times like its pin.
+TIME_KEYS = app_server_client.TIME_KEYS | {"archivedAt", "retryAt"}
+
+
 class Normalizer(loop_capture.Normalizer):
+    id_keys = ID_KEYS
+    time_keys = TIME_KEYS
+
     def text(self, value: str) -> str:
         value = ELIDED_LOOP.sub("{<loop>}", value)
         value = LOOP_ID_TEXT.sub(lambda match: self.identity(match.group(0)), value)
@@ -267,17 +279,8 @@ class Normalizer(loop_capture.Normalizer):
         return super().value(value, key)
 
 
-#: Keys whose string values are identities, beyond the loop's.
-ID_KEYS = loop_capture.ID_KEYS | {"message_id", "action_id", "lease_id", "inputEntryId",
-                                "queueItemId", "latestTurnId", "processId"}
-loop_capture.ID_KEYS.update(ID_KEYS)
-#: A unified session's archive mark is a time like its pin, in this capture's
-#: process only.
-app_server_client.TIME_KEYS.update({"archivedAt", "retryAt"})
-
-
 def reduce_turn(scenario: dict[str, Any], messages: list[dict[str, Any]]) -> list[Any]:
-    return loop_capture.reduce_patches(loop_capture.reduce_turn(scenario, messages))
+    return loop_capture.reduce_patches(loop_capture.reduce_turn(scenario, messages, TIME_KEYS))
 
 
 def reduce_code_mode(requests: list[dict[str, Any]], steps: list[Any]) -> None:
@@ -444,71 +447,62 @@ def shared_tools(requests: list[Any]) -> list[Any]:
 # --------------------------------------------------------------------------
 
 
+class Session(loop_capture.Session):
+    """What a scenario learned, plus what a unified session names by a random ID.
+
+    A step names the loops a response created as ``$L1``, ``$L2``, ... in the
+    order they appeared, the turns that started as ``$R1``, ``$R2``, ..., the
+    queued turns as ``$Q1``, ``$Q2``, ... and the child sessions as ``$K1``,
+    ``$K2``, ...
+    """
+
+    def __init__(self, root: Path) -> None:
+        super().__init__(root)
+        self.loops: list[str] = []
+        self.queued: list[str] = []
+
+    def learn(self, message: dict[str, Any]) -> None:
+        super().learn(message)
+        result = message.get("result") or {}
+        found = [result.get("loop")] if isinstance(result, dict) else []
+        for loop in found:
+            if isinstance(loop, dict) and isinstance(loop.get("id"), str) and loop["id"] not in self.loops:
+                self.loops.append(loop["id"])
+        item = result.get("queueItemId") if isinstance(result, dict) else None
+        if isinstance(item, str) and item not in self.queued:
+            self.queued.append(item)
+        if message.get("method") == "session/childSessionUpdated":
+            child = ((message.get("params") or {}).get("childSession") or {}).get("id")
+            if isinstance(child, str) and child not in self.children:
+                self.children.append(child)
+
+    def substitute(self, value: Any) -> Any:
+        value = super().substitute(value)
+        if isinstance(value, str):
+            for index in range(len(self.loops), 0, -1):
+                value = value.replace(f"$L{index}", self.loops[index - 1])
+            for index in range(len(self.turns), 0, -1):
+                value = value.replace(f"$R{index}", self.turns[index - 1])
+            for index in range(len(self.queued), 0, -1):
+                value = value.replace(f"$Q{index}", self.queued[index - 1])
+            for index in range(len(self.children), 0, -1):
+                value = value.replace(f"$K{index}", self.children[index - 1])
+        elif isinstance(value, dict):
+            return {key: self.substitute(item) for key, item in value.items()}
+        elif isinstance(value, list):
+            return [self.substitute(item) for item in value]
+        return value
+
+
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    return loop_capture.run_scenario(scenario, [*command, *scenario.get("flags", [])], quiet)
-
-
-# A scheduled loop's ID is random: a step names the loops a response
-# created as `$L1`, `$L2`, ... in the order they appeared, the turns that
-# started as `$R1`, `$R2`, ... and the queued turns as `$Q1`, `$Q2`, ...
-_learn = loop_capture.Session.learn
-_substitute = loop_capture.Session.substitute
-
-
-def _learn_loops(self: Any, message: dict[str, Any]) -> None:
-    _learn(self, message)
-    loops = getattr(self, "loops", None)
-    if loops is None:
-        loops = self.loops = []
-    items = getattr(self, "queued", None)
-    if items is None:
-        items = self.queued = []
-    result = message.get("result") or {}
-    found = [result.get("loop")] if isinstance(result, dict) else []
-    for loop in found:
-        if isinstance(loop, dict) and isinstance(loop.get("id"), str) and loop["id"] not in loops:
-            loops.append(loop["id"])
-    item = result.get("queueItemId") if isinstance(result, dict) else None
-    if isinstance(item, str) and item not in items:
-        items.append(item)
-    children = getattr(self, "children", None)
-    if children is None:
-        children = self.children = []
-    if message.get("method") == "session/childSessionUpdated":
-        child = ((message.get("params") or {}).get("childSession") or {}).get("id")
-        if isinstance(child, str) and child not in children:
-            children.append(child)
-
-
-def _substitute_loops(self: Any, value: Any) -> Any:
-    value = _substitute(self, value)
-    loops = getattr(self, "loops", [])
-    turns = getattr(self, "turns", [])
-    if isinstance(value, str):
-        for index in range(len(loops), 0, -1):
-            value = value.replace(f"$L{index}", loops[index - 1])
-        for index in range(len(turns), 0, -1):
-            value = value.replace(f"$R{index}", turns[index - 1])
-        queued = getattr(self, "queued", [])
-        for index in range(len(queued), 0, -1):
-            value = value.replace(f"$Q{index}", queued[index - 1])
-        children = getattr(self, "children", [])
-        for index in range(len(children), 0, -1):
-            value = value.replace(f"$K{index}", children[index - 1])
-    elif isinstance(value, dict):
-        return {key: _substitute_loops(self, item) for key, item in value.items()}
-    elif isinstance(value, list):
-        return [_substitute_loops(self, item) for item in value]
-    return value
-
-
-loop_capture.Session.learn = _learn_loops
-loop_capture.Session.substitute = _substitute_loops
-
-# The loop capture reads these module globals at call time, so the unified
-# views replace the legacy ones for every scenario this script runs.
-loop_capture.persisted = persisted
-loop_capture.request_view = request_view
+    return loop_capture.run_scenario(
+        scenario,
+        [*command, *scenario.get("flags", [])],
+        quiet,
+        session_class=Session,
+        persisted=persisted,
+        request_view=request_view,
+    )
 
 
 # --------------------------------------------------------------------------

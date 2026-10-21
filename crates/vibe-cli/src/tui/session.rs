@@ -232,7 +232,6 @@ fn startup_preferences(
         for (alias, configured) in models {
             let supports_images = configured
                 .get("supports_images")
-                .or_else(|| configured.get("supportsImages"))
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
             image_models.insert(alias, supports_images);
@@ -261,7 +260,10 @@ fn startup_preferences(
         image_models,
         mode,
         reasoning_effort,
-        registry_skills_enabled: config.is_some_and(super::runtime::registry_skills_enabled),
+        registry_skills_enabled: config
+            .and_then(|config| config.get("experimental_enable_registry_skills"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 

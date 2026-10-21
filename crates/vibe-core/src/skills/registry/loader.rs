@@ -90,7 +90,7 @@ fn load_entry(
         return None;
     }
     let root = store::store_root(vibe_home);
-    let version = pinned_version(vibe_home, &root, entry)?;
+    let version = pinned_version(vibe_home, &root, entry, RecordedAlias::Materialized)?;
     let skill_file = store::skill_dir(&root, &entry.skill_id, version)
         .ok()?
         .join("SKILL.md");
@@ -106,10 +106,26 @@ fn load_entry(
     Some(skill)
 }
 
-/// The concrete version a pin loads: a frozen number as written, `latest` the
+/// Which version a custom alias's last refresh recorded answers for its pin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecordedAlias {
+    /// The recorded version as is: reference `_pinned_version`, which the
+    /// sync reads to keep what a pin claims.
+    Claimed,
+    /// The recorded version only while it is on disk: reference
+    /// `_resolved_version`, which loading and installing a skill read.
+    Materialized,
+}
+
+/// The concrete version a pin names: a frozen number as written, `latest` the
 /// newest materialized version, and a custom alias the version its last
-/// refresh recorded when that one is on disk, else the newest on disk.
-pub(crate) fn pinned_version(vibe_home: &Path, root: &Path, entry: &ManifestEntry) -> Option<i64> {
+/// refresh recorded, as `recorded` admits it, else the newest on disk.
+pub(crate) fn pinned_version(
+    vibe_home: &Path,
+    root: &Path,
+    entry: &ManifestEntry,
+    recorded: RecordedAlias,
+) -> Option<i64> {
     let latest = || {
         store::latest_materialized(root, &entry.skill_id)
             .ok()
@@ -119,7 +135,10 @@ pub(crate) fn pinned_version(vibe_home: &Path, root: &Path, entry: &ManifestEntr
         ManifestVersion::Frozen(version) => Some(*version),
         ManifestVersion::Alias(alias) if alias == REGISTRY_LATEST_ALIAS => latest(),
         ManifestVersion::Alias(alias) => pins::resolved_alias(vibe_home, &entry.skill_id, alias)
-            .filter(|version| store::is_materialized(root, &entry.skill_id, *version))
+            .filter(|version| {
+                recorded == RecordedAlias::Claimed
+                    || store::is_materialized(root, &entry.skill_id, *version)
+            })
             .or_else(latest),
     }
 }

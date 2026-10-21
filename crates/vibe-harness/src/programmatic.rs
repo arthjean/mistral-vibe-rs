@@ -92,14 +92,6 @@ pub fn inventory() -> Vec<Callable> {
         }
         json!({"type": "object", "properties": properties, "required": required, "additionalProperties": false})
     };
-    // Only the parameters are read, and every command environment shares them.
-    let direct = |name: &str| {
-        catalog::model_tools(vibe_core::tools::shell::CommandEnvironment::Unix)
-            .into_iter()
-            .find(|tool| tool.name == name)
-            .map(|tool| tool.parameters)
-            .unwrap_or(Value::Null)
-    };
     vec![
         Callable {
             group: Cow::Borrowed("file_system"),
@@ -107,7 +99,7 @@ pub fn inventory() -> Vec<Callable> {
             description: Cow::Borrowed(
                 "Run a shell command in the working directory and return its exit code and output.",
             ),
-            input: direct("bash"),
+            input: catalog::bash_schema(),
             output: object(&[
                 ("command", json!({"type": "string"})),
                 ("stdout", json!({"type": "string"})),
@@ -124,7 +116,7 @@ pub fn inventory() -> Vec<Callable> {
             description: Cow::Borrowed(
                 "Read a text file, optionally from a zero-based line offset and up to a number of lines.",
             ),
-            input: direct("read_file"),
+            input: catalog::read_file_schema(),
             output: object(&[
                 ("path", json!({"type": "string"})),
                 ("content", json!({"type": "string"})),
@@ -141,7 +133,7 @@ pub fn inventory() -> Vec<Callable> {
             group: Cow::Borrowed("file_system"),
             name: Cow::Borrowed("write_file"),
             description: Cow::Borrowed("Create a UTF-8 text file or replace its contents."),
-            input: direct("write_file"),
+            input: catalog::write_file_schema(),
             output: object(&[
                 ("path", json!({"type": "string"})),
                 ("bytes_written", json!({"type": "integer"})),
@@ -156,7 +148,7 @@ pub fn inventory() -> Vec<Callable> {
             description: Cow::Borrowed(
                 "Replace an exact piece of text in a file. Read the file first: old_string must match it character for character and occur once unless replace_all is set.",
             ),
-            input: direct("edit"),
+            input: catalog::edit_schema(),
             output: object(&[
                 ("file", json!({"type": "string"})),
                 ("lines_changed", json!({"type": "integer"})),
@@ -440,7 +432,7 @@ pub fn inventory() -> Vec<Callable> {
             group: Cow::Borrowed("vibe"),
             name: Cow::Borrowed("todo"),
             description: Cow::Borrowed("Read or replace this session's task list."),
-            input: direct("todo"),
+            input: catalog::todo_schema(),
             output: todo_result_schema(),
             runtime: Cow::Borrowed("vibe.todo"),
             guidance: None,
@@ -467,12 +459,7 @@ fn todo_result_schema() -> Value {
         },
         "required": ["verb", "todos", "total_count"],
     });
-    let input = catalog::model_tools(vibe_core::tools::shell::CommandEnvironment::Unix)
-        .into_iter()
-        .find(|tool| tool.name == "todo")
-        .map(|tool| tool.parameters)
-        .unwrap_or(Value::Null);
-    schema["$defs"] = input["$defs"].clone();
+    schema["$defs"] = catalog::todo_schema()["$defs"].take();
     schema
 }
 

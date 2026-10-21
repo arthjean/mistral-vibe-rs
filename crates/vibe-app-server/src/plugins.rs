@@ -26,6 +26,7 @@ use vibe_core::plugins::drift::{
     PluginRouteKey, PluginRouteStatus, reconcile_plugin_routes, retain_pinned_tools,
 };
 use vibe_core::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
+use vibe_core::plugins::native::PLUGIN_AGENT_TYPE;
 use vibe_core::plugins::paths::{PluginPathRef, resolve_plugin_path};
 use vibe_core::plugins::redaction::{redact_argv, redact_names, redact_url};
 use vibe_core::plugins::snapshot::{ResolvedPluginSnapshot, build_snapshot};
@@ -997,17 +998,15 @@ pub fn plugin_components_by_owner(plugins: &SessionPlugins) -> Vec<(String, Vec<
                 .iter()
                 .filter(|item| item.plugin_name == owner)
             {
-                let kind = resolution
+                let kind = if resolution
                     .agents
                     .iter()
-                    .find(|definition| definition.name == agent.name)
-                    .map_or("agent", |definition| {
-                        if definition.agent_type == "subagent" {
-                            "subagent"
-                        } else {
-                            "agent"
-                        }
-                    });
+                    .any(|definition| definition.name == agent.name)
+                {
+                    PLUGIN_AGENT_TYPE
+                } else {
+                    "agent"
+                };
                 components.push(component(kind, &agent.name, Some(&agent.path)));
             }
             for library in snapshot

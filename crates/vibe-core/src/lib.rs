@@ -10,12 +10,14 @@
 
 pub mod atomic_file;
 pub mod auth;
+pub mod cache_store;
 pub mod checkpoints;
 mod child;
 pub mod clock;
 pub mod compaction;
 pub mod config;
 pub mod continuity;
+mod credential_cache;
 pub mod difflib;
 pub mod engine;
 pub mod events;
@@ -67,7 +69,7 @@ pub mod time;
 pub mod tools;
 pub mod tracing;
 pub mod trust;
-pub mod updates;
+pub mod upgrade;
 pub mod vision;
 pub mod whoami;
 pub mod workspace;

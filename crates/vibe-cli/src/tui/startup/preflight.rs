@@ -27,7 +27,7 @@ pub(in crate::tui) struct ReadyStartup {
     pub(in crate::tui) post_mount_action: Option<super::PostMountAction>,
     /// The one update cache the launch reads and writes, from the startup
     /// prompt through the release notes to the background check.
-    pub(in crate::tui) update_cache: vibe_core::updates::UpdateCacheStore,
+    pub(in crate::tui) update_cache: crate::update_notifier::UpdateCacheStore,
 }
 
 /// Runs every pre-session gate in reference order.

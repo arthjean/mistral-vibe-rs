@@ -10,7 +10,7 @@
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use tokio::sync::oneshot;
 use vibe_app_server::client::TurnDriver;
 
@@ -264,15 +264,4 @@ fn string(params: &Value, key: &str) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_owned()
-}
-
-/// The keyword arguments a handler receives: the validated fields, with the
-/// members of `_meta` laid over them.
-#[allow(dead_code)]
-pub(crate) fn call_arguments(params: &Value) -> Map<String, Value> {
-    let mut arguments = params.as_object().cloned().unwrap_or_default();
-    if let Some(Value::Object(meta)) = arguments.remove("_meta") {
-        arguments.extend(meta);
-    }
-    arguments
 }

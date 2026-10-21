@@ -11,9 +11,10 @@ use serde::Serialize;
 use serde_json::Value as JsonValue;
 
 use super::merge;
+use super::models::model_entry;
 use super::patch::JsonPointer;
 use super::registry::{self, FieldDefault};
-use super::{ConfigLayerKind, ConfigSnapshot, ConfigTarget};
+use super::{ConfigError, ConfigLayerKind, ConfigSnapshot, ConfigTarget, LayeredConfig, source_of};
 use crate::redaction::{REDACTED, is_sensitive_key, redact_value};
 
 /// Reference `HIDDEN_SETTINGS`: the fields a runtime fills rather than an
@@ -114,6 +115,36 @@ pub fn describe_fields(snapshot: &ConfigSnapshot) -> Vec<ConfigFieldView> {
         .collect();
     fields.push(window_row(active.as_ref(), snapshot));
     fields
+}
+
+impl LayeredConfig {
+    /// The settings surface: every published field with its per-layer values,
+    /// and the targets a write can be routed to.
+    pub fn describe_fields(&self) -> Result<ConfigFields, ConfigError> {
+        let snapshot = self.load()?;
+        let targets = self.writable_targets(&snapshot);
+        Ok(ConfigFields {
+            fields: describe_fields(&snapshot),
+            targets,
+        })
+    }
+
+    /// The configuration files a write can land in, the one an unrouted
+    /// operation goes to first.
+    ///
+    /// The project file is only writable while the workspace is trusted, which
+    /// is the same rule [`Self::batch_write`] enforces.
+    fn writable_targets(&self, snapshot: &ConfigSnapshot) -> Vec<ConfigTarget> {
+        let mut targets = vec![snapshot.selected_target];
+        for target in [ConfigTarget::User, ConfigTarget::Project] {
+            let enabled = source_of(target).is_some_and(|source| self.sources.contains(&source));
+            let writable = enabled && (target != ConfigTarget::Project || self.project_writable());
+            if writable && !targets.contains(&target) {
+                targets.push(target);
+            }
+        }
+        targets
+    }
 }
 
 /// The model the settings rows scoped to a model describe: reference
@@ -262,26 +293,6 @@ fn model_layer_values(
             })
         })
         .collect()
-}
-
-/// The entry for `alias` in a layer's `models`, keyed by alias or listed.
-fn model_entry<'a>(models: &'a toml::Value, alias: &str) -> Option<&'a toml::Table> {
-    match models {
-        toml::Value::Table(models) => models.get(alias)?.as_table(),
-        toml::Value::Array(entries) => {
-            entries
-                .iter()
-                .filter_map(toml::Value::as_table)
-                .find(|entry| {
-                    entry
-                        .get("alias")
-                        .or_else(|| entry.get("name"))
-                        .and_then(toml::Value::as_str)
-                        == Some(alias)
-                })
-        }
-        _ => None,
-    }
 }
 
 fn is_unset_threshold(value: &toml::Value) -> bool {

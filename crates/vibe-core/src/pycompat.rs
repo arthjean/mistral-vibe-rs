@@ -16,7 +16,7 @@ pub mod pydantic;
 mod repr;
 mod text;
 
-pub use json::{Dumps, dumps};
+pub use json::{Dumps, dumps, truthy};
 pub use number::{parse_float, parse_int, repr_float, thousands};
 pub use os_error::os_error;
 pub use repr::{repr_json, repr_str, str_json};

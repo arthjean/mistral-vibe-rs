@@ -9,10 +9,11 @@
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
-use vibe_app_server::client::{ClientError, HeadlessService, TurnDriver};
+use vibe_app_server::client::{HeadlessService, TurnDriver};
 use vibe_core::observability::{
     LogLevel, log_level_chain, set_config_log_level, set_session_log_level,
 };
+use vibe_core::pycompat::truthy;
 use vibe_protocol::ProtocolErrorCode;
 
 use crate::agent::{AcpAgent, voice};
@@ -103,9 +104,9 @@ where
                 .await
             }
         };
-        let renamed = renamed.map_err(|error| match protocol_code(&error) {
+        let renamed = renamed.map_err(|error| match error.protocol_code() {
             Some(ProtocolErrorCode::NotFound) => AcpError::SessionNotFound(session_id.clone()),
-            _ => AcpError::InvalidParams(error_message(&error)),
+            _ => AcpError::InvalidParams(error.app_server_message()),
         })?;
         let title = renamed
             .get("title")
@@ -126,7 +127,7 @@ where
                 .service
                 .lock()
                 .await
-                .unified_state(&harness.canonical_id())
+                .unified_state(&harness.session_id)
                 .map(|state| state["session"].clone());
             if let Some(session) = published {
                 let name = |key: &str| session[key].as_str().map(ToOwned::to_owned);
@@ -168,9 +169,9 @@ where
             if !unified {
                 return ignore_missing(error);
             }
-            match protocol_code(&error) {
+            match error.protocol_code() {
                 Some(ProtocolErrorCode::NotFound) => {
-                    Err(AcpError::Unexpected(error_message(&error)))
+                    Err(AcpError::Unexpected(error.app_server_message()))
                 }
                 _ => Err(error),
             }
@@ -182,9 +183,8 @@ where
                 .map(|_| ())
                 .or_else(missing);
         };
-        let saved = harness.canonical_id();
         self.close_session(&harness.session_id).await?;
-        self.host_call("session/delete", json!({"sessionId": saved}))
+        self.host_call("session/delete", json!({"sessionId": harness.session_id}))
             .await
             .map(|_| ())
             .or_else(missing)
@@ -237,7 +237,7 @@ where
             );
             self.call(harness, "workspace/trust/decision", Value::Object(located))
                 .await
-                .map_err(|error| AcpError::InvalidParams(error_message(&error)))?
+                .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?
                 .into_iter()
                 .collect()
         };
@@ -272,7 +272,7 @@ where
         let result = self
             .call_async(&harness, method, call_params)
             .await
-            .map_err(|error| AcpError::InvalidParams(error_message(&error)))?
+            .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?
             .result;
         let field = |key: &str| result.get(key).cloned().unwrap_or(Value::Null);
         Ok(match method {
@@ -313,7 +313,7 @@ where
                     json!({"entryId": entry_id}),
                 )
                 .await
-                .map_err(|error| AcpError::InvalidParams(error_message(&error)))?;
+                .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?;
             return Ok(json!({"paths": result.get("paths").cloned().unwrap_or(json!([]))}));
         }
         let restore_files = params.get("restoreFiles").is_none_or(truthy);
@@ -324,7 +324,7 @@ where
                 json!({"entryId": entry_id, "restoreFiles": restore_files, "inplace": true}),
             )
             .await
-            .map_err(|error| AcpError::InvalidParams(error_message(&error)))?;
+            .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?;
         let field = |key: &str| result.get(key).cloned().unwrap_or(json!([]));
         Ok(json!({
             "messageContent": result.get("message").cloned().unwrap_or(Value::Null),
@@ -351,17 +351,17 @@ where
         };
         let harness = self.session_harness(&session_id)?;
         let mut forwarded = params.clone();
-        forwarded.insert("sessionId".to_owned(), json!(harness.canonical_id()));
+        forwarded.insert("sessionId".to_owned(), json!(harness.session_id));
         let mutation = matches!(method, "review/approve" | "review/revert");
         let result = self
             .call(&harness, method, Value::Object(forwarded))
             .await
-            .map_err(|error| match protocol_code(&error) {
+            .map_err(|error| match error.protocol_code() {
                 Some(ProtocolErrorCode::InvalidParams) => {
-                    AcpError::InvalidParams(error_message(&error))
+                    AcpError::InvalidParams(error.app_server_message())
                 }
-                _ if mutation => AcpError::InvalidParams(error_message(&error)),
-                _ => AcpError::Unexpected(error_message(&error)),
+                _ if mutation => AcpError::InvalidParams(error.app_server_message()),
+                _ => AcpError::Unexpected(error.app_server_message()),
             })?;
         if mutation {
             return Ok(json!({}));
@@ -385,7 +385,7 @@ where
                 let result = self
                     .call_async(&harness, "connectors/auth/read", json!({"name": name}))
                     .await
-                    .map_err(|error| AcpError::InvalidParams(error_message(&error)))?
+                    .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?
                     .result;
                 return Ok(json!({"url": result.get("url").cloned().unwrap_or(Value::Null)}));
             }
@@ -424,7 +424,7 @@ where
                 if failures.len() == names.len()
                     && let Some(error) = failures.into_iter().next()
                 {
-                    return Err(AcpError::InvalidParams(error_message(&error)));
+                    return Err(AcpError::InvalidParams(error.app_server_message()));
                 }
             }
             "connectors/toggle" => {
@@ -450,7 +450,7 @@ where
                     json!({"alias": name, "disabled": disabled, "toolName": tool_name}),
                 )
                 .await
-                .map_err(|error| AcpError::InvalidParams(error_message(&error)))?;
+                .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?;
             }
             _ => return Err(AcpError::NotImplemented(method.to_owned())),
         }
@@ -458,7 +458,7 @@ where
         let state = self
             .call_async(&harness, "mcp/read", json!({}))
             .await
-            .map_err(|error| AcpError::InvalidParams(error_message(&error)))?
+            .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?
             .result
             .remove("mcp")
             .unwrap_or(Value::Null);
@@ -493,21 +493,20 @@ where
             }),
             _ => return Err(AcpError::NotImplemented(method.to_owned())),
         };
-        let result =
-            self.host_call(method, forwarded).await.map_err(|error| {
-                match protocol_code(&error) {
-                    Some(ProtocolErrorCode::Unauthorized) => {
-                        AcpError::Unauthenticated(error_message(&error))
-                    }
-                    Some(
-                        ProtocolErrorCode::InvalidParams
-                        | ProtocolErrorCode::InvalidRequest
-                        | ProtocolErrorCode::NotFound
-                        | ProtocolErrorCode::Conflict,
-                    ) => AcpError::InvalidParams(error_message(&error)),
-                    _ => AcpError::Internal(error_message(&error)),
+        let result = self.host_call(method, forwarded).await.map_err(|error| {
+            match error.protocol_code() {
+                Some(ProtocolErrorCode::Unauthorized) => {
+                    AcpError::Unauthenticated(error.app_server_message())
                 }
-            })?;
+                Some(
+                    ProtocolErrorCode::InvalidParams
+                    | ProtocolErrorCode::InvalidRequest
+                    | ProtocolErrorCode::NotFound
+                    | ProtocolErrorCode::Conflict,
+                ) => AcpError::InvalidParams(error.app_server_message()),
+                _ => AcpError::Internal(error.app_server_message()),
+            }
+        })?;
         Ok(Value::Object(result))
     }
 
@@ -530,18 +529,18 @@ where
                         .cloned()
                         .unwrap_or_else(|| json!({})),
                     Err(error)
-                        if protocol_code(&error) == Some(ProtocolErrorCode::MethodNotFound) =>
+                        if error.protocol_code() == Some(ProtocolErrorCode::MethodNotFound) =>
                     {
                         json!({})
                     }
-                    Err(error) => return Err(AcpError::InvalidParams(error_message(&error))),
+                    Err(error) => return Err(AcpError::InvalidParams(error.app_server_message())),
                 })
             }
             "account/read" => {
                 let result = self
                     .call_async(&harness, "account/read", json!({}))
                     .await
-                    .map_err(|error| AcpError::InvalidParams(error_message(&error)))?
+                    .map_err(|error| AcpError::InvalidParams(error.app_server_message()))?
                     .result;
                 Ok(result
                     .get("account")
@@ -588,7 +587,7 @@ where
                         }),
                     )
                     .await
-                    .map_err(|error| AcpError::Unexpected(error_message(&error)))?;
+                    .map_err(|error| AcpError::Unexpected(error.app_server_message()))?;
                     set_config_log_level(parse_level(Some(&level))?);
                 }
                 Ok(log_level_payload())
@@ -653,7 +652,7 @@ where
         let mut config = self
             .call_async(&harness, "config/read", json!({}))
             .await
-            .map_err(|error| AcpError::Unexpected(error_message(&error)))?
+            .map_err(|error| AcpError::Unexpected(error.app_server_message()))?
             .result
             .remove("config")
             .unwrap_or(Value::Null);
@@ -661,7 +660,7 @@ where
             config.insert("narratorEnabled".to_owned(), json!(true));
             config.insert("voiceModeEnabled".to_owned(), json!(true));
         }
-        let session_id = harness.canonical_id();
+        let session_id = harness.session_id.clone();
         let telemetry = Arc::clone(&self.telemetry);
         let record: voice::Recorder = {
             let session_id = session_id.clone();
@@ -786,34 +785,8 @@ fn text(params: &Map<String, Value>, key: &str) -> Result<String, AcpError> {
     }
 }
 
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(fields) => !fields.is_empty(),
-    }
-}
-
-fn protocol_code(error: &AcpError) -> Option<ProtocolErrorCode> {
-    match error {
-        AcpError::AppServer(ClientError::Protocol(code, _)) => Some(*code),
-        _ => None,
-    }
-}
-
-/// What the reference reads off `AppServerResponseError.error.message`.
-fn error_message(error: &AcpError) -> String {
-    match error {
-        AcpError::AppServer(ClientError::Protocol(_, message)) => message.clone(),
-        other => other.to_string(),
-    }
-}
-
 fn ignore_missing(error: AcpError) -> Result<(), AcpError> {
-    match protocol_code(&error) {
+    match error.protocol_code() {
         Some(ProtocolErrorCode::NotFound) => Ok(()),
         _ => Err(error),
     }

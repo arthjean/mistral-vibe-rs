@@ -5,9 +5,15 @@
 //! keeps on the events it authors, the credential that never leaves the
 //! process, and the gate's failure mode.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
-use serde_json::json;
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use secrecy::SecretString;
+use serde_json::{Map, Value, json};
+use toml::Table;
+use url::Url;
 
 use super::records::{
     ProjectPicker, ProjectSelectionSource, TelemetryToolStatus, TeleportFailureStage,
@@ -15,6 +21,7 @@ use super::records::{
 };
 use super::*;
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
+use crate::engine::EventObserver;
 use crate::events::LifecycleState;
 use crate::events::{EngineEvent, EventEnvelope};
 

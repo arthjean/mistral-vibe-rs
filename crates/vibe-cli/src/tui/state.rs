@@ -667,56 +667,18 @@ impl TuiState {
         Ok(())
     }
 
-    pub fn replace_projection_preserving_diagnostics(
-        &mut self,
-        mut replacement: Self,
-    ) -> Result<(), StateError> {
-        if replacement.session_id != self.session_id {
-            return Err(StateError::ForeignSession(replacement.session_id));
-        }
-        replacement.viewport = self.viewport;
+    /// A canonical resync: the snapshot replaces the server's entries, and
+    /// every entry this client wrote keeps the place it was anchored at.
+    /// Everything else is the operator's and survives, except what the
+    /// replaced revisions derived: the stream deltas, and the scroll position,
+    /// which returns to the newest entry. Nothing changes when the snapshot is
+    /// rejected.
+    pub fn resync(&mut self, mut snapshot: TuiSnapshot) -> Result<(), StateError> {
         // The window survives a resync while the entry it starts at does.
-        replacement.history_first_visible = self
+        let first_visible = self
             .history_first_visible
-            .take()
-            .filter(|id| replacement.entries.iter().any(|entry| &entry.id == id));
-        replacement.overlay = self.overlay.take();
-        replacement.rewind = self.rewind.take();
-        replacement.session_delete = self.session_delete.take();
-        replacement.prompt_queue = std::mem::take(&mut self.prompt_queue);
-        replacement.quit_confirmation = std::mem::take(&mut self.quit_confirmation);
-        replacement.rewind_confirmation = std::mem::take(&mut self.rewind_confirmation);
-        replacement.tools_collapsed = self.tools_collapsed;
-        replacement.folds = std::mem::take(&mut self.folds);
-        replacement.animation_frame = self.animation_frame;
-        replacement.loading = std::mem::take(&mut self.loading);
-        replacement.banner_cat = std::mem::take(&mut self.banner_cat);
-        replacement.last_keystroke_ms = self.last_keystroke_ms;
-        replacement.typing_hold = self.typing_hold;
-        replacement.revealed_callback = self.revealed_callback.take();
-        replacement.inline_notice = self.inline_notice.take();
-        replacement.queue_selection = self.queue_selection.take();
-        replacement.show_reasoning = self.show_reasoning;
-        replacement.autocopy_to_clipboard = self.autocopy_to_clipboard;
-        replacement.ask_confirmation_on_exit = self.ask_confirmation_on_exit;
-        replacement.callback = self.callback.take();
-        replacement.callback_scroll_offset = self.callback_scroll_offset;
-        replacement.plan_review = self.plan_review.take();
-        // Locally owned observability: a canonical resync replaces history, not
-        // what the operator is watching, selected, or was already told.
-        replacement.activity = self.activity.take();
-        replacement.turn_started_ms = self.turn_started_ms;
-        replacement.errors = std::mem::take(&mut self.errors);
-        replacement.debug_console = self.debug_console.take();
-        replacement.transcript_view = std::mem::take(&mut self.transcript_view);
-        replacement.notifier = std::mem::take(&mut self.notifier);
-        replacement.narrator = std::mem::take(&mut self.narrator);
-        replacement.file_watcher_for_autocomplete = self.file_watcher_for_autocomplete;
-        replacement.todos = self.todos.take();
-        replacement.subagents = std::mem::take(&mut self.subagents);
-        replacement.diagnostics = self.diagnostics.clone();
-        replacement.local_sequence = self.local_sequence;
-        replacement.local_entries = self.local_entries.clone();
+            .clone()
+            .filter(|id| snapshot.entries.iter().any(|entry| &entry.id == id));
         // Entries written before any server entry keep their place at the top.
         let mut leading = 0;
         for position in &self.local_entries {
@@ -724,33 +686,35 @@ impl TuiState {
                 .entry_indexes
                 .get(&position.entry_id)
                 .and_then(|index| self.entries.get(*index))
-                .cloned()
             else {
                 continue;
             };
-            if replacement
-                .entries
-                .iter()
-                .any(|candidate| candidate.id == entry.id)
-            {
-                return Err(StateError::DuplicateEntry(entry.id));
-            }
             let insertion_index = match position.after_entry_id.as_ref() {
                 None => {
                     leading += 1;
                     leading - 1
                 }
-                Some(anchor) => replacement
+                Some(anchor) => snapshot
                     .entries
                     .iter()
                     .position(|candidate| candidate.id == *anchor)
-                    .map_or(replacement.entries.len(), |index| index.saturating_add(1)),
+                    .map_or(snapshot.entries.len(), |index| index.saturating_add(1)),
             };
-            replacement.entries.insert(insertion_index, entry);
+            snapshot.entries.insert(insertion_index, entry.clone());
         }
-        replacement.reindex();
-        *self = replacement;
+        self.apply(ServerEvent::Snapshot(snapshot))?;
+        self.history_first_visible = first_visible;
+        self.effect_streams.clear();
+        self.scroll_offset = 0;
         Ok(())
+    }
+
+    /// The entry `id` names, when the transcript holds one.
+    #[must_use]
+    pub fn entry(&self, id: &str) -> Option<&TranscriptEntry> {
+        self.entry_indexes
+            .get(id)
+            .and_then(|index| self.entries.get(*index))
     }
 
     pub fn diagnostics(&self) -> impl Iterator<Item = &str> {
@@ -1226,19 +1190,15 @@ mod tests {
             })
             .expect("stale entry applies");
 
-        let mut replacement = TuiState::new("session");
-        replacement
-            .apply(ServerEvent::Snapshot(TuiSnapshot {
+        state
+            .resync(TuiSnapshot {
                 session_id: "session".to_owned(),
                 event_id: 8,
                 entries: vec![entry("canonical", 1, "new", EntryStatus::Completed)],
                 cursor_before: None,
                 cursor_after: None,
                 waiting: false,
-            }))
-            .expect("canonical state");
-        state
-            .replace_projection_preserving_diagnostics(replacement)
+            })
             .expect("same-session replacement");
 
         assert_eq!(state.watermark, 8);
@@ -1267,19 +1227,15 @@ mod tests {
             .extend_selection(super::super::transcript_view::Cell { line: 0, column: 3 });
         assert!(state.transcript_view.has_selection());
 
-        let mut replacement = TuiState::new("session");
-        replacement
-            .apply(ServerEvent::Snapshot(TuiSnapshot {
+        state
+            .resync(TuiSnapshot {
                 session_id: "session".to_owned(),
                 event_id: 2,
                 entries: vec![entry("canonical", 1, "new", EntryStatus::Completed)],
                 cursor_before: None,
                 cursor_after: None,
                 waiting: true,
-            }))
-            .expect("canonical state");
-        state
-            .replace_projection_preserving_diagnostics(replacement)
+            })
             .expect("same-session replacement");
 
         assert!(state.debug_console.is_some(), "the console stayed open");
@@ -1296,6 +1252,27 @@ mod tests {
                 .map(|activity| activity.elapsed_seconds),
             Some(4)
         );
+    }
+
+    #[test]
+    fn a_rejected_resync_leaves_the_state_as_it_was() {
+        let mut state = TuiState::new("session");
+        state.append_local(entry("ignored", 1, "local", EntryStatus::Completed));
+        state.scroll_offset = 3;
+        let before = state.clone();
+
+        assert_eq!(
+            state.resync(TuiSnapshot {
+                session_id: "session".to_owned(),
+                event_id: 4,
+                entries: vec![entry("local-1", 1, "collides", EntryStatus::Completed)],
+                cursor_before: None,
+                cursor_after: None,
+                waiting: false,
+            }),
+            Err(StateError::DuplicateEntry("local-1".to_owned()))
+        );
+        assert_eq!(state, before);
     }
 
     #[test]
@@ -1316,9 +1293,8 @@ mod tests {
             })
             .expect("second server entry");
 
-        let mut replacement = TuiState::new("session");
-        replacement
-            .apply(ServerEvent::Snapshot(TuiSnapshot {
+        state
+            .resync(TuiSnapshot {
                 session_id: "session".to_owned(),
                 event_id: 3,
                 entries: vec![
@@ -1328,10 +1304,7 @@ mod tests {
                 cursor_before: None,
                 cursor_after: None,
                 waiting: false,
-            }))
-            .expect("canonical snapshot");
-        state
-            .replace_projection_preserving_diagnostics(replacement)
+            })
             .expect("local positions restore");
 
         assert_eq!(

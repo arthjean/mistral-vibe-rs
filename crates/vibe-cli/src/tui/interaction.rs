@@ -263,17 +263,6 @@ impl Overlay {
         }
     }
 
-    /// Moves the selection onto the item `id` names, when it is selectable.
-    pub fn select_id(&mut self, id: &str) {
-        if let Some(index) = self
-            .items
-            .iter()
-            .position(|item| item.id == id && !item.disabled)
-        {
-            self.selected = Some(index);
-        }
-    }
-
     pub fn set_query(&mut self, query: impl Into<String>) {
         let selected_id = self.selected_item().map(|item| item.id.clone());
         self.query = query.into();
@@ -328,6 +317,8 @@ impl Overlay {
         self.selected = visible.get(next).copied();
     }
 
+    /// Moves the selection onto the item `id` names, when the query shows it
+    /// and it is selectable.
     pub fn select_by_id(&mut self, id: &str) {
         if let Some(selected) = self
             .visible_indexes()

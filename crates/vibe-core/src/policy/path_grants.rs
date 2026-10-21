@@ -102,7 +102,7 @@ pub fn path_pattern_matches(path: &str, pattern: &str) -> bool {
         return pattern_matches(&windows_normcase(pattern), &normalized);
     }
     if pattern.starts_with('/') {
-        return super::pure_path_match(pattern, &normalized);
+        return super::tool_rules::pure_path_match(pattern, &normalized);
     }
     fnmatch(pattern, &normalized)
 }

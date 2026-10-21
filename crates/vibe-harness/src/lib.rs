@@ -36,4 +36,5 @@ pub mod subagents;
 pub mod title;
 pub mod tool_projection;
 pub mod tools;
+mod utility_call;
 pub mod wire;

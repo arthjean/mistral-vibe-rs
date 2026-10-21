@@ -97,7 +97,7 @@ where
                         Err(message) => {
                             harness.service.lock().await.reject_callback(
                                 json!({
-                                    "sessionId": harness.canonical_id(),
+                                    "sessionId": harness.session_id,
                                     "callbackId": callback_id,
                                     "output": denied_question(),
                                 }),
@@ -111,7 +111,7 @@ where
                 }
             };
             harness.service.lock().await.respond_callback(json!({
-                "sessionId": harness.canonical_id(),
+                "sessionId": harness.session_id,
                 "callbackId": callback_id,
                 "output": output,
             }))?;

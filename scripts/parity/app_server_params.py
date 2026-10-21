@@ -27,7 +27,8 @@ Usage::
     scripts/parity/app_server_params.py --check
 
 The checkout must sit on the pinned commit; the script re-executes itself
-under the reference interpreter when the current one cannot import ``vibe``.
+under the reference interpreter, importing that commit extracted with
+``git archive`` (``scripts/parity/reference.py``).
 """
 
 from __future__ import annotations

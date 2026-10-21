@@ -8,6 +8,7 @@ use ratatui::style::Color;
 use serde_json::json;
 use vibe_app_server::client::{EffectDetail, PublicNoticeLevel};
 
+use super::composer::composer_border_style;
 use super::*;
 use crate::tui::attachments::PromptDraft;
 use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};

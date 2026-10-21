@@ -161,3 +161,18 @@ fn float_text(value: f64) -> String {
         repr_float(value)
     }
 }
+
+/// Reference: Python `bool(value)` on what `json.loads` returns: `None`,
+/// `False`, a zero and an empty string, list or dict are false, and every
+/// other value is true.
+#[must_use]
+pub fn truthy(value: &Value) -> bool {
+    match value {
+        Value::Null => false,
+        Value::Bool(flag) => *flag,
+        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
+        Value::String(text) => !text.is_empty(),
+        Value::Array(items) => !items.is_empty(),
+        Value::Object(fields) => !fields.is_empty(),
+    }
+}

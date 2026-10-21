@@ -110,7 +110,7 @@ where
                 .service
                 .lock()
                 .await
-                .interrupt_driver(&harness.canonical_id(), &turn_id);
+                .interrupt_driver(&harness.session_id, &turn_id);
         }
         Ok(())
     }
@@ -222,7 +222,6 @@ where
         harness: &Arc<AcpHarness<D>>,
         input: TurnInput,
     ) -> Result<TurnEnd, TurnFailure> {
-        let session_id = harness.canonical_id();
         let mut blocks = vec![PublicContentBlock::Text {
             text: input.text.clone(),
         }];
@@ -259,7 +258,7 @@ where
         let (reservation, driver, observer, mut updates) = {
             let mut service = harness.service.lock().await;
             let reservation = service
-                .reserve_prompt(&session_id, &request)
+                .reserve_prompt(&harness.session_id, &request)
                 .await
                 .map_err(|error| TurnFailure::Other(reserve_error(error)))?;
             if let Some(opening_usage) = opening_usage {

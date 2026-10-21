@@ -92,15 +92,12 @@ pub(super) fn adopt_hydrated_session(
     true
 }
 
+/// The session a hydrated `internal/session/*` result opened, which its
+/// stored metadata names under `session_id`.
 pub(super) fn metadata_session_id(result: &BTreeMap<String, Value>) -> Option<String> {
     result
         .get("metadata")
-        .and_then(|metadata| {
-            metadata
-                .get("session_id")
-                .or_else(|| metadata.get("sessionId"))
-                .or_else(|| metadata.get("id"))
-        })
+        .and_then(|metadata| metadata.get("session_id"))
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
 }
@@ -144,26 +141,13 @@ pub(super) fn canonical_session_projection(
     session_id: &str,
     include_saved_history: bool,
 ) -> Result<TuiState, CliError> {
-    let result = runtime
-        .service
-        .public_call("session/read", json!({"sessionId": session_id}))?;
-    let Some(public_state) = result.get("state") else {
-        return Err(CliError::Terminal(
-            "session/read omitted public state".to_owned(),
-        ));
-    };
-    let mut state = tui_state_from_public_session(session_id, public_state)?;
-    // A unified session's state is its whole saved history, the latest page
-    // of it, and the entry that page stops at (reference
-    // `history_before_cursor`); the legacy transcript beside it is not its own.
+    let mut state = tui_state_from_snapshot(canonical_snapshot(runtime, session_id)?)?;
+    // A unified session's saved history is its canonical state already; the
+    // legacy transcript beside it is not its own.
     if runtime.service.is_unified(session_id) {
         // Reference `_reset_todo_presentation`: a session the terminal opens
         // starts with an empty list, which only its next todo write fills.
         state.todos = Some(super::todos::TodoTracker::default());
-        state.cursor_before = public_state
-            .get("historyBeforeCursor")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned);
         if include_saved_history {
             state.window_history_tail();
         }
@@ -174,6 +158,32 @@ pub(super) fn canonical_session_projection(
         state.window_history_tail();
     }
     Ok(state)
+}
+
+/// What `session/read` publishes for `session_id`, as one snapshot.
+fn canonical_snapshot(
+    runtime: &mut InteractiveRuntime,
+    session_id: &str,
+) -> Result<TuiSnapshot, CliError> {
+    let result = runtime
+        .service
+        .public_call("session/read", json!({"sessionId": session_id}))?;
+    let Some(public_state) = result.get("state") else {
+        return Err(CliError::Terminal(
+            "session/read omitted public state".to_owned(),
+        ));
+    };
+    let mut snapshot = snapshot_from_public_session(session_id, public_state)?;
+    // A unified session's state is its whole saved history, the latest page
+    // of it, and the entry that page stops at (reference
+    // `history_before_cursor`).
+    if runtime.service.is_unified(session_id) {
+        snapshot.cursor_before = public_state
+            .get("historyBeforeCursor")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned);
+    }
+    Ok(snapshot)
 }
 
 fn overlay_latest_saved_history(
@@ -407,10 +417,11 @@ pub(super) fn recoverable_initial_state(
     state
 }
 
-pub(super) fn tui_state_from_public_session(
+/// The snapshot a public session state carries.
+fn snapshot_from_public_session(
     session_id: &str,
     public_state: &Value,
-) -> Result<TuiState, CliError> {
+) -> Result<TuiSnapshot, CliError> {
     let reported_session_id = public_state
         .pointer("/session/id")
         .and_then(Value::as_str)
@@ -454,32 +465,35 @@ pub(super) fn tui_state_from_public_session(
             .and_then(Value::as_str),
         Some("running" | "blocked")
     );
-    let mut state = TuiState::new(session_id);
+    Ok(TuiSnapshot {
+        session_id: session_id.to_owned(),
+        event_id: public_state
+            .get("eventId")
+            .and_then(Value::as_u64)
+            .unwrap_or_default(),
+        entries,
+        // Older saved history is paged through `history/list` offsets,
+        // which a public state's entry cursor does not name.
+        cursor_before: None,
+        cursor_after: None,
+        waiting,
+    })
+}
+
+/// A fresh, ready projection of `snapshot`.
+fn tui_state_from_snapshot(snapshot: TuiSnapshot) -> Result<TuiState, CliError> {
+    let mut state = TuiState::new(snapshot.session_id.clone());
     state
-        .apply(ServerEvent::Snapshot(TuiSnapshot {
-            session_id: session_id.to_owned(),
-            event_id: public_state
-                .get("eventId")
-                .and_then(Value::as_u64)
-                .unwrap_or_default(),
-            entries,
-            // Older saved history is paged through `history/list` offsets,
-            // which a public state's entry cursor does not name.
-            cursor_before: None,
-            cursor_after: None,
-            waiting,
-        }))
-        .map_err(|error| CliError::Terminal(error.to_string()))?;
-    state
-        .apply(ServerEvent::Ready)
+        .apply(ServerEvent::Snapshot(snapshot))
+        .and_then(|_| state.apply(ServerEvent::Ready))
         .map_err(|error| CliError::Terminal(error.to_string()))?;
     Ok(state)
 }
 
 pub(super) fn resync_current_projection(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    match canonical_session_projection(runtime, &runtime.session_id.clone(), false) {
-        Ok(replacement) => {
-            if let Err(error) = state.replace_projection_preserving_diagnostics(replacement) {
+    match canonical_snapshot(runtime, &runtime.session_id.clone()) {
+        Ok(snapshot) => {
+            if let Err(error) = state.resync(snapshot) {
                 state.push_diagnostic(format!("Canonical resync was rejected: {error}"));
             }
         }
@@ -644,7 +658,7 @@ mod tests {
 
     #[test]
     fn public_session_history_hydrates_the_initial_projection() {
-        let state = tui_state_from_public_session(
+        let state = snapshot_from_public_session(
             "session",
             &json!({
                 "eventId": 9,
@@ -665,6 +679,7 @@ mod tests {
                 "historyBeforeCursor": "restored-user"
             }),
         )
+        .and_then(tui_state_from_snapshot)
         .expect("public session state hydrates");
 
         assert_eq!(state.watermark, 9);
@@ -703,7 +718,7 @@ mod tests {
 
     #[test]
     fn active_callbacks_are_included_when_the_history_window_omits_them() {
-        let state = tui_state_from_public_session(
+        let state = snapshot_from_public_session(
             "session",
             &json!({
                 "eventId": 4,
@@ -736,6 +751,7 @@ mod tests {
                 }]
             }),
         )
+        .and_then(tui_state_from_snapshot)
         .expect("active callback hydrates");
         assert_eq!(state.entries.len(), 1);
         assert_eq!(state.entries[0].kind, TranscriptKind::Callback);

@@ -19,8 +19,7 @@ use super::error::BackendFailure;
 use super::retry::{Clock, NoRetryObserver, SystemClock};
 use super::types::Message;
 use super::{Backend, BackendContext, Credentials, ModelRequest};
-use crate::atomic_file::{FileMode, write_atomically};
-use crate::experiments::{JsonValue, OrderedMap};
+use crate::credential_cache::{read_entries, write_entries};
 use crate::observability::{self, LogLevel};
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
 use crate::telemetry::TelemetryCallType;
@@ -64,16 +63,16 @@ impl Entry {
 
     /// An entry as the file holds one: `available` a boolean and
     /// `stored_at_timestamp` an integer, which in Python a boolean also is.
-    fn read(value: &JsonValue) -> Option<Self> {
-        let JsonValue::Object(fields) = value else {
+    fn read(value: &Value) -> Option<Self> {
+        let Value::Object(fields) = value else {
             return None;
         };
-        let Some(JsonValue::Bool(available)) = fields.get("available") else {
+        let Some(Value::Bool(available)) = fields.get("available") else {
             return None;
         };
         let stored_at = match fields.get("stored_at_timestamp")? {
-            JsonValue::Bool(flag) => i64::from(*flag),
-            JsonValue::Number(number) if !number.is_f64() => number.as_i64()?,
+            Value::Bool(flag) => i64::from(*flag),
+            Value::Number(number) if !number.is_f64() => number.as_i64()?,
             _ => return None,
         };
         Some(Self {
@@ -266,8 +265,7 @@ impl ModelAvailability {
         {
             return None;
         }
-        let entry = self
-            .read_entries()
+        let entry = read_entries(&self.cache_path())
             .get(key)
             .and_then(Entry::read)
             .filter(|entry| entry.fresh(now));
@@ -279,44 +277,25 @@ impl ModelAvailability {
         entry
     }
 
-    fn read_entries(&self) -> OrderedMap<JsonValue> {
-        std::fs::read_to_string(self.cache_path())
-            .ok()
-            .and_then(|text| serde_json::from_str::<JsonValue>(&text).ok())
-            .and_then(|value| match value {
-                JsonValue::Object(entries) => Some(entries),
-                _ => None,
-            })
-            .unwrap_or_default()
-    }
-
     /// Rewrites the file with `entry` under `key`, dropping every other entry
     /// that is malformed or expired. Reference `_write_entry`.
     fn write_entry(&self, key: &str, entry: Entry) {
         let now = self.unix_now();
-        let mut kept: OrderedMap<JsonValue> = self
-            .read_entries()
-            .iter()
+        let path = self.cache_path();
+        let mut kept: Map<String, Value> = read_entries(&path)
+            .into_iter()
             .filter(|(existing, value)| {
-                *existing != key && Entry::read(value).is_some_and(|entry| entry.fresh(now))
+                existing != key && Entry::read(value).is_some_and(|entry| entry.fresh(now))
             })
-            .map(|(existing, value)| (existing.to_owned(), value.clone()))
             .collect();
-        let mut fields = OrderedMap::new();
-        fields.insert("available".to_owned(), JsonValue::Bool(entry.available));
+        let mut fields = Map::new();
+        fields.insert("available".to_owned(), Value::Bool(entry.available));
         fields.insert(
             "stored_at_timestamp".to_owned(),
-            JsonValue::Number(entry.stored_at.into()),
+            Value::from(entry.stored_at),
         );
-        kept.insert(key.to_owned(), JsonValue::Object(fields));
-        let text = JsonValue::Object(kept).python_json_compact();
-        let path = self.cache_path();
-        // The verdicts are keyed by credential, so the file is owner-only.
-        let written = path
-            .parent()
-            .is_some_and(|parent| std::fs::create_dir_all(parent).is_ok())
-            && write_atomically(&path, "model-probe", text.as_bytes(), FileMode::Private).is_ok();
-        if !written {
+        kept.insert(key.to_owned(), Value::Object(fields));
+        if !write_entries(&path, "model-probe", kept) {
             observability::log(
                 LogLevel::Debug,
                 &format!(

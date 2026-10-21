@@ -176,7 +176,7 @@ impl Version {
     pub fn parse(raw: &str) -> Option<Self> {
         let captures = VERSION_PATTERN
             .as_ref()?
-            .captures(crate::pycompat::strip(raw))?;
+            .captures(vibe_core::pycompat::strip(raw))?;
         let number = |name: &str| {
             captures
                 .name(name)

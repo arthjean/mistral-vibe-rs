@@ -8,13 +8,13 @@
 //! those rules leave asking becomes one approval callback whose answer every
 //! one of those tools records.
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PathGrantScope,
-    PermissionContext, PermissionMode, PermissionRequirement, PolicyError, approval_path_scope,
-    available_path_scopes, wildcard_match,
+    ApprovalDecision, GrantLifetime, PathGrantScope, PermissionContext, PermissionMode,
+    PermissionOutcome, PermissionRequirement, PermissionScope, approval_path_scope, wildcard_match,
 };
 use vibe_core::tools::{ToolInvocation, ToolRegistry};
 use vibe_harness::engine::SessionCore;
@@ -238,22 +238,27 @@ impl UnifiedGate {
         invocation: ToolInvocation,
         action: &ToolAction,
     ) -> Resolved {
+        if hides_environment(tools, action) {
+            return self.resolve_hidden(tools, names, invocation).await;
+        }
         let mut uncovered = Vec::new();
         let (mut cleared, mut scoped, mut unscoped) = (false, false, false);
         for name in names {
-            let probe = ProbeAgent::default();
-            match tools.authorize(name, invocation.clone(), &probe).await {
+            match tools.resolve_permission(name, invocation.clone()).await {
                 // The rules let the call run outright, or a stored grant
                 // covers every requirement they raised.
-                Some(Ok(_)) => cleared = true,
-                Some(Err(error)) => match probe.asked() {
-                    None => return Resolved::Refuse(verdict_of(error)),
-                    Some(requirements) if requirements.is_empty() => unscoped = true,
-                    Some(requirements) => {
-                        scoped = true;
-                        uncovered.extend(requirements);
-                    }
-                },
+                Some(Ok(PermissionOutcome::Cleared { .. })) => cleared = true,
+                Some(Ok(PermissionOutcome::Refused(reason))) => {
+                    return Resolved::Refuse(refused_by_policy(Some(reason)));
+                }
+                Some(Ok(PermissionOutcome::Unscoped { .. })) => unscoped = true,
+                Some(Ok(PermissionOutcome::Needs { requirements, .. })) => {
+                    scoped = true;
+                    uncovered.extend(requirements);
+                }
+                Some(Err(error)) => {
+                    return Resolved::Refuse(refused_by_policy(Some(error.to_string())));
+                }
                 // No rule reads the call, so its configured permission does.
                 None => match self.permission(name) {
                     PermissionMode::Always => cleared = true,
@@ -279,6 +284,65 @@ impl UnifiedGate {
             Resolved::Ask(uncovered)
         }
     }
+
+    /// Reference `_resolve_start_with_hidden_environment`'s verdict on a
+    /// start that picks parts of its run no command rule reads: a shell that
+    /// refuses the command still refuses it, and otherwise the call is asked
+    /// about unscoped, so the answer releases this call alone.
+    async fn resolve_hidden(
+        &self,
+        tools: &ToolRegistry,
+        names: &[&str],
+        invocation: ToolInvocation,
+    ) -> Resolved {
+        for name in names {
+            match tools.resolve_permission(name, invocation.clone()).await {
+                Some(Ok(PermissionOutcome::Refused(reason))) => {
+                    return Resolved::Refuse(refused_by_policy(Some(reason)));
+                }
+                None if self.permission(name) == PermissionMode::Never => {
+                    return Resolved::Refuse(refused_by_policy(None));
+                }
+                _ => {}
+            }
+        }
+        Resolved::Ask(Vec::new())
+    }
+}
+
+/// Reference `_resolve_start_with_hidden_environment`: whether a
+/// `process.start` also picks its environment, or a working directory other
+/// than the one its shells run in, both of which reach the process unseen by
+/// any command rule.
+///
+/// The shells run in the session's working directory, the first root its
+/// store authorized; a store that authorized none has no directory a start
+/// could match.
+fn hides_environment(tools: &ToolRegistry, action: &ToolAction) -> bool {
+    if action.tool_name != "process.start" {
+        return false;
+    }
+    let arguments = &action.arguments;
+    if arguments
+        .get("env")
+        .is_some_and(vibe_core::llm::adapter::truthy)
+    {
+        return true;
+    }
+    let Some(cwd) = arguments.get("cwd") else {
+        return false;
+    };
+    let Some(cwd) = cwd.as_str() else {
+        return vibe_core::llm::adapter::truthy(cwd);
+    };
+    let root = tools
+        .guard()
+        .and_then(|guard| guard.policy.workspace_roots().into_iter().next());
+    let Some(root) = root else {
+        return true;
+    };
+    let cwd = vibe_core::platform::expand_home(Path::new(cwd));
+    vibe_core::platform::resolve_lenient(&root.join(cwd)) != root
 }
 
 impl SmartGate {
@@ -459,11 +523,8 @@ async fn ask(
 }
 
 /// Reference `UnifiedPermissionResolver.grant`: every tool in `names` records
-/// the approval of `requirements` under `scope`.
-///
-/// Each records it through the session's store, which keeps what the tool
-/// already covers and writes the rest as an approval of its own would be
-/// written, permanent ones into the tool's allowlist included.
+/// the approval of `requirements` under `scope`, through the session's store,
+/// as an approval of its own would be recorded.
 async fn grant(
     tools: &ToolRegistry,
     names: &[&str],
@@ -480,31 +541,32 @@ async fn grant(
     let Some(guard) = tools.guard() else {
         return;
     };
-    // Reference `_PROCESS_SESSION_GRANT_BUILTINS`: a process dies with the
-    // session, so nothing about it is kept. And reference `_persist` writes
-    // no blank pattern, which a prefix-matched allowlist reads as every
-    // command.
-    let replay = ReplayAgent {
-        scope,
-        permanent: permanent
-            && route != "process.write"
-            && (requirements.is_empty()
-                || requirements
-                    .iter()
-                    .any(|requirement| !requirement.session_pattern.trim().is_empty())),
-    };
     for name in names {
-        // A tool that refuses the requirements, or already covers them,
-        // records nothing.
-        let _recorded = guard
+        // Reference `_PROCESS_SESSION_GRANT_BUILTINS`: a process dies with
+        // the session, so nothing about it is kept.
+        let lifetime = if permanent && route != "process.write" {
+            GrantLifetime::PermanentWithin(allowlist_scopes(name))
+        } else {
+            GrantLifetime::Session
+        };
+        guard
             .policy
-            .authorize(
-                name,
-                Value::Null,
-                PermissionContext::asking(requirements.to_vec()),
-                &replay,
-            )
+            .grant(name, requirements, scope, lifetime)
             .await;
+    }
+}
+
+/// Reference `BaseTool.allowlist_scopes`: a shell reads command prefixes and
+/// path grants back from its allowlist, and every other tool, a provided one
+/// included, reads every scope.
+fn allowlist_scopes(name: &str) -> &'static [PermissionScope] {
+    if SHELLS.contains(&name) {
+        &[
+            PermissionScope::CommandPattern,
+            PermissionScope::OutsideDirectory,
+        ]
+    } else {
+        &PermissionScope::ALL
     }
 }
 
@@ -516,11 +578,13 @@ async fn granted(tools: &ToolRegistry, name: &str, fallback: &PermissionRequirem
     let Some(guard) = tools.guard() else {
         return false;
     };
-    let stored = guard
-        .policy
-        .resolve(name, &PermissionContext::asking(vec![fallback.clone()]))
-        .await
-        .is_ok_and(|resolution| resolution.mode == PermissionMode::Always);
+    let stored = matches!(
+        guard
+            .policy
+            .outcome(name, &PermissionContext::asking(vec![fallback.clone()]))
+            .await,
+        Ok(PermissionOutcome::Cleared { .. })
+    );
     stored
         || (!is_process_id(&fallback.invocation_pattern)
             && guard
@@ -547,16 +611,6 @@ fn refused_by_callback() -> GateVerdict {
     }
 }
 
-fn verdict_of(error: PolicyError) -> GateVerdict {
-    match error {
-        PolicyError::Skipped { .. } => refused_by_callback(),
-        PolicyError::TurnCancelled => GateVerdict::CancelTurn,
-        PolicyError::TurnFailed(message) => GateVerdict::FailTurn { message },
-        PolicyError::Denied(reason) => refused_by_policy(Some(reason)),
-        other => refused_by_policy(Some(other.to_string())),
-    }
-}
-
 /// A smart-approve decision that lets the call run, with its note.
 fn smart_run(note: Option<String>) -> GateVerdict {
     GateVerdict::Run {
@@ -564,51 +618,6 @@ fn smart_run(note: Option<String>) -> GateVerdict {
             approval_record("execute", "always", "smart"),
             note.as_deref(),
         ),
-    }
-}
-
-/// Records what the rules would ask about instead of asking.
-#[derive(Default)]
-struct ProbeAgent {
-    asked: Mutex<Option<Vec<PermissionRequirement>>>,
-}
-
-impl ProbeAgent {
-    /// The requirements the rules asked about, or `None` when they did not
-    /// ask.
-    fn asked(&self) -> Option<Vec<PermissionRequirement>> {
-        lock(&self.asked).take()
-    }
-}
-
-impl ApprovalAgent for ProbeAgent {
-    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
-        *lock(&self.asked) = Some(request.requirements);
-        Box::pin(async { Ok(ApprovalDecision::Deny) })
-    }
-}
-
-/// Gives the store the answer the person already gave, so another tool
-/// records the approval as the store records one of its own.
-struct ReplayAgent {
-    scope: PathGrantScope,
-    permanent: bool,
-}
-
-impl ApprovalAgent for ReplayAgent {
-    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
-        // The store hands over what this tool still lacks, which offers the
-        // recursive scope whenever the whole approval did, or no path at all,
-        // and it reads no choice as the exact scope.
-        let selected = (self.scope == PathGrantScope::DirectoryRecursive
-            && !available_path_scopes(&request.requirements).is_empty())
-        .then_some(self.scope);
-        let decision = if self.permanent {
-            ApprovalDecision::ApprovePermanently(selected)
-        } else {
-            ApprovalDecision::ApproveForSession(selected)
-        };
-        Box::pin(async move { Ok(decision) })
     }
 }
 

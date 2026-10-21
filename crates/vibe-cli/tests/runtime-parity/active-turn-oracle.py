@@ -25,7 +25,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
-from reference import require_pin  # noqa: E402
+from reference import reexecute_pinned  # noqa: E402
 
 # The approval fixture the corpus replays: one shell effect carrying a command
 # and one required permission.
@@ -710,8 +710,7 @@ def main() -> int:
     parser.add_argument("--workdir", type=Path, default=Path("/tmp/active-turn-oracle"))
     arguments = parser.parse_args()
 
-    commit = require_pin(arguments.reference, arguments.expected_commit)
-    sys.path.insert(0, str(arguments.reference))
+    commit, _ = reexecute_pinned(arguments.reference, arguments.expected_commit)
     from vibe.core.config.harness_files import init_harness_files_manager
 
     init_harness_files_manager()

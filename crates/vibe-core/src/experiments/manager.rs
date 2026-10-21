@@ -14,14 +14,16 @@
 //! Reference: `vibe/core/experiments/manager.py` and
 //! `vibe/core/experiments/resolve.py` at the pinned commit.
 
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
+use crate::pycompat::{self, Dumps};
 use crate::telemetry::ExperimentAssignment;
 use crate::text::hex_encode;
 
 use super::ExperimentName;
 use super::client::RemoteEvalClient;
-use super::json::{JsonValue, OrderedMap};
+use super::json::python_eq;
 use super::models::{EvalResponse, ExperimentAttributes, FeatureDefinition, TrackData};
 
 /// How many hexadecimal characters of the digest the bucketing key keeps.
@@ -123,8 +125,8 @@ impl ExperimentManager {
     ///
     /// Reference `resolve.variant_or_none`.
     #[must_use]
-    pub fn variant_or_none(&self, name: ExperimentName) -> Option<JsonValue> {
-        let feature = self.response.as_ref()?.features.get(name.key())?;
+    pub fn variant_or_none(&self, name: ExperimentName) -> Option<Value> {
+        let feature = self.response.as_ref()?.feature(name.key())?;
         let value = feature.resolved_value();
         (!value.is_null()).then(|| value.clone())
     }
@@ -134,7 +136,7 @@ impl ExperimentManager {
     ///
     /// Reference `resolve.variant`.
     #[must_use]
-    pub fn variant(&self, name: ExperimentName) -> JsonValue {
+    pub fn variant(&self, name: ExperimentName) -> Value {
         self.variant_or_none(name)
             .unwrap_or_else(|| name.default_variant())
     }
@@ -151,12 +153,13 @@ impl ExperimentManager {
     ///
     /// Reference `resolve.config_variants`.
     #[must_use]
-    pub fn config_variants(&self) -> OrderedMap<JsonValue> {
+    pub fn config_variants(&self) -> Map<String, Value> {
         ExperimentName::ALL
             .into_iter()
             .filter_map(|name| {
                 let value = self.variant_or_none(name)?;
-                (!value.python_eq(&name.default_variant())).then(|| (name.key().to_owned(), value))
+                (!python_eq(&value, &name.default_variant()))
+                    .then(|| (name.key().to_owned(), value))
             })
             .collect()
     }
@@ -176,7 +179,7 @@ impl ExperimentManager {
         let Some(response) = self.response.as_ref() else {
             return records;
         };
-        for (key, feature) in response.features.iter() {
+        for (key, feature) in &response.features {
             for track in feature.rules.iter().flat_map(|rule| &rule.tracks) {
                 if track.result.in_experiment != Some(true) {
                     continue;
@@ -186,7 +189,7 @@ impl ExperimentManager {
                     continue;
                 }
                 let record = ExperimentAssignment {
-                    experiment_id: key.to_owned(),
+                    experiment_id: key.clone(),
                     experiment_name: track.experiment.key.clone(),
                     variation_name: label,
                     variation_id: track.result.variation_id,
@@ -226,7 +229,7 @@ impl ExperimentManager {
 fn filter_to_known_experiments(mut response: EvalResponse) -> EvalResponse {
     response
         .features
-        .retain(|key, _| ExperimentName::from_key(key).is_some());
+        .retain(|(key, _)| ExperimentName::from_key(key).is_some());
     response
 }
 
@@ -254,10 +257,10 @@ fn variant_label(feature: &FeatureDefinition, track: &TrackData) -> String {
 }
 
 /// One JSON value as a label, or [`None`] when it carries nothing.
-fn label_of(value: &JsonValue) -> Option<String> {
+fn label_of(value: &Value) -> Option<String> {
     match value {
-        JsonValue::Null => None,
-        JsonValue::String(text) => Some(text.clone()),
-        other => Some(other.python_json()),
+        Value::Null => None,
+        Value::String(text) => Some(text.clone()),
+        other => Some(pycompat::dumps(other, Dumps::DEFAULT)),
     }
 }

@@ -20,17 +20,17 @@ use super::compatibility::{
 };
 use super::diagnostics::Severity;
 use super::foreign::{
-    adapt_mcp_servers, adapt_skill_file, adapt_static_command, aliased, command_source_name,
-    declared_paths, markdown_files_for_declared_path, mcp_mapping, object_key_order,
-    pattern_compiles, skill_files_for_declared_path, unsupported_component,
+    AliasedObject, adapt_command_path, adapt_mcp_servers, adapt_skill_file, declared_paths,
+    diagnostic, hook_matcher, hook_type, mcp_mapping, optional_aliased_string,
+    skill_files_for_declared_path, unsupported_component, unsupported_hook,
 };
 use super::paths::{is_relative_to, resolve_strict};
 use super::strict::{self, ValidationErrors, char_len};
-use crate::hooks::{HookConfig, HookType};
+use crate::hooks::{HookConfig, HookProtocol, HookType};
 use crate::pycompat;
 use crate::skills::SkillScope;
 
-const FORMAT: &str = "claude_code";
+const FORMAT: DetectedPluginFormat = DetectedPluginFormat::ClaudeCode;
 const MANIFEST: &str = ".claude-plugin/plugin.json";
 /// The default timeout of a Claude command hook, in seconds.
 const DEFAULT_HOOK_TIMEOUT: f64 = 600.0;
@@ -79,46 +79,13 @@ const FIELDS: [(&str, Option<&str>); 25] = [
 
 /// The manifest after validation. Reference `_ClaudeManifest`.
 struct Manifest {
-    raw: Map<String, Value>,
-    /// The manifest as written, read again where key order matters.
-    text: String,
+    object: AliasedObject,
     name: String,
     version: Option<String>,
     description: Option<String>,
 }
 
-impl Manifest {
-    /// A declared field, `None` for an absent or `null` value.
-    fn field(&self, alias: &str) -> Option<&Value> {
-        let name = FIELDS
-            .iter()
-            .find(|(key, _)| *key == alias)
-            .and_then(|(_, name)| *name)
-            .unwrap_or(alias);
-        aliased(&self.raw, alias, name).filter(|value| !value.is_null())
-    }
-
-    /// Keys that populate no declared field. Reference `model_extra` minus
-    /// the declared spellings: a field name whose alias is also present stays
-    /// extra, as pydantic leaves it.
-    fn extras(&self) -> Vec<String> {
-        let mut extras: Vec<String> = self
-            .raw
-            .keys()
-            .filter(|key| {
-                !FIELDS.iter().any(|(alias, name)| {
-                    key.as_str() == *alias
-                        || (Some(key.as_str()) == *name && !self.raw.contains_key(*alias))
-                })
-            })
-            .cloned()
-            .collect();
-        extras.sort();
-        extras
-    }
-}
-
-fn parse_manifest(text: &str, raw: &Value) -> Result<Manifest, String> {
+fn parse_manifest(raw: &Value) -> Result<Manifest, String> {
     let mut errors = ValidationErrors::default();
     let Value::Object(map) = raw else {
         return Err("the manifest has to be an object".to_owned());
@@ -129,22 +96,12 @@ fn parse_manifest(text: &str, raw: &Value) -> Result<Manifest, String> {
     {
         errors.push("name", "must hold 1 to 256 characters");
     }
-    let optional = |alias: &str, field: &str, errors: &mut ValidationErrors| match aliased(
-        map, alias, field,
-    ) {
-        None | Some(Value::Null) => Some(None),
-        Some(Value::String(text)) => Some(Some(text.clone())),
-        Some(_) => {
-            errors.push(alias, "must be a string or null");
-            None
-        }
-    };
-    optional("$schema", "schema_id", &mut errors);
-    optional("displayName", "display_name", &mut errors);
-    let version = optional("version", "version", &mut errors);
-    let description = optional("description", "description", &mut errors);
-    optional("homepage", "homepage", &mut errors);
-    optional("license", "license", &mut errors);
+    optional_aliased_string(map, "$schema", "schema_id", &mut errors);
+    optional_aliased_string(map, "displayName", "display_name", &mut errors);
+    let version = optional_aliased_string(map, "version", "version", &mut errors);
+    let description = optional_aliased_string(map, "description", "description", &mut errors);
+    optional_aliased_string(map, "homepage", "homepage", &mut errors);
+    optional_aliased_string(map, "license", "license", &mut errors);
     strict::string_list(map, "", "keywords", true, &mut errors);
     if !errors.is_empty() {
         return Err(errors.render("Claude plugin manifest"));
@@ -163,22 +120,11 @@ fn parse_manifest(text: &str, raw: &Value) -> Result<Manifest, String> {
         return Err("version must be a semantic version".to_owned());
     }
     Ok(Manifest {
-        raw: map.clone(),
-        text: text.to_owned(),
+        object: AliasedObject::new(map.clone(), &FIELDS),
         name,
         version,
         description,
     })
-}
-
-fn diagnostic(
-    suffix: &str,
-    path: &Path,
-    message: impl Into<String>,
-    component: &str,
-    severity: Severity,
-) -> PluginAdapterDiagnostic {
-    super::foreign::diagnostic(FORMAT, suffix, path, message, component, severity, false)
 }
 
 /// Reads a Claude Code plugin. Reference `ClaudePluginAdapter.adapt`.
@@ -188,22 +134,24 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let loaded = resolve_declared_path(root, MANIFEST).and_then(|resolved| {
         let text = read_text(&resolved).map_err(|error| error.to_string())?;
         let raw: Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
-        Ok((resolved, parse_manifest(&text, &raw)?))
+        Ok((resolved, parse_manifest(&raw)?))
     });
     let (resolved_manifest, manifest) = match loaded {
         Ok(loaded) => loaded,
         Err(error) => {
             return PluginAdapterResult {
                 package: None,
-                diagnostics: vec![super::foreign::diagnostic(
-                    FORMAT,
-                    "manifest_invalid",
-                    &manifest_path,
-                    format!("Could not load the Claude plugin manifest: {error}"),
-                    "manifest",
-                    Severity::Error,
-                    true,
-                )],
+                diagnostics: vec![
+                    diagnostic(
+                        FORMAT,
+                        "manifest_invalid",
+                        &manifest_path,
+                        format!("Could not load the Claude plugin manifest: {error}"),
+                        "manifest",
+                        Severity::Error,
+                    )
+                    .fatal(),
+                ],
                 unsupported_components: Vec::new(),
             };
         }
@@ -244,10 +192,10 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         package: Some(AdaptedPluginPackage {
             source_format: DetectedPluginFormat::ClaudeCode,
             manifest_path: resolved_manifest,
-            author: author_display_name(manifest.field("author")),
+            author: author_display_name(manifest.object.field("author")),
             private_metadata: [(
                 "claudeManifest".to_owned(),
-                Value::Object(manifest.raw.clone()),
+                Value::Object(manifest.object.raw.clone()),
             )]
             .into_iter()
             .collect(),
@@ -273,10 +221,11 @@ fn adapt_skills(
     manifest: &Manifest,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Vec<AdaptedSkill> {
-    let mut paths = declared_paths(manifest.field("skills")).unwrap_or_else(|| {
+    let mut paths = declared_paths(manifest.object.field("skills")).unwrap_or_else(|| {
         diagnostics.push(diagnostic(
+            FORMAT,
             "skills_declaration_invalid",
-            &root.join(".claude-plugin").join("plugin.json"),
+            root.join(".claude-plugin").join("plugin.json"),
             "Claude skills have to be a relative path or a list of relative paths.",
             "skill",
             Severity::Error,
@@ -292,8 +241,9 @@ fn adapt_skills(
     for value in paths {
         let Some(relative) = value.strip_prefix("./") else {
             diagnostics.push(diagnostic(
+                FORMAT,
                 "skill_path_invalid",
-                &root.join(&value),
+                root.join(&value),
                 "A Claude skill path has to start with './'.",
                 "skill",
                 Severity::Error,
@@ -303,8 +253,9 @@ fn adapt_skills(
         match skill_files_for_declared_path(root, &value) {
             Ok(found) => files.extend(found),
             Err(error) => diagnostics.push(diagnostic(
+                FORMAT,
                 "skill_path_invalid",
-                &root.join(relative),
+                root.join(relative),
                 format!("Could not import the Claude skills: {error}"),
                 "skill",
                 Severity::Error,
@@ -322,10 +273,11 @@ fn adapt_commands(
     manifest: &Manifest,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Vec<AdaptedSkill> {
-    let Some(mut paths) = declared_paths(manifest.field("commands")) else {
+    let Some(mut paths) = declared_paths(manifest.object.field("commands")) else {
         diagnostics.push(diagnostic(
+            FORMAT,
             "commands_declaration_invalid",
-            &root.join(".claude-plugin").join("plugin.json"),
+            root.join(".claude-plugin").join("plugin.json"),
             "Claude commands have to be a relative path or a list of relative paths.",
             "command",
             Severity::Error,
@@ -339,39 +291,25 @@ fn adapt_commands(
     for value in paths {
         let Some(relative) = value.strip_prefix("./") else {
             diagnostics.push(diagnostic(
+                FORMAT,
                 "command_path_invalid",
-                &root.join(&value),
+                root.join(&value),
                 "A Claude command path has to start with './'.",
                 "command",
                 Severity::Error,
             ));
             continue;
         };
-        let found = markdown_files_for_declared_path(root, &value)
-            .and_then(|files| Ok((files, resolve_declared_path(root, &value)?)));
-        let (files, base) = match found {
-            Ok(found) => found,
-            Err(error) => {
-                diagnostics.push(diagnostic(
-                    "command_path_invalid",
-                    &root.join(relative),
-                    format!("Could not import the Claude commands: {error}"),
-                    "command",
-                    Severity::Error,
-                ));
-                continue;
-            }
-        };
-        let base = if base.is_dir() {
-            base
-        } else {
-            base.parent().map_or_else(PathBuf::new, Path::to_path_buf)
-        };
-        for path in files {
-            let source_name = command_source_name(&path, &base);
-            if let Some(command) = adapt_static_command(&path, &source_name, FORMAT, diagnostics) {
-                commands.push(command);
-            }
+        match adapt_command_path(root, &value, FORMAT, diagnostics) {
+            Ok(found) => commands.extend(found),
+            Err(error) => diagnostics.push(diagnostic(
+                FORMAT,
+                "command_path_invalid",
+                root.join(relative),
+                format!("Could not import the Claude commands: {error}"),
+                "command",
+                Severity::Error,
+            )),
         }
     }
     commands
@@ -390,7 +328,7 @@ fn adapt_mcp(
     {
         sources.push(loaded);
     }
-    let declared = manifest.field("mcpServers");
+    let declared = manifest.object.field("mcpServers");
     if let Some(Value::Object(_)) = declared {
         if let Some(mapping) = mcp_mapping(declared) {
             sources.push((manifest_path.to_path_buf(), mapping));
@@ -398,6 +336,7 @@ fn adapt_mcp(
     } else {
         match declared_paths(declared) {
             None => diagnostics.push(diagnostic(
+                FORMAT,
                 "mcp_declaration_invalid",
                 manifest_path,
                 "Claude mcpServers has to be an object, a path, or a list of paths.",
@@ -458,8 +397,9 @@ fn load_mcp_file(
         Ok(loaded) => Some(loaded),
         Err(error) => {
             diagnostics.push(diagnostic(
+                FORMAT,
                 "mcp_config_invalid",
-                &root.join(value.strip_prefix("./").unwrap_or(value)),
+                root.join(value.strip_prefix("./").unwrap_or(value)),
                 format!("Could not import the Claude MCP configuration: {error}"),
                 "mcp",
                 Severity::Error,
@@ -483,7 +423,7 @@ fn report_unsupported_components(
         ("workflows", "workflows", root.join("workflows")),
         ("settings", "settings", root.join("settings.json")),
     ] {
-        let declared = manifest.field(field).is_some();
+        let declared = manifest.object.field(field).is_some();
         if !declared && !conventional.exists() {
             continue;
         }
@@ -493,6 +433,7 @@ fn report_unsupported_components(
             conventional.as_path()
         };
         diagnostics.push(diagnostic(
+            FORMAT,
             &format!("{kind}_unsupported"),
             path,
             format!("Claude {field} are kept as package data and not converted into a capability."),
@@ -505,12 +446,13 @@ fn report_unsupported_components(
             &format!("claude_{kind}_unsupported"),
         ));
     }
-    if let Some(Value::Object(experimental)) = manifest.field("experimental") {
+    if let Some(Value::Object(experimental)) = manifest.object.field("experimental") {
         for kind in ["themes", "monitors"] {
             if !experimental.contains_key(kind) {
                 continue;
             }
             diagnostics.push(diagnostic(
+                FORMAT,
                 &format!("{kind}_unsupported"),
                 manifest_path,
                 format!("Claude {kind} have no portable runtime equivalent."),
@@ -532,29 +474,24 @@ fn report_unsupported_components(
         "channels",
     ]
     .into_iter()
-    .filter(|field| manifest.field(field).is_some())
+    .filter(|field| manifest.object.field(field).is_some())
     .collect();
     present_ui.sort_unstable();
     if !present_ui.is_empty() {
-        diagnostics.push(diagnostic(
-            "install_ui_unsupported",
-            manifest_path,
-            format!(
+        diagnostics.push(diagnostic(FORMAT, "install_ui_unsupported", manifest_path, format!(
                 "These Claude installation, configuration and interface fields are not supported: {}",
                 present_ui.join(", ")
-            ),
-            "interface",
-            Severity::Info,
-        ));
+            ), "interface", Severity::Info));
         unsupported.push(unsupported_component(
             "install_ui",
             manifest_path,
             "claude_install_ui_unsupported",
         ));
     }
-    let extras = manifest.extras();
+    let extras = manifest.object.extras();
     if !extras.is_empty() {
         diagnostics.push(diagnostic(
+            FORMAT,
             "fields_unsupported",
             manifest_path,
             format!(
@@ -567,13 +504,10 @@ fn report_unsupported_components(
     }
 }
 
-/// One hook configuration: where it was read, its object, and the document
-/// it sits in with the keys that reach it, which give its event order.
+/// One hook configuration: where it was read, and its object.
 struct HookSource {
     path: PathBuf,
     object: Map<String, Value>,
-    text: String,
-    pointer: Vec<&'static str>,
 }
 
 fn adapt_hooks(
@@ -586,14 +520,11 @@ fn adapt_hooks(
     let sources = hook_sources(root, manifest_path, manifest, diagnostics);
     let mut hooks = Vec::new();
     for source in sources {
-        let mut pointer = source.pointer.clone();
-        let groups = match source.object.get("hooks") {
-            Some(groups) => {
-                pointer.push("hooks");
-                groups.clone()
-            }
-            None => Value::Object(source.object.clone()),
-        };
+        let groups = source
+            .object
+            .get("hooks")
+            .cloned()
+            .unwrap_or_else(|| Value::Object(source.object.clone()));
         let Value::Object(groups) = groups else {
             diagnostics.push(hooks_invalid(
                 &source.path,
@@ -601,19 +532,17 @@ fn adapt_hooks(
             ));
             continue;
         };
-        let order = object_key_order(&source.text, &pointer)
-            .unwrap_or_else(|| groups.keys().cloned().collect());
-        for event_name in order {
-            if let Some(raw_rules) = groups.get(&event_name) {
-                adapt_hook_group(
-                    &source.path,
-                    &event_name,
-                    raw_rules,
-                    &mut hooks,
-                    diagnostics,
-                    unsupported,
-                );
-            }
+        // Events run in the order the document lists them, which the
+        // order-preserving `serde_json::Map` keeps.
+        for (event_name, raw_rules) in &groups {
+            adapt_hook_group(
+                &source.path,
+                event_name,
+                raw_rules,
+                &mut hooks,
+                diagnostics,
+                unsupported,
+            );
         }
     }
     hooks
@@ -625,7 +554,7 @@ fn hook_sources(
     manifest: &Manifest,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Vec<HookSource> {
-    let declared = manifest.field("hooks");
+    let declared = manifest.object.field("hooks");
     let mut sources = Vec::new();
     let conventional = root.join("hooks").join("hooks.json");
     if conventional.is_file()
@@ -648,8 +577,6 @@ fn hook_sources(
         Some(Value::Object(inline)) => sources.push(HookSource {
             path: manifest_path.to_path_buf(),
             object: inline.clone(),
-            text: manifest.text.clone(),
-            pointer: vec!["hooks"],
         }),
         Some(_) => diagnostics.push(hooks_invalid(
             manifest_path,
@@ -700,8 +627,6 @@ fn load_hooks_file(
                 Value::Object(object) => Ok(HookSource {
                     path: resolved,
                     object,
-                    text,
-                    pointer: Vec::new(),
                 }),
                 _ => Err("a Claude hook configuration has to be an object".to_owned()),
             }
@@ -728,6 +653,7 @@ fn adapt_hook_group(
 ) {
     let Some(hook_type) = hook_type(event_name) else {
         unsupported_hook(
+            FORMAT,
             path,
             format!(
                 "The Claude hook event {} has no matching runtime lifecycle.",
@@ -759,6 +685,7 @@ fn adapt_hook_group(
         };
         let Some(matcher) = hook_matcher(rule.get("matcher")) else {
             unsupported_hook(
+                FORMAT,
                 path,
                 format!(
                     "The Claude matcher {} cannot be mapped onto runtime tool names.",
@@ -830,6 +757,7 @@ fn adapt_hook_action(
         || has_unsupported_field
     {
         unsupported_hook(
+            FORMAT,
             path,
             "Only synchronous shell command hooks without an `if` filter map onto runtime hooks.",
             "claude_hook_action_unsupported",
@@ -877,49 +805,19 @@ fn adapt_hook_action(
             description: None,
         },
         source_path: path.to_path_buf(),
-        protocol: FORMAT.to_owned(),
+        protocol: HookProtocol::ClaudeCode,
     })
 }
 
-/// Reference `_claude_hook_type`.
-fn hook_type(event: &str) -> Option<HookType> {
-    match event {
-        "PreToolUse" => Some(HookType::PreTool),
-        "PostToolUse" => Some(HookType::PostTool),
-        "Stop" => Some(HookType::PostAgent),
-        _ => None,
-    }
-}
-
-/// Reference `_claude_matcher`; also used by the Kimi adapter.
-pub(super) fn hook_matcher(value: Option<&Value>) -> Option<String> {
-    match value {
-        None | Some(Value::Null) => Some("*".to_owned()),
-        Some(Value::String(text)) if text.is_empty() || text == "*" => Some("*".to_owned()),
-        Some(Value::String(text)) => pattern_compiles(text).then(|| text.clone()),
-        Some(_) => None,
-    }
-}
-
 fn hooks_invalid(path: &Path, message: impl Into<String>) -> PluginAdapterDiagnostic {
-    diagnostic("hooks_invalid", path, message, "hook", Severity::Error)
-}
-
-fn unsupported_hook(
-    path: &Path,
-    message: impl Into<String>,
-    reason: &str,
-    diagnostics: &mut Vec<PluginAdapterDiagnostic>,
-    unsupported: &mut Vec<AdaptedUnsupportedComponent>,
-) {
-    diagnostics.push(diagnostic(
-        "hooks_partially_unsupported",
+    diagnostic(
+        FORMAT,
+        "hooks_invalid",
         path,
         message,
         "hook",
-        Severity::Warning,
-    ));
-    unsupported.push(unsupported_component("hooks", path, reason));
+        Severity::Error,
+    )
 }
 
 #[cfg(test)]

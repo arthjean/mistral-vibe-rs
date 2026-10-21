@@ -23,7 +23,6 @@ use serde::Serialize;
 use crate::observability::{self, LogLevel};
 
 use super::EVAL_REQUEST_TIMEOUT;
-use super::json::JsonValue;
 use super::models::{EvalResponse, ExperimentAttributes};
 
 /// The status at or above which the reference stops reading a response.
@@ -40,9 +39,9 @@ const FAILING_STATUS: u16 = 400;
 pub struct EvalPayload {
     pub attributes: ExperimentAttributes,
     #[serde(rename = "forcedVariations")]
-    pub forced_variations: super::json::OrderedMap<JsonValue>,
+    pub forced_variations: serde_json::Map<String, serde_json::Value>,
     #[serde(rename = "forcedFeatures")]
-    pub forced_features: Vec<JsonValue>,
+    pub forced_features: Vec<serde_json::Value>,
     pub url: String,
 }
 
@@ -53,7 +52,7 @@ impl EvalPayload {
     pub fn new(attributes: ExperimentAttributes) -> Self {
         Self {
             attributes,
-            forced_variations: super::json::OrderedMap::new(),
+            forced_variations: serde_json::Map::new(),
             forced_features: Vec::new(),
             url: String::new(),
         }
@@ -250,9 +249,7 @@ impl RemoteEvalClient {
             return Err(EvalFailure::Status(response.status));
         }
         // Two passes rather than one, because the reference decodes and then
-        // validates and warns differently for each. Both read the text rather
-        // than a `serde_json::Value`, which would sort the object keys a forced
-        // variant carries.
+        // validates and warns differently for each.
         serde_json::from_str::<serde::de::IgnoredAny>(&response.body)
             .map_err(|_| EvalFailure::Body)?;
         serde_json::from_str::<EvalResponse>(&response.body).map_err(|_| EvalFailure::Payload)

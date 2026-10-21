@@ -6,9 +6,12 @@
 //! cannot: the refusal a write through the layer meets, and the provenance a
 //! snapshot reports for an assigned value.
 
+use std::fs;
+
+use serde_json::{Map, Value as Variant};
+
 use super::registry::default_document;
 use super::*;
-use crate::experiments::{JsonValue as Variant, OrderedMap};
 
 /// A prompt resolution that accepts the identifiers this fixture declares and
 /// refuses everything else, standing where a session hands its own resolver.
@@ -16,7 +19,7 @@ fn resolves(known: &'static [&'static str]) -> impl Fn(&str) -> bool {
     move |prompt_id: &str| known.contains(&prompt_id)
 }
 
-fn variants(entries: &[(&str, &str)]) -> OrderedMap<Variant> {
+fn variants(entries: &[(&str, &str)]) -> Map<String, Variant> {
     entries
         .iter()
         .map(|(key, value)| ((*key).to_owned(), Variant::String((*value).to_owned())))
@@ -29,13 +32,13 @@ fn layer(entries: &[(&str, &str)]) -> ExperimentsLayer {
 }
 
 /// The layer a typed variant set composes, the way a JSON feature delivers one.
-fn typed_layer(variants: &OrderedMap<Variant>) -> ExperimentsLayer {
+fn typed_layer(variants: &Map<String, Variant>) -> ExperimentsLayer {
     let known = resolves(&["cli", "tests", "lean"]);
     ExperimentsLayer::from_variants(variants, &known)
 }
 
 /// One typed variant, read from the JSON it is written as.
-fn typed(key: &str, json: &str) -> OrderedMap<Variant> {
+fn typed(key: &str, json: &str) -> Map<String, Variant> {
     [(
         key.to_owned(),
         serde_json::from_str::<Variant>(json).expect("the variant parses"),

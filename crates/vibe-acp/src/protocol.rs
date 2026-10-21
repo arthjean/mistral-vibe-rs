@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
 use vibe_app_server::client::ClientError;
+use vibe_protocol::ProtocolErrorCode;
 
 pub const ACP_PROTOCOL_VERSION: u16 = 1;
 
@@ -191,27 +192,6 @@ pub struct AcpTelemetryNotification {
     pub session_id: String,
 }
 
-/// What a session's negotiated settings look like on the wire. Both the
-/// `session/new` and `session/load` responses carry exactly this, which is why
-/// neither one owns the shape.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AcpSessionSettings {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub modes: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub config_options: Option<Vec<Value>>,
-}
-
-/// The `session/load` response, which ACP declares without an identity: the
-/// client already named the session it asked to load.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AcpLoadedSession {
-    #[serde(flatten)]
-    pub settings: AcpSessionSettings,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AcpSessionUpdate {
@@ -312,6 +292,24 @@ pub enum AcpError {
 }
 
 impl AcpError {
+    /// The code of an app-server refusal, which the reference reads off
+    /// `AppServerResponseError.error.code`.
+    pub(crate) fn protocol_code(&self) -> Option<ProtocolErrorCode> {
+        match self {
+            Self::AppServer(ClientError::Protocol(code, _)) => Some(*code),
+            _ => None,
+        }
+    }
+
+    /// The message of an app-server refusal, which the reference reads off
+    /// `AppServerResponseError.error.message`; any other failure's own text.
+    pub(crate) fn app_server_message(&self) -> String {
+        match self {
+            Self::AppServer(ClientError::Protocol(_, message)) => message.clone(),
+            other => other.to_string(),
+        }
+    }
+
     /// JSON-RPC error code carried on the wire. The match stays exhaustive so a
     /// new variant cannot silently inherit the internal-error code.
     #[must_use]

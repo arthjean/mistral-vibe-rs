@@ -14,10 +14,11 @@ use std::time::Duration;
 
 use serde_json::Value;
 use vibe_core::engine::CompletionProvider;
-use vibe_core::events::ModelMessage;
 use vibe_core::provider::config::ModelConfig;
-use vibe_core::provider::{ProviderInput, RequestDialect, RequestLimits};
+use vibe_core::provider::{ProviderInput, RequestLimits};
 use vibe_core::pycompat::{self, Dumps};
+
+use crate::utility_call::UtilityCall;
 
 /// Reference `TitlePolicy`.
 const CONFIRM_AFTER_STEPS: usize = 6;
@@ -282,47 +283,20 @@ impl TitleRoute {
             Some(previous) => format!("Current title: {previous}\n\nTranscript:\n{transcript}"),
             None => transcript,
         };
-        let mut model = self.model.clone();
-        model.temperature = 0.0;
-        "off".clone_into(&mut model.thinking);
-        let mut metadata = self.metadata.clone();
-        metadata.insert("call_type".to_owned(), "title_generation".to_owned());
-        if let Some(message_id) = message_id {
-            metadata.insert("message_id".to_owned(), message_id.to_owned());
-        }
+        let call = UtilityCall {
+            model: &self.model,
+            metadata: &self.metadata,
+            session_id,
+            call_type: "title_generation",
+            message_id,
+            system_prompt: SYSTEM_PROMPT,
+        };
         let input = ProviderInput {
-            turn_id: None,
-            session_id: Some(session_id.to_owned()),
-            model_override: Some(model.alias.clone()),
-            model: Some(model),
-            messages: vec![
-                ModelMessage::System {
-                    content: SYSTEM_PROMPT.to_owned(),
-                },
-                ModelMessage::User {
-                    content: prompt,
-                    injected: false,
-                    message_id: None,
-                    attachments: Vec::new(),
-                    user_display_content: None,
-                    input_text: None,
-                    manual_shell: None,
-                    compaction_boundary: false,
-                },
-            ],
-            stream: false,
-            images: Vec::new(),
-            tools: Vec::new(),
-            tool_choice: None,
-            thinking: false,
-            reasoning_effort: None,
-            headers: BTreeMap::new(),
             limits: RequestLimits {
                 max_tokens: Some(MAX_TOKENS),
                 temperature_millis: None,
             },
-            metadata,
-            dialect: RequestDialect::Unified,
+            ..call.input(prompt)
         };
         let answer = tokio::time::timeout(TOTAL_TIMEOUT, self.provider.complete(&input))
             .await

@@ -28,13 +28,13 @@ lines are authored prose ``NOTICE`` forbids reproducing, so the corpus records
 each one as a length plus a digest and never as text. The replay compares this
 port's own lines against those digests and requires permanent inequality.
 
-Like every other oracle here the script re-executes itself under the
-reference's virtual environment while importing the *pinned* tree, extracted out
-of the checkout with ``git archive`` so the checkout is never moved and an edit
-to its working tree never reaches the corpus. At the current pin the registry
-module imports only the standard library and ``vibe.cli.constants``, so the
-re-exec is what guarantees the *pinned* ``vibe`` package is the one imported
-rather than a dependency requirement.
+Like every capture here that imports ``vibe``, the script re-executes itself
+under the reference's virtual environment while importing the *pinned* tree,
+extracted out of the checkout with ``git archive`` so the checkout is never
+moved and an edit to its working tree never reaches the corpus. At the current
+pin the registry module imports only the standard library and
+``vibe.cli.constants``, so the re-exec is what guarantees the *pinned* ``vibe``
+package is the one imported rather than a dependency requirement.
 
 Usage::
 

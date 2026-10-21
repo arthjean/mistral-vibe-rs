@@ -277,14 +277,7 @@ impl LogSettings {
                 .parse::<i64>()
                 .map_err(|_| LogSettingsError { value })?,
         };
-        let level = if read(DEBUG_MODE_VARIABLE).as_deref() == Some(DEBUG_MODE_ENABLED) {
-            LogLevel::Debug
-        } else {
-            read(LOG_LEVEL_VARIABLE)
-                .as_deref()
-                .and_then(LogLevel::parse)
-                .unwrap_or_default()
-        };
+        let level = env_log_level(read).unwrap_or_default();
         Ok(Self { level, max_bytes })
     }
 
@@ -382,16 +375,11 @@ impl FileLog {
     /// the file was installed; a session override or a configured level, once
     /// either is set, takes its place in the chain.
     fn threshold(&self) -> LogLevel {
-        let (session, config) = level_state();
-        if session.is_none() && config.is_none() {
+        let chain = log_level_chain();
+        if chain.session.is_none() && chain.config.is_none() {
             return self.settings.level;
         }
-        LogLevelChain::resolve(
-            session,
-            env_log_level(&|name| std::env::var(name).ok()),
-            config,
-        )
-        .effective
+        chain.effective
     }
 
     /// Reference `shouldRollover`: the record that would reach the ceiling

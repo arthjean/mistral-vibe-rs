@@ -97,3 +97,21 @@ fn artifact_filenames_are_held_to_the_wheel_and_sdist_rules() {
         );
     }
 }
+
+fn version(raw: &str) -> Version {
+    Version::parse_notifier(raw).expect("valid version")
+}
+
+#[test]
+fn version_ordering_matches_the_reference_subset() {
+    assert!(version("2.23.2") > version("2.23.1"));
+    assert!(version("2.24") > version("2.23.9"));
+    assert_eq!(version("2.23"), version("2.23.0"));
+    assert!(version("2.23.1rc1") < version("2.23.1"));
+    assert!(version("2.23.1.dev4") < version("2.23.1rc1"));
+    assert!(version("2.23.1.post1") > version("2.23.1"));
+    // `-` normalizes to a local segment, which outranks the bare release.
+    assert!(version("2.23.1-dev") > version("2.23.1"));
+    assert!(Version::parse_notifier("not-a-version").is_none());
+    assert!(Version::parse_notifier("").is_none());
+}

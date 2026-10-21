@@ -20,7 +20,7 @@ pub fn adapt(
         DetectedPluginFormat::Codex => super::codex::adapt(root, data_root_base, scope),
         DetectedPluginFormat::ClaudeCode => super::claude::adapt(root, data_root_base, scope),
         DetectedPluginFormat::KimiCode => super::kimi::adapt(root, data_root_base, scope),
-        DetectedPluginFormat::OpenCode => super::foreign::adapt(root, data_root_base, scope),
+        DetectedPluginFormat::OpenCode => super::opencode::adapt(root, data_root_base, scope),
         _ => PluginAdapterResult::default(),
     }
 }

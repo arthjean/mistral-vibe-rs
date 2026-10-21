@@ -1,5 +1,5 @@
-//! The two floating panels the frame paints over the transcript: the callback
-//! prompt and the generic selection overlay.
+//! The floating panels the frame paints over the transcript: the callback
+//! prompt and the generic selection overlay here, the rewind picker beside.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -20,10 +20,7 @@ pub(super) fn draw_callback_overlay(
     scroll_offset: isize,
     theme: ResolvedTheme,
 ) {
-    let outer = frame.area();
-    let width = outer.width.saturating_sub(4).clamp(1, 96);
-    let available_height = outer.height.saturating_sub(2).max(1);
-    let inner_width = usize::from(width.saturating_sub(4).max(1));
+    let (width, inner_width) = panel_width(frame.area(), 96);
     let mut content = Vec::new();
     let mut focus_line = 0;
     for (index, line) in presentation.lines.iter().enumerate() {
@@ -32,21 +29,14 @@ pub(super) fn draw_callback_overlay(
         }
         wrap_visual_line(&sanitize_inline(line), inner_width, &mut content);
     }
-    let height = u16::try_from(content.len())
-        .unwrap_or(u16::MAX)
-        .saturating_add(2)
-        .min(available_height);
-    let area = Rect::new(
-        outer
-            .x
-            .saturating_add(outer.width.saturating_sub(width) / 2),
-        outer
-            .y
-            .saturating_add(outer.height.saturating_sub(height) / 2),
+    let area = panel_area(
+        frame.area(),
         width,
-        height,
+        u16::try_from(content.len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(2),
     );
-    let visible_height = usize::from(height.saturating_sub(2).max(1));
+    let visible_height = usize::from(area.height.saturating_sub(2).max(1));
     let target_line = focus_line.saturating_add_signed(scroll_offset);
     let start = target_line
         .saturating_sub(visible_height / 2)
@@ -57,19 +47,7 @@ pub(super) fn draw_callback_overlay(
         .take(visible_height)
         .map(|line| Line::raw(line.clone()))
         .collect::<Vec<_>>();
-    frame.render_widget(Clear, area);
-    frame.render_widget(
-        Paragraph::new(lines)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Action required ")
-                    .padding(Padding::horizontal(1))
-                    .style(theme.base()),
-            )
-            .wrap(Wrap { trim: false }),
-        area,
-    );
+    draw_panel(frame, area, "Action required", lines, theme);
 }
 
 pub(super) fn draw_overlay(
@@ -78,8 +56,7 @@ pub(super) fn draw_overlay(
     session_delete: Option<&SessionDeleteState>,
     theme: ResolvedTheme,
 ) {
-    let outer = frame.area();
-    let width = outer.width.saturating_sub(4).clamp(1, 86);
+    let (width, inner_width) = panel_width(frame.area(), 86);
     let visible = overlay.visible_items();
     // Rows, plus the optional filter and notice blocks, the blank separator, the
     // help line, and the border. Under-counting silently drops the help line.
@@ -88,20 +65,7 @@ pub(super) fn draw_overlay(
         .saturating_add(4)
         .saturating_add(if overlay.query.is_empty() { 0 } else { 2 })
         .saturating_add(if overlay.notice.is_some() { 2 } else { 0 });
-    let available_height = outer.height.saturating_sub(2).max(1);
-    let height = content_height.min(available_height);
-    let area = Rect::new(
-        outer
-            .x
-            .saturating_add(outer.width.saturating_sub(width) / 2),
-        outer
-            .y
-            .saturating_add(outer.height.saturating_sub(height) / 2),
-        width,
-        height,
-    );
-    frame.render_widget(Clear, area);
-    let inner_width = usize::from(width.saturating_sub(4).max(1));
+    let area = panel_area(frame.area(), width, content_height);
     let mut lines = Vec::with_capacity(visible.len().saturating_add(3));
     if !overlay.query.is_empty() {
         lines.push(Line::from(vec![
@@ -159,12 +123,50 @@ pub(super) fn draw_overlay(
         _ => "↑↓/jk Navigate  Enter Select  Esc Close",
     });
     lines.push(Line::styled(help, theme.muted()));
+    draw_panel(frame, area, &overlay.title, lines, theme);
+}
+
+/// How wide a floating panel is: at most `max_width`, two columns clear of
+/// each edge of the frame. The second value is the width its bordered,
+/// padded content wraps at.
+pub(super) fn panel_width(outer: Rect, max_width: u16) -> (u16, usize) {
+    let width = outer.width.saturating_sub(4).clamp(1, max_width);
+    (width, usize::from(width.saturating_sub(4).max(1)))
+}
+
+/// Where a panel `width` columns wide lands for `content_height` rows,
+/// borders included: centered over the frame, one row clear of its top and
+/// bottom edges.
+pub(super) fn panel_area(outer: Rect, width: u16, content_height: u16) -> Rect {
+    let height = content_height.min(outer.height.saturating_sub(2).max(1));
+    Rect::new(
+        outer
+            .x
+            .saturating_add(outer.width.saturating_sub(width) / 2),
+        outer
+            .y
+            .saturating_add(outer.height.saturating_sub(height) / 2),
+        width,
+        height,
+    )
+}
+
+/// Paints `lines` in a bordered panel titled `title` over whatever the frame
+/// already painted in `area`.
+pub(super) fn draw_panel(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    title: &str,
+    lines: Vec<Line<'_>>,
+    theme: ResolvedTheme,
+) {
+    frame.render_widget(Clear, area);
     frame.render_widget(
         Paragraph::new(lines)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(format!(" {} ", overlay.title))
+                    .title(format!(" {title} "))
                     .padding(Padding::horizontal(1))
                     .style(theme.base()),
             )

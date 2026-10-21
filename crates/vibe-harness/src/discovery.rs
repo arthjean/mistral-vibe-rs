@@ -168,10 +168,7 @@ pub fn search(functions: &[Function], request: SearchRequest) -> Answer {
 
 fn empty(mode: Mode, message: &str) -> Answer {
     Answer {
-        content: format!(
-            "{}\n\n{message}",
-            front_matter(mode, 0, 0, 0, Some(0), None, &[])
-        ),
+        content: format!("{}\n\n{message}", FrontMatter::empty(mode).render()),
         mode,
         tool_count: 0,
         connector_notice_count: 0,
@@ -215,15 +212,14 @@ fn best_match(functions: &[Function], connectors: &[String], query: Option<&str>
     let listed: Vec<&Function> = shown.iter().map(|(_, function)| *function).collect();
     let guidance = guidance_of(&listed);
     let mut lines = vec![
-        front_matter(
-            mode,
-            distinct_connectors(&listed),
+        FrontMatter {
+            relevant: shown.len(),
             related,
-            shown.len(),
-            Some(guidance.len()),
-            None,
-            &[],
-        ),
+            connectors: distinct_connectors(&listed),
+            notices: guidance.len(),
+            ..FrontMatter::empty(mode)
+        }
+        .render(),
         String::new(),
         "# Best Matching Tool Candidates".to_owned(),
         String::new(),
@@ -279,15 +275,13 @@ fn capabilities(functions: &[Function], connectors: &[String]) -> Answer {
         .collect::<Vec<_>>();
     Answer {
         content: [
-            front_matter(
-                mode,
-                distinct_connectors(&listed),
-                names.len(),
-                names.len(),
-                Some(0),
-                None,
-                &[],
-            ),
+            FrontMatter {
+                relevant: names.len(),
+                related: names.len(),
+                connectors: distinct_connectors(&listed),
+                ..FrontMatter::empty(mode)
+            }
+            .render(),
             String::new(),
             "# All Connector Capabilities".to_owned(),
             String::new(),
@@ -331,15 +325,14 @@ fn details(functions: &[Function], named: &[String]) -> Answer {
             .join("\n\n")
     };
     let mut lines = vec![
-        front_matter(
-            mode,
-            distinct_connectors(&loaded),
-            loaded.len(),
-            loaded.len(),
-            Some(0),
-            Some((named.len(), loaded.len())),
-            &loaded,
-        ),
+        FrontMatter {
+            relevant: loaded.len(),
+            related: loaded.len(),
+            connectors: distinct_connectors(&loaded),
+            loading: Some((named.len(), &loaded)),
+            ..FrontMatter::empty(mode)
+        }
+        .render(),
         String::new(),
         "# Tool Function Details".to_owned(),
         String::new(),
@@ -419,41 +412,56 @@ fn distinct_connectors(functions: &[&Function]) -> usize {
 }
 
 /// The front matter every answer starts with.
-fn front_matter(
+struct FrontMatter<'a> {
     mode: Mode,
-    connectors: usize,
-    related: usize,
     relevant: usize,
-    notices: Option<usize>,
-    loading: Option<(usize, usize)>,
-    loaded: &[&Function],
-) -> String {
-    let mut lines = vec![
-        "---".to_owned(),
-        format!("mode: {}", mode.as_str()),
-        format!("relevantFunctionCount: {relevant}"),
-        format!("relatedFunctionCount: {related}"),
-        format!("relatedConnectorCount: {connectors}"),
-    ];
-    if let Some(notices) = notices {
-        lines.push(format!("relevantConnectorNoticeCount: {notices}"));
-    }
-    if let Some((requested, count)) = loading {
-        lines.push(format!("requestedFunctionCount: {requested}"));
-        lines.push(format!("loadedFunctionCount: {count}"));
-    }
-    if !loaded.is_empty() {
-        lines.push("loadedFunctions:".to_owned());
-        for function in loaded {
-            lines.push(format!("  - name: {}", yaml_scalar(&function.lookup)));
-            lines.push(format!(
-                "    connector: {}",
-                yaml_scalar(&function.connector)
-            ));
+    related: usize,
+    connectors: usize,
+    notices: usize,
+    /// In details mode, how many functions were asked for and the ones
+    /// loaded.
+    loading: Option<(usize, &'a [&'a Function])>,
+}
+
+impl FrontMatter<'_> {
+    /// The front matter of an answer that lists nothing.
+    fn empty(mode: Mode) -> Self {
+        Self {
+            mode,
+            relevant: 0,
+            related: 0,
+            connectors: 0,
+            notices: 0,
+            loading: None,
         }
     }
-    lines.push("---".to_owned());
-    lines.join("\n")
+
+    fn render(&self) -> String {
+        let mut lines = vec![
+            "---".to_owned(),
+            format!("mode: {}", self.mode.as_str()),
+            format!("relevantFunctionCount: {}", self.relevant),
+            format!("relatedFunctionCount: {}", self.related),
+            format!("relatedConnectorCount: {}", self.connectors),
+            format!("relevantConnectorNoticeCount: {}", self.notices),
+        ];
+        if let Some((requested, loaded)) = self.loading {
+            lines.push(format!("requestedFunctionCount: {requested}"));
+            lines.push(format!("loadedFunctionCount: {}", loaded.len()));
+            if !loaded.is_empty() {
+                lines.push("loadedFunctions:".to_owned());
+            }
+            for function in loaded {
+                lines.push(format!("  - name: {}", yaml_scalar(&function.lookup)));
+                lines.push(format!(
+                    "    connector: {}",
+                    yaml_scalar(&function.connector)
+                ));
+            }
+        }
+        lines.push("---".to_owned());
+        lines.join("\n")
+    }
 }
 
 /// `value` as YAML writes it: bare when that reads back as the same string,

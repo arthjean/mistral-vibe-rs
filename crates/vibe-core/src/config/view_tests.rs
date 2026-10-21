@@ -4,6 +4,10 @@
 //! here are about which keys exist and what they carry, not about how a client
 //! renders them.
 
+use std::fs;
+
+use toml::Value;
+
 use super::registry::default_document;
 use super::*;
 

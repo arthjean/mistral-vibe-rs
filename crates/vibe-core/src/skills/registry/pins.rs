@@ -120,11 +120,7 @@ pub async fn skill_details(
 ) -> Option<SkillDetails> {
     let client = open_client(endpoint?).ok()?;
     let item = client.get_skill(skill_id, version, None).await.ok()?;
-    let latest_version = if item.metadata.latest_version != 0 {
-        item.metadata.latest_version
-    } else {
-        item.version
-    };
+    let latest_version = item.latest_version();
     Some(SkillDetails {
         name: item.resolved_name().unwrap_or_else(|| skill_id.to_owned()),
         skill_id: skill_id.to_owned(),
@@ -298,7 +294,12 @@ pub fn convert_skill_to_local(
         return Ok(None);
     };
     let root = target.store_root();
-    let Some(version) = super::loader::pinned_version(target.vibe_home, &root, &entry) else {
+    let Some(version) = super::loader::pinned_version(
+        target.vibe_home,
+        &root,
+        &entry,
+        super::loader::RecordedAlias::Materialized,
+    ) else {
         return Ok(None);
     };
     let materialized = store::skill_dir(&root, &entry.skill_id, version)

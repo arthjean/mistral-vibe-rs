@@ -39,16 +39,18 @@ use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, refer
 
 use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
 
+use super::super::fuzzy::fuzzy_match_score;
 use super::super::{
     CompletionEngine, CompletionKey, CompletionKeyOutcome, CompletionRequest, CompletionResolution,
     PathIndex, active_token,
 };
-use super::watch::default_filter_allows;
-use super::{
-    ASCII_CODEPOINT_LIMIT, ChangeKind, DEFAULT_IGNORE_PATTERNS, IgnoreRule, IgnoreRules,
-    IndexedPath, MASS_CHANGE_THRESHOLD, MAX_PATH_MATCHES, WorkspaceIndex, build_ascii_mask,
-    fuzzy_match_score, path_match_rank, path_search_context, rank_indexed_paths,
+use super::ignore::{DEFAULT_IGNORE_PATTERNS, IgnoreRule, IgnoreRules};
+use super::rank::{
+    ASCII_CODEPOINT_LIMIT, build_ascii_mask, path_match_rank, path_search_context,
+    rank_indexed_paths,
 };
+use super::watch::default_filter_allows;
+use super::{ChangeKind, IndexedPath, MASS_CHANGE_THRESHOLD, MAX_PATH_MATCHES, WorkspaceIndex};
 use crate::tui::input::PromptEditor;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/autocompletion/corpus.json";

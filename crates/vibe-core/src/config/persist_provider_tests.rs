@@ -2,6 +2,10 @@
 //! only non-default fields in model order, written even for an unchanged
 //! provider, and replacing the whole entry of the same name.
 
+use std::fs;
+
+use toml::Value;
+
 use super::registry::default_document;
 use super::*;
 

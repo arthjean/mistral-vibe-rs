@@ -15,16 +15,19 @@ use serde_json::{Map, Value};
 use super::compatibility::{
     AdaptedMcpServer, AdaptedPluginPackage, AdaptedUnsupportedComponent, DetectedPluginFormat,
     PluginAdapterDiagnostic, PluginAdapterResult, PluginMcpHttpAuth, PluginMcpServer,
-    author_display_name, read_text, resolve_declared_path, typescript_identifier,
+    author_display_name, check_header_name, read_text, resolve_declared_path,
+    resolve_stdio_command, typescript_identifier,
 };
-use super::diagnostics::Severity;
-use super::paths::{is_relative_to, resolve_strict};
+use super::diagnostics::{self as codes, Severity};
+use super::foreign::{declared_paths, diagnostic, plugin_stdio_env, unsupported_component};
+use super::paths::{exists_or_link, file_name, is_relative_to, path_text, resolve_strict};
 use super::strict::char_len;
 use crate::config::mcp::{normalize_mcp_server_name, normalize_mcp_server_url};
 use crate::platform::resolve_lenient;
 use crate::pycompat;
 use crate::skills::SkillScope;
 
+const FORMAT: DetectedPluginFormat = DetectedPluginFormat::Codex;
 const MANIFEST: &str = ".codex-plugin/plugin.json";
 const OPENAI_METADATA_FILENAME: &str = "openai.yaml";
 /// Only `openai.yaml` is metadata Codex executes; `openai.yml` is scanned so
@@ -32,11 +35,7 @@ const OPENAI_METADATA_FILENAME: &str = "openai.yaml";
 const AGENT_METADATA_FILENAMES: [&str; 2] = [OPENAI_METADATA_FILENAME, "openai.yml"];
 const MAX_NAME_LENGTH: usize = 256;
 
-#[expect(clippy::expect_used, reason = "compile-time constant patterns")]
-static HEADER_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$").expect("header pattern compiles")
-});
-#[expect(clippy::expect_used, reason = "compile-time constant patterns")]
+#[expect(clippy::expect_used, reason = "compile-time constant pattern")]
 static ENV_VAR: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$").expect("env var pattern compiles"));
 
@@ -72,14 +71,17 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         Err(error) => {
             return PluginAdapterResult {
                 package: None,
-                diagnostics: vec![diagnostic(
-                    Severity::Error,
-                    "plugin.compatibility.codex.manifest_invalid",
-                    manifest_path,
-                    format!("Could not load the Codex manifest: {error}"),
-                    true,
-                    "manifest",
-                )],
+                diagnostics: vec![
+                    diagnostic(
+                        FORMAT,
+                        "manifest_invalid",
+                        manifest_path,
+                        format!("Could not load the Codex manifest: {error}"),
+                        "manifest",
+                        Severity::Error,
+                    )
+                    .fatal(),
+                ],
                 unsupported_components: Vec::new(),
             };
         }
@@ -209,12 +211,12 @@ fn skill_roots(
         values
     } else {
         diagnostics.push(diagnostic(
-            Severity::Error,
-            "plugin.compatibility.codex.skills_declaration_invalid",
+            FORMAT,
+            "skills_declaration_invalid",
             root.join(".codex-plugin").join("plugin.json"),
             "The Codex skills declaration has to be a relative path or a list of relative paths.",
-            false,
             "skill",
+            Severity::Error,
         ));
         Vec::new()
     };
@@ -234,12 +236,10 @@ fn skill_roots(
             Ok(resolved) => {
                 roots.insert(resolved);
             }
-            Err(error) => diagnostics.push(diagnostic(
+            Err(error) => diagnostics.push(outside_root(
                 Severity::Error,
-                "plugin.path.outside_root",
                 posix_join(root, &value),
                 format!("Could not load the Codex skills: {error}"),
-                false,
                 "skill",
             )),
         }
@@ -282,12 +282,12 @@ fn load_mcp_servers(
             }
         }
         Some(_) => diagnostics.push(diagnostic(
-            Severity::Error,
-            "plugin.compatibility.codex.mcp_declaration_invalid",
+            FORMAT,
+            "mcp_declaration_invalid",
             root.join(".codex-plugin").join("plugin.json"),
             "The Codex mcpServers declaration has to be a relative path or an inline object.",
-            false,
             "mcp",
+            Severity::Error,
         )),
     }
     let loaded: Vec<AdaptedMcpServer> = sources
@@ -335,12 +335,12 @@ fn load_mcp_config(
         Ok(loaded) => Some(loaded),
         Err(error) => {
             diagnostics.push(diagnostic(
-                Severity::Error,
-                "plugin.compatibility.codex.mcp_config_invalid",
+                FORMAT,
+                "mcp_config_invalid",
                 posix_join(root, value),
                 format!("Could not load the Codex MCP configuration: {error}"),
-                false,
                 "mcp",
+                Severity::Error,
             ));
             None
         }
@@ -369,15 +369,15 @@ fn load_mcp_server_definitions(
                 });
             }
             Err(error) => diagnostics.push(diagnostic(
-                Severity::Error,
-                "plugin.compatibility.codex.mcp_server_invalid",
+                FORMAT,
+                "mcp_server_invalid",
                 config_path.to_path_buf(),
                 format!(
                     "Could not load the Codex MCP server {}: {error}",
                     pycompat::repr_str(source_id)
                 ),
-                false,
                 "mcp_server",
+                Severity::Error,
             )),
         }
     }
@@ -404,16 +404,16 @@ fn remove_mcp_server_collisions(
             continue;
         }
         diagnostics.push(diagnostic(
-            Severity::Error,
-            "plugin.compatibility.codex.mcp_server_collision",
+            FORMAT,
+            "mcp_server_collision",
             matches[0].config_file.clone(),
             format!(
                 "More than one configuration source declares the Codex MCP server {}, so every \
                  declaration of it is disabled.",
                 pycompat::repr_str(&source_id)
             ),
-            false,
             "mcp_server",
+            Severity::Error,
         ));
     }
     selected
@@ -444,21 +444,9 @@ fn codex_mcp_server(
         let args = string_list(map, "args")?;
         let declared_env = string_map(map, "env")?;
         let cwd = optional_string(map, "cwd")?;
-        let command = resolve_command(root, &command)?;
+        let command = resolve_stdio_command(root, &command)?;
         let cwd = resolve_cwd(root, cwd.as_deref())?;
-        let mut env: BTreeMap<String, String> = declared_env.into_iter().collect();
-        let reserved: Vec<&str> = ["PLUGIN_DATA", "PLUGIN_ROOT"]
-            .into_iter()
-            .filter(|name| env.contains_key(*name))
-            .collect();
-        if !reserved.is_empty() {
-            return Err(format!(
-                "env cannot define the reserved variables {}",
-                reserved.join(", ")
-            ));
-        }
-        env.insert("PLUGIN_ROOT".to_owned(), path_text(root));
-        env.insert("PLUGIN_DATA".to_owned(), path_text(data_root));
+        let env = plugin_stdio_env(declared_env.into_iter().collect(), root, data_root)?;
         require_server_name(source_id)?;
         let server = PluginMcpServer::Stdio {
             name: source_id.to_owned(),
@@ -562,16 +550,16 @@ fn unsupported_field_diagnostics(
         return Vec::new();
     }
     vec![diagnostic(
-        Severity::Info,
-        "plugin.compatibility.codex.mcp_metadata_partially_supported",
+        FORMAT,
+        "mcp_metadata_partially_supported",
         config_path.to_path_buf(),
         format!(
             "The Codex MCP server {} declares {}, kept as package data with no runtime equivalent.",
             pycompat::repr_str(source_id),
             extras.into_iter().collect::<Vec<_>>().join(", ")
         ),
-        false,
         "mcp_server",
+        Severity::Info,
     )]
 }
 
@@ -587,21 +575,9 @@ fn require_server_name(source_id: &str) -> Result<(), String> {
 /// `MCPStaticAuth._validate_headers`.
 fn validate_static_headers(headers: &BTreeMap<String, String>) -> Result<(), String> {
     let mut seen = BTreeSet::new();
-    for name in headers.keys() {
-        if !HEADER_NAME.is_match(name) {
-            return Err(format!(
-                "{} is not a valid HTTP header name",
-                pycompat::repr_str(name)
-            ));
-        }
-        if !seen.insert(name.to_lowercase()) {
-            return Err(format!(
-                "the HTTP header {} is repeated",
-                pycompat::repr_str(name)
-            ));
-        }
-    }
-    Ok(())
+    headers
+        .keys()
+        .try_for_each(|name| check_header_name(name, &mut seen))
 }
 
 fn string_list(map: &Map<String, Value>, key: &str) -> Result<Vec<String>, String> {
@@ -630,21 +606,6 @@ fn string_map(map: &Map<String, Value>, key: &str) -> Result<Vec<(String, String
             .collect(),
         Some(_) => Err(format!("{key} has to map strings to strings")),
     }
-}
-
-/// Reference `_resolve_command`.
-fn resolve_command(root: &Path, command: &str) -> Result<String, String> {
-    if let Some(relative) = command.strip_prefix("./") {
-        let resolved = resolve_lenient(&root.join(relative));
-        if !is_relative_to(&resolved, root) {
-            return Err("a stdio command has to resolve inside the plugin".to_owned());
-        }
-        return Ok(path_text(&resolved));
-    }
-    if command.contains('/') || command.contains('\\') || command == "." || command == ".." {
-        return Err("a stdio command must be a bare executable or start with './'".to_owned());
-    }
-    Ok(command.to_owned())
 }
 
 /// Reference `_resolve_cwd`.
@@ -680,22 +641,15 @@ fn report_interface(
     };
     if !interface.is_object() {
         diagnostics.push(diagnostic(
-            Severity::Warning,
-            "plugin.compatibility.codex.interface_metadata_invalid",
+            FORMAT,
+            "interface_metadata_invalid",
             manifest_path.to_path_buf(),
             "The Codex interface metadata has to be an object.",
-            false,
             "interface",
+            Severity::Warning,
         ));
     }
-    diagnostics.push(diagnostic(
-        Severity::Info,
-        "plugin.compatibility.codex.interface_metadata_unsupported",
-        manifest_path.to_path_buf(),
-        "The Codex interface and branding metadata is kept as package data and published as no capability.",
-        false,
-        "interface",
-    ));
+    diagnostics.push(diagnostic(FORMAT, "interface_metadata_unsupported", manifest_path.to_path_buf(), "The Codex interface and branding metadata is kept as package data and published as no capability.", "interface", Severity::Info));
     unsupported.push(unsupported_component(
         "interface_metadata",
         manifest_path.to_path_buf(),
@@ -717,12 +671,12 @@ fn report_apps(
     let path = match &manifest.apps {
         Some(declared) if !declared.is_string() => {
             diagnostics.push(diagnostic(
-                Severity::Warning,
-                "plugin.compatibility.codex.app_invalid",
+                FORMAT,
+                "app_invalid",
                 manifest_path.to_path_buf(),
                 "The Codex Apps declaration has to be a relative path.",
-                false,
                 "app",
+                Severity::Warning,
             ));
             manifest_path.to_path_buf()
         }
@@ -743,12 +697,12 @@ fn report_apps(
                 Ok(resolved) => resolved,
                 Err(error) => {
                     diagnostics.push(diagnostic(
-                        Severity::Warning,
-                        "plugin.compatibility.codex.app_invalid",
+                        FORMAT,
+                        "app_invalid",
                         manifest_path.to_path_buf(),
                         format!("Could not read the Codex Apps declaration: {error}"),
-                        false,
                         "app",
+                        Severity::Warning,
                     ));
                     manifest_path.to_path_buf()
                 }
@@ -756,12 +710,12 @@ fn report_apps(
         }
     };
     diagnostics.push(diagnostic(
-        Severity::Warning,
-        "plugin.compatibility.codex.openai_app_unsupported",
+        FORMAT,
+        "openai_app_unsupported",
         path.clone(),
         "OpenAI Apps and ChatGPT interface extensions cannot run in a headless session.",
-        false,
         "app",
+        Severity::Warning,
     ));
     unsupported.push(unsupported_component(
         "openai_app",
@@ -786,29 +740,15 @@ fn report_hooks(
             _ => false,
         };
         if inline {
-            diagnostics.push(diagnostic(
-                Severity::Warning,
-                "plugin.compatibility.codex.hooks_unsupported",
-                manifest_path.to_path_buf(),
-                "Inline Codex hooks do not run here; the plugin's other valid skills and MCP servers stay active.",
-                false,
-                "hook",
-            ));
+            diagnostics.push(diagnostic(FORMAT, "hooks_unsupported", manifest_path.to_path_buf(), "Inline Codex hooks do not run here; the plugin's other valid skills and MCP servers stay active.", "hook", Severity::Warning));
             unsupported.push(unsupported_component(
                 "codex_hooks",
                 manifest_path.to_path_buf(),
                 "codex_hook_semantics_unsupported",
             ));
         } else {
-            diagnostics.push(diagnostic(
-                Severity::Warning,
-                "plugin.compatibility.codex.hooks_invalid",
-                manifest_path.to_path_buf(),
-                "The Codex hooks declaration has to be a relative path, a list of relative paths, an \
-                 object, or a list of objects.",
-                false,
-                "hook",
-            ));
+            diagnostics.push(diagnostic(FORMAT, "hooks_invalid", manifest_path.to_path_buf(), "The Codex hooks declaration has to be a relative path, a list of relative paths, an \
+                 object, or a list of objects.", "hook", Severity::Warning));
         }
         return;
     };
@@ -825,14 +765,7 @@ fn report_hooks(
         });
         match resolved {
             Ok(resolved) => {
-                diagnostics.push(diagnostic(
-                    Severity::Warning,
-                    "plugin.compatibility.codex.hooks_unsupported",
-                    resolved.clone(),
-                    "Codex hooks do not run here; the plugin's other valid skills and MCP servers stay active.",
-                    false,
-                    "hook",
-                ));
+                diagnostics.push(diagnostic(FORMAT, "hooks_unsupported", resolved.clone(), "Codex hooks do not run here; the plugin's other valid skills and MCP servers stay active.", "hook", Severity::Warning));
                 unsupported.push(unsupported_component(
                     "codex_hooks",
                     resolved,
@@ -840,12 +773,12 @@ fn report_hooks(
                 ));
             }
             Err(error) => diagnostics.push(diagnostic(
-                Severity::Warning,
-                "plugin.compatibility.codex.hooks_invalid",
+                FORMAT,
+                "hooks_invalid",
                 manifest_path.to_path_buf(),
                 format!("Could not read the Codex hook configuration: {error}"),
-                false,
                 "hook",
+                Severity::Warning,
             )),
         }
     }
@@ -896,12 +829,10 @@ fn report_agent_metadata(
         let resolved = match resolved {
             Ok(resolved) => resolved,
             Err(error) => {
-                diagnostics.push(diagnostic(
+                diagnostics.push(outside_root(
                     Severity::Warning,
-                    "plugin.path.outside_root",
                     candidate,
                     format!("Could not read the Codex agent metadata: {error}"),
-                    false,
                     "agent_metadata",
                 ));
                 continue;
@@ -915,14 +846,7 @@ fn report_agent_metadata(
         {
             continue;
         }
-        diagnostics.push(diagnostic(
-            Severity::Info,
-            "plugin.compatibility.codex.agent_metadata_unsupported",
-            resolved.clone(),
-            "Codex agent and per-skill presentation metadata is kept as package data and becomes no capability.",
-            false,
-            "agent_metadata",
-        ));
+        diagnostics.push(diagnostic(FORMAT, "agent_metadata_unsupported", resolved.clone(), "Codex agent and per-skill presentation metadata is kept as package data and becomes no capability.", "agent_metadata", Severity::Info));
         unsupported.push(unsupported_component(
             "agent_metadata",
             resolved,
@@ -971,20 +895,6 @@ fn openai_metadata_has_unhandled_fields(text: &str) -> Option<bool> {
     Some(has_extra || products)
 }
 
-/// Reference `_declared_paths`: `None` for a value that is neither a string
-/// nor a list of strings.
-fn declared_paths(value: Option<&Value>) -> Option<Vec<String>> {
-    match value {
-        None => Some(Vec::new()),
-        Some(Value::String(path)) => Some(vec![path.clone()]),
-        Some(Value::Array(items)) => items
-            .iter()
-            .map(|item| item.as_str().map(str::to_owned))
-            .collect(),
-        Some(_) => None,
-    }
-}
-
 /// `root / PurePosixPath(value.removeprefix("./"))`.
 fn posix_join(root: &Path, value: &str) -> PathBuf {
     let relative = value.strip_prefix("./").unwrap_or(value);
@@ -1006,45 +916,22 @@ fn posix_parts(value: &str) -> Vec<&str> {
         .collect()
 }
 
-fn diagnostic(
+/// A declared path that resolves outside the plugin, under the resolver's own
+/// code rather than a `plugin.compatibility.codex.*` one.
+fn outside_root(
     severity: Severity,
-    code: &str,
     path: PathBuf,
     message: impl Into<String>,
-    fatal: bool,
     component: &str,
 ) -> PluginAdapterDiagnostic {
     PluginAdapterDiagnostic {
         severity,
-        code: code.to_owned(),
+        code: codes::PATH_OUTSIDE_ROOT.to_owned(),
         path,
         message: message.into(),
-        fatal,
+        fatal: false,
         component: component.to_owned(),
     }
-}
-
-fn unsupported_component(kind: &str, path: PathBuf, reason: &str) -> AdaptedUnsupportedComponent {
-    AdaptedUnsupportedComponent {
-        kind: kind.to_owned(),
-        path,
-        reason: reason.to_owned(),
-    }
-}
-
-fn exists_or_link(path: &Path) -> bool {
-    path.exists()
-        || std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default()
-}
-
-fn path_text(path: &Path) -> String {
-    path.to_string_lossy().into_owned()
 }
 
 #[cfg(test)]

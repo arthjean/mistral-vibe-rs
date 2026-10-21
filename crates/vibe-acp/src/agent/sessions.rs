@@ -148,7 +148,7 @@ where
                     &source,
                     "session/fork",
                     json!({
-                        "sourceSessionId": source.canonical_id(),
+                        "sourceSessionId": source.session_id,
                         "entryId": request.message_id,
                         "attach": false,
                     }),
@@ -559,7 +559,7 @@ where
             let failures = {
                 let mut service = session.service.lock().await;
                 service
-                    .initialize_pending_mcp(&session.canonical_id())
+                    .initialize_pending_mcp(&session.session_id)
                     .await
                     .unwrap_or_default()
             };
@@ -673,13 +673,13 @@ where
     harness.abort_tasks();
     let _ = harness.request_cancel();
     if let Some(experiments) = harness.experiments.as_ref() {
-        experiments.report_closed(&harness.canonical_id());
+        experiments.report_closed(&harness.session_id);
         experiments.close().await;
     }
     let mut service = harness.service.lock().await;
     if let Ok(Some(turn_id)) = harness.running_turn_id() {
-        let _ = service.interrupt(&harness.canonical_id(), &turn_id);
+        let _ = service.interrupt(&harness.session_id, &turn_id);
     }
-    let _ = service.close_session(&harness.canonical_id()).await;
+    let _ = service.close_session(&harness.session_id).await;
     let _ = service.shutdown();
 }

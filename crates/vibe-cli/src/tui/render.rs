@@ -4,10 +4,11 @@ use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
 mod completion_popup;
+mod composer;
 mod entries;
 mod markdown;
 mod overlays;
@@ -26,6 +27,8 @@ use super::rewind::{RewindChoice, RewindState};
 use super::setup::ResolvedTheme;
 use super::state::{TranscriptEntry, TranscriptKind, TuiState};
 use super::transcript;
+use composer::draw_input;
+pub(crate) use composer::editor_mouse_cell;
 pub(in crate::tui) use entries::follows_tool_toggle;
 #[cfg(test)]
 pub(in crate::tui) use entries::group_label;
@@ -157,10 +160,17 @@ pub fn draw(
         Constraint::Length(1),
     ])
     .areas(frame.area());
-    match state.subagents.view_entries() {
-        Some(entries) => draw_child_transcript(frame, transcript_area, state, theme, entries),
-        None => draw_transcript(frame, transcript_area, state, theme, Some(context.banner)),
-    }
+    let source = match state.subagents.view_entries() {
+        Some(entries) => TranscriptSource::Child {
+            entries,
+            running: state
+                .subagents
+                .viewed()
+                .is_some_and(|child| child.status.loading_status().is_some()),
+        },
+        None => TranscriptSource::Conversation(context.banner),
+    };
+    draw_transcript(frame, transcript_area, state, theme, &source);
     let selected = state
         .queue_selection
         .as_ref()
@@ -267,31 +277,17 @@ fn draw_modals(frame: &mut Frame<'_>, state: &TuiState, theme: ResolvedTheme) {
     }
 }
 
-/// Reference `SubagentTranscripts`: the viewed child's history painted the way
-/// the conversation is, without the banner, the windowing or the todo deltas
-/// that belong to the conversation.
-fn draw_child_transcript(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    state: &mut TuiState,
-    theme: ResolvedTheme,
-    entries: Vec<TranscriptEntry>,
-) {
-    let running = state
-        .subagents
-        .viewed()
-        .is_some_and(|child| child.status.loading_status().is_some());
-    let entries = std::mem::replace(&mut state.entries, entries);
-    let first_visible = state.history_first_visible.take();
-    let cursor_before = state.cursor_before.take();
-    let todos = state.todos.take();
-    let waiting = std::mem::replace(&mut state.waiting, running);
-    draw_transcript(frame, area, state, theme, None);
-    state.entries = entries;
-    state.history_first_visible = first_visible;
-    state.cursor_before = cursor_before;
-    state.todos = todos;
-    state.waiting = waiting;
+/// Whose history a transcript paint shows.
+enum TranscriptSource<'a> {
+    /// The conversation's own: windowed, topped by "Load more messages" and
+    /// the banner, with the deltas its todo writes made.
+    Conversation(BannerContext<'a>),
+    /// Reference `SubagentTranscripts`: the viewed child's history, painted
+    /// whole, its newest tool group running while the child does.
+    Child {
+        entries: Vec<TranscriptEntry>,
+        running: bool,
+    },
 }
 
 fn draw_queue(
@@ -348,18 +344,28 @@ fn draw_transcript(
     area: Rect,
     state: &mut TuiState,
     theme: ResolvedTheme,
-    banner: Option<BannerContext<'_>>,
+    source: &TranscriptSource<'_>,
 ) {
+    // Only the conversation's own transcript has a banner, and with it the
+    // window, the "Load more messages" row and the todo deltas.
+    let (entries, hidden, running, banner) = match source {
+        TranscriptSource::Conversation(banner) => (
+            state.entries.as_slice(),
+            state.hidden_history(),
+            state.waiting,
+            Some(banner),
+        ),
+        TranscriptSource::Child { entries, running } => (entries.as_slice(), 0, *running, None),
+    };
     let visible_height = usize::from(area.height).max(1);
     let mut newest_first = Vec::new();
     let mut action_rows = Vec::new();
     let mut rendered_chars = 0usize;
     let mut history_truncated = false;
     let visible = transcript::place_hook_lines(
-        state
-            .entries
+        entries
             .iter()
-            .skip(state.hidden_history())
+            .skip(hidden)
             .filter(|entry| entry.kind != TranscriptKind::Reasoning || state.show_reasoning)
             .filter(|entry| transcript::is_drawn(entry))
             .collect::<Vec<_>>(),
@@ -387,10 +393,8 @@ fn draw_transcript(
             state.folds.entry(key).or_insert(collapsed);
         }
     }
-    let todo_deltas = state
-        .todos
-        .is_some()
-        .then(|| crate::tui::todos::todo_deltas(&state.entries));
+    let todo_deltas = (banner.is_some() && state.todos.is_some())
+        .then(|| crate::tui::todos::todo_deltas(entries));
     let folding = Folding {
         folds: &state.folds,
         frame: state.animation_frame,
@@ -413,7 +417,7 @@ fn draw_transcript(
             // until the turn that opened it ends.
             members => tool_group(
                 members,
-                index + 1 == block_count && state.waiting,
+                index + 1 == block_count && running,
                 folding,
                 area.width,
                 theme,
@@ -447,7 +451,7 @@ fn draw_transcript(
     }
     // Reference `HistoryLoadMoreMessage`, mounted above the oldest entry shown.
     let mut load_more_index = None;
-    if !history_truncated && state.has_older_history() {
+    if !history_truncated && banner.is_some() && state.has_older_history() {
         load_more_index = Some(newest_first.len());
         newest_first.push(Line::styled(
             load_more_label(state.older_history_remaining()),
@@ -456,7 +460,7 @@ fn draw_transcript(
         newest_first.push(Line::default());
     }
     if !history_truncated && let Some(banner) = banner {
-        for line in banner_lines(banner, state.banner_cat.frame(), theme)
+        for line in banner_lines(*banner, state.banner_cat.frame(), theme)
             .into_iter()
             .rev()
         {
@@ -782,226 +786,6 @@ fn display_path(path: &Path) -> String {
         Ok(relative) => Path::new("~").join(relative).to_string_lossy().into_owned(),
         Err(_) => path.to_string_lossy().into_owned(),
     }
-}
-
-fn draw_input(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    editor: &PromptEditor,
-    input_mode: InputMode,
-    theme: ResolvedTheme,
-    context: UiContext<'_>,
-    (composer, caret, ghost): (&ComposerLayout, bool, Option<&str>),
-) {
-    let input_width = composer.width();
-    let title = if context.secret_input {
-        " API key (stored in native keyring) "
-    } else if context.switching {
-        " Switching "
-    } else if context.feedback_active {
-        " Rate response: 1-3, 0 later, Esc dismisses "
-    } else if context.agent_name.is_empty() {
-        ""
-    } else {
-        context.agent_name
-    };
-    let block = Block::default()
-        .borders(Borders::TOP | Borders::BOTTOM)
-        .border_style(composer_border_style(
-            theme,
-            context.safety,
-            context.voice_phase,
-        ))
-        .title_style(theme.muted())
-        .title_alignment(Alignment::Right)
-        .title(title);
-    frame.render_widget(block, area);
-    let body = Rect::new(
-        area.x,
-        area.y.saturating_add(1),
-        area.width,
-        area.height.saturating_sub(CHROME_HEIGHT),
-    );
-    let [prompt_area, input_area, _trailing_area] = Layout::horizontal([
-        Constraint::Length(PROMPT_WIDTH),
-        Constraint::Length(u16::try_from(input_width).unwrap_or(u16::MAX)),
-        Constraint::Min(0),
-    ])
-    .areas(body);
-    let text = editor_text(
-        editor,
-        context.secret_input,
-        composer.visual(),
-        composer.scroll(),
-        usize::from(input_area.height),
-    );
-    const PEAK_BLOCKS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    const FILL_BLOCKS: [char; 8] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
-    let indicator = usize::from(context.voice_indicator.min(7));
-    let prompt = if context.voice_phase == VoicePhase::Transcribing {
-        FILL_BLOCKS[indicator]
-    } else if context.voice_phase.is_active() {
-        PEAK_BLOCKS[indicator]
-    } else if context.switching {
-        '⠋'
-    } else {
-        input_mode.symbol()
-    };
-    frame.render_widget(
-        Paragraph::new(prompt.to_string()).style(theme.orange()),
-        prompt_area,
-    );
-    let input_style = if context.voice_phase.is_active() {
-        theme.muted()
-    } else {
-        theme.base()
-    };
-    frame.render_widget(Paragraph::new(text).style(input_style), input_area);
-    if caret && let Some(ghost) = ghost {
-        draw_inline_ghost(frame, input_area, composer, ghost, theme);
-    }
-    if caret && input_area.width > 0 && input_area.height > 0 {
-        frame.set_cursor_position((
-            input_area.x.saturating_add(
-                u16::try_from(composer.cursor_column())
-                    .unwrap_or(u16::MAX)
-                    .min(input_area.width.saturating_sub(1)),
-            ),
-            input_area.y.saturating_add(
-                u16::try_from(composer.cursor_row().saturating_sub(composer.scroll()))
-                    .unwrap_or(u16::MAX)
-                    .min(input_area.height.saturating_sub(1)),
-            ),
-        ));
-    }
-}
-
-/// Textual's `TextArea.suggestion`, which the reference's mid-prompt skill
-/// ghost sets: drawn dim at the caret, with the rest of the caret's row pushed
-/// right and cropped at the composer's edge.
-fn draw_inline_ghost(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    composer: &ComposerLayout,
-    ghost: &str,
-    theme: ResolvedTheme,
-) {
-    let Some(row) = composer.cursor_row().checked_sub(composer.scroll()) else {
-        return;
-    };
-    let (Ok(row), Ok(column)) = (u16::try_from(row), u16::try_from(composer.cursor_column()))
-    else {
-        return;
-    };
-    if row >= area.height || column >= area.width {
-        return;
-    }
-    let y = area.y.saturating_add(row);
-    let start = area.x.saturating_add(column);
-    let right = area.right();
-    let buffer = frame.buffer_mut();
-    let tail = (start..right)
-        .map(|x| buffer[(x, y)].clone())
-        .collect::<Vec<_>>();
-    let width = usize::from(right.saturating_sub(start));
-    let style = theme.base().add_modifier(Modifier::DIM);
-    let (end, _) = buffer.set_stringn(start, y, ghost, width, style);
-    for (offset, cell) in tail.into_iter().enumerate() {
-        let Some(x) = u16::try_from(offset)
-            .ok()
-            .and_then(|offset| end.checked_add(offset))
-            .filter(|x| *x < right)
-        else {
-            break;
-        };
-        buffer[(x, y)] = cell;
-    }
-}
-
-fn composer_border_style(theme: ResolvedTheme, safety: Safety, voice: VoicePhase) -> Style {
-    if voice.is_active() {
-        return theme.orange();
-    }
-    match safety {
-        Safety::Neutral => theme.muted(),
-        Safety::Safe => theme.success(),
-        Safety::Destructive => theme.warning(),
-        Safety::Yolo => theme.error(),
-    }
-}
-
-/// Maps an absolute terminal coordinate into the scrolled editor body.
-/// Coordinates outside the visible composer return `None` without inventing
-/// a nearest selection target.
-pub(crate) fn editor_mouse_cell(
-    editor: &PromptEditor,
-    screen: Rect,
-    _secret_input: bool,
-    input_mode: InputMode,
-    x: u16,
-    y: u16,
-) -> Option<(usize, usize)> {
-    let composer =
-        ComposerLayout::for_viewport(editor, screen.width, screen.height, input_mode.prefix_len());
-    let input_height = composer.input_height();
-    let input_y = screen
-        .y
-        .saturating_add(screen.height)
-        .saturating_sub(1)
-        .saturating_sub(input_height);
-    let body_y = input_y.saturating_add(1);
-    let body_height = composer.body_height();
-    let input_x = screen.x.saturating_add(PROMPT_WIDTH);
-    let input_width = u16::try_from(composer.width()).unwrap_or(u16::MAX);
-    if x < input_x
-        || x >= input_x.saturating_add(input_width)
-        || y < body_y
-        || y >= body_y.saturating_add(body_height)
-    {
-        return None;
-    }
-    Some((
-        usize::from(y.saturating_sub(body_y)).saturating_add(composer.scroll()),
-        usize::from(x.saturating_sub(input_x)),
-    ))
-}
-
-fn editor_text(
-    editor: &PromptEditor,
-    secret_input: bool,
-    layout: &VisualLayout,
-    scroll: usize,
-    height: usize,
-) -> Text<'static> {
-    let selection = editor.selection();
-    let mut lines = Vec::with_capacity(height);
-    for range in layout.lines().iter().skip(scroll).take(height) {
-        let mut line = Vec::new();
-        let mut column = 0usize;
-        for index in range.clone() {
-            let grapheme = layout.grapheme(editor.text(), index);
-            let visible = if secret_input {
-                "•".to_owned()
-            } else if grapheme == "\t" {
-                " ".repeat(4 - (column % 4))
-            } else if grapheme.chars().all(char::is_control) {
-                String::new()
-            } else {
-                sanitize_inline(grapheme)
-            };
-            column = column.saturating_add(UnicodeWidthStr::width(visible.as_str()));
-            let selected = selection
-                .as_ref()
-                .is_some_and(|selection| selection.contains(&index));
-            line.push(if selected {
-                Span::styled(visible, Style::default().add_modifier(Modifier::REVERSED))
-            } else {
-                Span::raw(visible)
-            });
-        }
-        lines.push(line);
-    }
-    Text::from(lines.into_iter().map(Line::from).collect::<Vec<_>>())
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use super::{EVAL_PATH_TEMPLATE, ExperimentName, build_eval_url};
+use crate::pycompat::{Dumps, dumps};
 
 #[test]
 fn every_name_carries_a_key_and_a_typed_default() {
@@ -25,7 +26,7 @@ fn every_name_carries_a_key_and_a_typed_default() {
         ]
     );
     assert_eq!(
-        ExperimentName::ALL.map(|name| name.default_variant().python_json()),
+        ExperimentName::ALL.map(|name| dumps(&name.default_variant(), Dumps::DEFAULT)),
         [
             "\"cli\"",
             "\"legacy\"",
