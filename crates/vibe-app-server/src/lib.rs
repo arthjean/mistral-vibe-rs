@@ -19,6 +19,7 @@ pub mod server;
 pub mod session_hooks;
 mod session_lifecycle;
 pub mod startup;
+mod sync;
 #[cfg(test)]
 mod tool_execution_parity_tests;
 #[cfg(test)]

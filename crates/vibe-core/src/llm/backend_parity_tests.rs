@@ -29,7 +29,7 @@ use super::error::{BackendErrorSource, CallFailure, KeySource, WrappedCause};
 use super::retry::{Clock, RetryObserver, RetryReason, SleepFuture, SleepKind, next_delay};
 use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
 use super::{Backend, BackendContext, MapCredentials, ModelRequest, TokenFuture, VertexAccess};
-use crate::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::replay::Capture;
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
 use crate::pycompat::{self, Dumps};
 
@@ -1132,26 +1132,12 @@ fn every_ledger_entry_names_another_scorecard_row() {
 /// what it answers.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "llm backends") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return;
+    // `--corpus` names the committed corpus, which `--check` compares anyway,
+    // so the regeneration hint a failure prints is the command that writes it.
+    Capture {
+        script: CAPTURE_SCRIPT,
+        family: &["--corpus"],
+        arguments: &[],
     }
-    let repository = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = std::process::Command::new("python3")
-        .arg(repository.join(CAPTURE_SCRIPT))
-        .arg("--check")
-        .arg("--reference")
-        .arg(&root)
-        .current_dir(&repository)
-        .env_remove("FORCE_COLOR")
-        .output()
-        .expect("python3 runs the capture script");
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT} --corpus`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    .probe("llm backends");
 }

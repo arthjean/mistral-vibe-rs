@@ -1,38 +1,38 @@
 //! The Mistral backend, which the reference drives through the Mistral Python
 //! client (`vibe/core/llm/backend/mistral.py` over `mistralai` 2.6).
 //!
-//! What reaches the wire is the client's: the request model serializes its
-//! nullable fields as `null`, an assistant turn always carries `prefix` and
-//! `tool_calls`, reasoning travels as a `thinking` chunk only when thinking is
-//! on, and the effort collapses to `none` or `high`. The client retries 429
-//! and the 5xx it knows on its own schedule and retries connection failures
-//! and timeouts, but not a peer that hung up mid-answer; the backend reports
-//! every retryable status and every such failure as it happens. Its event
-//! reader splits on blank lines of any newline style and ends on `[DONE]`.
+//! What reaches the wire is the client's: its request models write the body
+//! ([`request`]) and its response models read the answer back ([`answer`]).
+//! The client retries 429 and the 5xx it knows on its own schedule and
+//! retries connection failures and timeouts, but not a peer that hung up
+//! mid-answer; the backend reports every retryable status and every such
+//! failure as it happens.
 
 use std::sync::LazyLock;
 
 use regex::Regex;
-use serde_json::{Map, Value, json};
+use serde_json::Value;
 
-use super::adapter::{lax_count, truthy};
 use super::error::{
     BackendErrorSource, BackendFailure, KeyOrigin, KeySource, LocalFailure, LocalKind,
     TransportFailure,
 };
-use super::generic::{CallFacts, merge_headers};
-use super::pump::{ChunkPump, ChunkStream, EventSource, Settle};
+use super::generic::CallFacts;
+use super::pump::{ChunkPump, ChunkStream, Settle};
 use super::retry::{
     Clock, MISTRAL_RETRYABLE_STATUSES, RetryObserver, RetryReason, SleepKind, mistral_delay,
     mistral_retry_after_millis,
 };
-use super::transport::{HttpClient, HttpResponse, HttpSettings};
-use super::types::{
-    Chunk, ContentPart, Message, Role, StopInfo, Tool, ToolCall, ToolChoice, Usage,
-};
+use super::transport::{HttpClient, HttpResponse, HttpSettings, merge_headers};
+use super::types::Chunk;
 use super::{BackendContext, ModelRequest};
 use crate::provider::config::ProviderConfig;
-use crate::pycompat::{self, Dumps};
+
+mod answer;
+mod request;
+
+use answer::{EventReader, whole_answer};
+use request::body;
 
 const PATH: &str = "/v1/chat/completions";
 /// The variable the Mistral client reads a key from when it is handed none.
@@ -129,6 +129,11 @@ impl MistralBackend {
         self.context.clock.as_ref()
     }
 
+    /// The URL every call is sent to.
+    pub(super) fn endpoint(&self) -> String {
+        format!("{}{PATH}", self.server_url)
+    }
+
     fn facts(&self, request: &ModelRequest<'_>) -> CallFacts {
         CallFacts::new(
             &self.provider,
@@ -158,7 +163,13 @@ impl MistralBackend {
         if let Some(key) = &self.api_key {
             headers.push(("Authorization".to_owned(), format!("Bearer {key}")));
         }
-        merge_headers(&mut headers, request.extra_headers);
+        merge_headers(
+            &mut headers,
+            request
+                .extra_headers
+                .iter()
+                .map(|(name, value)| (name, value)),
+        );
         headers
     }
 
@@ -175,7 +186,7 @@ impl MistralBackend {
         let body = serde_json::to_vec(&body(request, streaming))
             .map_err(|error| BackendFailure::local(LocalKind::Type, error.to_string()))?;
         let headers = self.headers(request, streaming);
-        let url = format!("{}{PATH}", self.server_url);
+        let url = self.endpoint();
         let started = millis(self.clock().monotonic());
         let mut attempt: u32 = 0;
         loop {
@@ -301,12 +312,7 @@ impl MistralBackend {
         let transport_facts = facts.clone();
         let pump = ChunkPump::new(
             response.body,
-            EventReader {
-                buffer: Vec::new(),
-                started: false,
-                done: false,
-                correlation_id,
-            },
+            EventReader::new(correlation_id),
             Box::new(move |failure: TransportFailure| transport_facts.request_error(&failure)),
         );
         Ok(pump.into_stream(Settle::none()))
@@ -376,657 +382,5 @@ fn validation_report(body: &[u8]) -> BackendFailure {
             LocalKind::MistralResponse,
             "the provider's validation report could not be read",
         )
-    }
-}
-
-/// The reasoning effort the Mistral API takes for a thinking level.
-fn effort(thinking: &str) -> Option<&'static str> {
-    match thinking {
-        "low" => Some("none"),
-        "medium" | "high" | "max" => Some("high"),
-        _ => None,
-    }
-}
-
-/// The request body as the client's request model serializes it.
-fn body(request: &ModelRequest<'_>, streaming: bool) -> Value {
-    if request.unified {
-        return unified_body(request, streaming);
-    }
-    let include_reasoning = request.model.thinking != "off";
-    let mut body = Map::new();
-    body.insert("model".to_owned(), json!(request.model.name));
-    body.insert("temperature".to_owned(), json!(request.temperature));
-    body.insert("max_tokens".to_owned(), json!(request.max_tokens));
-    body.insert("stream".to_owned(), Value::Bool(streaming));
-    body.insert(
-        "messages".to_owned(),
-        Value::Array(
-            request
-                .messages
-                .iter()
-                .map(|message| mistral_message(message, include_reasoning))
-                .collect(),
-        ),
-    );
-    body.insert(
-        "tools".to_owned(),
-        request
-            .tools
-            .filter(|tools| !tools.is_empty())
-            .map_or(Value::Null, |tools| {
-                Value::Array(tools.iter().map(Tool::chat_declaration).collect())
-            }),
-    );
-    if let Some(choice) = request.tool_choice {
-        body.insert(
-            "tool_choice".to_owned(),
-            match choice {
-                ToolChoice::Tool(tool) => {
-                    json!({"type": "function", "function": {"name": tool.name}})
-                }
-                keyword => json!(keyword.keyword()),
-            },
-        );
-    }
-    body.insert(
-        "metadata".to_owned(),
-        request
-            .metadata
-            .map_or(Value::Null, |metadata| Value::Object(metadata.clone())),
-    );
-    body.insert(
-        "reasoning_effort".to_owned(),
-        json!(effort(&request.model.thinking)),
-    );
-    Value::Object(body)
-}
-
-/// The body the Unified Harness runtime's adapter hands the same client
-/// (`vibe/adapters/mistral.py` under `harness/runtimes/python/python/mistralai_vibe_local_harness/`):
-/// only the fields it sets reach the wire, `parallel_tool_calls` rides with
-/// the tools, and the metadata goes out only when there is some.
-fn unified_body(request: &ModelRequest<'_>, streaming: bool) -> Value {
-    let mut body = Map::new();
-    body.insert("model".to_owned(), json!(request.model.name));
-    body.insert(
-        "messages".to_owned(),
-        Value::Array(request.messages.iter().map(unified_message).collect()),
-    );
-    body.insert("temperature".to_owned(), json!(request.temperature));
-    if let Some(effort) = effort(&request.model.thinking) {
-        body.insert("reasoning_effort".to_owned(), json!(effort));
-    }
-    if let Some(max_tokens) = request.max_tokens {
-        body.insert("max_tokens".to_owned(), json!(max_tokens));
-    }
-    if let Some(metadata) = request.metadata.filter(|metadata| !metadata.is_empty()) {
-        body.insert("metadata".to_owned(), Value::Object(metadata.clone()));
-    }
-    if let Some(tools) = request.tools.filter(|tools| !tools.is_empty()) {
-        body.insert(
-            "tools".to_owned(),
-            Value::Array(tools.iter().map(Tool::chat_declaration).collect()),
-        );
-        body.insert("parallel_tool_calls".to_owned(), Value::Bool(true));
-    }
-    body.insert("stream".to_owned(), Value::Bool(streaming));
-    Value::Object(body)
-}
-
-/// One message as the unified adapter writes it and the client's models
-/// then serialize it: an assistant turn gains `prefix`, a tool call its
-/// `index`.
-fn unified_message(message: &Message) -> Value {
-    let content =
-        |message: &Message| -> Value {
-            if !message.parts.is_empty() {
-                return Value::Array(
-                message
-                    .parts
-                    .iter()
-                    .map(|part| match part {
-                        ContentPart::Text(text) => json!({"type": "text", "text": text}),
-                        ContentPart::Image(picture) => {
-                            json!({"type": "image_url", "image_url": {"url": picture.data_uri()}})
-                        }
-                    })
-                    .collect(),
-            );
-            }
-            if message.images.is_empty() {
-                return json!(message.text());
-            }
-            let mut parts = Vec::new();
-            if !message.text().is_empty() {
-                parts.push(json!({"type": "text", "text": message.text()}));
-            }
-            parts.extend(message.images.iter().map(
-                |picture| json!({"type": "image_url", "image_url": {"url": picture.data_uri()}}),
-            ));
-            Value::Array(parts)
-        };
-    match message.role {
-        Role::System => json!({"role": "system", "content": content(message)}),
-        Role::User => json!({"role": "user", "content": content(message)}),
-        Role::Assistant => {
-            let reasoning = message
-                .reasoning_content
-                .as_deref()
-                .filter(|reasoning| !reasoning.is_empty());
-            let mut payload = Map::new();
-            payload.insert("role".to_owned(), json!("assistant"));
-            let body = match reasoning {
-                Some(reasoning) => {
-                    let mut chunks = vec![json!({
-                        "type": "thinking",
-                        "thinking": [{"type": "text", "text": reasoning}],
-                    })];
-                    if !message.text().is_empty() {
-                        chunks.push(json!({"type": "text", "text": message.text()}));
-                    }
-                    Value::Array(chunks)
-                }
-                None if message.text().is_empty() => Value::Null,
-                None => json!(message.text()),
-            };
-            payload.insert("content".to_owned(), body);
-            let calls: Vec<Value> = message
-                .tool_calls
-                .iter()
-                .flatten()
-                .map(|call| {
-                    json!({
-                        "id": call.id.as_deref().unwrap_or_default(),
-                        "type": "function",
-                        "function": {
-                            "name": call.name.as_deref().unwrap_or_default(),
-                            "arguments": call.arguments.as_deref().unwrap_or_default(),
-                        },
-                        "index": 0,
-                    })
-                })
-                .collect();
-            if !calls.is_empty() {
-                payload.insert("tool_calls".to_owned(), Value::Array(calls));
-            }
-            payload.insert("prefix".to_owned(), Value::Bool(false));
-            Value::Object(payload)
-        }
-        Role::Tool => json!({
-            "role": "tool",
-            "tool_call_id": message.tool_call_id,
-            "name": message.name,
-            "content": message.content,
-        }),
-    }
-}
-
-fn mistral_message(message: &Message, include_reasoning: bool) -> Value {
-    match message.role {
-        Role::System => json!({"role": "system", "content": message.text()}),
-        Role::User if !message.images.is_empty() => {
-            let mut parts = Vec::new();
-            if !message.text().is_empty() {
-                parts.push(json!({"type": "text", "text": message.text()}));
-            }
-            parts.extend(message.images.iter().map(
-                |picture| json!({"type": "image_url", "image_url": {"url": picture.data_uri()}}),
-            ));
-            json!({"role": "user", "content": parts})
-        }
-        Role::User => json!({"role": "user", "content": message.content}),
-        Role::Assistant => {
-            let reasoning = message
-                .reasoning_content
-                .as_deref()
-                .filter(|reasoning| include_reasoning && !reasoning.is_empty());
-            let content = match reasoning {
-                Some(reasoning) => {
-                    let mut chunks = vec![json!({
-                        "type": "thinking",
-                        "thinking": [{"type": "text", "text": reasoning}],
-                    })];
-                    if !message.text().is_empty() {
-                        chunks.push(json!({"type": "text", "text": message.text()}));
-                    }
-                    Value::Array(chunks)
-                }
-                None => json!(message.text()),
-            };
-            let calls: Vec<Value> = message
-                .tool_calls
-                .iter()
-                .flatten()
-                .map(|call| {
-                    let mut converted = Map::new();
-                    converted.insert(
-                        "function".to_owned(),
-                        json!({
-                            "name": call.name.as_deref().unwrap_or_default(),
-                            "arguments": call.arguments.as_deref().unwrap_or_default(),
-                        }),
-                    );
-                    if let Some(id) = &call.id {
-                        converted.insert("id".to_owned(), json!(id));
-                    }
-                    converted.insert("type".to_owned(), json!("function"));
-                    if let Some(index) = call.index {
-                        converted.insert("index".to_owned(), json!(index));
-                    }
-                    Value::Object(converted)
-                })
-                .collect();
-            json!({
-                "role": "assistant",
-                "content": content,
-                "tool_calls": calls,
-                "prefix": false,
-            })
-        }
-        Role::Tool => json!({
-            "role": "tool",
-            "content": message.content,
-            "tool_call_id": message.tool_call_id,
-            "name": message.name,
-        }),
-    }
-}
-
-/// The text and the reasoning of a content value.
-fn parse_content(content: &Value) -> Result<(String, Option<String>), LocalFailure> {
-    let refused = |what: &str| LocalFailure::new(LocalKind::Validation, what.to_owned());
-    match content {
-        Value::String(text) => Ok((text.clone(), None)),
-        Value::Array(chunks) => {
-            let mut text = String::new();
-            let mut reasoning = String::new();
-            for chunk in chunks {
-                let chunk = chunk
-                    .as_object()
-                    .ok_or_else(|| refused("a content chunk is not an object"))?;
-                match chunk.get("type").and_then(Value::as_str).unwrap_or("text") {
-                    "text" => text.push_str(
-                        chunk
-                            .get("text")
-                            .and_then(Value::as_str)
-                            .ok_or_else(|| refused("a text chunk carries no text"))?,
-                    ),
-                    "thinking" => {
-                        let inner = chunk
-                            .get("thinking")
-                            .and_then(Value::as_array)
-                            .ok_or_else(|| refused("a thinking chunk carries no list"))?;
-                        for part in inner {
-                            if let Some(part) = part.as_object()
-                                && part.get("type").and_then(Value::as_str).unwrap_or("text")
-                                    == "text"
-                                && let Some(piece) = part.get("text").and_then(Value::as_str)
-                            {
-                                reasoning.push_str(piece);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            Ok((text, (!reasoning.is_empty()).then_some(reasoning)))
-        }
-        _ => Err(refused("content is neither text nor a list of chunks")),
-    }
-}
-
-/// The tool calls of a delta or a message. Arguments given as an object are
-/// written back as `json.dumps` text, keys in the order the provider sent them.
-fn parse_tool_calls(calls: &[Value]) -> Result<Vec<ToolCall>, LocalFailure> {
-    let refused = |what: &str| LocalFailure::new(LocalKind::Validation, what.to_owned());
-    calls
-        .iter()
-        .map(|call| {
-            let call = call
-                .as_object()
-                .ok_or_else(|| refused("a tool call is not an object"))?;
-            let function = call
-                .get("function")
-                .and_then(Value::as_object)
-                .ok_or_else(|| refused("a tool call carries no function"))?;
-            let name = function
-                .get("name")
-                .and_then(Value::as_str)
-                .ok_or_else(|| refused("a tool call carries no name"))?;
-            let arguments = match function.get("arguments") {
-                Some(Value::String(arguments)) => arguments.clone(),
-                Some(arguments @ Value::Object(_)) => pycompat::dumps(
-                    arguments,
-                    Dumps {
-                        ensure_ascii: false,
-                        ..Dumps::DEFAULT
-                    },
-                ),
-                _ => return Err(refused("a tool call carries no arguments")),
-            };
-            let id = match call.get("id") {
-                None => Some("null".to_owned()),
-                Some(Value::Null) => None,
-                Some(Value::String(id)) => Some(id.clone()),
-                Some(_) => return Err(refused("a tool call id is not a string")),
-            };
-            let index = match call.get("index") {
-                None => Some(0),
-                Some(Value::Null) => None,
-                Some(value) => Some(lax_count(value)?),
-            };
-            Ok(ToolCall {
-                id,
-                index,
-                name: Some(name.to_owned()),
-                arguments: Some(arguments),
-            })
-        })
-        .collect()
-}
-
-/// `usage.prompt_tokens_details.cached_tokens`, read leniently: anything odd
-/// counts as zero.
-fn cached_tokens(usage: &Map<String, Value>) -> u64 {
-    usage
-        .get("prompt_tokens_details")
-        .and_then(Value::as_object)
-        .and_then(|details| details.get("cached_tokens"))
-        .and_then(|value| match value {
-            Value::String(text) => text.trim().parse::<u64>().ok(),
-            other if truthy(other) => lax_count(other).ok(),
-            _ => Some(0),
-        })
-        .unwrap_or(0)
-}
-
-fn usage_of(usage: Option<&Value>) -> Result<Usage, LocalFailure> {
-    let Some(usage) = usage.filter(|usage| !usage.is_null()) else {
-        return Ok(Usage::default());
-    };
-    let usage = usage
-        .as_object()
-        .ok_or_else(|| LocalFailure::new(LocalKind::Validation, "usage is not an object"))?;
-    let count = |name: &str| match usage.get(name) {
-        None | Some(Value::Null) => Ok(0),
-        Some(value) => lax_count(value),
-    };
-    Ok(Usage {
-        prompt_tokens: count("prompt_tokens")?,
-        completion_tokens: count("completion_tokens")?,
-        cached_tokens: cached_tokens(usage),
-    })
-}
-
-/// One streamed event's chunk.
-fn event_chunk(text: &str, correlation_id: Option<&String>) -> Result<Chunk, LocalFailure> {
-    let refused = |what: &str| LocalFailure::new(LocalKind::Validation, what.to_owned());
-    let data: Value = serde_json::from_str(text).map_err(|_| refused("an event is not JSON"))?;
-    let data = data
-        .as_object()
-        .ok_or_else(|| refused("an event is not an object"))?;
-    if !data.get("id").is_some_and(Value::is_string)
-        || !data.get("model").is_some_and(Value::is_string)
-    {
-        return Err(refused("an event carries no id or model"));
-    }
-    let choices = data
-        .get("choices")
-        .and_then(Value::as_array)
-        .ok_or_else(|| refused("an event carries no choices"))?;
-    for choice in choices {
-        let choice = choice
-            .as_object()
-            .ok_or_else(|| refused("a choice is not an object"))?;
-        if !choice.get("index").is_some_and(Value::is_number)
-            || !choice.get("delta").is_some_and(Value::is_object)
-            || !choice
-                .get("finish_reason")
-                .is_some_and(|reason| reason.is_null() || reason.is_string())
-        {
-            return Err(refused("a choice is malformed"));
-        }
-    }
-    let usage = usage_of(data.get("usage"))?;
-    let Some(choice) = choices.first().and_then(Value::as_object) else {
-        return Ok(Chunk {
-            message: Message::assistant().with_content(""),
-            usage: Some(usage),
-            correlation_id: correlation_id.cloned(),
-            stop: None,
-        });
-    };
-    let delta = choice
-        .get("delta")
-        .and_then(Value::as_object)
-        .ok_or_else(|| refused("a choice carries no delta"))?;
-    let (content, reasoning) = match delta.get("content") {
-        Some(content) if truthy(content) => parse_content(content)?,
-        _ => (String::new(), None),
-    };
-    let tool_calls = match delta.get("tool_calls") {
-        Some(Value::Array(calls)) if !calls.is_empty() => Some(parse_tool_calls(calls)?),
-        _ => None,
-    };
-    Ok(Chunk {
-        message: Message {
-            content: Some(content),
-            reasoning_content: reasoning,
-            tool_calls,
-            ..Message::assistant()
-        },
-        usage: Some(usage),
-        correlation_id: correlation_id.cloned(),
-        stop: choice
-            .get("finish_reason")
-            .and_then(Value::as_str)
-            .map(StopInfo::reason),
-    })
-}
-
-/// A whole answer.
-fn whole_answer(text: &str) -> Result<Chunk, LocalFailure> {
-    let refused = |what: &str| LocalFailure::new(LocalKind::MistralResponse, what.to_owned());
-    let data: Value = serde_json::from_str(text).map_err(|_| refused("the answer is not JSON"))?;
-    let data = data
-        .as_object()
-        .ok_or_else(|| refused("the answer is not an object"))?;
-    for field in ["id", "object", "model"] {
-        if !data.get(field).is_some_and(Value::is_string) {
-            return Err(refused("the answer is missing a field"));
-        }
-    }
-    if !data.get("created").is_some_and(Value::is_number)
-        || !data.get("usage").is_some_and(Value::is_object)
-    {
-        return Err(refused("the answer is missing a field"));
-    }
-    let choices = data
-        .get("choices")
-        .and_then(Value::as_array)
-        .ok_or_else(|| refused("the answer carries no choices"))?;
-    let choice = choices
-        .first()
-        .and_then(Value::as_object)
-        .ok_or_else(|| LocalFailure::new(LocalKind::Value, "the answer carries no choice"))?;
-    let reason = choice
-        .get("finish_reason")
-        .and_then(Value::as_str)
-        .ok_or_else(|| refused("a choice carries no finish reason"))?;
-    let message = match choice.get("message") {
-        None | Some(Value::Null) => None,
-        Some(Value::Object(message)) => Some(message),
-        Some(_) => return Err(refused("a choice's message is not an object")),
-    };
-    let (content, reasoning) = match message.and_then(|message| message.get("content")) {
-        Some(content) if truthy(content) => parse_content(content)?,
-        _ => (String::new(), None),
-    };
-    let tool_calls = match message.and_then(|message| message.get("tool_calls")) {
-        Some(Value::Array(calls)) if !calls.is_empty() => Some(parse_tool_calls(calls)?),
-        _ => None,
-    };
-    Ok(Chunk {
-        message: Message {
-            content: Some(content),
-            reasoning_content: reasoning,
-            tool_calls,
-            ..Message::assistant()
-        },
-        usage: Some(usage_of(data.get("usage"))?),
-        correlation_id: None,
-        stop: Some(StopInfo::reason(reason)),
-    })
-}
-
-/// The client's event framing: blocks separated by a blank line in any
-/// newline style, `data` lines joined by newlines, `[DONE]` as the sentinel.
-struct EventReader {
-    buffer: Vec<u8>,
-    started: bool,
-    done: bool,
-    correlation_id: Option<String>,
-}
-
-/// The separators a block ends with, longest first where they share a prefix.
-const BOUNDARIES: &[&[u8]] = &[
-    b"\r\n\r\n",
-    b"\r\n\r",
-    b"\r\n\n",
-    b"\r\r\n",
-    b"\n\r\n",
-    b"\r\r",
-    b"\n\r",
-    b"\n\n",
-];
-
-enum Block {
-    Skip,
-    Done,
-    Event(String),
-}
-
-impl EventReader {
-    fn block(raw: &[u8]) -> Result<Block, LocalFailure> {
-        let text = std::str::from_utf8(raw)
-            .map_err(|_| LocalFailure::new(LocalKind::Value, "an event is not UTF-8"))?;
-        let mut data = String::new();
-        let mut publish = false;
-        for line in split_lines(text) {
-            if line.is_empty() || line.starts_with(':') {
-                continue;
-            }
-            let (field, value) = match line.find(':') {
-                Some(position) => {
-                    let value = &line[position + 1..];
-                    (&line[..position], value.strip_prefix(' ').unwrap_or(value))
-                }
-                None => (line, ""),
-            };
-            match field {
-                "event" | "id" | "retry" => publish = true,
-                "data" => {
-                    data.push_str(value);
-                    data.push('\n');
-                    publish = true;
-                }
-                _ => {}
-            }
-        }
-        if data == "[DONE]\n" {
-            return Ok(Block::Done);
-        }
-        if data.is_empty() || !publish {
-            return Ok(Block::Skip);
-        }
-        data.pop();
-        Ok(Block::Event(data))
-    }
-
-    fn release(&mut self, raw: &[u8]) -> Result<Option<Chunk>, BackendFailure> {
-        match Self::block(raw)? {
-            Block::Skip => Ok(None),
-            Block::Done => {
-                self.done = true;
-                Ok(None)
-            }
-            Block::Event(data) => event_chunk(&data, self.correlation_id.as_ref())
-                .map(Some)
-                .map_err(Into::into),
-        }
-    }
-}
-
-fn split_lines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let bytes = text.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        match bytes[index] {
-            b'\n' => {
-                lines.push(&text[start..index]);
-                start = index + 1;
-            }
-            b'\r' => {
-                lines.push(&text[start..index]);
-                if bytes.get(index + 1) == Some(&b'\n') {
-                    index += 1;
-                }
-                start = index + 1;
-            }
-            _ => {}
-        }
-        index += 1;
-    }
-    lines.push(&text[start..]);
-    lines
-}
-
-impl EventSource for EventReader {
-    fn push(&mut self, bytes: &[u8]) -> Result<Vec<Chunk>, BackendFailure> {
-        let mut bytes = bytes;
-        if !self.started && self.buffer.is_empty() {
-            bytes = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes);
-        }
-        self.started = true;
-        self.buffer.extend_from_slice(bytes);
-        let mut chunks = Vec::new();
-        let mut position = 0;
-        let mut index = 0;
-        while index < self.buffer.len() && !self.done {
-            let byte = self.buffer[index];
-            if byte == b'\r' || byte == b'\n' {
-                let boundary = BOUNDARIES
-                    .iter()
-                    .find(|boundary| self.buffer[index..].starts_with(boundary));
-                if let Some(boundary) = boundary {
-                    let raw = self.buffer[position..index].to_vec();
-                    position = index + boundary.len();
-                    index = position;
-                    if let Some(chunk) = self.release(&raw)? {
-                        chunks.push(chunk);
-                    }
-                    continue;
-                }
-            }
-            index += 1;
-        }
-        self.buffer.drain(..position);
-        Ok(chunks)
-    }
-
-    fn finish(&mut self) -> Result<Vec<Chunk>, BackendFailure> {
-        if self.done {
-            return Ok(Vec::new());
-        }
-        self.done = true;
-        let raw = std::mem::take(&mut self.buffer);
-        Ok(self.release(&raw)?.into_iter().collect())
-    }
-
-    fn done(&self) -> bool {
-        self.done
     }
 }

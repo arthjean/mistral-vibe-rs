@@ -1,8 +1,6 @@
 use std::path::Path;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Alignment, Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Text};
@@ -10,9 +8,10 @@ use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use vibe_app_server::startup::{
     SavedSessionSummary, StartupHost, WorkspaceTrustDecision, WorkspaceTrustPrompt,
 };
+use vibe_core::storage::short_session_id;
 
-use super::super::session_picker::{SessionDeleteDecision, SessionDeleteState};
-use super::super::terminal::{CrosstermOps, TerminalGuard};
+use super::super::session_picker::SessionDeleteState;
+use super::super::terminal::FullScreen;
 use super::super::updates::{UPDATE_DIALOG_TITLE, UpdateChoice, UpdatePromptMode, version_line};
 use super::StartupError;
 use super::session::ResumeResolution;
@@ -139,13 +138,10 @@ fn run_dialog(
     dialog: &mut StartupDialog<'_>,
     startup_host: Option<&StartupHost>,
 ) -> Result<DialogResult, StartupError> {
-    let mut guard = TerminalGuard::enter(CrosstermOps::stdout())
-        .map_err(|error| StartupError::Terminal(error.to_string()))?;
-    let backend = CrosstermBackend::new(std::io::stdout());
-    let mut terminal =
-        Terminal::new(backend).map_err(|error| StartupError::Terminal(error.to_string()))?;
+    let mut screen = FullScreen::enter().map_err(StartupError::Terminal)?;
     let result = loop {
-        terminal
+        screen
+            .terminal
             .draw(|frame| draw_startup_dialog(frame, dialog))
             .map_err(|error| StartupError::Terminal(error.to_string()))?;
         let event = event::read().map_err(|error| StartupError::Terminal(error.to_string()))?;
@@ -170,10 +166,7 @@ fn run_dialog(
             }
         }
     };
-    drop(terminal);
-    guard
-        .restore()
-        .map_err(|error| StartupError::Terminal(error.to_string()))?;
+    screen.restore().map_err(StartupError::Terminal)?;
     Ok(result)
 }
 
@@ -230,21 +223,12 @@ fn reduce_dialog(dialog: &mut StartupDialog<'_>, key: KeyEvent) -> Option<Dialog
             }
             KeyCode::Enter => sessions
                 .get(*selected)
-                .filter(|session| {
-                    !delete
-                        .as_ref()
-                        .is_some_and(|delete| delete.session_id == session.id)
-                })
+                .filter(|session| !SessionDeleteState::holds(delete.as_ref(), &session.id))
                 .map(|session| DialogStep::Complete(DialogResult::Resume(session.id.clone()))),
             KeyCode::Char('d') => {
                 let session_id = sessions.get(*selected)?.id.clone();
-                match SessionDeleteState::request(delete.as_ref(), &session_id, false) {
-                    SessionDeleteDecision::Show(next) => {
-                        *delete = Some(next);
-                        None
-                    }
-                    SessionDeleteDecision::Delete => Some(DialogStep::DeleteSession(session_id)),
-                }
+                SessionDeleteState::press(delete, &session_id, false)
+                    .then_some(DialogStep::DeleteSession(session_id))
             }
             KeyCode::Esc if delete.is_some() => {
                 *delete = None;
@@ -393,7 +377,7 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
                 Line::from(""),
             ];
             lines.extend(sessions.iter().enumerate().map(|(index, session)| {
-                let short_id = session.id.chars().take(8).collect::<String>();
+                let short_id = short_session_id(&session.id);
                 let preview = delete
                     .as_ref()
                     .filter(|delete| delete.session_id == session.id)
@@ -477,6 +461,7 @@ fn selected_line(index: usize, selected: usize, content: String) -> Line<'static
 mod tests {
     use std::path::PathBuf;
 
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
     use super::*;

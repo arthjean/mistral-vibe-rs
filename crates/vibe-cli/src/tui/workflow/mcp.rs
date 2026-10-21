@@ -10,7 +10,8 @@ use super::super::interaction::{
     OverlayItem, OverlayKind,
 };
 use super::super::pickers::{
-    mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay, mcp_overlay,
+    McpSource, McpSourceStatus, mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay,
+    mcp_overlay,
 };
 use super::super::runtime::{schedule_ui_background, schedule_ui_call, schedule_ui_external};
 use super::super::state::{EntryStatus, TuiState};
@@ -345,60 +346,6 @@ fn schedule_read_integrations(
     );
 }
 
-/// The MCP servers of a published source list, under the key the pickers read.
-pub(super) fn server_sources(value: &Value) -> Value {
-    json!({"mcp": {"sources": sources_of(value, "server").collect::<Vec<_>>()}})
-}
-
-/// The connectors of a published source list, in the shape the connector picker
-/// reads: it renders an authorization state and a flat tool list, and the
-/// published source carries both under other names.
-pub(super) fn connector_sources(value: &Value) -> Value {
-    json!({
-        "connectors": {
-            "sources": sources_of(value, "connector")
-                .map(|source| {
-                    let tools = source.get("tools").and_then(Value::as_array);
-                    let name = source.get("name").and_then(Value::as_str).unwrap_or_default();
-                    let status = source.get("status").and_then(Value::as_str).unwrap_or_default();
-                    json!({
-                        "id": name,
-                        "alias": name,
-                        "name": name,
-                        "enabled": status != "disabled",
-                        "authState": match status {
-                            "connected" => "connected",
-                            "needs_auth" => "disconnected",
-                            "needs_setup" => "setup_required",
-                            _ => "failed",
-                        },
-                        "toolNames": tools
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|tool| tool.get("name").cloned())
-                            .collect::<Vec<_>>(),
-                        "disabledTools": tools
-                            .into_iter()
-                            .flatten()
-                            .filter(|tool| tool.get("enabled").and_then(Value::as_bool) == Some(false))
-                            .filter_map(|tool| tool.get("name").cloned())
-                            .collect::<Vec<_>>(),
-                    })
-                })
-                .collect::<Vec<_>>()
-        }
-    })
-}
-
-fn sources_of<'a>(value: &'a Value, kind: &'a str) -> impl Iterator<Item = &'a Value> {
-    value
-        .pointer("/mcp/sources")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(move |source| source.get("kind").and_then(Value::as_str) == Some(kind))
-}
-
 pub(in crate::tui) fn apply_pending_operation(
     operation: McpPendingOperation,
     result: Result<vibe_app_server::client::PublicDispatch, String>,
@@ -495,12 +442,17 @@ pub(in crate::tui) fn apply_pending_operation(
     let value = map_value(dispatch.result);
     match operation {
         McpPendingOperation::ReadIntegrations { filter, detail } => {
-            let servers = server_sources(&value);
-            let connectors = connector_sources(&value);
+            let sources = match McpSource::published(&value) {
+                Ok(sources) => sources,
+                Err(error) => {
+                    state.push_diagnostic(error);
+                    return;
+                }
+            };
             if let Some(target) = detail {
-                state.overlay = Some(mcp_detail_overlay(&servers, &connectors, &target));
+                state.overlay = Some(mcp_detail_overlay(&sources, &target));
             } else {
-                let mut overlay = mcp_overlay(&servers, &connectors);
+                let mut overlay = mcp_overlay(&sources);
                 if let Some(filter) = filter {
                     overlay.set_query(filter);
                 }
@@ -556,11 +508,18 @@ pub(in crate::tui) fn apply_pending_operation(
         McpPendingOperation::CheckConnector { source } => {
             // The refresh answers with the runtime it produced, so the
             // connector's new state is read off the published source list.
-            let connected = sources_of(value.get("runtime").unwrap_or(&Value::Null), "connector")
-                .find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(&source))
-                .and_then(|candidate| candidate.get("status"))
-                .and_then(Value::as_str)
-                == Some("connected");
+            let sources = match McpSource::published(value.get("runtime").unwrap_or(&Value::Null)) {
+                Ok(sources) => sources,
+                Err(error) => {
+                    state.push_diagnostic(error);
+                    return;
+                }
+            };
+            let connected = sources.iter().any(|candidate| {
+                candidate.kind == IntegrationKind::Connector
+                    && candidate.name == source
+                    && candidate.status == McpSourceStatus::Connected
+            });
             if connected {
                 // Reference `ConnectorAuthClosed(refreshed=True)`: the browser
                 // opens on the connector that signed in.

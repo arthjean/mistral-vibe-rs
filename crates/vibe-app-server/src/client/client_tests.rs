@@ -12,6 +12,7 @@ use vibe_core::compaction::manager::PLACEHOLDER_SUMMARY;
 use vibe_core::events::ModelToolCall;
 use vibe_core::provider::{AssistantMessage, ImageInput, Usage};
 use vibe_core::schema::{ObjectSchema, Property};
+use vibe_core::storage::SessionStore;
 use vibe_core::tools::{
     ToolAvailability, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
 };
@@ -20,6 +21,11 @@ use std::path::Path;
 
 use super::headless::HeadlessService;
 use super::in_process::decode_mcp_warnings;
+use super::interactive::plan_review::{
+    interactive_plan_review_spec, plan_file_path, run_interactive_plan_review,
+};
+use super::interactive::questions::interactive_question_spec;
+use super::interactive::queue::CallbackQueue;
 use super::interactive::*;
 use crate::server::SessionToolFactory;
 use vibe_core::compaction::manager::CompactionPlan;
@@ -30,7 +36,8 @@ use vibe_core::policy::{ApprovalAgent, ApprovalDecision, ApprovalRequest};
 use vibe_core::provider::ProviderInput;
 use vibe_core::tools::ToolInvocation;
 
-use super::live::{ProviderSessionCompactor, SessionToolExecutor};
+use super::live::compactor::ProviderSessionCompactor;
+use super::live::executor::SessionToolExecutor;
 
 mod driver_tests;
 mod headless_tests;

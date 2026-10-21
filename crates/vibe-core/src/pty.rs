@@ -7,8 +7,8 @@
 //! group instead of landing in a pipe nobody reads as a signal. Opening one
 //! directly needs the `setsid` and `TIOCSCTTY` calls that `unsafe_code` forbids
 //! here, so `portable-pty` owns those two and this module owns the rest: the
-//! blocking-to-async bridge, the escalation ladder over the process group, and
-//! the single release of the writer.
+//! blocking-to-async bridge and the single release of the writer, with the
+//! escalation ladder over the process group run by [`crate::child`].
 //!
 //! Everything here is deliberately backend-shaped rather than session-shaped:
 //! [`crate::process::TerminalManager`] decides which backend a terminal gets and
@@ -18,11 +18,12 @@ use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::Duration;
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
-use crate::child::{ChildExit, GROUP_POLL_INTERVAL, Rung, TerminationError};
+use crate::child::{
+    ChildExit, ChildGroup, GROUP_POLL_INTERVAL, Leader, LeaderFuture, TerminationError,
+};
 
 mod console;
 #[cfg(test)]
@@ -77,19 +78,18 @@ pub(crate) struct PtyStreams {
 }
 
 /// A child running under its own terminal, session and process group.
-pub(crate) struct PtyTerminal {
+///
+/// `portable-pty` calls `setsid` before `exec`, so the child leads both its
+/// session and its process group and its pid is that group's id.
+pub(crate) type PtyTerminal = ChildGroup<PtyChild>;
+
+/// The child a terminal started, and the terminal it runs under.
+pub(crate) struct PtyChild {
     child: Box<dyn portable_pty::Child + Send + Sync>,
-    /// `portable-pty` calls `setsid` before `exec`, so the child leads both its
-    /// session and its process group and its pid is that group's id.
-    #[cfg_attr(
-        not(unix),
-        expect(dead_code, reason = "only the POSIX process-group signals read it")
-    )]
-    group: Option<i32>,
     /// Held so the terminal outlives the child: dropping the master closes the
     /// descriptor the reader thread is still draining. On Windows it is the
-    /// pseudoconsole, which [`PtyTerminal::close_console`] closes once the
-    /// child is gone so the reader reaches its end.
+    /// pseudoconsole, which [`Leader::close_console`] closes once the child is
+    /// gone so the reader reaches its end.
     #[cfg_attr(
         not(windows),
         expect(
@@ -232,12 +232,14 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
     let (reader, writer) = pseudoconsole_streams(reader, writer);
     let group = child.process_id().and_then(|id| i32::try_from(id).ok());
     Ok((
-        PtyTerminal {
-            child,
+        ChildGroup::led_by(
+            PtyChild {
+                child,
+                master: Some(Box::new(pair.master)),
+                exit: None,
+            },
             group,
-            master: Some(Box::new(pair.master)),
-            exit: None,
-        },
+        ),
         PtyStreams {
             reader,
             writer: PtyWriter::new(writer),
@@ -365,9 +367,8 @@ fn dimension(environment: &BTreeMap<String, String>, key: &str, fallback: u16) -
         .unwrap_or(fallback)
 }
 
-impl PtyTerminal {
-    /// Reports the child's exit status without blocking.
-    pub(crate) fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
+impl Leader for PtyChild {
+    fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
         if let Some(exit) = self.exit {
             return Ok(Some(exit));
         }
@@ -377,130 +378,24 @@ impl PtyTerminal {
         Ok(exit)
     }
 
-    /// Waits for the child to exit.
-    ///
     /// `portable-pty` only offers a blocking wait, and the child cannot be moved
     /// onto a blocking task while the ladder still needs it, so the wait polls
     /// the non-blocking status at the same interval the process group does.
-    pub(crate) async fn wait(&mut self) -> std::io::Result<ChildExit> {
-        loop {
-            if let Some(exit) = self.try_wait()? {
-                return Ok(exit);
+    fn wait(&mut self) -> LeaderFuture<'_, std::io::Result<ChildExit>> {
+        Box::pin(async move {
+            loop {
+                if let Some(exit) = self.try_wait()? {
+                    return Ok(exit);
+                }
+                tokio::time::sleep(GROUP_POLL_INTERVAL).await;
             }
-            tokio::time::sleep(GROUP_POLL_INTERVAL).await;
-        }
+        })
     }
 
-    /// Shuts the child down, escalating from `from` until it exits.
-    pub(crate) async fn shut_down(
-        &mut self,
-        grace: Duration,
-        from: Rung,
-    ) -> Result<ChildExit, TerminationError> {
-        for rung in [Rung::Wait, Rung::Terminate, Rung::Kill] {
-            if rung < from {
-                continue;
-            }
-            match rung {
-                Rung::Wait => {}
-                Rung::Terminate => self.signal(false)?,
-                Rung::Kill => self.signal(true)?,
-            }
-            match tokio::time::timeout(grace, self.wait()).await {
-                Ok(Ok(exit)) => return Ok(exit),
-                Ok(Err(source)) => return Err(TerminationError::Wait(source.to_string())),
-                Err(_) => {}
-            }
-        }
-        Err(TerminationError::Deadline)
-    }
-
-    /// Reaps descendants that outlived the child.
-    ///
-    /// The child leads its own process group, so a grandchild that ignored the
-    /// leader's exit is still addressable here rather than left running.
-    pub(crate) async fn reap_group(
-        &mut self,
-        grace: Duration,
-        already_signaled: bool,
-    ) -> Result<(), TerminationError> {
-        #[cfg(unix)]
-        {
-            let Some(group) = self.group else {
-                return Ok(());
-            };
-            if !crate::child::group_alive(group)? {
-                return Ok(());
-            }
-            if !already_signaled {
-                self.signal(false)?;
-            }
-            if crate::child::wait_for_group_exit(group, grace).await? {
-                return Ok(());
-            }
-            self.signal(true)?;
-            if crate::child::wait_for_group_exit(group, grace).await? {
-                return Ok(());
-            }
-            Err(TerminationError::Deadline)
-        }
-        #[cfg(windows)]
-        {
-            // ConPTY hands the child no job object. The tree kill reaches the
-            // descendants still parented under a live leader, and closing the
-            // pseudoconsole ends the ones attached to it that the leader left
-            // behind. The console is closed even when the leader would not
-            // die, so that failure is reported only after the close.
-            if !already_signaled {
-                self.signal(true)?;
-            }
-            let exit = self.shut_down(grace, Rung::Wait).await.map(drop);
-            let closed = self.close_console(grace).await;
-            exit.and(closed)
-        }
-    }
-
-    /// Closes the pseudoconsole, which ends every process still attached to it
-    /// and lets the reader reach end of file: ConPTY reports end of file when
-    /// the console closes, not when the child exits.
-    ///
-    /// `ClosePseudoConsole` blocks until the console host is gone, so it runs
-    /// on a thread of its own and a close that outlasts `grace` is a failure.
-    /// The thread is detached rather than a blocking task: a runtime waits for
-    /// its blocking tasks as it shuts down, so a close that never returns would
-    /// hold the whole process. A POSIX terminal has nothing to close before it
-    /// drops.
-    pub(crate) async fn close_console(&mut self, grace: Duration) -> Result<(), TerminationError> {
-        #[cfg(windows)]
-        if let Some(master) = self.master.take() {
-            let (closed, closing) = tokio::sync::oneshot::channel();
-            std::thread::spawn(move || {
-                drop(master);
-                let _ = closed.send(());
-            });
-            return match tokio::time::timeout(grace, closing).await {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(error)) => Err(TerminationError::Console(error.to_string())),
-                Err(_) => Err(TerminationError::Console(
-                    "ClosePseudoConsole did not return before the cleanup deadline".to_owned(),
-                )),
-            };
-        }
-        let _ = grace;
-        Ok(())
-    }
-
-    /// Signals the whole group, falling back to the child when none is owned.
-    ///
-    /// On Windows both rungs end the leader's whole tree, as reference
+    /// On Windows this ends the leader's whole tree, as reference
     /// `request_termination` does by forcing it, and a leader that already
     /// exited needs nothing.
-    pub(crate) fn signal(&mut self, force: bool) -> Result<(), TerminationError> {
-        #[cfg(unix)]
-        if let Some(group) = self.group {
-            return crate::child::signal_group(group, force);
-        }
-        let _ = force;
+    fn kill(&mut self) -> Result<(), TerminationError> {
         #[cfg(windows)]
         {
             if matches!(self.try_wait(), Ok(Some(_))) {
@@ -518,6 +413,41 @@ impl PtyTerminal {
                 Ok(())
             } else {
                 Err(TerminationError::Signal(error.to_string()))
+            }
+        })
+    }
+
+    /// Closes the pseudoconsole, which ends every process still attached to it
+    /// and lets the reader reach end of file: ConPTY reports end of file when
+    /// the console closes, not when the child exits.
+    ///
+    /// `ClosePseudoConsole` blocks until the console host is gone, so it runs
+    /// on a thread of its own and a close that outlasts `grace` is a failure.
+    /// The thread is detached rather than a blocking task: a runtime waits for
+    /// its blocking tasks as it shuts down, so a close that never returns would
+    /// hold the whole process. A POSIX terminal has nothing to close before it
+    /// drops.
+    #[cfg(windows)]
+    fn close_console(
+        &mut self,
+        grace: std::time::Duration,
+    ) -> LeaderFuture<'_, Result<(), TerminationError>> {
+        let master = self.master.take();
+        Box::pin(async move {
+            let Some(master) = master else {
+                return Ok(());
+            };
+            let (closed, closing) = tokio::sync::oneshot::channel();
+            std::thread::spawn(move || {
+                drop(master);
+                let _ = closed.send(());
+            });
+            match tokio::time::timeout(grace, closing).await {
+                Ok(Ok(())) => Ok(()),
+                Ok(Err(error)) => Err(TerminationError::Console(error.to_string())),
+                Err(_) => Err(TerminationError::Console(
+                    "ClosePseudoConsole did not return before the cleanup deadline".to_owned(),
+                )),
             }
         })
     }

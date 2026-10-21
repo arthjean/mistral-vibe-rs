@@ -11,7 +11,7 @@
 //! implementations read each other's secrets there too.
 
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
@@ -222,7 +222,7 @@ impl KeyringBackend for MemoryKeyringBackend {
 /// reference legacy name, then the prior-build name, migrating on read and
 /// caching per account.
 pub struct KeyringStore {
-    backend: Box<dyn KeyringBackend>,
+    backend: Arc<dyn KeyringBackend>,
     disabled: bool,
     cache: Mutex<BTreeMap<String, Option<String>>>,
 }
@@ -230,9 +230,15 @@ pub struct KeyringStore {
 impl KeyringStore {
     #[must_use]
     pub fn new(backend: Box<dyn KeyringBackend>) -> Self {
+        Self::shared(Arc::from(backend), false)
+    }
+
+    /// A store over a backend another holder keeps too, disabled as the
+    /// reference's `VIBE_TEST_DISABLE_KEYRING` hook disables it.
+    pub(super) fn shared(backend: Arc<dyn KeyringBackend>, disabled: bool) -> Self {
         Self {
             backend,
-            disabled: false,
+            disabled,
             cache: Mutex::new(BTreeMap::new()),
         }
     }
@@ -241,18 +247,17 @@ impl KeyringStore {
     /// test hook asks for it.
     #[must_use]
     pub fn native() -> Self {
-        let mut store = Self::new(Box::new(NativeKeyringBackend::new()));
-        store.disabled = std::env::var(DISABLE_KEYRING_ENV_VAR).as_deref() == Ok("1");
-        store
+        Self::shared(
+            Arc::new(NativeKeyringBackend::new()),
+            std::env::var(DISABLE_KEYRING_ENV_VAR).as_deref() == Ok("1"),
+        )
     }
 
     /// A store that answers as if no backend existed, the reference's
     /// `VIBE_TEST_DISABLE_KEYRING` behavior.
     #[must_use]
     pub fn disabled(backend: Box<dyn KeyringBackend>) -> Self {
-        let mut store = Self::new(backend);
-        store.disabled = true;
-        store
+        Self::shared(Arc::from(backend), true)
     }
 
     fn read_services() -> impl Iterator<Item = &'static str> {
@@ -295,27 +300,35 @@ impl KeyringStore {
     /// legacy source, tolerating a failed delete.
     #[must_use]
     pub fn get_api_key(&self, account: &str) -> Option<String> {
+        self.read(account, true).ok().flatten()
+    }
+
+    /// [`KeyringStore::get_api_key`] with the store's failure surfaced, which
+    /// caches nothing. Without `search_legacy` only the current service is
+    /// consulted, the reference's `search_legacy_services=False`.
+    pub(super) fn read(
+        &self,
+        account: &str,
+        search_legacy: bool,
+    ) -> Result<Option<String>, KeyringFailure> {
         if account.is_empty() || self.disabled {
-            return None;
+            return Ok(None);
         }
         if let Ok(cache) = self.cache.lock()
             && let Some(cached) = cache.get(account)
         {
-            return cached.clone();
+            return Ok(cached.clone());
         }
-        for service in Self::read_services() {
-            match self.backend.get(service, account) {
-                Err(_) => return None,
-                Ok(None) => continue,
-                Ok(Some(secret)) => {
-                    if service != KEYRING_SERVICE {
-                        self.migrate_legacy_entry(account, &secret, service);
-                    }
-                    return self.cache_insert(account, Some(secret));
+        let services = if search_legacy { usize::MAX } else { 1 };
+        for service in Self::read_services().take(services) {
+            if let Some(secret) = self.backend.get(service, account)? {
+                if service != KEYRING_SERVICE {
+                    self.migrate_legacy_entry(account, &secret, service);
                 }
+                return Ok(self.cache_insert(account, Some(secret)));
             }
         }
-        self.cache_insert(account, None)
+        Ok(self.cache_insert(account, None))
     }
 
     fn migrate_legacy_entry(&self, account: &str, secret: &str, source_service: &str) {

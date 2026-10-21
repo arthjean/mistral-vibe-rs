@@ -14,13 +14,8 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        let cwd = check.required_string(&object, "cwd", &[]);
-        check.extras(&object, &["sessionId", "cwd"], &[]);
-        check.finish().map_err(rejected)?;
-        let (session_id, cwd) = (session_id.unwrap_or_default(), cwd.unwrap_or_default());
+        let RelocateParams { session_id, cwd } =
+            wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
         if self.root_key().is_some() {
             return self.relocate_root(request, &session_id, &cwd);
         }
@@ -164,4 +159,12 @@ fn relocation_target(
         ));
     }
     Ok(target.to_string_lossy().into_owned())
+}
+
+/// Reference `SessionRelocateParams`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RelocateParams {
+    session_id: String,
+    cwd: String,
 }

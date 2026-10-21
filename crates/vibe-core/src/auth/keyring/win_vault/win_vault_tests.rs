@@ -235,11 +235,9 @@ fn the_reference_and_the_port_read_each_other_s_secrets() {
         }
     }
 
-    let root = crate::parity::reference_root();
-    if let Some(reason) = crate::parity::off_pin_reason(&root, "keyring") {
-        eprintln!("{reason}");
+    let Some(root) = crate::parity::replay::pinned_reference("keyring") else {
         return;
-    }
+    };
     let Some(python) = crate::parity::pinned_interpreter(&root) else {
         eprintln!("skipping the live keyring probe: the reference has no interpreter");
         return;

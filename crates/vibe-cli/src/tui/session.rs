@@ -216,10 +216,9 @@ fn startup_preferences(
     let configured_model = snapshot.active_model_alias().map(ToOwned::to_owned);
     let document = snapshot.public_view();
     let config = document.get("config");
-    let model = if arguments.model == DEFAULT_MODEL {
-        configured_model.unwrap_or_else(|| arguments.model.clone())
-    } else {
-        arguments.model.clone()
+    let model = match &arguments.model {
+        Some(model) => model.clone(),
+        None => configured_model.unwrap_or_else(|| arguments.model().to_owned()),
     };
     let mut image_models = ImageModels::default();
     image_models.insert(DEFAULT_MODEL, true);

@@ -32,14 +32,15 @@
 //! resume and fork, and `vibe/app_server/_legacy_session_runtime.py`'s
 //! admin-config fetch.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use crate::sync::lock;
 
 use vibe_core::config::LayeredConfig;
 use vibe_core::experiments::{
-    EvalCache, EvalResponse, ExperimentManager, ExperimentStateSink, PlanSources, RemoteEvalClient,
-    hydrate_experiments_from_session, initialize_experiments,
+    CredentialSource, EvalCache, EvalResponse, ExperimentManager, ExperimentStateSink, PlanSources,
+    RemoteEvalClient, hydrate_experiments_from_session, initialize_experiments,
 };
 use vibe_core::identity::{
     CachedIdentity, IdentityCache, IdentityFuture, IdentityResolver, IdentityResult,
@@ -151,10 +152,9 @@ impl SessionExperiments {
         let client = RemoteEvalClient::from_settings(&read("api_host"), &read("client_key"));
         let cache = EvalCache::new(config.harness_files().vibe_home());
         let mut manager = ExperimentManager::new(client);
-        let cached = apply_cached_variants(&config, &cache, credentials.as_ref());
-        let started_cached = cached.is_some();
-        if let Some(cached) = cached {
-            manager.hydrate(cached);
+        let started_cached =
+            apply_cached_variants(&config, &cache, credentials.as_ref(), &mut manager);
+        if started_cached {
             exposures.publish(manager.assignments());
         }
         let identity: Arc<dyn IdentityResolver> =
@@ -305,10 +305,7 @@ impl SessionExperiments {
     /// waits on this lookup for its model, which the configuration reports as
     /// `awaitingExperimentModel` until the lookup settles.
     pub fn start(self: &Arc<Self>, session_id: &str) {
-        let mut slot = self
-            .task
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut slot = lock(&self.task);
         if slot.is_some() {
             return;
         }
@@ -333,20 +330,16 @@ impl SessionExperiments {
         if let Some(telemetry) = self.telemetry.clone() {
             let session = session_id.to_owned();
             let runtime = Arc::clone(self);
-            *self
-                .admin
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) =
-                Some(handle.spawn(async move {
-                    let result = vibe_core::config::admin::refresh_admin_layer(
-                        &runtime.config,
-                        runtime.credentials.as_ref(),
-                    )
-                    .await;
-                    if let Some(record) = result.report() {
-                        telemetry.record(&record, Some(&session));
-                    }
-                }));
+            *lock(&self.admin) = Some(handle.spawn(async move {
+                let result = vibe_core::config::admin::refresh_admin_layer(
+                    &runtime.config,
+                    runtime.credentials.as_ref(),
+                )
+                .await;
+                if let Some(record) = result.report() {
+                    telemetry.record(&record, Some(&session));
+                }
+            }));
         }
     }
 
@@ -355,11 +348,7 @@ impl SessionExperiments {
     /// census then carries what the lookup resolved. Answers at once when no
     /// lookup was started, and when one was cancelled.
     pub async fn settle(&self) {
-        let started = self
-            .task
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .is_some();
+        let started = lock(&self.task).is_some();
         if !started {
             return;
         }
@@ -472,10 +461,7 @@ impl SessionExperiments {
         working_directory: &std::path::Path,
         trust: bool,
     ) {
-        *self
-            .followed
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(FollowedSession {
+        *lock(&self.followed) = Some(FollowedSession {
             session_id: session_id.to_owned(),
             working_directory: working_directory.to_path_buf(),
             trust,
@@ -504,10 +490,7 @@ impl SessionExperiments {
     /// manager, so a shutdown never waits on a request that is still going.
     pub async fn close(&self) {
         for slot in [&self.task, &self.admin] {
-            let task = slot
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .take();
+            let task = lock(slot).take();
             if let Some(task) = task {
                 task.abort();
                 // A cancelled task is the expected outcome here; the join is
@@ -548,40 +531,49 @@ impl SessionExperiments {
     /// prompt on its next turn, because the merged settings it was composed
     /// under no longer match.
     fn refresh(&self, manager: &ExperimentManager) {
-        let directories = self.config.harness_files().prompts_dirs();
-        self.config
-            .set_experiment_variants(&manager.config_variants(), &|prompt_id| {
-                vibe_core::system_prompt::load_system_prompt(prompt_id, &directories).is_ok()
-            });
-        drop(self.config.load());
+        sync_variants(&self.config, &manager.config_variants());
         self.exposures.publish(manager.assignments());
     }
 }
 
-/// Applies the rollout cached for this configuration's credential to its
-/// experiments layer and answers it, or answers nothing where none is cached.
+/// Takes the rollout cached for this configuration's credential into
+/// `manager` and applies it to the experiments layer, answering whether one
+/// was cached.
 ///
 /// A cached rollout that maps to no configuration variant leaves the layer as
 /// it was. Reference `_apply_cached_experiment_variants`, which every session
 /// configuration and every host read runs before the first render.
-pub fn apply_cached_variants(
+fn apply_cached_variants(
     config: &LayeredConfig,
     cache: &EvalCache,
-    credentials: &vibe_core::experiments::CredentialSource,
-) -> Option<EvalResponse> {
-    let effective = config.load().ok()?.effective;
-    let cached = cache.load(&effective, credentials)?;
-    let mut manager = ExperimentManager::new(RemoteEvalClient::with_url(None));
-    manager.hydrate(cached.clone());
+    credentials: &CredentialSource,
+    manager: &mut ExperimentManager,
+) -> bool {
+    let Some(cached) = config
+        .load()
+        .ok()
+        .and_then(|snapshot| cache.load(&snapshot.effective, credentials))
+    else {
+        return false;
+    };
+    manager.hydrate(cached);
     let variants = manager.config_variants();
     if !variants.is_empty() {
-        let directories = config.harness_files().prompts_dirs();
-        config.set_experiment_variants(&variants, &|prompt_id| {
-            vibe_core::system_prompt::load_system_prompt(prompt_id, &directories).is_ok()
-        });
-        drop(config.load());
+        sync_variants(config, &variants);
     }
-    Some(cached)
+    true
+}
+
+/// Writes `variants` into the experiments layer and loads once, which
+/// republishes the merged document to the caches that follow a load.
+/// Reference `GrowthbookLayer.set_variants` followed by the orchestrator's
+/// reload.
+fn sync_variants(config: &LayeredConfig, variants: &serde_json::Map<String, serde_json::Value>) {
+    let directories = config.harness_files().prompts_dirs();
+    config.set_experiment_variants(variants, &|prompt_id| {
+        vibe_core::system_prompt::load_system_prompt(prompt_id, &directories).is_ok()
+    });
+    drop(config.load());
 }
 
 /// A resolver for a process that cannot build an HTTP client.
@@ -632,10 +624,7 @@ impl vibe_core::telemetry::SessionReset for SessionExperiments {
     /// the caller's path.
     fn reset(&self, from_session_id: &str, to_session_id: &str) -> bool {
         let (working_directory, trust) = {
-            let mut followed = self
-                .followed
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let mut followed = lock(&self.followed);
             let Some(followed) = followed
                 .as_mut()
                 .filter(|followed| followed.session_id == from_session_id)

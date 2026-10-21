@@ -16,7 +16,7 @@ use vibe_core::whoami::{
     store_cached_whoami, whoami_cache_path,
 };
 
-use super::WorkspaceService;
+use super::{WorkspaceService, effective_text};
 use crate::vocabulary::{AccountActionKind, AccountPlanKind, AccountStatus};
 
 /// Chat plan names the reference sells as Pro.
@@ -325,18 +325,9 @@ impl WorkspaceService {
                 ..Dumps::DEFAULT
             },
         );
-        let console = self
-            .config
-            .load()
-            .ok()
-            .and_then(|snapshot| {
-                snapshot
-                    .effective
-                    .get("console_base_url")
-                    .and_then(TomlValue::as_str)
-                    .map(str::to_owned)
-            })
-            .unwrap_or_else(|| DEFAULT_CONSOLE_BASE_URL.to_owned());
+        let console = self.read_config(DEFAULT_CONSOLE_BASE_URL.to_owned(), |snapshot| {
+            effective_text(snapshot, "console_base_url", DEFAULT_CONSOLE_BASE_URL)
+        });
         let encoded = share_context
             .bytes()
             .map(|byte| {

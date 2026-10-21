@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use vibe_core::events::ModelMessage;
-use vibe_core::provider::config::ModelConfig;
+use vibe_core::provider::config::{ModelConfig, ThinkingLevel};
 use vibe_core::provider::{ProviderInput, RequestDialect, RequestLimits};
 
 /// What one utility call asks, and of which model.
@@ -31,7 +31,7 @@ impl UtilityCall<'_> {
     pub(crate) fn input(&self, prompt: String) -> ProviderInput {
         let mut model = self.model.clone();
         model.temperature = 0.0;
-        "off".clone_into(&mut model.thinking);
+        model.thinking = ThinkingLevel::Off;
         let mut metadata = self.metadata.clone();
         metadata.insert("call_type".to_owned(), self.call_type.to_owned());
         if let Some(message_id) = self.message_id {

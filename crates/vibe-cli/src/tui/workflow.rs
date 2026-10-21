@@ -1,9 +1,11 @@
 use crossterm::event::KeyEvent;
 use serde_json::{Value, json};
+use vibe_core::storage::short_session_id;
 
 mod config;
 mod keys;
 mod live_commands;
+mod log_level;
 mod mcp;
 mod overlay;
 
@@ -17,8 +19,7 @@ mod command_line_tests;
 
 use super::chat_input::ChatInputState;
 use super::controls::ControlState;
-use super::debug_console::{DebugConsole, PAGE_SIZE as DEBUG_PAGE_SIZE};
-use super::exit::shorten_session_id;
+use super::debug_console::{DebugConsole, LogPage, PAGE_SIZE as DEBUG_PAGE_SIZE};
 use super::interaction::{
     Overlay, OverlayKind, RemoteProjectAction, TeleportPushAction, ValueEdit,
 };
@@ -31,8 +32,8 @@ use super::session_picker::SessionDeleteState;
 use super::state::{EntryStatus, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
-    InteractiveRuntime, adopt_hydrated_session, call_runtime, hydration, metadata_session_id,
-    push_local_error, push_local_notice, unix_millis,
+    InteractiveRuntime, adopt_hydrated_session, call_runtime, hydration, map_value,
+    metadata_session_id, push_local_error, push_local_notice, unix_millis,
 };
 pub(in crate::tui) use config::apply_render_preferences;
 use config::{
@@ -412,18 +413,20 @@ pub(in crate::tui) fn refresh_debug_console(
         .filter(|overlay| overlay.kind == OverlayKind::Debug)
         .and_then(Overlay::selected_item)
         .map(|item| item.id.clone());
-    match runtime.service.public_call(
-        "diagnostics/logs/read",
-        json!({"offset": offset, "limit": DEBUG_PAGE_SIZE}),
-    ) {
-        Ok(result) => {
-            let page = map_value(result);
-            let Some(console) = state.debug_console.as_mut() else {
-                return;
-            };
-            console.absorb(&page, now_ms);
-            let overlay = console.overlay(selected.as_deref());
-            state.overlay = Some(overlay);
+    let page = runtime
+        .service
+        .public_call(
+            "diagnostics/logs/read",
+            json!({"offset": offset, "limit": DEBUG_PAGE_SIZE}),
+        )
+        .map_err(|error| error.to_string())
+        .and_then(|result| {
+            serde_json::from_value::<LogPage>(map_value(result)).map_err(|error| error.to_string())
+        });
+    match page {
+        Ok(page) => {
+            console.absorb(page, now_ms);
+            state.overlay = Some(console.overlay(selected.as_deref()));
         }
         Err(error) => {
             let console = console.clone();
@@ -521,10 +524,7 @@ fn delete_selected_session(
         Some(_) => {
             push_local_notice(
                 state,
-                &format!(
-                    "Deleted session `{}`.",
-                    session_id.chars().take(8).collect::<String>()
-                ),
+                &format!("Deleted session `{}`.", short_session_id(session_id)),
                 EntryStatus::Completed,
             );
         }
@@ -695,15 +695,11 @@ fn accept_rewind(
                 &format!(
                     "Rewound into a new session: {} continues from here, {} keeps the \
                      conversation as it was",
-                    shorten_session_id(&runtime.session_id),
-                    shorten_session_id(&previous_session_id)
+                    short_session_id(&runtime.session_id),
+                    short_session_id(&previous_session_id)
                 ),
                 EntryStatus::Completed,
             );
         }
     }
-}
-
-fn map_value(map: std::collections::BTreeMap<String, Value>) -> Value {
-    Value::Object(map.into_iter().collect())
 }

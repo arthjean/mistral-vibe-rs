@@ -7,10 +7,11 @@ use super::super::clipboard_images::ClipboardImageManager;
 use super::super::composer::apply_effects as apply_composer_effects;
 use super::super::controls::ControlState;
 use super::super::prompt::{PromptContext, start_prompt};
-use super::super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
-use super::super::{ActiveTurn, InteractiveRuntime, push_local_notice, start_teleport};
+use super::super::state::{EntryStatus, TuiState};
+use super::super::{
+    ActiveTurn, InteractiveRuntime, push_local_notice, push_local_warning, start_teleport,
+};
 use super::PostMountAction;
-use vibe_core::events::PublicNoticeLevel;
 
 pub(in crate::tui) enum MountedStartup {
     Pending(Option<PostMountAction>),
@@ -116,7 +117,7 @@ pub(in crate::tui) async fn complete_mounted_startup(
         }
         Some(PostMountAction::Teleport(prompt)) => {
             if let Some(runtime) = runtime.as_mut() {
-                start_teleport(prompt.as_deref(), working_directory, runtime, state);
+                start_teleport(prompt.as_deref(), runtime, state);
             } else {
                 state.push_diagnostic(
                     "Startup Teleport could not start because setup is incomplete",
@@ -134,14 +135,7 @@ pub(in crate::tui) async fn complete_mounted_startup(
 pub(in crate::tui) const UNIFIED_HARNESS_NOTICE: &str = "You are using our new unified harness. If you encounter issues, restart with --legacy-harness.";
 
 fn push_unified_harness_notice(state: &mut TuiState) {
-    state.append_local(TranscriptEntry {
-        id: String::new(),
-        revision: 1,
-        kind: TranscriptKind::Notice,
-        text: UNIFIED_HARNESS_NOTICE.to_owned(),
-        status: EntryStatus::Completed,
-        source: EntrySource::notice(PublicNoticeLevel::Warning),
-    });
+    push_local_warning(state, UNIFIED_HARNESS_NOTICE.to_owned());
 }
 
 fn record_initialization(
@@ -216,7 +210,9 @@ async fn dispatch_initial_prompt(
 
 #[cfg(test)]
 mod tests {
-    use super::super::super::state::TuiState;
+    use vibe_core::events::PublicNoticeLevel;
+
+    use super::super::super::state::{EntrySource, TuiState};
     use super::*;
 
     #[test]

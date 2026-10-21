@@ -17,16 +17,13 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use super::keyring::{
-    KEYRING_SERVICE, KeyringBackend, KeyringFailure, LEGACY_KEYRING_SERVICES, NativeKeyringBackend,
-    PRIOR_BUILD_KEYRING_SERVICE,
-};
+use super::keyring::{KeyringBackend, KeyringFailure, KeyringStore};
 use crate::mcp::{McpAuthConfig, McpServerConfig};
 
 mod callback;
@@ -127,16 +124,16 @@ impl McpOAuthError {
 /// The keyring entries of one credential, reference `KeyringTokenStorage`
 /// and the `_kr_*` helpers.
 ///
-/// Reads consult the current service only (`search_legacy_services=False`)
-/// and go through a cache, as `get_api_key_from_keyring` does; a write
+/// The entries go through the same store an API key does, as the `_kr_*`
+/// helpers go through `get_api_key_from_keyring`, `set_api_key_in_keyring`
+/// and `delete_api_key_from_keyring`: reads consult the current service only
+/// (`search_legacy_services=False`) and go through its cache, a write
 /// remembers what it wrote and a delete forgets it. A host without any
 /// credential store is `Headless`; the reference's
 /// `VIBE_TEST_DISABLE_KEYRING` hook makes every read empty and every write
 /// fail, which is a different thing.
 pub struct McpOAuthStore {
-    backend: Arc<dyn KeyringBackend>,
-    disabled: bool,
-    cache: Mutex<BTreeMap<String, Option<String>>>,
+    keyring: KeyringStore,
 }
 
 /// No credential store is reachable, reference `MCPOAuthHeadlessError`.
@@ -147,9 +144,7 @@ impl McpOAuthStore {
     #[must_use]
     pub fn new(backend: Arc<dyn KeyringBackend>, disabled: bool) -> Self {
         Self {
-            backend,
-            disabled,
-            cache: Mutex::new(BTreeMap::new()),
+            keyring: KeyringStore::shared(backend, disabled),
         }
     }
 
@@ -157,29 +152,15 @@ impl McpOAuthStore {
     /// test hook.
     #[must_use]
     pub fn native() -> Self {
-        Self::new(
-            Arc::new(NativeKeyringBackend::new()),
-            std::env::var(super::keyring::DISABLE_KEYRING_ENV_VAR).as_deref() == Ok("1"),
-        )
+        Self {
+            keyring: KeyringStore::native(),
+        }
     }
 
     /// Reference `_kr_get`.
     pub fn get(&self, account: &str) -> Result<Option<String>, Headless> {
-        if self.disabled {
-            return Ok(None);
-        }
-        if let Ok(cache) = self.cache.lock()
-            && let Some(cached) = cache.get(account)
-        {
-            return Ok(cached.clone());
-        }
-        match self.backend.get(KEYRING_SERVICE, account) {
-            Ok(value) => {
-                if let Ok(mut cache) = self.cache.lock() {
-                    return Ok(cache.entry(account.to_owned()).or_insert(value).clone());
-                }
-                Ok(value)
-            }
+        match self.keyring.read(account, false) {
+            Ok(value) => Ok(value),
             Err(KeyringFailure::NoBackend) => Err(Headless),
             // Reference `get_api_key_from_keyring` answers a store failure as
             // an absent entry, and caches nothing.
@@ -195,49 +176,14 @@ impl McpOAuthStore {
 
     /// Reference `_kr_set`.
     pub fn set(&self, account: &str, value: &str) -> Result<(), KeyringFailure> {
-        if self.disabled {
-            self.forget(account);
-            return Err(KeyringFailure::Backend(
-                "the keyring is disabled for this run".to_owned(),
-            ));
-        }
-        if let Err(failure) = self.backend.set(KEYRING_SERVICE, account, value) {
-            self.forget(account);
-            return Err(failure);
-        }
-        for legacy in LEGACY_KEYRING_SERVICES {
-            let _ = self.backend.delete(legacy, account);
-        }
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.insert(account.to_owned(), Some(value.to_owned()));
-        }
-        Ok(())
+        self.keyring.set_api_key(account, value)
     }
 
     /// Reference `_kr_delete`: an absent entry is not a failure.
     pub fn delete(&self, account: &str) -> Result<(), KeyringFailure> {
-        self.forget(account);
-        if self.disabled {
-            return Ok(());
-        }
-        let mut failure = None;
-        for service in std::iter::once(KEYRING_SERVICE)
-            .chain(LEGACY_KEYRING_SERVICES.iter().copied())
-            .chain(std::iter::once(PRIOR_BUILD_KEYRING_SERVICE))
-        {
-            match self.backend.delete(service, account) {
-                Ok(()) | Err(KeyringFailure::NoEntry) => {}
-                Err(error) => {
-                    failure.get_or_insert(error);
-                }
-            }
-        }
-        failure.map_or(Ok(()), Err)
-    }
-
-    fn forget(&self, account: &str) {
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.remove(account);
+        match self.keyring.delete_api_key(account) {
+            Err(KeyringFailure::NoEntry) => Ok(()),
+            outcome => outcome,
         }
     }
 
@@ -800,7 +746,7 @@ impl OAuthClientConfig {
         let scope = (!scope.is_empty()).then_some(scope);
         let client_metadata_url = oauth.client_metadata_url.as_ref().map(ToString::to_string);
         if let Some(document) = &client_metadata_url
-            && !flow::is_valid_client_metadata_url(document)
+            && !flow::discovery::is_valid_client_metadata_url(document)
         {
             return Err(McpOAuthError::Config(format!(
                 "the client metadata URL `{document}` must be an HTTPS URL with a path"
@@ -811,7 +757,7 @@ impl OAuthClientConfig {
         });
         Ok(Self {
             alias: server.alias.clone(),
-            server_url: declared_url(server),
+            server_url: server.declared_url(),
             redirect_port: oauth.redirect_port,
             redirect_uri,
             scope,
@@ -819,15 +765,6 @@ impl OAuthClientConfig {
             fallback_client_info,
         })
     }
-}
-
-fn declared_url(server: &McpServerConfig) -> String {
-    server
-        .declared
-        .as_ref()
-        .and_then(|declared| declared.url.clone())
-        .or_else(|| crate::mcp::transport_url(&server.transport).map(ToString::to_string))
-        .unwrap_or_default()
 }
 
 /// The HTTP client the flow sends through, reference `VibeAsyncHTTPClient`

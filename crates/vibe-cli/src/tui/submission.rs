@@ -240,7 +240,7 @@ pub(super) async fn execute(
         }
         Route::Teleport(target) => {
             if let Some(runtime) = context.runtime.as_mut() {
-                handle_teleport_command(Some(&target), working_directory, runtime, context.state);
+                handle_teleport_command(Some(&target), runtime, context.state);
             }
         }
         Route::Shell(_) => {

@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Unified Harness approvals decide a shell or `process.*` call across every
+  available shell, as the reference does: the first shell that refuses wins,
+  and one prompt carries the scopes every shell still needs. Sessions whose
+  only shell is PowerShell or Git Bash no longer refuse those calls by policy.
+  Approving a command that no shell rule reads now records that exact command
+  instead of allowing every command of the shell for the session. A write to a
+  background process is asked under its process id and remembered for the
+  session, and a `process.start` that sets `env` or a `cwd` outside the shell's
+  directory is asked about on its own and remembered nowhere. A permanent
+  approval writes only the patterns the allowlist reads back; blank patterns
+  and patterns outside the tool's scopes last for the session.
+
+- Approval prompts of headless and in-process sessions are titled
+  `Allow <tool>?` instead of `Approve <tool>?`, and question prompts
+  `User input required`, as the reference titles them; the TUI no longer shows
+  the questions twice.
+
+- The app server validates `session/list`, `session/read` and `session/fork`
+  parameters against the reference schema: a `limit` above 500 is refused,
+  `includeArchived` and a `history` page are accepted, and `agentConfig` may be
+  `null`. In-process sessions validate the same way as stdio ones.
+
+- After a failed turn the TUI keeps its `/retry` offer and the end-of-turn
+  notifications, which the transcript resync used to drop, and the terminal
+  title is rewritten only when it changes. Under SSH, copying writes the OSC 52
+  sequence and runs no local clipboard command, as the reference does.
+
+- Caches derived from credentials, the skills ledger and the session
+  `record.json` are written owner-only (`0600`) and synced to disk.
+
+- Compaction prompt files are read like system prompt files: a file that is
+  not UTF-8 is decoded instead of skipped, and surrounding whitespace is
+  trimmed as Python trims it.
+
 - Onboarding saves the API key under the variable the provider names. It used
   to save it, typed or from a browser sign-in, under `[redacted]`, so the next
   launch found no key and the session never started; run setup again to store

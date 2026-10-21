@@ -12,10 +12,11 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use vibe_core::atomic_file::{FileMode, write_atomically};
 
 use super::{
     ProjectsDispatch, ProjectsNotification, ProjectsService, ProjectsServiceError, notification,
-    optional_u64, persist_json_atomically, required_string,
+    optional_u64, required_string,
 };
 use crate::host::{self, now_seconds};
 
@@ -93,17 +94,34 @@ pub(super) fn parse_interval(value: &str) -> Result<u64, ProjectsServiceError> {
     })
 }
 
+/// The loops `path` holds, an absent file holding none. A loop that was
+/// running when its process stopped is scheduled again: nothing runs it now.
 pub(super) fn load_loops(
     path: &Path,
 ) -> Result<BTreeMap<String, ScheduledLoop>, ProjectsServiceError> {
-    match fs::read(path) {
-        Ok(contents) => serde_json::from_slice(&contents).map_err(ProjectsServiceError::Json),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-        Err(error) => Err(ProjectsServiceError::Persistence(error)),
+    let mut loops: BTreeMap<String, ScheduledLoop> = match fs::read(path) {
+        Ok(contents) => serde_json::from_slice(&contents).map_err(ProjectsServiceError::Json)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => BTreeMap::new(),
+        Err(error) => return Err(ProjectsServiceError::Persistence(error)),
+    };
+    for scheduled in loops.values_mut() {
+        if scheduled.state == LoopState::Running {
+            scheduled.state = LoopState::Scheduled;
+        }
     }
+    Ok(loops)
 }
 
-pub(super) fn next_loop_sequence(loops: &BTreeMap<String, ScheduledLoop>) -> u64 {
+/// `loops` as pretty JSON, replacing `path` atomically and owner-only.
+fn write_loop_store(path: &Path, loops: &BTreeMap<String, ScheduledLoop>) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let contents = serde_json::to_vec_pretty(loops).map_err(std::io::Error::other)?;
+    write_atomically(path, "state", &contents, FileMode::Private).map_err(|error| error.source)
+}
+
+fn next_loop_sequence(loops: &BTreeMap<String, ScheduledLoop>) -> u64 {
     loops
         .keys()
         .filter_map(|id| {
@@ -122,19 +140,24 @@ pub(super) fn default_loop_store() -> PathBuf {
 }
 
 impl ProjectsService {
-    pub fn with_loop_store(mut self, path: PathBuf) -> Result<Self, ProjectsServiceError> {
-        let mut loops = load_loops(&path)?;
-        for scheduled in loops.values_mut() {
-            if scheduled.state == LoopState::Running {
-                scheduled.state = LoopState::Scheduled;
-            }
+    pub fn with_loop_store(self, path: PathBuf) -> Result<Self, ProjectsServiceError> {
+        Ok(Self::over_loops(load_loops(&path)?, path, None))
+    }
+
+    /// The service over `loops`, which `loop_store` holds. `loop_store_error`
+    /// is why the store could not be read, which every loop call then
+    /// answers with.
+    pub(super) fn over_loops(
+        loops: BTreeMap<String, ScheduledLoop>,
+        loop_store: PathBuf,
+        loop_store_error: Option<String>,
+    ) -> Self {
+        Self {
+            next_loop: Arc::new(AtomicU64::new(next_loop_sequence(&loops))),
+            loops: Arc::new(Mutex::new(loops)),
+            loop_store,
+            loop_store_error,
         }
-        let next = next_loop_sequence(&loops);
-        self.loops = Arc::new(Mutex::new(loops));
-        self.loop_store = path;
-        self.loop_store_error = None;
-        self.next_loop = Arc::new(AtomicU64::new(next));
-        Ok(self)
     }
 
     pub fn fire_loop(
@@ -169,62 +192,57 @@ impl ProjectsService {
                 "scheduled loop cannot fire while its session has active work".to_owned(),
             ));
         }
-        let mut loops = self.lock_loops()?;
-        let before = loops.clone();
-        let scheduled = loops.get_mut(loop_id).ok_or_else(|| {
-            ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
-        })?;
-        if session_id.is_some_and(|session_id| scheduled.session_id != session_id) {
-            return Err(ProjectsServiceError::NotFound(format!(
-                "loop `{loop_id}` is not owned by session `{}`",
-                session_id.unwrap_or_default()
-            )));
-        }
-        if scheduled.state == LoopState::Running {
-            return Err(ProjectsServiceError::Conflict(format!(
-                "loop `{loop_id}` is already running"
-            )));
-        }
-        if now_seconds < scheduled.next_fire_at {
-            return Err(ProjectsServiceError::Conflict(format!(
-                "loop `{loop_id}` is not due"
-            )));
-        }
-        scheduled.state = LoopState::Running;
-        scheduled.next_fire_at = now_seconds.saturating_add(scheduled.interval_seconds);
-        let fire = LoopFire {
-            loop_id: scheduled.id.clone(),
-            session_id: scheduled.session_id.clone(),
-            prompt: scheduled.prompt.clone(),
-            notice: notification(
-                "history/entryAdded",
-                [(
-                    "entry",
-                    json!({
-                        "id": format!("scheduled-loop:{loop_id}"),
-                        "sessionId": scheduled.session_id,
-                        "turnId": Value::Null,
-                        "inputEntryId": Value::Null,
-                        "createdAt": now_seconds.saturating_mul(1_000),
-                        "updatedAt": now_seconds.saturating_mul(1_000),
-                        "generationStatus": "completed",
-                        "relatedEntryId": Value::Null,
-                        "type": "notice",
-                        "level": "info",
-                        "message": format!("Loop `{loop_id}` fired"),
-                        "detail": {
-                            "kind": "scheduled_loop_fired",
-                            "loopId": loop_id,
-                        },
-                    }),
-                )],
-            ),
-        };
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = before;
-            return Err(error);
-        }
-        Ok(fire)
+        self.mutate_loops(|loops| {
+            let scheduled = loops.get_mut(loop_id).ok_or_else(|| {
+                ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
+            })?;
+            if session_id.is_some_and(|session_id| scheduled.session_id != session_id) {
+                return Err(ProjectsServiceError::NotFound(format!(
+                    "loop `{loop_id}` is not owned by session `{}`",
+                    session_id.unwrap_or_default()
+                )));
+            }
+            if scheduled.state == LoopState::Running {
+                return Err(ProjectsServiceError::Conflict(format!(
+                    "loop `{loop_id}` is already running"
+                )));
+            }
+            if now_seconds < scheduled.next_fire_at {
+                return Err(ProjectsServiceError::Conflict(format!(
+                    "loop `{loop_id}` is not due"
+                )));
+            }
+            scheduled.state = LoopState::Running;
+            scheduled.next_fire_at = now_seconds.saturating_add(scheduled.interval_seconds);
+            Ok(LoopFire {
+                loop_id: scheduled.id.clone(),
+                session_id: scheduled.session_id.clone(),
+                prompt: scheduled.prompt.clone(),
+                notice: notification(
+                    "history/entryAdded",
+                    [(
+                        "entry",
+                        json!({
+                            "id": format!("scheduled-loop:{loop_id}"),
+                            "sessionId": scheduled.session_id,
+                            "turnId": Value::Null,
+                            "inputEntryId": Value::Null,
+                            "createdAt": now_seconds.saturating_mul(1_000),
+                            "updatedAt": now_seconds.saturating_mul(1_000),
+                            "generationStatus": "completed",
+                            "relatedEntryId": Value::Null,
+                            "type": "notice",
+                            "level": "info",
+                            "message": format!("Loop `{loop_id}` fired"),
+                            "detail": {
+                                "kind": "scheduled_loop_fired",
+                                "loopId": loop_id,
+                            },
+                        }),
+                    )],
+                ),
+            })
+        })
     }
 
     pub fn next_due_loop_id(
@@ -251,22 +269,18 @@ impl ProjectsService {
         _completed_at_seconds: u64,
     ) -> Result<(), ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
-        let mut loops = self.lock_loops()?;
-        let before = loops.clone();
-        let scheduled = loops.get_mut(loop_id).ok_or_else(|| {
-            ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
-        })?;
-        if scheduled.state != LoopState::Running {
-            return Err(ProjectsServiceError::Conflict(format!(
-                "loop `{loop_id}` is not running"
-            )));
-        }
-        scheduled.state = LoopState::Scheduled;
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = before;
-            return Err(error);
-        }
-        Ok(())
+        self.mutate_loops(|loops| {
+            let scheduled = loops.get_mut(loop_id).ok_or_else(|| {
+                ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
+            })?;
+            if scheduled.state != LoopState::Running {
+                return Err(ProjectsServiceError::Conflict(format!(
+                    "loop `{loop_id}` is not running"
+                )));
+            }
+            scheduled.state = LoopState::Scheduled;
+            Ok(())
+        })
     }
 
     pub(super) fn loop_create(
@@ -303,35 +317,32 @@ impl ProjectsService {
             ));
         }
         let now_seconds = optional_u64(params, "nowSeconds")?.unwrap_or_else(now_seconds);
-        let mut loops = self.lock_loops()?;
-        if loops
-            .values()
-            .filter(|scheduled| scheduled.session_id == session_id)
-            .count()
-            >= MAX_LOOPS_PER_SESSION
-        {
-            return Err(ProjectsServiceError::Loop(format!(
-                "session `{session_id}` already owns {MAX_LOOPS_PER_SESSION} scheduled loops"
-            )));
-        }
-        let before = loops.clone();
-        let id = format!(
-            "{:08x}",
-            self.next_loop.fetch_add(1, Ordering::Relaxed) & u64::from(u32::MAX)
-        );
-        let scheduled = ScheduledLoop {
-            id: id.clone(),
-            session_id: session_id.to_owned(),
-            prompt: prompt.to_owned(),
-            interval_seconds,
-            next_fire_at: now_seconds.saturating_add(interval_seconds),
-            state: LoopState::Scheduled,
-        };
-        loops.insert(id, scheduled.clone());
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = before;
-            return Err(error);
-        }
+        let scheduled = self.mutate_loops(|loops| {
+            if loops
+                .values()
+                .filter(|scheduled| scheduled.session_id == session_id)
+                .count()
+                >= MAX_LOOPS_PER_SESSION
+            {
+                return Err(ProjectsServiceError::Loop(format!(
+                    "session `{session_id}` already owns {MAX_LOOPS_PER_SESSION} scheduled loops"
+                )));
+            }
+            let id = format!(
+                "{:08x}",
+                self.next_loop.fetch_add(1, Ordering::Relaxed) & u64::from(u32::MAX)
+            );
+            let scheduled = ScheduledLoop {
+                id: id.clone(),
+                session_id: session_id.to_owned(),
+                prompt: prompt.to_owned(),
+                interval_seconds,
+                next_fire_at: now_seconds.saturating_add(interval_seconds),
+                state: LoopState::Scheduled,
+            };
+            loops.insert(id, scheduled.clone());
+            Ok(scheduled)
+        })?;
         Ok(ProjectsDispatch::result([(
             "loop",
             public_loop_value(&scheduled),
@@ -362,17 +373,11 @@ impl ProjectsService {
     ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
-        let mut loops = self.lock_loops()?;
-        let before = loops.clone();
-        let removed = loops
-            .values()
-            .filter(|scheduled| scheduled.session_id == session_id)
-            .count();
-        loops.retain(|_, scheduled| scheduled.session_id != session_id);
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = before;
-            return Err(error);
-        }
+        let removed = self.mutate_loops(|loops| {
+            let held = loops.len();
+            loops.retain(|_, scheduled| scheduled.session_id != session_id);
+            Ok(held - loops.len())
+        })?;
         Ok(ProjectsDispatch::result([("count", json!(removed))]))
     }
 
@@ -383,32 +388,33 @@ impl ProjectsService {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
         let loop_id = required_string(params, "loopId")?;
-        let mut loops = self.lock_loops()?;
-        let before = loops.clone();
-        // Reference `LoopManager.delete` sees only the session's own loops.
-        let scheduled = loops
-            .get(loop_id)
-            .filter(|scheduled| scheduled.session_id == session_id)
-            .ok_or_else(|| ProjectsServiceError::Loop(format!("loop `{loop_id}` was not found")))?;
-        if scheduled.state == LoopState::Running {
-            return Err(ProjectsServiceError::Conflict(format!(
-                "loop `{loop_id}` cannot be deleted while running"
-            )));
-        }
-        let removed = loops
-            .remove(loop_id)
-            .ok_or_else(|| ProjectsServiceError::NotFound(loop_id.to_owned()))?;
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = before;
-            return Err(error);
-        }
+        let removed = self.mutate_loops(|loops| {
+            // Reference `LoopManager.delete` sees only the session's own loops.
+            let scheduled = loops
+                .get(loop_id)
+                .filter(|scheduled| scheduled.session_id == session_id)
+                .ok_or_else(|| {
+                    ProjectsServiceError::Loop(format!("loop `{loop_id}` was not found"))
+                })?;
+            if scheduled.state == LoopState::Running {
+                return Err(ProjectsServiceError::Conflict(format!(
+                    "loop `{loop_id}` cannot be deleted while running"
+                )));
+            }
+            loops
+                .remove(loop_id)
+                .ok_or_else(|| ProjectsServiceError::NotFound(loop_id.to_owned()))
+        })?;
         Ok(ProjectsDispatch::result([(
             "loop",
             public_loop_value(&removed),
         )]))
     }
 
-    pub(super) fn lock_loops(
+    /// The loops, refused once a holder panicked: a panic inside
+    /// [`Self::mutate_loops`] skips its rollback, so a poisoned map may hold a
+    /// change the store never received.
+    fn lock_loops(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, ScheduledLoop>>, ProjectsServiceError>
     {
@@ -417,11 +423,23 @@ impl ProjectsService {
             .map_err(|_| ProjectsServiceError::StatePoisoned)
     }
 
-    pub(super) fn persist_loops(
+    /// Applies `change` to the loops and writes the result to the store, as
+    /// one step: when either fails, the loops are what they were before.
+    pub(super) fn mutate_loops<T>(
         &self,
-        loops: &BTreeMap<String, ScheduledLoop>,
-    ) -> Result<(), ProjectsServiceError> {
-        persist_json_atomically(&self.loop_store, loops).map_err(ProjectsServiceError::Persistence)
+        change: impl FnOnce(&mut BTreeMap<String, ScheduledLoop>) -> Result<T, ProjectsServiceError>,
+    ) -> Result<T, ProjectsServiceError> {
+        let mut loops = self.lock_loops()?;
+        let before = loops.clone();
+        let outcome = change(&mut loops).and_then(|value| {
+            write_loop_store(&self.loop_store, &loops)
+                .map_err(ProjectsServiceError::Persistence)?;
+            Ok(value)
+        });
+        if outcome.is_err() {
+            *loops = before;
+        }
+        outcome
     }
 
     pub(super) fn ensure_loop_store_ready(&self) -> Result<(), ProjectsServiceError> {

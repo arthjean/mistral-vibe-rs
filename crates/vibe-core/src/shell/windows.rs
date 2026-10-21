@@ -15,11 +15,12 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use super::guardrails::{GuardrailDialect, expand_guardrail_commands, guardrail_requirements};
 use super::lexer::{WordSplit, split_tokens};
+use super::operands::{escaping_directory, escaping_path, render_policy_path, retain_ungranted};
 use super::{
-    GuardrailDialect, ShellAnalysis, ShellCommandLists, ShellFlavor, ShellPolicyContext,
-    command_node, command_requirements, deferred, escaping_directory, escaping_path,
-    guardrail_requirements, refusal, retain_ungranted,
+    ShellAnalysis, ShellCommandLists, ShellFlavor, ShellPolicyContext, command_node,
+    command_requirements, deferred, refusal,
 };
 use crate::policy::{PermissionMode, PermissionRequirement, PermissionScope};
 
@@ -656,7 +657,7 @@ fn path_reach(
     context: &ShellPolicyContext,
     environment: &[(String, String)],
 ) -> (Option<String>, bool) {
-    let cwd = super::render_policy_path(&context.working_directory);
+    let cwd = render_policy_path(&context.working_directory);
     let (mut value, unresolved) = expand_powershell_path(token, &cwd, environment);
     let mut unsupported_provider = false;
     if let Some(captures) = PROVIDER_PATH
@@ -863,7 +864,7 @@ pub(super) fn analyze_powershell(
 /// Whether a PowerShell session may be a pager: reference
 /// `BashStdin.resolve_permission` for the Windows families.
 pub(super) fn runs_pager(command: &str, pagers: &[&str]) -> bool {
-    super::expand_guardrail_commands(&split_command_parts(command), WordSplit::LiteralBackslash)
+    expand_guardrail_commands(&split_command_parts(command), WordSplit::LiteralBackslash)
         .iter()
         .any(|part| {
             let tokens = split_command_tokens(part);

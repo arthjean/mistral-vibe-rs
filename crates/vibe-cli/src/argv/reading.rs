@@ -22,7 +22,8 @@
 use std::ffi::OsString;
 
 use clap::{Arg, ArgAction, Command};
-use vibe_core::pycompat;
+
+use crate::argparse::Refusal;
 
 /// How many values an option takes, in argparse's three shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -76,8 +77,7 @@ enum Token {
 #[derive(Debug)]
 pub(crate) struct Reading {
     pub(crate) argv: Vec<OsString>,
-    /// argparse's message, without the `prog: error:` prefix.
-    pub(crate) refusal: Option<String>,
+    pub(crate) refusal: Option<Refusal>,
 }
 
 /// Reads `argv`, program name first, against `command`'s options.
@@ -100,11 +100,10 @@ pub(crate) fn read(command: &Command, argv: Vec<OsString>, exact_only: &[&str]) 
             Token::Separator => {}
             Token::Cluster | Token::Unknown => rewritten.push(token.clone()),
             Token::Ambiguous(matches) => {
-                refusal = Some(format!(
-                    "ambiguous option: {} could match {}",
-                    token.to_string_lossy(),
-                    matches.join(", ")
-                ));
+                refusal = Some(Refusal::Ambiguous {
+                    token: token.to_string_lossy().into_owned(),
+                    matches: matches.clone(),
+                });
                 break;
             }
             Token::Option {
@@ -116,11 +115,10 @@ pub(crate) fn read(command: &Command, argv: Vec<OsString>, exact_only: &[&str]) 
                     if option.arity == Arity::Zero {
                         // `_parse_known_args.consume_optional`: a flag given
                         // `=value` is refused rather than stripped.
-                        refusal = Some(format!(
-                            "argument {}: ignored explicit argument {}",
-                            option.spellings.join("/"),
-                            pycompat::repr_str(explicit)
-                        ));
+                        refusal = Some(Refusal::IgnoredExplicit {
+                            argument: option.spellings.join("/"),
+                            value: explicit.clone(),
+                        });
                         break;
                     }
                     rewritten.push(OsString::from(format!("{}={explicit}", option.canonical)));

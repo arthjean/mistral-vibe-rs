@@ -76,12 +76,7 @@ async fn provider_image_input(attachment: &Value) -> Result<ImageInput, DriverEr
     let data = if let Some(source) = source {
         match source.get("kind").and_then(Value::as_str) {
             Some("file") => encode_file_image(source, media_type).await?,
-            Some("inline") => validated_inline_image(
-                media_type,
-                source.get("data").and_then(Value::as_str).ok_or_else(|| {
-                    DriverError::ImageAttachment("missing inline image data".to_owned())
-                })?,
-            )?,
+            Some("inline") => validated_inline_image(media_type, inline_data(source)?)?,
             Some(kind) => {
                 return Err(DriverError::ImageAttachment(format!(
                     "unsupported image source kind `{kind}`"
@@ -186,31 +181,41 @@ async fn snapshot_inline_image(
         }
     };
     let bytes = BASE64_STANDARD
-        .decode(
-            source
-                .get("data")
-                .and_then(Value::as_str)
-                .unwrap_or_default(),
-        )
+        .decode(inline_data(source)?)
         .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
     validate_image_size(bytes.len())
         .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
-    let digest = vibe_core::text::hex_encode(&Sha1::digest(&bytes));
-    let directory = session_dir.join("attachments");
-    let path = directory.join(format!("{digest}{extension}"));
-    let io_error = |error: std::io::Error| DriverError::ImageAttachment(error.to_string());
-    tokio::fs::create_dir_all(&directory)
-        .await
-        .map_err(io_error)?;
-    if !tokio::fs::try_exists(&path).await.map_err(io_error)? {
-        tokio::fs::write(&path, &bytes).await.map_err(io_error)?;
-    }
-    let path =
-        vibe_core::platform::simplified(&tokio::fs::canonicalize(&path).await.map_err(io_error)?)
-            .to_path_buf();
+    let session_dir = session_dir.to_path_buf();
+    let source =
+        tokio::task::spawn_blocking(move || persisted_source(&bytes, extension, &session_dir))
+            .await
+            .map_err(|error| DriverError::ImageAttachment(error.to_string()))?
+            .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
     let mut snapshot = attachment.clone();
-    snapshot["source"] = json!({"kind": "file", "path": path.to_string_lossy()});
+    snapshot["source"] = source;
     Ok(Some(snapshot))
+}
+
+/// Reference `_persist`: the bytes written once under the session's
+/// `attachments` directory, named by their SHA-1 and `extension`, as the file
+/// source that points there.
+fn persisted_source(bytes: &[u8], extension: &str, session_dir: &Path) -> std::io::Result<Value> {
+    let directory = session_dir.join("attachments");
+    std::fs::create_dir_all(&directory)?;
+    let digest = vibe_core::text::hex_encode(&Sha1::digest(bytes));
+    let path = directory.join(format!("{digest}{extension}"));
+    if !path.try_exists()? {
+        std::fs::write(&path, bytes)?;
+    }
+    let path = vibe_core::platform::canonicalize(&path)?;
+    Ok(json!({"kind": "file", "path": path.to_string_lossy()}))
+}
+
+fn inline_data(source: &Value) -> Result<&str, DriverError> {
+    source
+        .get("data")
+        .and_then(Value::as_str)
+        .ok_or_else(|| DriverError::ImageAttachment("missing inline image data".to_owned()))
 }
 
 fn attachment_media_type(attachment: &Value) -> Result<&str, DriverError> {
@@ -260,32 +265,21 @@ pub(crate) fn snapshot_image_file(
     session_dir: Option<&Path>,
 ) -> Result<Value, String> {
     let image = read_image(path).map_err(|error| error.to_string())?;
-    validate_image_size(image.bytes.len()).map_err(|error| error.to_string())?;
-    let mime_type = image.format.media_type();
-    let Some(session_dir) = session_dir else {
-        return Ok(json!({
-            "source": {"kind": "inline", "data": BASE64_STANDARD.encode(&image.bytes)},
-            "alias": alias,
-            "mimeType": mime_type,
-        }));
+    let source = match session_dir {
+        None => json!({"kind": "inline", "data": BASE64_STANDARD.encode(&image.bytes)}),
+        Some(session_dir) => {
+            let extension = path
+                .extension()
+                .map(|extension| format!(".{}", extension.to_string_lossy().to_lowercase()))
+                .unwrap_or_default();
+            persisted_source(&image.bytes, &extension, session_dir)
+                .map_err(|error| error.to_string())?
+        }
     };
-    let extension = path
-        .extension()
-        .map(|extension| format!(".{}", extension.to_string_lossy().to_lowercase()))
-        .unwrap_or_default();
-    let digest = vibe_core::text::hex_encode(&Sha1::digest(&image.bytes));
-    let directory = session_dir.join("attachments");
-    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-    let destination = directory.join(format!("{digest}{extension}"));
-    if !destination.exists() {
-        std::fs::write(&destination, &image.bytes).map_err(|error| error.to_string())?;
-    }
-    let destination =
-        vibe_core::platform::canonicalize(&destination).map_err(|error| error.to_string())?;
     Ok(json!({
-        "source": {"kind": "file", "path": destination.to_string_lossy()},
+        "source": source,
         "alias": alias,
-        "mimeType": mime_type,
+        "mimeType": image.format.media_type(),
     }))
 }
 

@@ -346,8 +346,8 @@ impl LayeredConfig {
         let active = snapshot.mcp_servers(&self.paths.working_directory)?;
         let key = mcp::mcp_server_url_key(&normalized_url);
         if let Some(existing) = active.iter().find(|server| {
-            mcp::mcp_transport_url(&server.transport)
-                .is_some_and(|url| mcp::mcp_server_url_key(&mcp::declared_url(server, url)) == key)
+            crate::mcp::transport_url(&server.transport).is_some()
+                && mcp::mcp_server_url_key(&server.declared_url()) == key
         }) {
             if !matches!(existing.auth, McpAuthConfig::Oauth(_)) {
                 return Err(ConfigError::InvalidMcp(format!(
@@ -365,9 +365,7 @@ impl LayeredConfig {
                     existing.alias
                 )));
             }
-            let url = mcp::mcp_transport_url(&existing.transport)
-                .map(|url| mcp::declared_url(existing, url))
-                .unwrap_or_default();
+            let url = existing.declared_url();
             return Ok(mcp::McpOAuthAdded {
                 name: existing.alias.clone(),
                 url,
@@ -601,7 +599,7 @@ impl LayeredConfig {
         })?;
         let server = mcp::decode_mcp_server(entry, working_directory).ok()?;
         matches!(server.auth, McpAuthConfig::Oauth(_))
-            .then(|| mcp::mcp_transport_url(&server.transport).cloned())
+            .then(|| crate::mcp::transport_url(&server.transport).cloned())
             .flatten()
     }
 

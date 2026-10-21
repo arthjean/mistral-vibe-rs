@@ -65,18 +65,14 @@ pub(super) async fn handle_effects(
         return;
     };
     let _ = input.apply(InputEvent::Feedback { active: false });
-    if action == FeedbackAction::Dismiss {
-        return;
-    }
-
-    let Some(runtime) = runtime.as_mut() else {
-        state.push_diagnostic("Feedback could not be saved: interactive runtime is unavailable");
-        return;
-    };
     let persistence_action = match action {
         FeedbackAction::Rating(_) => "given",
         FeedbackAction::Snooze => "snoozed",
         FeedbackAction::Dismiss => return,
+    };
+    let Some(runtime) = runtime.as_mut() else {
+        state.push_diagnostic("Feedback could not be saved: interactive runtime is unavailable");
+        return;
     };
     if let Err(error) = runtime
         .service

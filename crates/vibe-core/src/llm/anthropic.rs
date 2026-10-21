@@ -19,9 +19,10 @@ use serde_json::{Map, Value, json};
 use super::adapter::{PreparedRequest, RequestParts, count_field};
 use super::error::{LocalFailure, LocalKind};
 use super::types::{Chunk, Message, Role, StopInfo, ToolCall, ToolChoice, Usage};
+use crate::provider::config::ThinkingLevel;
 use crate::pycompat::{self, Dumps};
 
-const ENDPOINT: &str = "/v1/messages";
+pub(super) const ENDPOINT: &str = "/v1/messages";
 const API_VERSION: &str = "2023-06-01";
 const BETA_FEATURES: &str = "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14,prompt-caching-2024-07-31,context-1m-2025-08-07";
 const ADAPTIVE_MAX_TOKENS: u64 = 32_768;
@@ -205,17 +206,17 @@ fn apply_thinking(
     payload: &mut Map<String, Value>,
     messages: &[Map<String, Value>],
     max_tokens: Option<u64>,
-    thinking: &str,
+    thinking: ThinkingLevel,
 ) {
-    if thinking == "off" && !history_has_reasoning(messages) {
+    if thinking == ThinkingLevel::Off && !history_has_reasoning(messages) {
         payload.insert(
             "max_tokens".to_owned(),
             json!(max_tokens.unwrap_or(DEFAULT_MAX_TOKENS)),
         );
         return;
     }
-    let effort = if thinking == "off" {
-        "medium"
+    let effort = if thinking == ThinkingLevel::Off {
+        ThinkingLevel::Medium
     } else {
         thinking
     };
@@ -223,7 +224,10 @@ fn apply_thinking(
         "thinking".to_owned(),
         json!({"type": "adaptive", "display": "summarized"}),
     );
-    payload.insert("output_config".to_owned(), json!({"effort": effort}));
+    payload.insert(
+        "output_config".to_owned(),
+        json!({"effort": effort.as_str()}),
+    );
     payload.insert(
         "max_tokens".to_owned(),
         json!(max_tokens.unwrap_or(ADAPTIVE_MAX_TOKENS)),

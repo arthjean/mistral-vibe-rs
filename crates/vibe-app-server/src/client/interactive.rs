@@ -1,36 +1,34 @@
 //! The tools and callbacks a session runs when a person is at the other end.
 //!
 //! An interactive client answers three things the model can ask for: an
-//! approval, a set of questions, and a verdict on a finished plan. Each one
-//! leaves the engine as a callback request, waits for the client's answer, and
-//! comes back as a tool result. The request and answer shapes, the validation
-//! that a body is one of them, and the two tool specifications that publish
-//! them all live here.
+//! approval, a set of questions ([`questions`]), and a verdict on a finished
+//! plan ([`plan_review`]). Each one leaves the engine as a request on the
+//! session's [`CallbackChannel`], is raised as a callback by the client's
+//! [`queue::CallbackQueue`], and comes back as a tool result or a policy
+//! decision. The request and answer shapes and the approval agents live here.
 
-use std::collections::VecDeque;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PathGrantScope, PolicyError,
     available_path_scopes,
 };
-use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
-    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
-    reference_text,
+    OwnedToolHandlerFuture, ToolError, ToolHandler, ToolInvocation, ToolOutputSink, ToolRegistry,
 };
 
-use super::{
-    ClientError, MAX_INTERACTIVE_CALLBACKS, MAX_INTERACTIVE_OPTIONS_PER_QUESTION,
-    MAX_INTERACTIVE_QUESTIONS, MAX_INTERACTIVE_REQUEST_BYTES,
-};
+use super::ClientError;
 use crate::server::{ApprovalAgentFactory, SessionToolFactory};
+use plan_review::{interactive_plan_review_spec, plan_file_path, run_interactive_plan_review};
+use questions::{interactive_question_spec, run_interactive_questions};
 use vibe_core::events::EffectDetail;
+
+pub(crate) mod plan_review;
+pub(crate) mod questions;
+pub(crate) mod queue;
 
 pub(crate) enum InteractiveCallbackRequest {
     Approval {
@@ -40,7 +38,6 @@ pub(crate) enum InteractiveCallbackRequest {
     },
     Tool {
         session_id: String,
-        title: String,
         detail: Value,
         response: tokio::sync::oneshot::Sender<Result<Value, String>>,
     },
@@ -117,10 +114,9 @@ impl CallbackChannel {
         match self {
             Self::Shared(sender) => sender.send(request).await.map_err(drop),
             Self::Routed(routes) => {
-                let route = routes
-                    .lock()
-                    .ok()
-                    .and_then(|routes| routes.get(request.session_id()).cloned())
+                let route = crate::sync::lock(routes)
+                    .get(request.session_id())
+                    .cloned()
                     .ok_or(())?;
                 route.send(request).map_err(drop)
             }
@@ -133,14 +129,10 @@ pub(crate) enum InteractiveCallbackResponse {
     Tool(tokio::sync::oneshot::Sender<Result<Value, String>>),
 }
 
-pub(super) struct PendingInteractiveCallback {
-    pub(super) session_id: String,
-    pub(super) turn_id: String,
-    pub(super) response: InteractiveCallbackResponse,
-}
-
-pub(super) struct InteractiveApprovalFactory {
-    pub(super) sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+/// Approval agents that ask the client through `channel`, unless the session
+/// approves every call on its own.
+pub(crate) struct InteractiveApprovalFactory {
+    pub(crate) channel: CallbackChannel,
 }
 
 impl ApprovalAgentFactory for InteractiveApprovalFactory {
@@ -150,7 +142,7 @@ impl ApprovalAgentFactory for InteractiveApprovalFactory {
         } else {
             Arc::new(InteractiveApprovalAgent {
                 session_id: session_id.to_owned(),
-                sender: self.sender.clone(),
+                channel: self.channel.clone(),
             })
         }
     }
@@ -170,23 +162,23 @@ impl ApprovalAgent for ApproveInteractiveRequest {
     }
 }
 
-pub(super) struct InteractiveApprovalAgent {
-    pub(super) session_id: String,
-    pub(super) sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+pub(crate) struct InteractiveApprovalAgent {
+    pub(crate) session_id: String,
+    pub(crate) channel: CallbackChannel,
 }
 
 impl ApprovalAgent for InteractiveApprovalAgent {
     fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
         Box::pin(async move {
             let (response, receiver) = tokio::sync::oneshot::channel();
-            self.sender
+            self.channel
                 .send(InteractiveCallbackRequest::Approval {
                     session_id: self.session_id.clone(),
                     request,
                     response,
                 })
                 .await
-                .map_err(|_| PolicyError::TurnCancelled)?;
+                .map_err(|()| PolicyError::TurnCancelled)?;
             receiver.await.map_err(|_| PolicyError::TurnCancelled)
         })
     }
@@ -240,34 +232,6 @@ impl SessionToolFactory for InteractiveSessionToolFactory {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct InteractiveQuestionRequest {
-    questions: Vec<InteractiveQuestion>,
-    #[serde(default)]
-    footer_note: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct InteractiveQuestion {
-    question: String,
-    #[serde(default)]
-    header: String,
-    options: Vec<InteractiveQuestionOption>,
-    #[serde(default)]
-    multi_select: bool,
-    #[serde(default)]
-    hide_other: bool,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct InteractiveQuestionOption {
-    label: String,
-    #[serde(default)]
-    description: String,
-}
 pub(crate) fn approval_callback_detail(
     request: &ApprovalRequest,
     working_directory: Option<&std::path::Path>,
@@ -354,10 +318,6 @@ pub(crate) fn approval_decision_from_output(
     }
 }
 
-pub(super) fn interactive_request_session_id(request: &InteractiveCallbackRequest) -> &str {
-    request.session_id()
-}
-
 /// Settles a request that reads or steers the running turn rather than
 /// asking the client anything: the server answers what it knows of the
 /// session, and the driver takes the control into the turn.
@@ -437,26 +397,6 @@ pub(crate) fn reject_interactive_request(request: InteractiveCallbackRequest, me
     }
 }
 
-pub(super) fn retain_interactive_request(
-    backlog: &mut VecDeque<InteractiveCallbackRequest>,
-    request: InteractiveCallbackRequest,
-) {
-    if backlog.len() < MAX_INTERACTIVE_CALLBACKS {
-        backlog.push_back(request);
-    } else {
-        reject_interactive_request(request, "interactive callback backlog is full");
-    }
-}
-
-pub(super) fn fail_pending_interactive_callback(
-    pending: Option<PendingInteractiveCallback>,
-    message: &str,
-) {
-    if let Some(pending) = pending {
-        fail_interactive_response(pending.response, message);
-    }
-}
-
 pub(crate) fn fail_interactive_response(response: InteractiveCallbackResponse, message: &str) {
     match response {
         InteractiveCallbackResponse::Approval(response) => {
@@ -466,49 +406,6 @@ pub(crate) fn fail_interactive_response(response: InteractiveCallbackResponse, m
             let _ = response.send(Err(message.to_owned()));
         }
     }
-}
-
-pub(super) async fn run_interactive_questions(
-    sender: CallbackChannel,
-    session_id: String,
-    call_id: String,
-    arguments: Value,
-) -> Result<ToolExecutionOutput, ToolError> {
-    let request_bytes = serde_json::to_vec(&arguments)
-        .map_err(|error| ToolError::Execution(format!("invalid question request: {error}")))?
-        .len();
-    if request_bytes > MAX_INTERACTIVE_REQUEST_BYTES {
-        return Err(ToolError::Execution(format!(
-            "question request exceeds {MAX_INTERACTIVE_REQUEST_BYTES} bytes"
-        )));
-    }
-    let request = serde_json::from_value::<InteractiveQuestionRequest>(arguments)
-        .map_err(|error| ToolError::Execution(format!("invalid question request: {error}")))?;
-    validate_interactive_question_request(&request)?;
-    let questions = request.questions.clone();
-    let title = request
-        .questions
-        .iter()
-        .enumerate()
-        .map(|(index, question)| {
-            if question.header.is_empty() {
-                format!("{}. {}", index + 1, question.question)
-            } else {
-                format!("{}. {}: {}", index + 1, question.header, question.question)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let detail = json!({
-        "kind": "user_input",
-        "request": {
-            "questions": questions,
-            "footerNote": request.footer_note.clone(),
-        },
-        "relatedEntryId": related_entry_id(call_id),
-    });
-    let output = request_interactive_tool_callback(sender, session_id, title, detail).await?;
-    question_tool_output(&output, &request.questions)
 }
 
 /// Reference `UserInputCallbackDetail.related_entry_id`: the effect the
@@ -521,57 +418,16 @@ fn related_entry_id(call_id: String) -> Value {
     }
 }
 
-pub(super) fn validate_interactive_question_request(
-    request: &InteractiveQuestionRequest,
-) -> Result<(), ToolError> {
-    if request.questions.is_empty() || request.questions.len() > MAX_INTERACTIVE_QUESTIONS {
-        return Err(ToolError::Execution(format!(
-            "question count must be between 1 and {MAX_INTERACTIVE_QUESTIONS}"
-        )));
-    }
-    for question in &request.questions {
-        if question.question.trim().is_empty() {
-            return Err(ToolError::Execution(
-                "question text must not be empty".to_owned(),
-            ));
-        }
-        if question.header.chars().count() > 20 {
-            return Err(ToolError::Execution(
-                "question header exceeds 20 characters".to_owned(),
-            ));
-        }
-        if question.options.len() < 2
-            || question.options.len() > MAX_INTERACTIVE_OPTIONS_PER_QUESTION
-        {
-            return Err(ToolError::Execution(format!(
-                "each question must have between 2 and \
-                 {MAX_INTERACTIVE_OPTIONS_PER_QUESTION} options"
-            )));
-        }
-        if question
-            .options
-            .iter()
-            .any(|option| option.label.trim().is_empty())
-        {
-            return Err(ToolError::Execution(
-                "question option labels must not be empty".to_owned(),
-            ));
-        }
-    }
-    Ok(())
-}
-
-pub(super) async fn request_interactive_tool_callback(
+/// Asks the client the question `detail` describes and waits for its answer.
+async fn request_interactive_tool_callback(
     sender: CallbackChannel,
     session_id: String,
-    title: String,
     detail: Value,
 ) -> Result<Value, ToolError> {
     let (response, receiver) = tokio::sync::oneshot::channel();
     sender
         .send(InteractiveCallbackRequest::Tool {
             session_id,
-            title,
             detail,
             response,
         })
@@ -581,603 +437,4 @@ pub(super) async fn request_interactive_tool_callback(
         .await
         .map_err(|_| ToolError::Execution("interactive callback was abandoned".to_owned()))?
         .map_err(ToolError::TurnFailed)
-}
-
-/// Asks the surface driving the turn to clear the transcript and rotate the
-/// session, and waits for it to be queued.
-///
-/// Waiting is what makes the answer honest: the tool reports a cleared context
-/// only once the turn actually holds the control that clears it.
-pub(super) async fn request_context_clearing(
-    sender: CallbackChannel,
-    session_id: String,
-    continuation: String,
-    plan_file_path: Option<String>,
-) -> Result<(), ToolError> {
-    let (response, receiver) = tokio::sync::oneshot::channel();
-    sender
-        .send(InteractiveCallbackRequest::ClearContext {
-            session_id,
-            continuation,
-            plan_file_path,
-            response,
-        })
-        .await
-        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
-    receiver
-        .await
-        .map_err(|_| ToolError::Execution("context clearing was abandoned".to_owned()))?
-        .map_err(ToolError::Execution)
-}
-
-/// Asks the surface driving the turn which agent profile the session runs.
-async fn request_active_agent(
-    sender: &CallbackChannel,
-    session_id: String,
-) -> Result<Option<String>, ToolError> {
-    let (response, receiver) = tokio::sync::oneshot::channel();
-    sender
-        .send(InteractiveCallbackRequest::ActiveAgent {
-            session_id,
-            response,
-        })
-        .await
-        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
-    receiver
-        .await
-        .map_err(|_| ToolError::Execution("agent lookup was abandoned".to_owned()))
-}
-
-/// Moves the session to `agent_name` and waits until the running turn holds
-/// the switch, so the tool never reports a profile the next request lacks.
-async fn request_agent_switch(
-    sender: &CallbackChannel,
-    session_id: String,
-    agent_name: &str,
-) -> Result<(), ToolError> {
-    let (response, receiver) = tokio::sync::oneshot::channel();
-    sender
-        .send(InteractiveCallbackRequest::SwitchAgent {
-            session_id,
-            agent_name: agent_name.to_owned(),
-            response,
-        })
-        .await
-        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
-    receiver
-        .await
-        .map_err(|_| ToolError::Execution("agent switch was abandoned".to_owned()))?
-        .map_err(ToolError::Execution)
-}
-
-pub(super) fn question_tool_output(
-    output: &Value,
-    questions: &[InteractiveQuestion],
-) -> Result<ToolExecutionOutput, ToolError> {
-    let (answers, cancelled) = user_input_result(output)?;
-    if cancelled {
-        if !answers.is_empty() {
-            return Err(ToolError::Execution(
-                "cancelled question response included answers".to_owned(),
-            ));
-        }
-        return Ok(ToolExecutionOutput {
-            skip: None,
-            turn_failure: None,
-            approval: None,
-            failure: None,
-            typed_result: json!({"answers": [], "cancelled": true}),
-            model_text: answer_model_text(&[], true),
-            display: json!({"kind": "user_question"}),
-            projected_result: serde_json::Value::Null,
-            chunks: Vec::new(),
-            pending_injection: None,
-            remote_result: None,
-        });
-    }
-    if answers.len() != questions.len() {
-        return Err(ToolError::Execution(format!(
-            "expected {} question answers, received {}",
-            questions.len(),
-            answers.len()
-        )));
-    }
-    let mut published = Vec::with_capacity(answers.len());
-    for (answer, question) in answers.iter().zip(questions) {
-        let returned_question = required_output_string(answer, "question")?;
-        let answer_text = required_output_string(answer, "answer")?;
-        let is_other = answer
-            .get("isOther")
-            .and_then(Value::as_bool)
-            .ok_or_else(|| ToolError::Execution("question answer omitted isOther".to_owned()))?;
-        if returned_question != question.question {
-            return Err(ToolError::Execution(
-                "question answer does not match the request".to_owned(),
-            ));
-        }
-        validate_interactive_answer(question, answer_text, is_other)?;
-        published.push(PublishedAnswer {
-            question: returned_question.to_owned(),
-            answer: answer_text.to_owned(),
-            is_other,
-        });
-    }
-    Ok(ToolExecutionOutput {
-        skip: None,
-        turn_failure: None,
-        approval: None,
-        failure: None,
-        typed_result: json!({
-            "answers": published
-                .iter()
-                .map(|answer| json!({
-                    "question": answer.question,
-                    "answer": answer.answer,
-                    "is_other": answer.is_other,
-                }))
-                .collect::<Vec<_>>(),
-            "cancelled": false,
-        }),
-        model_text: answer_model_text(&published, false),
-        display: json!({"kind": "user_question"}),
-        projected_result: serde_json::Value::Null,
-        chunks: Vec::new(),
-        pending_injection: None,
-        remote_result: None,
-    })
-}
-
-/// One answer as reference `UserAnswer` (`vibe/questions.py:58`) declares it.
-///
-/// The client answers over the wire in the camel case the request model
-/// aliases, and the result the model reads is the field names themselves, so
-/// the two spellings are separated here rather than passed through.
-struct PublishedAnswer {
-    question: String,
-    answer: String,
-    is_other: bool,
-}
-
-/// Reference `UserQuestionResult` (`vibe/questions.py:66`) declares `answers`
-/// and `cancelled`, and the agent loop renders one field per line, with the
-/// answer list as Python's repr of a list of dictionaries.
-fn answer_model_text(answers: &[PublishedAnswer], cancelled: bool) -> String {
-    let rendered = answers
-        .iter()
-        .map(|answer| {
-            vec![
-                ("question", vibe_core::pycompat::repr_str(&answer.question)),
-                ("answer", vibe_core::pycompat::repr_str(&answer.answer)),
-                (
-                    "is_other",
-                    reference_text::boolean(answer.is_other).to_owned(),
-                ),
-            ]
-        })
-        .collect::<Vec<_>>();
-    reference_text::joined(&[
-        ("answers", reference_text::dictionary_list(&rendered)),
-        ("cancelled", reference_text::boolean(cancelled).to_owned()),
-    ])
-}
-
-pub(super) fn validate_interactive_answer(
-    question: &InteractiveQuestion,
-    answer: &str,
-    is_other: bool,
-) -> Result<(), ToolError> {
-    if answer.trim().is_empty() {
-        return Err(ToolError::Execution(
-            "question answer must not be empty".to_owned(),
-        ));
-    }
-    if is_other {
-        return if question.hide_other {
-            Err(ToolError::Execution(
-                "question does not allow a free-text answer".to_owned(),
-            ))
-        } else {
-            Ok(())
-        };
-    }
-    let labels = answer.split(", ").collect::<Vec<_>>();
-    if (!question.multi_select && labels.len() != 1)
-        || labels
-            .iter()
-            .any(|label| !question.options.iter().any(|option| option.label == *label))
-        || labels
-            .iter()
-            .enumerate()
-            .any(|(index, label)| labels[..index].contains(label))
-    {
-        return Err(ToolError::Execution(
-            "question answer selected an invalid option".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
-/// The labels a client answers the plan review with. They are the answer
-/// values the reference matches on (`vibe/core/tools/builtins/exit_plan_mode.py`),
-/// so they are the protocol rather than prose.
-const PLAN_CLEAR_AUTO: &str = "Yes, clear context and auto approve edits";
-const PLAN_AUTO: &str = "Yes, and auto approve edits";
-const PLAN_MANUAL: &str = "Yes, and request approval for edits";
-const PLAN_STAY: &str = "No";
-
-/// The profile a plan review may only run under, and the two it hands off to.
-const PLAN_AGENT: &str = "plan";
-const EDITING_AGENT: &str = "accept-edits";
-const ASKING_AGENT: &str = "ask";
-
-pub(super) async fn run_interactive_plan_review(
-    sender: CallbackChannel,
-    session_id: String,
-    call_id: String,
-    plan_path: PathBuf,
-) -> Result<ToolExecutionOutput, ToolError> {
-    const QUESTION: &str = "Plan is complete. Switch to code mode and start implementing?";
-    // Reference `PlanSession.snapshot_content_hash`, taken when the call
-    // starts: what the plan read before the user was asked about it.
-    let reviewed = read_plan(&plan_path).await;
-    // Reference `ExitPlanMode.run` refuses outside the plan profile before it
-    // asks anything, so a profile that enables the tool cannot leave a mode it
-    // is not in.
-    if request_active_agent(&sender, session_id.clone())
-        .await?
-        .as_deref()
-        != Some(PLAN_AGENT)
-    {
-        return Err(ToolError::Execution(
-            "exit_plan_mode only answers while the session runs the plan agent".to_owned(),
-        ));
-    }
-    let detail = json!({
-        "kind": "user_input",
-        "request": {
-            "questions": [{
-                "question": QUESTION,
-                "header": "Plan ready",
-                "options": interactive_plan_options(),
-                "multiSelect": false,
-                "hideOther": false,
-            }],
-            "footerNote": format!(
-                "Plan file: {} (Ctrl+G opens it for editing)",
-                plan_path.display()
-            ),
-        },
-        "planReview": true,
-        "filePath": plan_path,
-        "relatedEntryId": related_entry_id(call_id),
-    });
-    let output = request_interactive_tool_callback(
-        sender.clone(),
-        session_id.clone(),
-        QUESTION.to_owned(),
-        detail,
-    )
-    .await?;
-    let (answers, cancelled) = user_input_result(&output)?;
-    // Reference `ExitPlanMode.run` matches the first answer's label without
-    // regard to case, reads a free-text answer as feedback, and stays in plan
-    // mode for anything else.
-    let first = answers.first().filter(|_| !cancelled);
-    let verdict = first.map(|answer| {
-        let value = answer
-            .get("answer")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let other = answer.get("isOther").and_then(Value::as_bool) == Some(true);
-        (value.to_lowercase(), value.to_owned(), other)
-    });
-    let (target, clear_context, message) = match &verdict {
-        None => (
-            None,
-            false,
-            "User cancelled. Staying in plan mode.".to_owned(),
-        ),
-        Some((lower, _, _)) if lower == &PLAN_CLEAR_AUTO.to_lowercase() => (
-            Some(EDITING_AGENT),
-            true,
-            "Now in accept-edits mode. The planning context is being cleared, and \
-             implementation starts from the approved plan."
-                .to_owned(),
-        ),
-        Some((lower, _, _)) if lower == &PLAN_AUTO.to_lowercase() => (
-            Some(EDITING_AGENT),
-            false,
-            "Now in accept-edits mode: go ahead and implement the plan.".to_owned(),
-        ),
-        Some((lower, _, _)) if lower == &PLAN_MANUAL.to_lowercase() => (
-            Some(ASKING_AGENT),
-            false,
-            "Now in ask mode: every edit waits for the user's approval.".to_owned(),
-        ),
-        Some((_, value, true)) => (
-            None,
-            false,
-            format!("Still planning. The user's feedback: {value}"),
-        ),
-        Some(_) => (
-            None,
-            false,
-            "Still planning: keep refining the plan.".to_owned(),
-        ),
-    };
-    if let Some(target) = target {
-        request_agent_switch(&sender, session_id.clone(), target).await?;
-    }
-    if clear_context {
-        // Reference `_clear_context_after_plan_accept` re-seeds the cleared
-        // conversation with the approved plan, and with nothing when the plan
-        // file is empty or missing, which is also when no path is named.
-        let plan = tokio::fs::read_to_string(&plan_path)
-            .await
-            .unwrap_or_default();
-        let (continuation, plan_file_path) = if plan.is_empty() {
-            (String::new(), None)
-        } else {
-            (
-                format!(
-                    "<{tag}>The conversation was cleared once the plan was approved. \
-                     Carry out the approved plan below; it is authoritative.\n\n{plan}</{tag}>",
-                    tag = vibe_core::workspace::WARNING_TAG
-                ),
-                plan_path.to_str().map(str::to_owned),
-            )
-        };
-        request_context_clearing(sender, session_id, continuation, plan_file_path).await?;
-    }
-    let switched = target.is_some();
-    // Reference `_handle_plan_review_ended`: a plan the user edited while it
-    // was under review reaches the model, as the version to implement, once
-    // the step settles.
-    let pending_injection = match read_plan(&plan_path).await {
-        Some(plan) if Some(&plan) != reviewed.as_ref() => Some(format!(
-            "<{tag}>The plan file was edited by hand while it was under review. \
-             Implement the edited version below; it supersedes the one you wrote.\n\n{plan}</{tag}>",
-            tag = vibe_core::workspace::WARNING_TAG
-        )),
-        _ => None,
-    };
-    // Reference `ExitPlanModeResult`
-    // (`vibe/core/tools/builtins/exit_plan_mode.py:34`) declares `switched` then
-    // `message`, and the agent loop renders one field per line, so the decision
-    // reaches the model beside the sentence rather than only inside it.
-    let model_text = reference_text::joined(&[
-        ("switched", reference_text::boolean(switched).to_owned()),
-        ("message", message.clone()),
-    ]);
-    Ok(ToolExecutionOutput {
-        skip: None,
-        turn_failure: None,
-        // Reference `ExitPlanModeConfig.permission` is `always`, so the call
-        // runs on the configuration's say.
-        approval: Some(vibe_core::tools::ToolApproval {
-            decision: vibe_core::tools::ToolVerdict::Execute,
-            approval_type: vibe_core::tools::ToolApprovalType::Always,
-            approval_source: vibe_core::tools::ToolApprovalSource::Config,
-        }),
-        failure: None,
-        typed_result: json!({"switched": switched, "message": message}),
-        model_text,
-        // Reference `ExitPlanMode.format_result_display`: the verdict is the
-        // header, and a plan that stays reads as unsuccessful.
-        display: json!({
-            "success": switched,
-            "verb": "",
-            "message": message,
-            "warnings": [],
-            "approvalNote": null,
-            "suffix": "",
-        }),
-        projected_result: serde_json::Value::Null,
-        chunks: Vec::new(),
-        pending_injection,
-        remote_result: None,
-    })
-}
-
-/// Reference `PlanSession.read`: the plan's text, or nothing when the file
-/// is absent.
-async fn read_plan(plan_path: &Path) -> Option<String> {
-    tokio::fs::read(plan_path)
-        .await
-        .ok()
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-}
-
-/// Where a session's plan lives: reference `PlanSession.plan_file_path`, a
-/// Unix timestamp and a random slug drawn once per session and kept for the
-/// life of the process.
-pub(super) fn plan_file_path(plan_directory: &Path, session_id: &str) -> PathBuf {
-    static NAMES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> =
-        std::sync::OnceLock::new();
-    let draw = || {
-        format!(
-            "{}-{}.md",
-            vibe_core::clock::now_seconds(),
-            vibe_core::worktree::random_slug()
-        )
-    };
-    let name = match NAMES.get_or_init(Default::default).lock() {
-        Ok(mut names) => names
-            .entry(session_id.to_owned())
-            .or_insert_with(draw)
-            .clone(),
-        // A poisoned memo still names a plan, only not the one drawn before.
-        Err(_) => draw(),
-    };
-    plan_directory.join(name)
-}
-
-pub(super) fn user_input_result(output: &Value) -> Result<(&[Value], bool), ToolError> {
-    if output.get("type").and_then(Value::as_str) != Some("user_input") {
-        return Err(ToolError::Execution(
-            "interactive tool returned a non-user-input output".to_owned(),
-        ));
-    }
-    let result = output
-        .get("result")
-        .and_then(Value::as_object)
-        .ok_or_else(|| ToolError::Execution("user-input output omitted result".to_owned()))?;
-    let answers = result
-        .get("answers")
-        .and_then(Value::as_array)
-        .ok_or_else(|| ToolError::Execution("user-input output omitted answers".to_owned()))?;
-    let cancelled = result
-        .get("cancelled")
-        .and_then(Value::as_bool)
-        .ok_or_else(|| ToolError::Execution("user-input output omitted cancelled".to_owned()))?;
-    Ok((answers, cancelled))
-}
-
-pub(super) fn required_output_string<'a>(
-    value: &'a Value,
-    key: &str,
-) -> Result<&'a str, ToolError> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .ok_or_else(|| ToolError::Execution(format!("interactive answer omitted string `{key}`")))
-}
-
-pub(super) fn interactive_plan_options() -> Vec<Value> {
-    [
-        (
-            PLAN_CLEAR_AUTO,
-            "Clear planning context, switch to code mode, and auto approve edits",
-        ),
-        (PLAN_AUTO, "Switch to code mode with auto-approved edits"),
-        (PLAN_MANUAL, "Switch to code mode and keep edit approvals"),
-        (PLAN_STAY, "Keep planning and refine the plan further"),
-    ]
-    .into_iter()
-    .map(|(label, description)| json!({"label": label, "description": description}))
-    .collect()
-}
-
-/// Directive coverage for `ask_user_question`, whose reference description
-/// this port must cover without reproducing (`NOTICE`).
-///
-/// | Reference directive | Covered by |
-/// |---|---|
-/// | The question carries structured options rather than free prose | "structured options" in the description |
-/// | One to four questions per call | "one to four questions" |
-/// | Each question has a header, a question text, and its options | the property descriptions plus `minItems` |
-/// | Two to four options per question | "two to four options", `minItems: 2` |
-/// | A free-text "Other" option is appended by the client | "an Other free-text choice is appended" |
-///
-/// The argument shape comes from the reference `UserQuestionRequest`, which is
-/// the one reference model configuring `alias_generator=to_camel` alongside
-/// `extra="forbid"`: its properties are camelCase where every other reference
-/// tool stays snake_case.
-pub(super) fn interactive_question_spec() -> ToolSpec {
-    let choice = ObjectSchema::new()
-        .required(
-            "label",
-            Property::string().described("A one to five word label for the choice"),
-        )
-        .optional(
-            "description",
-            Property::string()
-                .described("An optional expansion of what the choice means")
-                .with_default(""),
-        )
-        .forbid_extra_properties();
-    let question = ObjectSchema::new()
-        .required(
-            "question",
-            Property::string().described("The text of the question"),
-        )
-        .required(
-            "options",
-            Property::array(Property::reference("QuestionChoice"))
-                .constrained("minItems", 2)
-                .described(
-                    "The choices offered, two to four of them, not counting the Other free-text \
-                     choice the client appends.",
-                ),
-        )
-        .optional(
-            "header",
-            Property::string()
-                .constrained("maxLength", 20)
-                .described("A short chip label for the question, at most 20 characters")
-                .with_default(""),
-        )
-        .optional(
-            "hideOther",
-            Property::boolean()
-                .described("When true, the Other free-text choice is withheld")
-                .with_default(false),
-        )
-        .optional(
-            "multiSelect",
-            Property::boolean()
-                .described("When true, several choices may be selected at once")
-                .with_default(false),
-        )
-        .forbid_extra_properties();
-    ToolSpec {
-        name: "ask_user_question".to_owned(),
-        description: "Put a question to the user with structured options. Send one to four \
-                      questions, each carrying a header, its question text, and two to four \
-                      options; an Other free-text choice is appended for you."
-            .to_owned(),
-        input_schema: ObjectSchema::new()
-            .define("QuestionChoice", choice)
-            .define("UserQuestion", question)
-            .required(
-                "questions",
-                Property::array(Property::reference("UserQuestion"))
-                    .constrained("minItems", 1)
-                    .described(
-                        "The questions to put, one to four of them. Several questions render as \
-                         tabs.",
-                    ),
-            )
-            .optional(
-                "footerNote",
-                Property::string()
-                    .described("An optional quiet note rendered under the question widget.")
-                    .with_default(Value::Null)
-                    .nullable(),
-            )
-            .forbid_extra_properties()
-            .build(),
-        output_schema: None,
-        config: Value::Null,
-        state: Value::Null,
-        availability: ToolAvailability::Available,
-        presentation: ToolPresentationKind::Generic,
-        source: ToolSource::BuiltIn,
-        selection_priority: 50,
-    }
-}
-
-/// Directive coverage for `exit_plan_mode`.
-///
-/// | Reference directive | Covered by |
-/// |---|---|
-/// | The call announces a finished plan ready to implement | "the plan is finished and ready to implement" |
-/// | Call it only once the plan is final | "Call it only once the plan is final" |
-/// | Do not call it while planning continues | "never while planning is still under way or the user wants to keep planning" |
-pub(super) fn interactive_plan_review_spec() -> ToolSpec {
-    ToolSpec {
-        name: "exit_plan_mode".to_owned(),
-        description: "Announce that the plan is finished and ready to implement. Call it only \
-                      once the plan is final, never while planning is still under way or the \
-                      user wants to keep planning."
-            .to_owned(),
-        input_schema: ObjectSchema::new().build(),
-        output_schema: None,
-        config: Value::Null,
-        state: Value::Null,
-        availability: ToolAvailability::Available,
-        presentation: ToolPresentationKind::Generic,
-        source: ToolSource::BuiltIn,
-        selection_priority: 50,
-    }
 }

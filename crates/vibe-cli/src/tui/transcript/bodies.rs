@@ -5,6 +5,7 @@
 use serde_json::Value;
 use vibe_app_server::client::{EffectResultDisplay, PublicEffectState};
 
+use super::super::render::clean_output;
 use super::{BodyLine, BodyStyle, EffectKind};
 
 pub(super) fn effect_body(
@@ -473,95 +474,6 @@ pub(super) fn detail_lines(text: &str) -> Vec<BodyLine> {
         return Vec::new();
     }
     cleaned.split('\n').map(BodyLine::plain).collect()
-}
-
-/// Reference `clean_output` (`vibe/cli/textual_ui/widgets/tool_widgets.py`):
-/// each line keeps only what its last carriage return redrew, loses its escape
-/// sequences, and loses every control character but the tab.
-#[must_use]
-fn clean_output(content: &str) -> String {
-    content
-        .replace("\r\n", "\n")
-        .split('\n')
-        .map(|line| {
-            let written = line.trim_end_matches('\r');
-            let redrawn = written.rsplit('\r').next().unwrap_or(written);
-            strip_escapes(redrawn)
-                .chars()
-                .filter(
-                    |character| !matches!(u32::from(*character), 0x00..=0x08 | 0x0b..=0x1f | 0x7f),
-                )
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Reference `_ANSI_ESCAPE`: an OSC ended by BEL or ST, a CSI with its final
-/// byte, or a two-byte escape. An escape that is none of those is left for the
-/// control filter, which drops the ESC alone.
-fn strip_escapes(line: &str) -> String {
-    let characters = line.chars().collect::<Vec<_>>();
-    let mut output = String::with_capacity(line.len());
-    let mut index = 0;
-    while index < characters.len() {
-        if characters[index] != '\u{1b}' {
-            output.push(characters[index]);
-            index += 1;
-            continue;
-        }
-        let end = escape_end(&characters, index);
-        match end {
-            Some(end) => index = end,
-            None => {
-                output.push(characters[index]);
-                index += 1;
-            }
-        }
-    }
-    output
-}
-
-/// Where the escape starting at `start` ends, exclusive, when it matches.
-fn escape_end(characters: &[char], start: usize) -> Option<usize> {
-    let introducer = *characters.get(start + 1)?;
-    if introducer == ']' {
-        let mut cursor = start + 2;
-        while let Some(&character) = characters.get(cursor) {
-            match character {
-                '\u{7}' => return Some(cursor + 1),
-                '\u{1b}' => {
-                    if characters.get(cursor + 1) == Some(&'\\') {
-                        return Some(cursor + 2);
-                    }
-                    break;
-                }
-                _ => cursor += 1,
-            }
-        }
-        // An unterminated OSC still matches as the two-byte `ESC ]`.
-        return Some(start + 2);
-    }
-    if introducer == '[' {
-        let mut cursor = start + 2;
-        while characters
-            .get(cursor)
-            .is_some_and(|character| ('0'..='?').contains(character))
-        {
-            cursor += 1;
-        }
-        while characters
-            .get(cursor)
-            .is_some_and(|character| (' '..='/').contains(character))
-        {
-            cursor += 1;
-        }
-        return characters
-            .get(cursor)
-            .filter(|character| ('@'..='~').contains(*character))
-            .map(|_| cursor + 1);
-    }
-    (('@'..='Z').contains(&introducer) || ('\\'..='_').contains(&introducer)).then_some(start + 2)
 }
 
 pub(super) fn text_lines(text: &str) -> Vec<BodyLine> {

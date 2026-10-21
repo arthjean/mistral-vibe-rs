@@ -17,7 +17,7 @@ use crate::llm::error::BackendFailure;
 use crate::llm::retry::NoRetryObserver;
 use crate::llm::types::{Image, Message};
 use crate::llm::{Backend, BackendContext, ModelRequest};
-use crate::provider::config::{BackendKind, ModelConfig, ProviderConfig};
+use crate::provider::config::{BackendKind, ModelConfig, ProviderConfig, ThinkingLevel};
 use crate::telemetry::TelemetryCallType;
 
 /// Reference `MAX_DESCRIPTION_TOKENS`.
@@ -182,9 +182,9 @@ async fn describe(
     instruction: &str,
 ) -> Result<String, String> {
     let mut model = route.model.clone();
-    "low".clone_into(&mut model.thinking);
+    model.thinking = ThinkingLevel::Low;
     if route.provider.backend != BackendKind::Mistral {
-        "off".clone_into(&mut model.thinking);
+        model.thinking = ThinkingLevel::Off;
     }
     let backend = Backend::new(route.provider.clone(), route.context.clone())
         .map_err(|error| reason(&BackendFailure::Local(error)))?;

@@ -85,3 +85,37 @@ async fn public_calls_preserve_notifications_and_execute_resource_work() {
         .expect("deferred MCP resource response");
     assert!(integrations.result["mcp"]["sources"].is_array());
 }
+
+/// A Teleport event reads as the server publishes it: a cancellation as a
+/// failure carrying the cancellation error, a push question with its counts,
+/// and a kind the reference does not publish as no event at all.
+#[test]
+fn teleport_events_read_as_the_server_publishes_them() {
+    let read = |event: Value| serde_json::from_value::<ProgrammaticTeleportEvent>(event);
+    assert_eq!(
+        read(json!({"kind": "cancelled", "operationId": "op"})).expect("a cancellation reads"),
+        ProgrammaticTeleportEvent::Failed {
+            operation_id: "op".to_owned(),
+            error: PublicError {
+                message: "Teleport was cancelled".to_owned(),
+                code: Some("teleport_cancelled".to_owned()),
+                details: Value::Null,
+            },
+        }
+    );
+    assert_eq!(
+        read(json!({
+            "kind": "push_required",
+            "operationId": "op",
+            "unpushedCount": 2,
+            "branchNotPushed": true,
+        }))
+        .expect("a push question reads"),
+        ProgrammaticTeleportEvent::PushRequired {
+            operation_id: "op".to_owned(),
+            unpushed_count: 2,
+            branch_not_pushed: true,
+        }
+    );
+    assert!(read(json!({"kind": "rewinding", "operationId": "op"})).is_err());
+}

@@ -125,7 +125,7 @@ pub(crate) async fn run(
     );
     let route = bootstrap::programmatic_route(&arguments, &workspace)?;
     let mut arguments = arguments;
-    arguments.model.clone_from(&route.model);
+    arguments.model = Some(route.model.clone());
     let credential = bootstrap::programmatic_credential(&arguments, &route.provider)?;
     crate::validate_arguments(&arguments)?;
     let config = bootstrap::route_driver_config(&route, &workspace)?;
@@ -195,7 +195,7 @@ where
     let options = bootstrap::session_options(
         &arguments,
         &working_directory,
-        arguments.model.clone(),
+        arguments.model().to_owned(),
         None,
         None,
         bootstrap::Launch::Programmatic,

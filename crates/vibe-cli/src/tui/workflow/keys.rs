@@ -19,9 +19,9 @@ use super::super::pickers::remote_project_create_overlay;
 use super::super::session_picker::{SessionPickerEffect, reduce_key as reduce_session_picker_key};
 use super::super::setup::ResolvedTheme;
 use super::super::state::TuiState;
-use super::super::{InteractiveRuntime, preview_theme};
+use super::super::{InteractiveRuntime, move_overlay_selection, preview_theme};
 use super::config::persisted_theme;
-use super::live_commands::handle_log_level_key;
+use super::log_level::handle_log_level_key;
 use super::mcp::{
     McpEffect, auth_panel_context, reduce_auth_action, refresh_mcp_view, set_selected_mcp,
 };
@@ -235,14 +235,14 @@ pub(in crate::tui) fn handle_remote_project_create_key(
             return OverlayKeyResult::Handled;
         }
         KeyCode::Up | KeyCode::BackTab => {
-            move_selection(state, -1);
+            move_overlay_selection(state, -1);
             return OverlayKeyResult::Handled;
         }
         // A field answers `Enter` by moving on; only the button submits.
         KeyCode::Down | KeyCode::Tab | KeyCode::Enter
             if selected != Some(RemoteProjectField::Submit) =>
         {
-            move_selection(state, 1);
+            move_overlay_selection(state, 1);
             return OverlayKeyResult::Handled;
         }
         KeyCode::Enter => {
@@ -293,10 +293,10 @@ async fn reduce_list_key(
     match key.code {
         KeyCode::Esc => return dismiss(policy.escape, runtime, state, theme),
         KeyCode::Up | KeyCode::Char('k') if key.modifiers.is_empty() => {
-            move_selection(state, -1);
+            move_overlay_selection(state, -1);
         }
         KeyCode::Down | KeyCode::Char('j') if key.modifiers.is_empty() => {
-            move_selection(state, 1);
+            move_overlay_selection(state, 1);
         }
         KeyCode::Backspace if key.modifiers.is_empty() => {
             if let Some(overlay) = state.overlay.as_mut() {
@@ -322,12 +322,6 @@ async fn reduce_list_key(
         preview_selected(state, theme);
     }
     OverlayKeyResult::Handled
-}
-
-fn move_selection(state: &mut TuiState, delta: isize) {
-    if let Some(overlay) = state.overlay.as_mut() {
-        overlay.move_selection(delta);
-    }
 }
 
 /// Reference `on_option_list_option_highlighted`: the highlighted theme

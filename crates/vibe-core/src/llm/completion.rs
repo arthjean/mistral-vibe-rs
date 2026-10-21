@@ -19,18 +19,16 @@ use super::call::{self, Answered, Failed, StreamingCall};
 use super::error::{LocalFailure, LocalKind};
 use super::pump::ChunkStream;
 use super::retry::RetryObserver;
+use super::transport::merge_headers;
 use super::types::{Chunk, ContentPart, Image, Message, Role, Tool, ToolCall, ToolChoice};
 use super::{Backend, BackendContext, ModelRequest};
 use crate::engine::{CompletionProvider, ProviderFuture, ProviderStreamFuture};
 use crate::events::{ModelMessage, ModelToolCall};
-use crate::provider::config::{BackendKind, ModelConfig, ProviderConfig};
+use crate::provider::config::{BackendKind, ModelConfig, ProviderConfig, ThinkingLevel};
 use crate::provider::{
     AssistantMessage, CallError, ModelCallDescriptor, ProviderChunk, ProviderError, ProviderInput,
     ProviderStream, Usage,
 };
-
-/// The thinking levels a model entry and a session may name.
-const THINKING_LEVELS: &[&str] = &["off", "low", "medium", "high", "max"];
 
 /// A provider entry, the models it serves, and the backend that reaches it.
 pub struct LlmCompletion {
@@ -84,11 +82,11 @@ impl LlmCompletion {
         let requested = input
             .reasoning_effort
             .as_deref()
-            .filter(|level| THINKING_LEVELS.contains(level));
+            .and_then(ThinkingLevel::parse);
         if let Some(level) = requested {
-            model.thinking = level.to_owned();
-        } else if input.thinking && model.thinking == "off" {
-            model.thinking = "medium".to_owned();
+            model.thinking = level;
+        } else if input.thinking && model.thinking == ThinkingLevel::Off {
+            model.thinking = ThinkingLevel::Medium;
         }
         model
     }
@@ -146,15 +144,7 @@ impl Prepared {
                 call::user_agent(completion.provider.backend),
             )],
         };
-        for (name, value) in &input.headers {
-            match headers
-                .iter_mut()
-                .find(|(known, _)| known.eq_ignore_ascii_case(name))
-            {
-                Some(existing) => existing.1.clone_from(value),
-                None => headers.push((name.clone(), value.clone())),
-            }
-        }
+        merge_headers(&mut headers, &input.headers);
         let metadata = (!input.metadata.is_empty()).then(|| {
             input
                 .metadata
@@ -297,24 +287,6 @@ fn unified_parts(blocks: &[crate::events::PublicContentBlock]) -> Vec<ContentPar
             PublicContentBlock::Resource { .. } => None,
         })
         .collect()
-}
-
-/// The URL a streamed call to `model` is sent to.
-fn call_url(provider: &ProviderConfig, model: &str) -> String {
-    let base = provider.api_base.as_str();
-    match (provider.backend, provider.api_style.as_str()) {
-        (BackendKind::Mistral, _) => format!(
-            "{}/v1/chat/completions",
-            super::mistral::server_url(base).unwrap_or_else(|| base.to_owned())
-        ),
-        (BackendKind::Generic, "anthropic") => format!("{base}/v1/messages"),
-        (BackendKind::Generic, "openai-responses") => format!("{base}/responses"),
-        (BackendKind::Generic, "vertex-anthropic") => {
-            super::vertex::base_url(&provider.region)
-                + &super::vertex::endpoint(&provider.region, &provider.project_id, model, true)
-        }
-        (BackendKind::Generic, _) => format!("{base}/chat/completions"),
-    }
 }
 
 fn check_address(provider: &ProviderConfig) -> Result<(), LocalFailure> {
@@ -564,7 +536,7 @@ impl CompletionProvider for LlmCompletion {
         Some(ModelCallDescriptor {
             provider_name: self.provider.name.clone(),
             api_style: self.provider.api_style.clone(),
-            endpoint: call_url(&self.provider, &self.default_model),
+            endpoint: self.backend.endpoint(&self.default_model),
         })
     }
 

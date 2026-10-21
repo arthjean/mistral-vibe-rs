@@ -23,7 +23,7 @@ use super::retry::{
     RetryReason, SleepKind, generic_is_retryable, generic_retry_after, next_delay,
 };
 use super::sse::{DataLine, LineError, LineSplitter, data_line};
-use super::transport::{HttpClient, HttpResponse, HttpSettings};
+use super::transport::{HttpClient, HttpResponse, HttpSettings, merge_headers};
 use super::types::Chunk;
 use super::{BackendContext, ModelRequest};
 use crate::provider::config::ProviderConfig;
@@ -187,6 +187,15 @@ impl GenericBackend {
         self.context.clock.as_ref()
     }
 
+    /// The URL a streamed call to `model` is sent to. A style no dialect
+    /// speaks fails the call itself, and is described until then by the
+    /// endpoint of the default `openai` style.
+    pub(super) fn endpoint(&self, model: &str) -> String {
+        Dialect::for_style(&self.provider.api_style)
+            .unwrap_or(Dialect::OpenAi)
+            .streaming_url(&self.provider, model)
+    }
+
     /// The request, its URL and what a failure report says about it.
     async fn prepare(
         &self,
@@ -226,13 +235,19 @@ impl GenericBackend {
             streaming,
             provider: &self.provider,
             api_key: api_key.as_deref(),
-            thinking: &request.model.thinking,
+            thinking: request.model.thinking,
         };
         let mut prepared = dialect.prepare(&parts, token.as_deref())?;
         if dialect == Dialect::VertexAnthropic && prepared.base_url.is_some() {
             prepared.base_url = Some(self.context.vertex.base_url(&self.provider.region));
         }
-        merge_headers(&mut prepared.headers, request.extra_headers);
+        merge_headers(
+            &mut prepared.headers,
+            request
+                .extra_headers
+                .iter()
+                .map(|(name, value)| (name, value)),
+        );
         let base = prepared
             .base_url
             .clone()
@@ -419,21 +434,6 @@ impl GenericBackend {
                 Ok(pump)
             }
             None => Ok(pump),
-        }
-    }
-}
-
-/// Adds the loop's headers over the dialect's, a later name replacing an
-/// earlier one whatever its case.
-pub(super) fn merge_headers(headers: &mut Vec<(String, String)>, extra: &[(String, String)]) {
-    for (name, value) in extra {
-        if let Some(existing) = headers
-            .iter_mut()
-            .find(|(known, _)| known.eq_ignore_ascii_case(name))
-        {
-            existing.1.clone_from(value);
-        } else {
-            headers.push((name.clone(), value.clone()));
         }
     }
 }

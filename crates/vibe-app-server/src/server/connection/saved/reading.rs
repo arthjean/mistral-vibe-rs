@@ -13,27 +13,12 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        let history_limit = check.bounded_int(&object, "historyLimit", &[], 200, PAGE_BOUNDS);
-        let _turns_limit = check.bounded_int(&object, "turnsLimit", &[], 200, PAGE_BOUNDS);
-        let _include_history = check.optional_bool(&object, "includeHistory", &[]);
-        let _include_turns = check.optional_bool(&object, "includeTurns", &[]);
-        check.extras(
-            &object,
-            &[
-                "sessionId",
-                "historyLimit",
-                "turnsLimit",
-                "includeHistory",
-                "includeTurns",
-            ],
-            &[],
-        );
-        check.finish().map_err(rejected)?;
-        let session_id = session_id.unwrap_or_default();
-        let history_limit = usize::try_from(history_limit.unwrap_or(200)).unwrap_or(200);
+        let ReadParams {
+            session_id,
+            history,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
+        // Reference `SessionReadParams.history_limit`.
+        let history_limit = history.map_or(1, |page| usize::from(page.limit));
         if let Some(state) = self.live_state(&session_id)? {
             let event_id = state["eventId"].clone();
             return Ok(success_batch(
@@ -83,14 +68,11 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        let limit = check.bounded_int(&object, "historyLimit", &[], 200, PAGE_BOUNDS);
-        check.extras(&object, &["sessionId", "historyLimit"], &[]);
-        check.finish().map_err(rejected)?;
-        let session_id = session_id.unwrap_or_default();
-        let limit = usize::try_from(limit.unwrap_or(200)).unwrap_or(200);
+        let HistoryGetParams {
+            session_id,
+            history_limit,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
+        let limit = usize::from(history_limit);
         let hydrated = self.load_saved(&session_id)?;
         let history = stored_history(&session_id, &hydrated);
         let tail = history.len().saturating_sub(limit);
@@ -106,15 +88,11 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        let turn_id = check.optional_string(&object, "turnId", &[]);
-        let page = page_request(&mut check, &object);
-        check.extras(&object, &["sessionId", "turnId", "page"], &[]);
-        check.finish().map_err(rejected)?;
-        let session_id = session_id.unwrap_or_default();
-        let page = page.unwrap_or_default();
+        let PagedParams {
+            session_id,
+            turn_id,
+            page,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
         if self.server.harness_selection().use_unified {
             let state = self.unified_state(&session_id, None)?;
             let history = state["history"].as_array().cloned().unwrap_or_default();
@@ -182,17 +160,13 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        let page = page_request(&mut check, &object);
-        check.extras(&object, &["sessionId", "page"], &[]);
+        let params = wire_validation::validate_params(&request.method, &request.params);
         if self.root_key().is_none() {
             return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
         }
-        check.finish().map_err(rejected)?;
-        let session_id = session_id.unwrap_or_default();
-        let page = page.unwrap_or_default();
+        let PagedParams {
+            session_id, page, ..
+        } = params.map_err(rejected)?;
         if self.server.harness_selection().use_unified {
             let state = self.unified_state(&session_id, None)?;
             let turns = turns_from_history(
@@ -321,37 +295,63 @@ impl ServerConnection {
     }
 }
 
+/// Reference `SessionReadParams`: a history left out is read as a default
+/// page, and one sent as null as none.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReadParams {
+    session_id: String,
+    #[serde(default = "default_page")]
+    history: Option<Page>,
+}
+
+fn default_page() -> Option<Page> {
+    Some(Page::default())
+}
+
+/// Reference `SessionHistoryGetParams`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HistoryGetParams {
+    session_id: String,
+    #[serde(default = "default_history_limit")]
+    history_limit: u16,
+}
+
+/// Reference `SessionHistoryListParams` and `SessionTurnsListParams`, which
+/// names no turn.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PagedParams {
+    session_id: String,
+    turn_id: Option<String>,
+    #[serde(default)]
+    page: Page,
+}
+
 /// Reference `PageRequest`.
-#[derive(Default)]
+#[derive(Deserialize)]
+#[serde(default)]
 struct Page {
     cursor: Option<String>,
-    limit: Option<usize>,
+    limit: u16,
+    #[serde(rename = "direction", deserialize_with = "is_forward")]
     forward: bool,
 }
 
-fn page_request(check: &mut WireCheck, object: &Map<String, Value>) -> Option<Page> {
-    let parent = [PathSegment::Field("page".to_owned())];
-    let page = check.optional_object(object, "page", &[])?;
-    let cursor = check.optional_string(page, "cursor", &parent);
-    let limit = check.bounded_int(page, "limit", &parent, 200, PAGE_BOUNDS);
-    let forward = match page.get("direction") {
-        None | Some(Value::Null) => false,
-        Some(Value::String(direction)) if direction == "forward" => true,
-        Some(Value::String(direction)) if direction == "backward" => false,
-        Some(_) => {
-            check.report(
-                crate::params::child_path(&parent, "direction"),
-                "Input should be 'forward' or 'backward'",
-            );
-            false
+impl Default for Page {
+    fn default() -> Self {
+        Self {
+            cursor: None,
+            limit: default_history_limit(),
+            forward: false,
         }
-    };
-    check.extras(page, &["cursor", "limit", "direction"], &parent);
-    Some(Page {
-        cursor,
-        limit: limit.and_then(|limit| usize::try_from(limit).ok()),
-        forward,
-    })
+    }
+}
+
+/// Whether a page's `direction` reads forward, the other one being backward.
+fn is_forward<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    Ok(String::deserialize(deserializer)? == "forward")
 }
 
 /// Where a forward page that names no cursor starts.
@@ -373,7 +373,7 @@ fn page_window<'a, T>(
     start: ForwardStart,
     id: impl Fn(&T) -> String,
 ) -> (Vec<&'a T>, Option<String>, Option<String>) {
-    let limit = page.limit.unwrap_or(200);
+    let limit = usize::from(page.limit);
     let position = |cursor: &str| items.iter().position(|item| id(item) == cursor);
     let (first, end) = match (page.cursor.as_deref(), page.forward, start) {
         (Some(cursor), true, _) => {

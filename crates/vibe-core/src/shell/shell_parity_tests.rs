@@ -39,8 +39,11 @@ use std::process::Command;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+use super::operands::inspects_paths;
 use super::*;
-use crate::parity::{off_pin_reason, pinned_interpreter, reference_root};
+use crate::parity::pinned_interpreter;
+use crate::parity::replay::{pinned_reference, repository};
+use crate::platform::parse_policy_path;
 use crate::policy::{PermissionScope, path_grant_pattern_matches};
 use crate::tools::config::{ToolConfigResolver, shell_read_only_commands};
 
@@ -1310,18 +1313,16 @@ fn permission_wire(mode: PermissionMode) -> String {
 /// reference that moves is reported rather than silently replayed.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "shell policy") {
-        eprintln!("{reason}");
+    // The capture script has no `--check` mode, so the probe recaptures into a
+    // scratch file and compares it here rather than through `Capture::probe`.
+    let Some(root) = pinned_reference("shell policy") else {
         return;
-    }
+    };
     let Some(interpreter) = pinned_interpreter(&root) else {
         eprintln!("skipping the live shell-policy probe: no reference interpreter");
         return;
     };
-    let workspace =
-        crate::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
-            .expect("workspace root");
+    let workspace = repository();
     let temporary = tempfile::tempdir().expect("temporary root");
     let captured = temporary.path().join("policy.json");
     let output = Command::new(&interpreter)

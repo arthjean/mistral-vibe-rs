@@ -21,7 +21,7 @@ fn rewrite(argv: &[&str]) -> (Vec<String>, Option<String>) {
             .skip(1)
             .map(|token| token.to_string_lossy().into_owned())
             .collect(),
-        reading.refusal,
+        reading.refusal.map(|refusal| refusal.to_string()),
     )
 }
 

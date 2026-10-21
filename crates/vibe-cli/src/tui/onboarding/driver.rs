@@ -7,8 +7,6 @@ use std::time::Duration;
 
 use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
 use futures_util::StreamExt;
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use tokio::sync::{mpsc, oneshot};
 use toml::Table;
 use vibe_core::auth::{
@@ -22,7 +20,7 @@ use super::model::{
 use super::render;
 use crate::CliError;
 use crate::tui::clipboard::{SystemClipboard, SystemClipboardPort};
-use crate::tui::terminal::{CrosstermOps, TerminalGuard};
+use crate::tui::terminal::FullScreen;
 
 /// What one full drive of the screens produced.
 pub struct OnboardingRun {
@@ -52,9 +50,7 @@ pub async fn run_flow(
     ports: &mut dyn OnboardingPorts,
 ) -> Result<OnboardingRun, CliError> {
     let mut model = OnboardingModel::new(context);
-    let mut guard = TerminalGuard::enter(CrosstermOps::stdout()).map_err(terminal_error)?;
-    let backend = CrosstermBackend::new(std::io::stdout());
-    let mut terminal = Terminal::new(backend).map_err(terminal_error)?;
+    let mut screen = FullScreen::enter().map_err(CliError::Terminal)?;
     let mut events = EventStream::new();
     let (event_sender, mut forwarded) = mpsc::unbounded_channel::<ModelEvent>();
     let mut animation = render::Animation::default();
@@ -65,7 +61,8 @@ pub async fn run_flow(
     let mut needs_redraw = true;
     let outcome = 'flow: loop {
         if needs_redraw {
-            terminal
+            screen
+                .terminal
                 .draw(|frame| render::draw(frame, &model, &animation))
                 .map_err(terminal_error)?;
             needs_redraw = false;
@@ -137,8 +134,7 @@ pub async fn run_flow(
     if let Some(worker) = worker.take() {
         worker.cancel();
     }
-    drop(terminal);
-    guard.restore().map_err(terminal_error)?;
+    screen.restore().map_err(CliError::Terminal)?;
     Ok(OnboardingRun {
         outcome: outcome?,
         selected_theme: model.selected_theme(),

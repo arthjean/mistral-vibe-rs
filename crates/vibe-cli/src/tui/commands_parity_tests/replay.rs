@@ -19,10 +19,11 @@ use vibe_core::telemetry::TelemetryRecord;
 
 use super::super::command_handlers::log_level::{self, Applied, Badge, LogLevelBackend, Picker};
 use super::super::command_handlers::{
-    self, CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpSourceKind, McpState,
-    NotifySeverity, Panel, ProviderAuth, Reloaded, ScheduledLoop, SessionLog, Stats,
+    self, CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpState, NotifySeverity,
+    Panel, ProviderAuth, Reloaded, ScheduledLoop, SessionLog, Stats,
 };
 use super::super::commands::{COMMANDS, CommandContext, parse_command_in};
+use super::super::interaction::IntegrationKind;
 use super::super::runtime::{InteractiveRuntime, RuntimeSkill, interactive_test_runtime};
 use super::super::submission::{
     EMPTY_SHELL_ERROR, Hint, Occupancy, Refusal, Route, classify, route,
@@ -321,7 +322,7 @@ impl CommandBackend for FixtureBackend<'_> {
     }
 
     async fn mcp_state(&mut self) -> McpState {
-        let names = |key: &str, kind: McpSourceKind| {
+        let names = |key: &str, kind: IntegrationKind| {
             self.mcp(key)
                 .and_then(Value::as_array)
                 .into_iter()
@@ -330,8 +331,8 @@ impl CommandBackend for FixtureBackend<'_> {
                 .map(move |name| (name.to_owned(), kind))
                 .collect::<Vec<_>>()
         };
-        let mut sources = names("sources", McpSourceKind::Server);
-        sources.extend(names("connectors", McpSourceKind::Connector));
+        let mut sources = names("sources", IntegrationKind::McpServer);
+        sources.extend(names("connectors", IntegrationKind::Connector));
         McpState {
             sources,
             connector_error: text(self.mcp("connectorError")),

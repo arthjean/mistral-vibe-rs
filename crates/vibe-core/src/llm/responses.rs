@@ -16,17 +16,20 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value, json};
 
-use super::adapter::{PreparedRequest, RequestParts, bearer_headers, count_field, object_or_empty};
+use super::adapter::{
+    PreparedRequest, RequestParts, bearer_headers, count_field, image_parts, object_or_empty,
+};
 use super::error::{BackendFailure, LocalFailure, LocalKind};
 use super::types::{Chunk, Message, Role, StopInfo, ToolCall, ToolChoice, Usage};
+use crate::provider::config::ThinkingLevel;
 
-const ENDPOINT: &str = "/responses";
+pub(super) const ENDPOINT: &str = "/responses";
 
-fn effort(thinking: &str) -> &str {
+const fn effort(thinking: ThinkingLevel) -> &'static str {
     match thinking {
-        "off" => "none",
-        "max" => "xhigh",
-        other => other,
+        ThinkingLevel::Off => "none",
+        ThinkingLevel::Max => "xhigh",
+        other => other.as_str(),
     }
 }
 
@@ -36,13 +39,11 @@ fn input_items(messages: &[Message]) -> Vec<Value> {
         match message.role {
             Role::System => items.push(json!({"role": "system", "content": message.text()})),
             Role::User if !message.images.is_empty() => {
-                let mut parts = Vec::new();
-                if !message.text().is_empty() {
-                    parts.push(json!({"type": "input_text", "text": message.text()}));
-                }
-                parts.extend(message.images.iter().map(
+                let parts = image_parts(
+                    message,
+                    "input_text",
                     |picture| json!({"type": "input_image", "image_url": picture.data_uri()}),
-                ));
+                );
                 items.push(json!({"role": "user", "content": parts}));
             }
             Role::User => items.push(json!({"role": "user", "content": message.text()})),

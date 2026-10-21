@@ -78,15 +78,6 @@ fn connection_root(params: &BTreeMap<String, Value>) -> (BTreeMap<String, Value>
     (params, root)
 }
 
-fn parse<T: serde::de::DeserializeOwned>(
-    params: &BTreeMap<String, Value>,
-) -> Result<T, WorkspaceServiceError> {
-    serde_json::from_value(Value::Object(
-        params.clone().into_iter().collect::<Map<_, _>>(),
-    ))
-    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))
-}
-
 fn required_path(cwd: &str) -> Result<&Path, WorkspaceServiceError> {
     if cwd.is_empty() {
         return Err(WorkspaceServiceError::InvalidParams(
@@ -112,7 +103,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: CheckoutsParams = parse(params)?;
+        let params: CheckoutsParams = parse_params(params)?;
         let answer = crate::worktrees::checkouts_response(
             &params.repo_local_paths,
             params.session_cwd.as_deref().map(Path::new),
@@ -133,7 +124,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: ListParams = parse(params)?;
+        let params: ListParams = parse_params(params)?;
         let listing = crate::worktrees::list_response(
             required_path(&params.cwd)?,
             params.include_details,
@@ -152,7 +143,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: LimitUpdateParams = parse(params)?;
+        let params: LimitUpdateParams = parse_params(params)?;
         if !(0..=MAX_WORKTREE_LIMIT).contains(&params.limit) {
             return Err(WorkspaceServiceError::InvalidParams(format!(
                 "limit must be between 0 and {MAX_WORKTREE_LIMIT}"
@@ -181,7 +172,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let PruneParams {} = parse(params)?;
+        let PruneParams {} = parse_params(params)?;
         let removed = ManagedWorktree::prune(&self.managed_worktrees(), self.worktree_limit()?)
             .map_err(git_refusal)?;
         Ok(WorkspaceDispatch::result([("removed", json!(removed))]))
@@ -192,7 +183,7 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let (params, session_id) = connection_root(params);
-        let params: RemoveParams = parse(&params)?;
+        let params: RemoveParams = parse_params(&params)?;
         let answer = crate::worktrees::remove_response(
             required_path(&params.cwd)?,
             &self.managed_worktrees(),
@@ -216,7 +207,7 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let (params, _) = connection_root(params);
-        let params: ReapParams = parse(&params)?;
+        let params: ReapParams = parse_params(&params)?;
         let request = params
             .requester_id
             .as_deref()
@@ -238,7 +229,7 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let (params, _) = connection_root(params);
-        let params: ReapParams = parse(&params)?;
+        let params: ReapParams = parse_params(&params)?;
         crate::worktrees::cancel_reap(
             required_path(&params.cwd)?,
             &self.managed_worktrees(),

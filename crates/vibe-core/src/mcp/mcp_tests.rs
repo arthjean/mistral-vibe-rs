@@ -12,6 +12,7 @@ use tokio::sync::Notify;
 
 use super::*;
 use crate::policy::{ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode};
+use crate::tools::{ToolError, ToolInvocation};
 
 struct AlwaysApprove;
 

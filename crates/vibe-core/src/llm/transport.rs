@@ -130,6 +130,29 @@ impl HttpClient {
     }
 }
 
+/// Sets each header of `extra` over `headers`, a name replacing the one
+/// already there whatever its case, so a request carries each header once.
+/// The reference merges plain dictionaries, which keep two spellings of one
+/// name apart and send both.
+pub(super) fn merge_headers<N, V>(
+    headers: &mut Vec<(String, String)>,
+    extra: impl IntoIterator<Item = (N, V)>,
+) where
+    N: AsRef<str>,
+    V: AsRef<str>,
+{
+    for (name, value) in extra {
+        let (name, value) = (name.as_ref(), value.as_ref());
+        match headers
+            .iter_mut()
+            .find(|(known, _)| known.eq_ignore_ascii_case(name))
+        {
+            Some(existing) => value.clone_into(&mut existing.1),
+            None => headers.push((name.to_owned(), value.to_owned())),
+        }
+    }
+}
+
 /// Names a client failure the way `httpx` would have raised it.
 fn classify(error: &reqwest::Error) -> TransportFailure {
     let message = error_chain(error);

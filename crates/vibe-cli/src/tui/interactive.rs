@@ -42,9 +42,7 @@ use super::runtime::{
 use super::session::{banner_metrics_from_workspace, start_runtime};
 use super::setup::{EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetector, Theme};
 use super::shell::{finish_shell, interrupt_shell};
-use super::state::{
-    EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState,
-};
+use super::state::{EntryStatus, ServerEvent, TuiState};
 use super::telemetry::{refresh_account_when_ready, report_session_opened, report_startup};
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::turn::{
@@ -53,8 +51,8 @@ use super::turn::{
 };
 use super::{
     Arguments, CliError, DEFAULT_CONTEXT_WINDOW, FRAME_INTERVAL, apply_path_normalization_event,
-    configured_theme, exit, push_local_notice, shortcuts, startup, switching, unix_seconds,
-    updates, workflow,
+    configured_theme, exit, push_local_notice, push_local_warning, shortcuts, startup, switching,
+    unix_seconds, updates, workflow,
 };
 use drain::{
     INPUT_ENDED, ReadyInputDrain, drain_ready_interrupts, drain_ready_into,
@@ -273,9 +271,7 @@ impl Session {
         self.input
             .set_safety(runtime.map_or(Safety::Neutral, |runtime| runtime.safety));
         let banner = runtime.map_or(&self.fallback_banner, |runtime| &runtime.banner);
-        let model = runtime.map_or(self.arguments.model.as_str(), |runtime| {
-            runtime.model.as_str()
-        });
+        let model = runtime.map_or(self.arguments.model(), |runtime| runtime.model.as_str());
         let thinking = runtime.map_or("off", |runtime| runtime.thinking.as_str());
         let tokens = runtime.map_or(
             TokenState {
@@ -499,7 +495,7 @@ pub async fn run_interactive(
             &format!(
                 "No API key resolved for {}. Set it in your environment or in the global .env \
                  under the vibe home, then restart.",
-                arguments.credential_environment
+                arguments.credential_environment()
             ),
             EntryStatus::Completed,
         );
@@ -830,14 +826,7 @@ fn warn_about_untrusted_config(
          to do it for you.",
         store.settings_path().display()
     );
-    state.append_local(TranscriptEntry {
-        id: String::new(),
-        revision: 1,
-        kind: TranscriptKind::Notice,
-        text: message,
-        status: EntryStatus::Completed,
-        source: EntrySource::notice(vibe_core::events::PublicNoticeLevel::Warning),
-    });
+    push_local_warning(state, message);
 }
 
 mod drain;

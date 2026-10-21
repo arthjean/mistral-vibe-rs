@@ -52,7 +52,7 @@ impl WorkspaceService {
         let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
         let limit = usize_param(params, "limit", 100, 1, 500)?;
         // A fork a rewind left unwritten is read where it is held.
-        let draft = self.lock_drafts()?.get(session_id).map(|draft| {
+        let draft = lock(&self.drafts).get(session_id).map(|draft| {
             draft
                 .messages
                 .iter()
@@ -84,7 +84,7 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
-        let draft = self.lock_drafts()?.get(session_id).cloned();
+        let draft = lock(&self.drafts).get(session_id).cloned();
         let hydrated = match draft {
             Some(draft) => draft,
             None => self.store.open(session_id).map_err(storage_error)?,

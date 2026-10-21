@@ -15,6 +15,7 @@ mod commands_parity_tests;
 pub mod completion;
 mod composer;
 mod composer_layout;
+mod config_schema;
 pub mod controls;
 pub mod debug_console;
 pub mod diagnostics;
@@ -547,6 +548,30 @@ fn push_local_error(state: &mut TuiState, message: String) {
         status: EntryStatus::Failed,
         source: EntrySource::notice(PublicNoticeLevel::Error),
     });
+}
+
+/// Reference `WarningMessage` mounted by the client itself.
+fn push_local_warning(state: &mut TuiState, message: String) {
+    state.append_local(TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Notice,
+        text: message,
+        status: EntryStatus::Completed,
+        source: EntrySource::notice(PublicNoticeLevel::Warning),
+    });
+}
+
+/// A method's answer as one JSON document, which is how the views read it.
+fn map_value(map: std::collections::BTreeMap<String, Value>) -> Value {
+    Value::Object(map.into_iter().collect())
+}
+
+/// Moves the highlight of the open picker, if one is open.
+fn move_overlay_selection(state: &mut TuiState, delta: isize) {
+    if let Some(overlay) = state.overlay.as_mut() {
+        overlay.move_selection(delta);
+    }
 }
 
 fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {

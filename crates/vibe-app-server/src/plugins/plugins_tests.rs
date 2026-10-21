@@ -1,8 +1,10 @@
 //! A session's plugins from installed roots to the published catalogs.
 
 use std::fs;
+use std::path::Path;
 
 use serde_json::json;
+use vibe_core::plugins::content::digest_plugin_tree;
 
 use super::*;
 
@@ -75,7 +77,7 @@ async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
     let home = HardenedHome::new();
     let home = vibe_core::platform::canonicalize(home.path()).unwrap();
     let sources = sources(&home);
-    let plugins = start(&sources, "session-1", PluginPorts::default()).await;
+    let plugins = bind(&sources, "session-1", None, PluginPorts::default()).await;
     let catalog = plugin_catalog(&plugins);
     let demo = &catalog["plugins"][0];
     let digest = "a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f";
@@ -140,7 +142,7 @@ async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
 async fn a_reload_picks_up_a_new_plugin() {
     let home = HardenedHome::new();
     let sources = sources(home.path());
-    let first = start(&sources, "s", PluginPorts::default()).await;
+    let first = bind(&sources, "s", None, PluginPorts::default()).await;
     let second = home.path().join("plugins").join("other");
     fs::create_dir_all(&second).unwrap();
     fs::write(
@@ -148,7 +150,7 @@ async fn a_reload_picks_up_a_new_plugin() {
         DEMO_MANIFEST.replace("\"demo\"", "\"other\""),
     )
     .unwrap();
-    let reloaded = reload(&sources, "s", &first, PluginPorts::default()).await;
+    let reloaded = bind(&sources, "s", Some(&first), PluginPorts::default()).await;
     let names: Vec<&str> = reloaded
         .snapshot
         .plugins

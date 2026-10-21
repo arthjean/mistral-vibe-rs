@@ -172,7 +172,7 @@ fn refusal_message(details: &Value) -> String {
 #[must_use]
 pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option<&'static str> {
     use vibe_app_server::client::DriverError;
-    use vibe_core::llm::error::{BackendErrorSource, FailureCode};
+    use vibe_core::llm::error::BackendErrorSource;
     use vibe_core::provider::ProviderError;
 
     match error {
@@ -186,17 +186,9 @@ pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option
         {
             Some("transport")
         }
-        DriverError::Provider(ProviderError::Call(call)) => Some(match call.failure.code() {
-            FailureCode::RateLimit => "rate_limit",
-            FailureCode::ContextTooLong => "context_too_long",
-            FailureCode::ResponseTooLong => "response_too_long",
-            FailureCode::Refusal => "refusal",
-            FailureCode::InvalidApiKey => "auth",
-            FailureCode::IncompleteStream
-            | FailureCode::InvalidModel
-            | FailureCode::BackendError
-            | FailureCode::InternalError => "model",
-        }),
+        DriverError::Provider(ProviderError::Call(call)) => {
+            turn_error_class(call.failure.code().as_str())
+        }
         DriverError::Provider(ProviderError::Refusal(_)) => Some("refusal"),
         DriverError::Provider(ProviderError::ContextOverflow) => Some("context_too_long"),
         DriverError::Provider(ProviderError::HttpStatus { status: 401 | 403 }) => Some("auth"),
@@ -208,21 +200,26 @@ pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option
         }
         DriverError::StaleTurn(_) => Some("cancelled"),
         // A unified turn's failure carries the code it was published with.
-        DriverError::Published(error) => match error.code.as_deref() {
-            Some("rate_limit") => Some("rate_limit"),
-            Some("context_too_long") => Some("context_too_long"),
-            Some("response_too_long") => Some("response_too_long"),
-            Some("refusal") => Some("refusal"),
-            Some("invalid_api_key") => Some("auth"),
-            Some("incomplete_stream" | "invalid_model" | "backend_error" | "internal_error") => {
-                Some("model")
-            }
-            _ => None,
-        },
+        DriverError::Published(error) => error.code.as_deref().and_then(turn_error_class),
         DriverError::StatePoisoned
         | DriverError::UnsupportedControl(_)
         | DriverError::ImageAttachment(_)
         | DriverError::Compaction(_) => None,
+    }
+}
+
+/// The error code a turn failure published as reference `TurnErrorCode`
+/// (`FailureCode::as_str`) is classified under, or `None` for a code this
+/// client does not know.
+fn turn_error_class(code: &str) -> Option<&'static str> {
+    match code {
+        "rate_limit" => Some("rate_limit"),
+        "context_too_long" => Some("context_too_long"),
+        "response_too_long" => Some("response_too_long"),
+        "refusal" => Some("refusal"),
+        "invalid_api_key" => Some("auth"),
+        "incomplete_stream" | "invalid_model" | "backend_error" | "internal_error" => Some("model"),
+        _ => None,
     }
 }
 

@@ -112,9 +112,9 @@ async fn resolve_credential(
     // reached reads as absent, as the reference reads it.
     let resolve = || {
         vibe_core::config::DotenvValues::global(&vibe_home)
-            .variable(&arguments.credential_environment)
+            .variable(arguments.credential_environment())
             .filter(|credential| !credential.is_empty())
-            .or_else(|| store.resolve(&arguments.credential_environment))
+            .or_else(|| store.resolve(arguments.credential_environment()))
     };
     let credential = resolve();
     if !arguments.setup && credential.is_some() {

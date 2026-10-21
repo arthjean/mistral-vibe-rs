@@ -15,24 +15,21 @@
 //! attributed to, and knows nothing about a project.
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::params::{self, optional_u64, required_string};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
-use serde::Serialize;
 use serde_json::Value;
 use thiserror::Error;
-use vibe_core::atomic_file::{FileMode, write_atomically};
 
 pub(crate) mod links;
 mod loops;
 pub(crate) mod store;
 
 pub use loops::{LoopFire, LoopState, ScheduledLoop};
-use loops::{default_loop_store, load_loops, next_loop_sequence};
+use loops::{default_loop_store, load_loops};
 
 pub const PROJECTS_METHODS: &[&str] = &[
     "loops/clear",
@@ -129,23 +126,10 @@ impl Default for ProjectsService {
     fn default() -> Self {
         let loop_store = default_loop_store();
         let (loops, loop_store_error) = match load_loops(&loop_store) {
-            Ok(mut loops) => {
-                for scheduled in loops.values_mut() {
-                    if scheduled.state == LoopState::Running {
-                        scheduled.state = LoopState::Scheduled;
-                    }
-                }
-                (loops, None)
-            }
+            Ok(loops) => (loops, None),
             Err(error) => (BTreeMap::new(), Some(error.to_string())),
         };
-        let next_loop = next_loop_sequence(&loops);
-        Self {
-            loops: Arc::new(Mutex::new(loops)),
-            loop_store,
-            loop_store_error,
-            next_loop: Arc::new(AtomicU64::new(next_loop)),
-        }
+        Self::over_loops(loops, loop_store, loop_store_error)
     }
 }
 
@@ -160,22 +144,13 @@ impl ProjectsService {
         session_id: &str,
     ) -> Result<ProjectsSessionRemoval, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
-        let mut loops = self.lock_loops()?;
-        let loops_before = loops.clone();
-
-        let loop_ids = loops
-            .iter()
-            .filter(|(_, scheduled)| scheduled.session_id == session_id)
-            .map(|(loop_id, _)| loop_id.clone())
-            .collect::<Vec<_>>();
-        let removed_loops = loop_ids
-            .into_iter()
-            .filter_map(|loop_id| loops.remove_entry(&loop_id))
-            .collect();
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = loops_before;
-            return Err(error);
-        }
+        let removed_loops = self.mutate_loops(|loops| {
+            let (removed, kept) = std::mem::take(loops)
+                .into_iter()
+                .partition(|(_, scheduled)| scheduled.session_id == session_id);
+            *loops = kept;
+            Ok(removed)
+        })?;
         Ok(ProjectsSessionRemoval {
             session_id: session_id.to_owned(),
             loops: removed_loops,
@@ -187,24 +162,19 @@ impl ProjectsService {
         removal: &ProjectsSessionRemoval,
     ) -> Result<(), ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
-        let mut loops = self.lock_loops()?;
-        if removal
-            .loops
-            .keys()
-            .any(|loop_id| loops.contains_key(loop_id))
-        {
-            return Err(ProjectsServiceError::Conflict(
-                "projects session rollback collides with newer session state".to_owned(),
-            ));
-        }
-        let loops_before = loops.clone();
-
-        loops.extend(removal.loops.clone());
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = loops_before;
-            return Err(error);
-        }
-        Ok(())
+        self.mutate_loops(|loops| {
+            if removal
+                .loops
+                .keys()
+                .any(|loop_id| loops.contains_key(loop_id))
+            {
+                return Err(ProjectsServiceError::Conflict(
+                    "projects session rollback collides with newer session state".to_owned(),
+                ));
+            }
+            loops.extend(removal.loops.clone());
+            Ok(())
+        })
     }
 
     pub fn rebind_session(
@@ -216,19 +186,14 @@ impl ProjectsService {
         if old_session_id == new_session_id {
             return Ok(());
         }
-        let mut loops = self.lock_loops()?;
-        let loops_before = loops.clone();
-
-        for scheduled in loops.values_mut() {
-            if scheduled.session_id == old_session_id {
-                scheduled.session_id = new_session_id.to_owned();
+        self.mutate_loops(|loops| {
+            for scheduled in loops.values_mut() {
+                if scheduled.session_id == old_session_id {
+                    scheduled.session_id = new_session_id.to_owned();
+                }
             }
-        }
-        if let Err(error) = self.persist_loops(&loops) {
-            *loops = loops_before;
-            return Err(error);
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Dispatches the methods that only touch the loop store.
@@ -268,15 +233,6 @@ fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> Pr
             .map(|(key, value)| (key.to_owned(), value))
             .collect(),
     }
-}
-
-/// `value` as pretty JSON, replacing `path` atomically and owner-only.
-fn persist_json_atomically<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let contents = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
-    write_atomically(path, "state", &contents, FileMode::Private).map_err(|error| error.source)
 }
 
 impl From<params::ParamError> for ProjectsServiceError {

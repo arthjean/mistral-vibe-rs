@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use toml::{Table, Value as TomlValue};
 use vibe_core::auth::{
     PersistOutcome, ProviderCredentialsRequest, effective_browser_auth_url, persist_api_key,
@@ -20,7 +20,10 @@ use vibe_core::auth::{
 use vibe_core::config::{ConfigSnapshot, DotenvValues, global_env_file};
 use vibe_protocol::ProtocolErrorCode;
 
-use super::{WorkspaceDispatch, WorkspaceService, WorkspaceServiceError};
+use super::{
+    WorkspaceDispatch, WorkspaceService, WorkspaceServiceError, config_error, effective_text, lock,
+    parse_params,
+};
 
 /// The reason every onboarding write carries.
 const ONBOARDING: &str = "onboarding";
@@ -71,35 +74,22 @@ struct SubmitChoicesParams {
     theme: Option<String>,
 }
 
-fn parse<T: serde::de::DeserializeOwned>(
-    params: &BTreeMap<String, Value>,
-) -> Result<T, WorkspaceServiceError> {
-    serde_json::from_value(Value::Object(
-        params.clone().into_iter().collect::<Map<_, _>>(),
-    ))
-    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))
-}
-
 impl WorkspaceService {
     /// The process environment with the vibe home's dotenv filling in, and the
     /// keys this run stored on top, which is the environment the reference's
     /// own `os.environ` holds once its setup stored a key.
     pub(super) fn credential_environment(&self) -> BTreeMap<String, String> {
         let mut environ = DotenvValues::global(&self.paths.vibe_home).environment();
-        if let Ok(stored) = self.stored_keys.lock() {
-            environ.extend(
-                stored
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.clone())),
-            );
-        }
+        environ.extend(
+            lock(&self.stored_keys)
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone())),
+        );
         environ
     }
 
     fn setup_snapshot(&self) -> Result<ConfigSnapshot, WorkspaceServiceError> {
-        self.config
-            .load()
-            .map_err(|error| WorkspaceServiceError::Config(error.to_string()))
+        self.config.load().map_err(config_error)
     }
 
     /// Reference `SetupRequestHandler._status`: the seed a wizard opens on,
@@ -108,7 +98,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: StatusParams = parse(params)?;
+        let params: StatusParams = parse_params(params)?;
         let snapshot = self.setup_snapshot()?;
         let provider = match params.provider.as_deref() {
             None => seed_provider(&snapshot),
@@ -167,13 +157,10 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: StoreCredentialParams = parse(params)?;
+        let params: StoreCredentialParams = parse_params(params)?;
         let snapshot = self.setup_snapshot()?;
         let provider = resolve_api_key_provider(&named_provider(&snapshot, &params.provider)?);
-        let mut stored = self
-            .stored_keys
-            .lock()
-            .map_err(|_| WorkspaceServiceError::StatePoisoned)?;
+        let mut stored = lock(&self.stored_keys);
         let report = persist_api_key(
             &text(&provider, "api_key_env_var"),
             text(&provider, "backend") == "mistral",
@@ -202,7 +189,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: SubmitChoicesParams = parse(params)?;
+        let params: SubmitChoicesParams = parse_params(params)?;
         let snapshot = self.setup_snapshot()?;
         let (provider, provider_drift) = merged_provider(&snapshot, params.provider.as_ref());
         let drifted = |requested: &Option<String>, key: &str, default: &str| {
@@ -395,15 +382,6 @@ fn text(table: &Table, key: &str) -> String {
         .get(key)
         .and_then(TomlValue::as_str)
         .unwrap_or_default()
-        .to_owned()
-}
-
-fn effective_text(snapshot: &ConfigSnapshot, key: &str, default: &str) -> String {
-    snapshot
-        .effective
-        .get(key)
-        .and_then(TomlValue::as_str)
-        .unwrap_or(default)
         .to_owned()
 }
 

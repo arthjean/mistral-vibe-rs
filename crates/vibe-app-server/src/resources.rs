@@ -253,14 +253,6 @@ pub trait ResourceBackend: Send + Sync {
 pub use core_backend::CoreResourceBackend;
 pub(crate) use core_backend::overlay_plugin_sources;
 
-#[derive(Debug, Clone)]
-struct McpSource {
-    name: String,
-    transport: String,
-    status: String,
-    tools: BTreeMap<String, bool>,
-}
-
 /// The session-scoped resource state.
 ///
 /// The six `review/*` methods used to be answered from a map held here. They
@@ -278,7 +270,6 @@ pub struct ResourceService {
     /// an empty page rather than an error.
     log: Option<FileLog>,
     feedback_actions: Vec<String>,
-    mcp: BTreeMap<String, McpSource>,
     policy_stores: BTreeMap<String, PermissionStore>,
     tool_registries: BTreeMap<String, ToolRegistry>,
     /// How long each session took to open, which `session/ready/wait`
@@ -550,6 +541,11 @@ impl ResourceService {
         Ok(read_only([]))
     }
 
+    /// The tools a session registered, which decide its calls.
+    pub(crate) fn session_tool_registry(&self, session_id: &str) -> Option<ToolRegistry> {
+        self.tool_registries.get(session_id).cloned()
+    }
+
     /// The session's tool surface as `ToolSummary` declares it: a name and
     /// whether the tool is custom.
     ///
@@ -560,11 +556,6 @@ impl ResourceService {
     /// loaded from a `tool_paths` directory; this port loads none (see the
     /// accepted divergence on `tool_paths`), so every tool it publishes is a
     /// builtin, MCP or connector one and answers `false`.
-    /// The tools a session registered, which decide its calls.
-    pub(crate) fn session_tool_registry(&self, session_id: &str) -> Option<ToolRegistry> {
-        self.tool_registries.get(session_id).cloned()
-    }
-
     fn tool_list(&self, session_id: &str) -> Result<Value, ResourceError> {
         let registry = self.tool_registries.get(session_id).ok_or_else(|| {
             ResourceError::NotFound(format!("session `{session_id}` was not found"))
@@ -578,40 +569,6 @@ impl ResourceService {
                 .map(|spec| json!({"name": spec.name, "isCustom": false}))
                 .collect(),
         ))
-    }
-
-    fn mcp_state(&self) -> Value {
-        Value::Object(
-            [
-                (
-                    "sources".to_owned(),
-                    Value::Array(
-                        self.mcp
-                            .values()
-                            .map(|source| {
-                                json!({
-                                    "name": source.name,
-                                    "displayName": source.name,
-                                    "kind": "server",
-                                    "transport": source.transport,
-                                    "status": source.status,
-                                    "tools": source.tools.iter().map(|(name, enabled)| {
-                                        json!({"name": name, "description": "", "enabled": enabled})
-                                    }).collect::<Vec<_>>(),
-                                    "error": null,
-                                    "pluginName": null,
-                                })
-                            })
-                            .collect(),
-                    ),
-                ),
-                ("discoveryErrors".to_owned(), json!({})),
-                ("connectorError".to_owned(), Value::Null),
-                ("manageConnectorsUrl".to_owned(), Value::Null),
-            ]
-            .into_iter()
-            .collect::<Map<_, _>>(),
-        )
     }
 
     /// The part of `RuntimeSnapshot` this service owns.
@@ -632,12 +589,23 @@ impl ResourceService {
             ("connectors".to_owned(), json!({"connected": 0, "total": 0})),
             (
                 "mcp".to_owned(),
-                recorded.map_or_else(|| self.mcp_state(), |state| state.mcp.clone()),
+                recorded.map_or_else(empty_mcp_state, |state| state.mcp.clone()),
             ),
         ]
         .into_iter()
         .collect())
     }
+}
+
+/// The `MCPState` of a session its backend has reported nothing about: no
+/// server, no discovery error and no connector catalog.
+fn empty_mcp_state() -> Value {
+    json!({
+        "sources": [],
+        "discoveryErrors": {},
+        "connectorError": null,
+        "manageConnectorsUrl": null,
+    })
 }
 
 fn host_platform() -> Platform {

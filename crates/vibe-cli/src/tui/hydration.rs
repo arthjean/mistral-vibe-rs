@@ -14,6 +14,7 @@ use vibe_app_server::client::{
     PublicCallbackState, PublicContentBlock, PublicEffectState, PublicHistoryEntry,
     PublicMessageRole,
 };
+use vibe_core::storage::short_session_id;
 
 use super::callback::sync_active_callbacks;
 use super::controls::ControlState;
@@ -132,8 +133,7 @@ pub(super) fn hydrate_initial_state(
 
 /// Reference `_resume_local_session`.
 pub(super) fn resumed_session_notice(session_id: &str) -> String {
-    let short = session_id.chars().take(8).collect::<String>();
-    format!("Resumed session `{short}`")
+    format!("Resumed session `{}`", short_session_id(session_id))
 }
 
 pub(super) fn canonical_session_projection(
@@ -404,7 +404,7 @@ pub(super) fn transcript_entries_from_history(
 pub(super) fn decode_public_result<T: DeserializeOwned>(
     result: BTreeMap<String, Value>,
 ) -> Result<T, CliError> {
-    serde_json::from_value(Value::Object(result.into_iter().collect())).map_err(CliError::Json)
+    serde_json::from_value(super::map_value(result)).map_err(CliError::Json)
 }
 
 pub(super) fn recoverable_initial_state(

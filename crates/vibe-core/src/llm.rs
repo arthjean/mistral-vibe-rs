@@ -200,6 +200,16 @@ impl Backend {
         }
     }
 
+    /// The URL a streamed call to `model` is sent to, which a call
+    /// descriptor names.
+    #[must_use]
+    pub fn endpoint(&self, model: &str) -> String {
+        match self {
+            Self::Mistral(backend) => backend.endpoint(),
+            Self::Generic(backend) => backend.endpoint(model),
+        }
+    }
+
     /// One non-streaming call.
     ///
     /// # Errors

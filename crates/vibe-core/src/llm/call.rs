@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 
 use super::adapter::processed;
 use super::error::{BackendFailure, CallFailure, LocalFailure, LocalKind, WrappedCause};
+use super::transport::merge_headers;
 use super::types::{Chunk, Message, Role, Usage};
 use crate::provider::config::{BackendKind, ProviderConfig};
 
@@ -98,16 +99,15 @@ pub fn extra_headers(provider: &ProviderConfig, session_id: &str) -> Vec<(String
         .iter()
         .map(|(name, value)| (name.clone(), value.clone()))
         .collect();
-    set_header(&mut headers, "user-agent", user_agent(provider.backend));
-    set_header(&mut headers, "x-affinity", session_id.to_owned());
+    let user_agent = user_agent(provider.backend);
+    merge_headers(
+        &mut headers,
+        [
+            ("user-agent", user_agent.as_str()),
+            ("x-affinity", session_id),
+        ],
+    );
     headers
-}
-
-fn set_header(headers: &mut Vec<(String, String)>, name: &str, value: String) {
-    match headers.iter_mut().find(|(known, _)| known == name) {
-        Some(existing) => existing.1 = value,
-        None => headers.push((name.to_owned(), value)),
-    }
 }
 
 /// What an answered call leaves behind.

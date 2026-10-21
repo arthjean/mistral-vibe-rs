@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use vibe_app_server::client::{ClientError, PublicDispatch, PublicHistoryEntry};
 
 use super::hydration::history_entry;
+use super::render::clean_output;
 use super::state::{TranscriptEntry, TuiState};
 use super::transcript::MANUAL_SHELL_TOOL_NAME;
 use super::{CliError, InteractiveRuntime};
@@ -510,6 +511,8 @@ fn shell_entry(
         .map(history_entry)
 }
 
+/// The captured output in cursor order, decoded and cleaned as every command
+/// output is ([`clean_output`]).
 fn sanitized_process_output(chunks: &[ShellChunk]) -> String {
     let mut chunks = chunks.to_vec();
     chunks.sort_by_key(|chunk| chunk.cursor);
@@ -517,48 +520,7 @@ fn sanitized_process_output(chunks: &[ShellChunk]) -> String {
         .into_iter()
         .flat_map(|chunk| chunk.bytes)
         .collect::<Vec<_>>();
-    let mut sanitized = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] != 0x1b {
-            let byte = bytes[index];
-            if byte == b'\n' || byte == b'\t' || byte >= b' ' {
-                sanitized.push(byte);
-            }
-            index += 1;
-            continue;
-        }
-        index += 1;
-        match bytes.get(index).copied() {
-            Some(b'[') => {
-                index += 1;
-                while index < bytes.len() {
-                    let byte = bytes[index];
-                    index += 1;
-                    if (0x40..=0x7e).contains(&byte) {
-                        break;
-                    }
-                }
-            }
-            Some(b']') => {
-                index += 1;
-                while index < bytes.len() {
-                    if bytes[index] == 0x07 {
-                        index += 1;
-                        break;
-                    }
-                    if bytes[index] == 0x1b && bytes.get(index + 1) == Some(&b'\\') {
-                        index += 2;
-                        break;
-                    }
-                    index += 1;
-                }
-            }
-            Some(_) => index += 1,
-            None => {}
-        }
-    }
-    String::from_utf8_lossy(&sanitized).into_owned()
+    clean_output(&String::from_utf8_lossy(&bytes))
 }
 
 #[cfg(test)]

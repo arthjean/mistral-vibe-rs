@@ -15,8 +15,8 @@ use tokio::process::{ChildStdin, Command};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
-use crate::child::{ChildExit, ChildGroup, Rung, TerminationError};
-use crate::pty::{PtySpec, PtyTerminal, PtyWriter};
+use crate::child::{ChildGroup, Leader, Rung, TerminationError};
+use crate::pty::{PtySpec, PtyWriter};
 use crate::workspace::{GitInspector, GitInspectorFuture, GitState, WorkspaceError};
 
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 1_048_576;
@@ -131,7 +131,7 @@ pub struct ProcessRead {
 
 struct ManagedProcess {
     id: String,
-    child: Mutex<TerminalChild>,
+    child: Mutex<Box<ChildGroup<dyn Leader>>>,
     stdin: Mutex<Option<TerminalInput>>,
     chunks: Mutex<mpsc::UnboundedReceiver<ProcessChunk>>,
     readers: Mutex<Vec<JoinHandle<()>>>,
@@ -139,53 +139,6 @@ struct ManagedProcess {
     output_dropped: Arc<AtomicBool>,
     /// The terminal this process runs on, absent on the pipe backend.
     backend: Option<&'static str>,
-}
-
-/// The child behind one terminal, whichever backend owns it.
-///
-/// Both backends answer the same four questions, so every caller below stays
-/// written once instead of once per backend.
-#[cfg_attr(
-    windows,
-    expect(
-        clippy::large_enum_variant,
-        reason = "a Windows child group also holds its job object; one per session needs no box"
-    )
-)]
-enum TerminalChild {
-    Piped(ChildGroup),
-    Terminal(Box<PtyTerminal>),
-}
-
-impl TerminalChild {
-    fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
-        match self {
-            Self::Piped(child) => child.try_wait(),
-            Self::Terminal(child) => child.try_wait(),
-        }
-    }
-
-    async fn shut_down(
-        &mut self,
-        grace: Duration,
-        from: Rung,
-    ) -> Result<ChildExit, TerminationError> {
-        match self {
-            Self::Piped(child) => child.shut_down(grace, from).await,
-            Self::Terminal(child) => child.shut_down(grace, from).await,
-        }
-    }
-
-    async fn reap_group(
-        &mut self,
-        grace: Duration,
-        already_signaled: bool,
-    ) -> Result<(), TerminationError> {
-        match self {
-            Self::Piped(child) => child.reap_group(grace, already_signaled).await,
-            Self::Terminal(child) => child.reap_group(grace, already_signaled).await,
-        }
-    }
 }
 
 /// The writing half of one terminal.
@@ -225,9 +178,14 @@ impl TerminalManager {
             return Err(ProcessError::InvalidProgram);
         }
         let (sender, receiver) = mpsc::unbounded_channel();
-        let cursor = Arc::new(AtomicU64::new(0));
-        let output_bytes = Arc::new(AtomicUsize::new(0));
         let output_dropped = Arc::new(AtomicBool::new(false));
+        let sink = OutputSink {
+            sender,
+            cursor: Arc::new(AtomicU64::new(0)),
+            output_bytes: Arc::new(AtomicUsize::new(0)),
+            output_dropped: output_dropped.clone(),
+            max_output_bytes: spec.max_output_bytes,
+        };
         let mut backend = None;
         // A caller that asked for a terminal gets one or gets an error. Falling
         // through to pipes here would publish a session claiming a capability it
@@ -252,16 +210,9 @@ impl TerminalManager {
             // A terminal merges the two streams into one, so a chunk read off it
             // is reported the way the child wrote it: in order, on the stream a
             // terminal has.
-            let reader = spawn_terminal_reader(
-                streams.reader,
-                sender.clone(),
-                cursor.clone(),
-                output_bytes.clone(),
-                output_dropped.clone(),
-                spec.max_output_bytes,
-            );
+            let reader = spawn_terminal_reader(streams.reader, sink.clone());
             Some((
-                TerminalChild::Terminal(Box::new(child)),
+                Box::new(child) as Box<ChildGroup<dyn Leader>>,
                 Some(TerminalInput::Terminal(streams.writer)),
                 vec![reader],
             ))
@@ -288,27 +239,11 @@ impl TerminalManager {
                 let stdout = pipes.stdout.ok_or(ProcessError::MissingPipe("stdout"))?;
                 let stderr = pipes.stderr.ok_or(ProcessError::MissingPipe("stderr"))?;
                 let readers = vec![
-                    tokio::spawn(read_stream(
-                        stdout,
-                        ProcessStream::Stdout,
-                        sender.clone(),
-                        cursor.clone(),
-                        output_bytes.clone(),
-                        output_dropped.clone(),
-                        spec.max_output_bytes,
-                    )),
-                    tokio::spawn(read_stream(
-                        stderr,
-                        ProcessStream::Stderr,
-                        sender,
-                        cursor,
-                        output_bytes,
-                        output_dropped.clone(),
-                        spec.max_output_bytes,
-                    )),
+                    tokio::spawn(read_stream(stdout, ProcessStream::Stdout, sink.clone())),
+                    tokio::spawn(read_stream(stderr, ProcessStream::Stderr, sink)),
                 ];
                 (
-                    TerminalChild::Piped(child),
+                    Box::new(child) as Box<ChildGroup<dyn Leader>>,
                     pipes.stdin.map(TerminalInput::Piped),
                     readers,
                 )
@@ -564,8 +499,13 @@ impl TerminalManager {
         // A pseudoconsole reaches end of file when it is closed rather than
         // when its child exits, so it is closed before its reader is awaited.
         // One that does not close leaves the reader short of its end.
-        if let TerminalChild::Terminal(terminal) = &mut *process.child.lock().await
-            && terminal.close_console(self.cleanup_grace).await.is_err()
+        if process
+            .child
+            .lock()
+            .await
+            .close_console(self.cleanup_grace)
+            .await
+            .is_err()
         {
             process.output_dropped.store(true, Ordering::Release);
         }
@@ -654,6 +594,46 @@ fn pass_arguments(command: &mut Command, program: &std::path::Path, arguments: &
     command.args(arguments);
 }
 
+/// Where every reader of one terminal delivers what it reads: one queue, one
+/// cursor, and one output budget across its streams.
+#[derive(Clone)]
+struct OutputSink {
+    sender: mpsc::UnboundedSender<ProcessChunk>,
+    cursor: Arc<AtomicU64>,
+    output_bytes: Arc<AtomicUsize>,
+    output_dropped: Arc<AtomicBool>,
+    max_output_bytes: usize,
+}
+
+impl OutputSink {
+    /// Queues what one read returned, as far as the budget allows, and records
+    /// whatever had to be dropped.
+    fn push(&self, stream: ProcessStream, bytes: &[u8]) {
+        let read = bytes.len();
+        let previous = self.output_bytes.fetch_add(read, Ordering::AcqRel);
+        if previous >= self.max_output_bytes {
+            self.output_dropped.store(true, Ordering::Release);
+            return;
+        }
+        let accepted = read.min(self.max_output_bytes.saturating_sub(previous));
+        if accepted < read {
+            self.output_dropped.store(true, Ordering::Release);
+        }
+        let cursor = self.cursor.fetch_add(1, Ordering::Relaxed);
+        if self
+            .sender
+            .send(ProcessChunk {
+                cursor,
+                stream,
+                bytes: bytes[..accepted].to_vec(),
+            })
+            .is_err()
+        {
+            self.output_dropped.store(true, Ordering::Release);
+        }
+    }
+}
+
 /// Drains a terminal into the same queue the pipe readers feed.
 ///
 /// The handle is blocking and cannot be aborted, so it runs on its own thread
@@ -661,11 +641,7 @@ fn pass_arguments(command: &mut Command, program: &std::path::Path, arguments: &
 /// that wait is instant, where aborting a blocking task would not be.
 fn spawn_terminal_reader(
     mut reader: Box<dyn std::io::Read + Send>,
-    sender: mpsc::UnboundedSender<ProcessChunk>,
-    cursor: Arc<AtomicU64>,
-    output_bytes: Arc<AtomicUsize>,
-    output_dropped: Arc<AtomicBool>,
-    max_output_bytes: usize,
+    sink: OutputSink,
 ) -> JoinHandle<()> {
     let (finished, wait) = oneshot::channel();
     std::thread::spawn(move || {
@@ -679,26 +655,7 @@ fn spawn_terminal_reader(
                 Ok(0) | Err(_) => break,
                 Ok(read) => read,
             };
-            let previous = output_bytes.fetch_add(read, Ordering::AcqRel);
-            if previous >= max_output_bytes {
-                output_dropped.store(true, Ordering::Release);
-                continue;
-            }
-            let accepted = read.min(max_output_bytes.saturating_sub(previous));
-            if accepted < read {
-                output_dropped.store(true, Ordering::Release);
-            }
-            let chunk_cursor = cursor.fetch_add(1, Ordering::Relaxed);
-            if sender
-                .send(ProcessChunk {
-                    cursor: chunk_cursor,
-                    stream: ProcessStream::Stdout,
-                    bytes: buffer[..accepted].to_vec(),
-                })
-                .is_err()
-            {
-                output_dropped.store(true, Ordering::Release);
-            }
+            sink.push(ProcessStream::Stdout, &buffer[..read]);
         }
         let _ = finished.send(());
     });
@@ -707,15 +664,8 @@ fn spawn_terminal_reader(
     })
 }
 
-async fn read_stream<R>(
-    mut reader: R,
-    stream: ProcessStream,
-    sender: mpsc::UnboundedSender<ProcessChunk>,
-    cursor: Arc<AtomicU64>,
-    output_bytes: Arc<AtomicUsize>,
-    output_dropped: Arc<AtomicBool>,
-    max_output_bytes: usize,
-) where
+async fn read_stream<R>(mut reader: R, stream: ProcessStream, sink: OutputSink)
+where
     R: AsyncRead + Unpin,
 {
     let mut buffer = vec![0_u8; 8_192];
@@ -724,26 +674,7 @@ async fn read_stream<R>(
             Ok(0) | Err(_) => break,
             Ok(read) => read,
         };
-        let previous = output_bytes.fetch_add(read, Ordering::AcqRel);
-        if previous >= max_output_bytes {
-            output_dropped.store(true, Ordering::Release);
-            continue;
-        }
-        let accepted = read.min(max_output_bytes.saturating_sub(previous));
-        if accepted < read {
-            output_dropped.store(true, Ordering::Release);
-        }
-        let chunk_cursor = cursor.fetch_add(1, Ordering::Relaxed);
-        if sender
-            .send(ProcessChunk {
-                cursor: chunk_cursor,
-                stream,
-                bytes: buffer[..accepted].to_vec(),
-            })
-            .is_err()
-        {
-            output_dropped.store(true, Ordering::Release);
-        }
+        sink.push(stream, &buffer[..read]);
     }
 }
 

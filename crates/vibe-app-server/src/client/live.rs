@@ -52,11 +52,20 @@ use vibe_core::tools::{
     ToolSource, ToolSpec, reference_text,
 };
 
+pub(super) mod compactor;
 pub(crate) mod delegation;
+pub(super) mod executor;
+mod middleware;
+mod titles;
+mod transcript;
+
+use compactor::ProviderSessionCompactor;
+use executor::SessionToolExecutor;
+use titles::{TitleRouting, title_routing};
 
 use delegation::ProviderSamplingHandler;
 
-use super::interactive::plan_file_path;
+use super::interactive::plan_review::{PLAN_AGENT, plan_file_path};
 use super::{
     CompactionDriverFuture, DriverError, DriverFuture, PublicContentBlock, SessionCompaction,
     SessionIntent, TurnDriver, TurnReservation, provider_images, session_stats,
@@ -105,19 +114,6 @@ struct PendingContext {
     inject_invoked_skill: bool,
 }
 
-/// The persisted half of a turn: the transcript the store already holds, the
-/// identity the engine runs the turn under, and the metadata the sink and the
-/// baseline are built from.
-///
-/// A driver with no session root has none of this, which is the only difference
-/// between a persisted turn and an ephemeral one.
-struct TurnTranscript {
-    store: SessionStore,
-    metadata: vibe_core::storage::SessionMetadata,
-    session_id: String,
-    messages: Vec<ModelMessage>,
-}
-
 pub struct LiveTurnDriver {
     provider: Arc<dyn CompletionProvider>,
     compactor: ProviderSessionCompactor,
@@ -151,288 +147,6 @@ pub struct LiveTurnDriver {
     /// `select_utility_model`), read again for every title since a probe may
     /// have answered meanwhile.
     titles: Option<TitleRouting>,
-}
-
-/// The provider-bound half of compaction: it binds the core manager to this
-/// session's provider and plan. A compacted session keeps its identifier, as
-/// it does upstream since the envelope is appended rather than substituted.
-///
-/// The summarization itself lives one layer down, in
-/// [`vibe_core::compaction::manager`], because it is provider-neutral: the call
-/// shape, the failure taxonomy, the fallback and the retry ladder are the same
-/// whichever backend answers, and keeping them there is what lets the compaction
-/// corpus drive them with a scripted provider.
-#[derive(Clone)]
-pub(super) struct ProviderSessionCompactor {
-    provider: Arc<dyn CompletionProvider>,
-    /// The prompts, the model, the tools and the strict flag this session
-    /// summarizes under.
-    plan: Arc<CompactionPlan>,
-}
-
-impl ProviderSessionCompactor {
-    pub(super) fn new(provider: Arc<dyn CompletionProvider>) -> Self {
-        Self {
-            provider,
-            plan: Arc::new(CompactionPlan::default()),
-        }
-    }
-
-    /// The same compactor, summarizing under `plan`.
-    pub(super) fn with_plan(&self, plan: CompactionPlan) -> Self {
-        Self {
-            provider: Arc::clone(&self.provider),
-            plan: Arc::new(plan),
-        }
-    }
-
-    async fn compact_with_instructions(
-        &self,
-        current_session_id: &str,
-        messages: &[ModelMessage],
-        extra_instructions: &str,
-        requests: Option<compaction_manager::SummaryRequests>,
-    ) -> Result<CompactionResult, CompactionFailure> {
-        let plan = CompactionPlan {
-            session_id: Some(current_session_id.to_owned()),
-            requests,
-            ..(*self.plan).clone()
-        };
-        let summarized = compaction_manager::compact(
-            self.provider.as_ref(),
-            &plan,
-            messages,
-            extra_instructions.trim(),
-        )
-        .await?;
-        Ok(CompactionResult {
-            new_session_id: current_session_id.to_owned(),
-            summary: summarized.summary,
-            messages: summarized.messages,
-            usage: summarized.usage,
-            failure: summarized.failure,
-        })
-    }
-
-    /// The plan one session summarizes under: this process's resolved prompts,
-    /// with the model, the strict flag and the live tool surface the session
-    /// itself carries.
-    fn session_plan(
-        &self,
-        settings: &CompactionSettings,
-        tools: Vec<ToolDefinition>,
-        tool_choice: Option<ToolChoice>,
-        thinking: bool,
-    ) -> CompactionPlan {
-        CompactionPlan {
-            prompts: self.plan.prompts.clone(),
-            model: settings.compaction_model.clone(),
-            thinking,
-            tools,
-            tool_choice,
-            strict: settings.raise_on_compaction_failure,
-            ..CompactionPlan::default()
-        }
-    }
-}
-
-impl Compactor for ProviderSessionCompactor {
-    fn compact<'a>(
-        &'a self,
-        current_session_id: &'a str,
-        messages: &'a [ModelMessage],
-    ) -> vibe_core::engine::CompactionFuture<'a> {
-        Box::pin(async move {
-            self.compact_with_instructions(current_session_id, messages, "", None)
-                .await
-        })
-    }
-
-    fn compact_reporting<'a>(
-        &'a self,
-        current_session_id: &'a str,
-        messages: &'a [ModelMessage],
-        requests: compaction_manager::SummaryRequests,
-    ) -> vibe_core::engine::CompactionFuture<'a> {
-        Box::pin(async move {
-            self.compact_with_instructions(current_session_id, messages, "", Some(requests))
-                .await
-        })
-    }
-
-    fn cleared_session_id(&self, current_session_id: &str) -> Result<String, String> {
-        Ok(rotate_session_id(current_session_id))
-    }
-}
-
-/// The session's own view of the registry: the two configured filters, plus the
-/// exact names a subagent is confined to.
-///
-/// The filters are compiled once here rather than per call, because the
-/// reference matching rules cover globs and regular expressions and a turn
-/// consults them for every published name and again for every call.
-#[derive(Clone)]
-pub(super) struct SessionToolExecutor {
-    tools: ToolRegistry,
-    /// The session's two lists, shared by every clone so an agent switch in
-    /// the middle of a turn reaches the executor the engine already holds.
-    filters: Arc<std::sync::RwLock<SessionToolFilters>>,
-    allowed: Option<BTreeSet<String>>,
-    /// Tools this executor publishes but refuses to run, with the reason the
-    /// model reads. A withheld tool and a refused one are different answers:
-    /// the reference keeps `task` in a subagent's surface and refuses the call,
-    /// so a refusal has to be expressible without dropping the definition.
-    refused: BTreeMap<String, String>,
-}
-
-/// Which tools a session's configuration publishes.
-#[derive(Clone)]
-struct SessionToolFilters {
-    /// Absent when the session wrote no `enabled_tools`, which is the only
-    /// state that publishes everything. A list that carries entries narrows
-    /// even when none of them compiles into a usable pattern, because the
-    /// reference gates on the written list and matches with `name_matches`,
-    /// which skips a blank entry and an uncompilable expression rather than
-    /// widening the surface back out.
-    enabled: Option<NameFilter>,
-    disabled: NameFilter,
-}
-
-impl SessionToolFilters {
-    fn of(intent: &SessionIntent) -> Self {
-        Self {
-            enabled: (!intent.enabled_tools.is_empty())
-                .then(|| NameFilter::new(&intent.enabled_tools)),
-            disabled: NameFilter::new(&intent.disabled_tools),
-        }
-    }
-}
-
-impl SessionToolExecutor {
-    pub(super) fn new(tools: ToolRegistry, intent: &SessionIntent) -> Self {
-        Self {
-            tools,
-            filters: Arc::new(std::sync::RwLock::new(SessionToolFilters::of(intent))),
-            allowed: None,
-            refused: BTreeMap::new(),
-        }
-    }
-
-    /// Publishes what `intent` enables from now on, in this executor and in
-    /// every clone of it.
-    fn retarget(&self, intent: &SessionIntent) {
-        if let Ok(mut filters) = self.filters.write() {
-            *filters = SessionToolFilters::of(intent);
-        }
-    }
-
-    fn filters(&self) -> SessionToolFilters {
-        self.filters.read().map_or_else(
-            |poisoned| poisoned.into_inner().clone(),
-            |filters| filters.clone(),
-        )
-    }
-
-    pub(super) fn with_allowed_tools(mut self, allowed: BTreeSet<String>) -> Self {
-        self.allowed = Some(allowed);
-        self
-    }
-
-    /// The same executor, publishing `name` and answering `reason` when it is
-    /// called.
-    pub(super) fn refusing(mut self, name: &str, reason: String) -> Self {
-        self.refused.insert(name.to_owned(), reason);
-        self
-    }
-
-    /// Why `name` is refused before it runs, or [`None`] when it may run.
-    fn refusal(&self, name: &str) -> Option<String> {
-        self.refused.get(name).cloned()
-    }
-
-    fn permits(&self, name: &str) -> bool {
-        let filters = self.filters();
-        filters
-            .enabled
-            .as_ref()
-            .is_none_or(|enabled| enabled.matches(name))
-            && !filters.disabled.matches(name)
-            && self
-                .allowed
-                .as_ref()
-                .is_none_or(|allowed| allowed.contains(name))
-    }
-
-    pub(super) fn definitions(&self) -> Result<Vec<ToolDefinition>, DriverError> {
-        let filters = self.filters();
-        self.tools
-            .available(filters.enabled.as_ref(), &filters.disabled)
-            .map_err(|error| DriverError::Tool(error.to_string()))
-            .map(|definitions| {
-                definitions
-                    .into_iter()
-                    .filter(|definition| self.permits(&definition.name))
-                    .map(|spec| ToolDefinition {
-                        name: spec.name,
-                        description: spec.description,
-                        input_schema: spec.input_schema,
-                    })
-                    .collect()
-            })
-    }
-}
-
-impl ToolExecutor for SessionToolExecutor {
-    fn remote_origin(&self, name: &str) -> Option<RemoteToolOrigin> {
-        self.tools.remote_origin(name)
-    }
-
-    fn prepare_arguments(&self, name: &str, arguments: &str) -> Result<serde_json::Value, String> {
-        ToolExecutor::prepare_arguments(&self.tools, name, arguments)
-    }
-
-    fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
-        if !self.permits(name) {
-            return Box::pin(
-                async move { Err(format!("tool `{name}` is disabled for this session")) },
-            );
-        }
-        if let Some(reason) = self.refusal(name) {
-            return Box::pin(async move { Err(reason) });
-        }
-        self.tools.execute(name, arguments)
-    }
-
-    fn execute_stream<'a>(
-        &'a self,
-        name: &'a str,
-        arguments: &'a str,
-        output: ToolStreamSink,
-    ) -> ToolFuture<'a> {
-        self.execute_call("", name, arguments, output)
-    }
-
-    fn publishes(&self, name: &str) -> bool {
-        self.permits(name) && ToolExecutor::publishes(&self.tools, name)
-    }
-
-    fn execute_call<'a>(
-        &'a self,
-        call_id: &'a str,
-        name: &'a str,
-        arguments: &'a str,
-        output: ToolStreamSink,
-    ) -> ToolFuture<'a> {
-        if !self.permits(name) {
-            return Box::pin(
-                async move { Err(format!("tool `{name}` is disabled for this session")) },
-            );
-        }
-        if let Some(reason) = self.refusal(name) {
-            return Box::pin(async move { Err(reason) });
-        }
-        self.tools.execute_call(call_id, name, arguments, output)
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -806,114 +520,6 @@ impl LiveTurnDriver {
             .await
             .map_err(DriverError::Engine)
     }
-
-    /// The system messages every cycle of this session opens with.
-    ///
-    /// Reference `_loop.py` composes them on every cycle rather than only on
-    /// the first, so a resumed session runs under the same directives a fresh
-    /// one does. Plan mode also creates the file it names here, which is what
-    /// makes the path writable by the time the model reads the directive.
-    async fn system_preamble(
-        &self,
-        reservation: &TurnReservation,
-    ) -> Result<Vec<ModelMessage>, DriverError> {
-        // The server composes the session's prompt, headless section included
-        // (`vibe/core/system_prompt.py:380-425`). A reservation built without
-        // it runs on this driver's configured prompt, which carries the
-        // headless directive the same way.
-        let content = match &reservation.system_prompt {
-            Some(prompt) => prompt.text.clone(),
-            None if reservation.intent.headless => format!(
-                "{}\n\n{}",
-                self.system_prompt.trim_end(),
-                vibe_core::system_prompt::HEADLESS_SECTION
-            ),
-            None => self.system_prompt.clone(),
-        };
-        let messages = vec![ModelMessage::System { content }];
-        if runs_plan_agent(reservation) {
-            let plan_path = self
-                .plan_directory()
-                .map(|directory| plan_file_path(&directory, &reservation.session_id))
-                .ok_or_else(|| DriverError::Tool("plan file root is unavailable".to_owned()))?;
-            if let Some(parent) = plan_path.parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .map_err(|error| DriverError::Tool(error.to_string()))?;
-            }
-            tokio::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(false)
-                .open(&plan_path)
-                .await
-                .map_err(|error| DriverError::Tool(error.to_string()))?;
-        }
-        Ok(messages)
-    }
-
-    /// Opens the transcript this turn continues, creating one when the store
-    /// holds none.
-    ///
-    /// A `resume` selector and a `continue` both name a session the store
-    /// already has. Without either, the session's own identifier is tried and a
-    /// miss means this is its first turn.
-    fn open_transcript(
-        &self,
-        root: &Path,
-        reservation: &TurnReservation,
-    ) -> Result<TurnTranscript, DriverError> {
-        let store = SessionStore::new(root);
-        let hydrated = if let Some(selector) = &reservation.intent.resume {
-            Some(
-                store
-                    .resume(selector, &self.system_prompt, BTreeMap::new())
-                    .map_err(DriverError::Storage)?,
-            )
-        } else if reservation.intent.continue_session {
-            Some(
-                store
-                    .continue_session(
-                        &reservation.working_directory,
-                        &self.system_prompt,
-                        BTreeMap::new(),
-                    )
-                    .map_err(DriverError::Storage)?,
-            )
-        } else {
-            // The session the server opened: written already, or named and
-            // waiting for its first save.
-            match store.open(&reservation.session_id) {
-                Ok(hydrated) => Some(hydrated),
-                Err(vibe_core::storage::StorageError::SessionNotFound(_)) => None,
-                Err(error) => return Err(DriverError::Storage(error)),
-            }
-        };
-        match hydrated {
-            Some(hydrated) => Ok(TurnTranscript {
-                store,
-                session_id: hydrated.metadata.id.clone(),
-                metadata: hydrated.metadata,
-                messages: hydrated.messages,
-            }),
-            None => {
-                let metadata = store
-                    .create(
-                        &reservation.session_id,
-                        &reservation.working_directory,
-                        None,
-                        crate::host::now_millis(),
-                    )
-                    .map_err(DriverError::Storage)?;
-                Ok(TurnTranscript {
-                    store,
-                    metadata,
-                    session_id: reservation.session_id.clone(),
-                    messages: Vec::new(),
-                })
-            }
-        }
-    }
 }
 
 impl TurnDriver for LiveTurnDriver {
@@ -1283,59 +889,6 @@ impl TurnDriver for LiveTurnDriver {
 }
 
 impl LiveTurnDriver {
-    /// The warning policy this session speaks through, created on its first
-    /// turn and kept afterward.
-    ///
-    /// `context_warnings` decides whether the policy is registered at all, the
-    /// way the reference's `_setup_middleware` does, rather than registering a
-    /// silent one: an unregistered policy cannot latch, so turning the key off
-    /// mid-session leaves nothing behind.
-    fn context_warning(
-        &self,
-        session_id: &str,
-        settings: &CompactionSettings,
-    ) -> Result<Option<Arc<ContextWarningMiddleware>>, DriverError> {
-        if !settings.context_warnings {
-            return Ok(None);
-        }
-        let mut warnings = self
-            .context_warnings
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?;
-        Ok(Some(Arc::clone(
-            warnings.entry(session_id.to_owned()).or_default(),
-        )))
-    }
-
-    /// The plan-agent reminder of this session, told which agent the turn
-    /// runs and what the reminder names.
-    fn plan_agent(
-        &self,
-        reservation: &TurnReservation,
-        tools: &[vibe_core::provider::ToolDefinition],
-    ) -> Result<Arc<PlanAgentMiddleware>, DriverError> {
-        let middleware = Arc::clone(
-            self.plan_agents
-                .lock()
-                .map_err(|_| DriverError::StatePoisoned)?
-                .entry(reservation.session_id.clone())
-                .or_default(),
-        );
-        let published = |name: &str| tools.iter().any(|tool| tool.name == name);
-        let plan_file = self
-            .plan_directory()
-            .map(|directory| plan_file_path(&directory, &reservation.session_id))
-            .map(|path| path.display().to_string())
-            .unwrap_or_default();
-        middleware.set_reminder(vibe_core::middleware::plan_agent_reminder(
-            &plan_file,
-            published("ask_user_question"),
-            published("exit_plan_mode"),
-        ));
-        middleware.set_active(runs_plan_agent(reservation));
-        Ok(middleware)
-    }
-
     fn send_control(
         &self,
         session_id: &str,
@@ -1367,6 +920,7 @@ impl Drop for ControlRegistration<'_> {
         }
     }
 }
+
 /// The launch's own credential first, then the ambient ones.
 struct LaunchCredentials {
     launch: MapCredentials,
@@ -1381,68 +935,8 @@ impl Credentials for LaunchCredentials {
     }
 }
 
-/// What a title's model is chosen from: the configured providers and models,
-/// with the session's own model active, and the credentials and budgets the
-/// call runs with.
-#[derive(Clone)]
-struct TitleRouting {
-    routing: ModelRouting,
-    context: BackendContext,
-}
-
-impl TitleRouting {
-    /// Reference `select_utility_model`, or `None` when the configuration
-    /// leaves nothing to run a title on.
-    fn selection(&self) -> Option<UtilitySelection> {
-        utility::select(
-            &self.routing,
-            self.context.credentials.as_ref(),
-            ModelAvailability::global(),
-            Some(UtilityFeature::Title),
-        )
-        .ok()
-    }
-}
-
-/// The routing a title reads: every configured provider, the driver's own
-/// standing in for the entry of the same name, and the driver's model active.
-fn title_routing(config: &LiveDriverConfig) -> ModelRouting {
-    let mut providers = config.providers.clone();
-    match providers
-        .iter_mut()
-        .find(|provider| provider.name == config.provider.name)
-    {
-        Some(entry) => *entry = config.provider.clone(),
-        None => providers.push(config.provider.clone()),
-    }
-    let mut models = config.models.clone();
-    if !models
-        .iter()
-        .any(|model| model.alias == config.model || model.name == config.model)
-    {
-        models.push(ModelConfig::new(&config.model, &config.provider.name));
-    }
-    ModelRouting {
-        providers,
-        models,
-        active_alias: Some(config.model.clone()),
-        allowed_models: config.allowed_models.clone(),
-        api: config.api,
-        utility_models: config.utility_models.clone(),
-    }
-}
-
 /// Where the ambient configuration saves sessions, or `None` when it saves
 /// none (reference `SessionLoggingConfig.enabled`).
 fn default_session_root() -> Option<PathBuf> {
     crate::workspace::WorkspaceService::default().logged_session_root()
-}
-
-/// The builtin agent plan mode is. Reference `BuiltinAgentName.PLAN`.
-pub(crate) const PLAN_AGENT: &str = "plan";
-
-/// Whether the turn runs the plan agent, or the port's own plan mode.
-fn runs_plan_agent(reservation: &TurnReservation) -> bool {
-    reservation.intent.agent.as_deref() == Some(PLAN_AGENT)
-        || reservation.intent.mode.as_deref() == Some("plan")
 }

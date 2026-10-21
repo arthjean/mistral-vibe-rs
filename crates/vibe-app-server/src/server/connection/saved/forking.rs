@@ -13,31 +13,13 @@ impl ServerConnection {
         &mut self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let _idempotency_key = check.optional_string(&object, "idempotencyKey", &[]);
-        let source = check.required_string(&object, "sourceSessionId", &[]);
-        let entry_id = check.optional_string(&object, "entryId", &[]);
-        let _agent_config = check.optional_object(&object, "agentConfig", &[]);
-        let _after_turn_id = check.optional_string(&object, "afterTurnId", &[]);
-        let history_limit = check.bounded_int(&object, "historyLimit", &[], 200, PAGE_BOUNDS);
-        let attach = check.optional_bool(&object, "attach", &[]).unwrap_or(true);
-        check.extras(
-            &object,
-            &[
-                "idempotencyKey",
-                "sourceSessionId",
-                "entryId",
-                "agentConfig",
-                "afterTurnId",
-                "historyLimit",
-                "attach",
-            ],
-            &[],
-        );
-        check.finish().map_err(rejected)?;
-        let source = source.unwrap_or_default();
-        let history_limit = usize::try_from(history_limit.unwrap_or(200)).unwrap_or(200);
+        let ForkParams {
+            source_session_id: source,
+            entry_id,
+            history_limit,
+            attach,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
+        let history_limit = usize::from(history_limit);
         if self.root_id().as_deref() != Some(source.as_str()) {
             return Err(not_found(&source));
         }
@@ -190,4 +172,16 @@ fn detached_fork_state(
     session["workspaceRoots"] = json!([forked.metadata.working_directory]);
     session["tokenUsage"] = json!({"inputTokens": 0, "outputTokens": 0, "totalTokens": 0});
     state
+}
+
+/// Reference `SessionForkParams`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ForkParams {
+    source_session_id: String,
+    entry_id: Option<String>,
+    #[serde(default = "default_history_limit")]
+    history_limit: u16,
+    #[serde(default = "default_true")]
+    attach: bool,
 }

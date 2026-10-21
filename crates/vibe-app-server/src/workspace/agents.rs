@@ -156,11 +156,12 @@ impl WorkspaceService {
         forced: &[String],
     ) -> Self {
         let mut scoped = self.clone();
-        scoped.config = self
-            .config
-            .scoped_to_working_directory(working_directory, trusted)
-            .with_project_file_trust(project_file_trust)
-            .with_additional_roots(add_directories.iter().map(PathBuf::from).collect());
+        scoped.config = self.session_config(
+            working_directory,
+            trusted,
+            project_file_trust,
+            add_directories,
+        );
         scoped.forced_agents = forced.iter().cloned().collect();
         scoped
     }
@@ -406,9 +407,7 @@ impl WorkspaceService {
             return self.agents_list(params);
         }
         let source = self.authorized_existing_path(Path::new(required_string(params, "path")?))?;
-        self.agents
-            .lock()
-            .map_err(|_| WorkspaceServiceError::StatePoisoned)?
+        lock(&self.agents)
             .install(&source)
             .map_err(|error| WorkspaceServiceError::Extension(error.to_string()))?;
         // Both forms answer with the catalog the change produced, which is what
@@ -427,9 +426,7 @@ impl WorkspaceService {
             self.set_builtin_agent_installed(name, false)?;
             return self.agents_list(params);
         }
-        self.agents
-            .lock()
-            .map_err(|_| WorkspaceServiceError::StatePoisoned)?
+        lock(&self.agents)
             .uninstall(required_string(params, "name")?)
             .map_err(|error| WorkspaceServiceError::Extension(error.to_string()))?;
         self.agents_list(params)
@@ -442,15 +439,7 @@ impl WorkspaceService {
     ) -> Result<(), WorkspaceServiceError> {
         // Reference `_agent_install` edits the list whatever the name.
         let snapshot = self.config.load().map_err(config_error)?;
-        let mut installed = snapshot
-            .effective
-            .get("installed_agents")
-            .and_then(TomlValue::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(TomlValue::as_str)
-            .map(ToOwned::to_owned)
-            .collect::<Vec<_>>();
+        let mut installed = string_list(&snapshot.effective, "installed_agents");
         // Appended in the order the installations happened.
         if install && !installed.iter().any(|entry| entry == name) {
             installed.push(name.to_owned());
@@ -480,11 +469,9 @@ impl WorkspaceService {
     /// as it stands now, so an `agent_paths` entry written between two reads
     /// is searched by the second.
     fn agent_search_paths(&self) -> Vec<(ExtensionSource, PathBuf)> {
-        let configured = self
-            .config
-            .load()
-            .map(|snapshot| string_list(&snapshot.effective, "agent_paths"))
-            .unwrap_or_default();
+        let configured = self.read_config(Vec::new(), |snapshot| {
+            string_list(&snapshot.effective, "agent_paths")
+        });
         vibe_core::extensions::agent_search_paths(
             &configured,
             &self.config.harness_files(),
@@ -611,19 +598,12 @@ impl WorkspaceService {
     }
 
     pub(super) fn catalog(&self) -> ExtensionCatalog {
-        let builtin_agents = self
-            .agents
-            .lock()
-            .ok()
-            .map(|agents| {
-                agents
-                    .list()
-                    .into_iter()
-                    .filter(|agent| agent.source == ExtensionSource::Builtin)
-                    .map(|agent| (agent.name.clone(), agent.clone()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let builtin_agents = lock(&self.agents)
+            .list()
+            .into_iter()
+            .filter(|agent| agent.source == ExtensionSource::Builtin)
+            .map(|agent| (agent.name.clone(), agent.clone()))
+            .collect();
         let mut roots = self.discovery_roots.clone();
         roots.agents = self.agent_search_paths();
         roots.skills = self.skill_discovery(&self.paths.working_directory, self.project_trusted);

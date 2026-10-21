@@ -25,7 +25,7 @@ impl WorkspaceService {
         &self,
         session_id: &str,
     ) -> Result<HydratedSession, WorkspaceServiceError> {
-        if let Some(draft) = self.lock_drafts()?.get(session_id) {
+        if let Some(draft) = lock(&self.drafts).get(session_id) {
             return Ok(draft.clone());
         }
         self.store.open(session_id).map_err(|error| match error {
@@ -39,8 +39,7 @@ impl WorkspaceService {
     /// Whether `session_id` is a fork no turn has written to disk yet.
     #[must_use]
     pub(crate) fn is_draft(&self, session_id: &str) -> bool {
-        self.lock_drafts()
-            .is_ok_and(|drafts| drafts.contains_key(session_id))
+        lock(&self.drafts).contains_key(session_id)
     }
 
     /// Forks `source` before the message at `keep_messages` without writing
@@ -65,7 +64,7 @@ impl WorkspaceService {
         self.continuity
             .refresh(draft.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
-        self.lock_drafts()?.insert(new_id, draft.clone());
+        lock(&self.drafts).insert(new_id, draft.clone());
         Ok(draft)
     }
 
@@ -80,7 +79,7 @@ impl WorkspaceService {
         &self,
         session_id: &str,
     ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
-        let mut drafts = self.lock_drafts()?;
+        let mut drafts = lock(&self.drafts);
         let Some(draft) = drafts.get(session_id) else {
             return Ok(None);
         };
@@ -111,11 +110,11 @@ impl WorkspaceService {
         session_id: &str,
         keep_messages: usize,
     ) -> Result<HydratedSession, WorkspaceServiceError> {
-        let draft = self.lock_drafts()?.get(session_id).cloned();
+        let draft = lock(&self.drafts).get(session_id).cloned();
         let hydrated = match draft {
             Some(mut draft) => {
                 draft.messages.truncate(keep_messages);
-                self.lock_drafts()?.insert(session_id.to_owned(), draft);
+                lock(&self.drafts).insert(session_id.to_owned(), draft);
                 self.publish_draft(session_id)?.ok_or_else(|| {
                     WorkspaceServiceError::Storage(format!(
                         "the rewound draft `{session_id}` disappeared before it was saved"
@@ -143,20 +142,9 @@ impl WorkspaceService {
     /// Forgets a draft fork, which is what closing a session nobody typed into
     /// leaves of it upstream: nothing.
     pub(crate) fn discard_draft(&self, session_id: &str) {
-        if let Ok(mut drafts) = self.lock_drafts()
-            && drafts.remove(session_id).is_some()
-        {
+        if lock(&self.drafts).remove(session_id).is_some() {
             let _ = self.continuity.remove(session_id);
         }
-    }
-
-    pub(super) fn lock_drafts(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, HydratedSession>>, WorkspaceServiceError>
-    {
-        self.drafts
-            .lock()
-            .map_err(|_| WorkspaceServiceError::StatePoisoned)
     }
 
     pub fn update_runtime_settings(

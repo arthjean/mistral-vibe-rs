@@ -31,9 +31,10 @@ impl PendingAuthRequired {
     }
 }
 
-/// Reference `_auth_required_seen`'s key: a requirement is published once per
-/// session, server, descriptor revision and observed connection.
-type AuthRequiredKey = (String, String, String, Option<String>);
+/// What `mcp_catalog/authRequired` is deduplicated on, reference
+/// `_auth_required_key`: a requirement is published once per session, server,
+/// descriptor revision and observed connection revision.
+pub(in crate::resources) type AuthRequiredKey = (String, String, String, Option<String>);
 
 /// Reference `project_mcp_sources`: what is not active in the session although
 /// the configuration names it.
@@ -73,11 +74,7 @@ impl CoreResourceBackend {
         session: &CoreResourceSession,
     ) -> Result<Vec<McpServerConfig>, McpCatalogError> {
         let Some(store) = session.config() else {
-            return Ok(session
-                .started_mcp
-                .lock()
-                .map(|configs| configs.clone())
-                .unwrap_or_default());
+            return Ok(lock(&session.started_mcp).clone());
         };
         store
             .load()
@@ -107,13 +104,11 @@ impl CoreResourceBackend {
         let pending = self.mcp_auth_required.clone();
         let owner = session_id.to_owned();
         let sink: McpAuthorizationSink = Arc::new(move |name, required| {
-            if let Ok(mut pending) = pending.lock() {
-                pending.push(PendingAuthRequired {
-                    session_id: owner.clone(),
-                    name: name.to_owned(),
-                    required: required.clone(),
-                });
-            }
+            lock(&pending).push(PendingAuthRequired {
+                session_id: owner.clone(),
+                name: name.to_owned(),
+                required: required.clone(),
+            });
         });
         session
             .mcp
@@ -177,17 +172,14 @@ impl CoreResourceBackend {
         session: &CoreResourceSession,
         session_id: &str,
     ) -> Vec<Map<String, Value>> {
-        let raised = self
-            .mcp_auth_required
-            .lock()
-            .map(|mut pending| {
-                let (mine, others) = std::mem::take(&mut *pending)
-                    .into_iter()
-                    .partition::<Vec<_>, _>(|event| event.session_id == session_id);
-                *pending = others;
-                mine
-            })
-            .unwrap_or_default();
+        let raised = {
+            let mut pending = lock(&self.mcp_auth_required);
+            let (mine, others) = std::mem::take(&mut *pending)
+                .into_iter()
+                .partition::<Vec<_>, _>(|event| event.session_id == session_id);
+            *pending = others;
+            mine
+        };
         let mut accepted = Vec::new();
         for event in raised {
             let needs_auth =
@@ -202,12 +194,7 @@ impl CoreResourceBackend {
                 event.required.descriptor_revision.clone(),
                 event.required.observed_connection_revision.clone(),
             );
-            let fresh = self
-                .mcp_auth_required_seen
-                .lock()
-                .map(|mut seen| seen.insert(key))
-                .unwrap_or(false);
-            if !fresh {
+            if !lock(&self.mcp_auth_required_seen).insert(key) {
                 continue;
             }
             let mut params = Map::new();
@@ -228,10 +215,8 @@ impl CoreResourceBackend {
 
     /// Reference `_clear_resolved_auth_required`: a session's projected
     /// runtime moved, so what it was told needs a sign-in may be told again.
-    fn forget_auth_required(&self, session_id: &str) {
-        if let Ok(mut seen) = self.mcp_auth_required_seen.lock() {
-            seen.retain(|(session, ..)| session != session_id);
-        }
+    pub(super) fn forget_auth_required(&self, session_id: &str) {
+        lock(&self.mcp_auth_required_seen).retain(|(session, ..)| session != session_id);
     }
 
     pub(super) async fn run_mcp_catalog(

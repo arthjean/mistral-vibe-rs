@@ -39,17 +39,13 @@ use vibe_core::mcp::{
     McpServerConfig, McpServerRemoveError, McpStaticAuth, McpTransportConfig,
 };
 
+use crate::argparse::{self, Refusal, USAGE_EXIT};
+
 /// The program name every usage line and every error line carries.
 const PROG: &str = "vibe mcp";
 
-/// The exit code an argument failure carries, which is argparse's own.
-const USAGE_EXIT: u8 = 2;
-
 /// The transport an invocation that names none asks for.
 const DEFAULT_TRANSPORT: &str = "streamable-http";
-
-/// argparse's help column: two past the widest invocation, capped.
-const MAX_HELP_POSITION: usize = 24;
 
 /// Whether `arguments` is a `vibe mcp` invocation, which is decided before the
 /// interactive parser sees them because `mcp` is not a prompt.
@@ -370,76 +366,97 @@ pub async fn run(
         {
             print_help(&root, stdout)
         }
-        Some((first, rest)) if root.find_subcommand(first.as_str()).is_some() => {
-            let Some(sub) = root.find_subcommand(first.as_str()).cloned() else {
-                return USAGE_EXIT;
-            };
-            dispatch(&root, sub, first, rest, environment, stdout, stderr).await
-        }
-        Some((first, _)) if first.starts_with('-') => {
-            fail(&root, PROG, &unrecognized(first), stderr)
-        }
-        Some((first, _)) => fail(
-            &root,
-            PROG,
-            &format!(
-                "argument mcp_command: invalid choice: '{first}' (choose from {})",
-                subcommand_names(&root).join(", ")
+        Some((first, rest)) => match (Subcommand::named(first), root.find_subcommand(first)) {
+            (Some(subcommand), Some(sub)) => {
+                dispatch(&root, subcommand, sub, rest, environment, stdout, stderr).await
+            }
+            _ if first.starts_with('-') => fail(
+                &root,
+                PROG,
+                &Refusal::Unrecognized(first.clone()).to_string(),
+                stderr,
             ),
-            stderr,
-        ),
+            _ => fail(
+                &root,
+                PROG,
+                &Refusal::InvalidChoice {
+                    argument: "mcp_command".to_owned(),
+                    value: first.clone(),
+                    choices: argparse::subcommand_names(&root),
+                }
+                .to_string(),
+                stderr,
+            ),
+        },
+    }
+}
+
+/// The sub-commands `vibe mcp` dispatches on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Subcommand {
+    Add,
+    Remove,
+}
+
+impl Subcommand {
+    fn named(name: &str) -> Option<Self> {
+        match name {
+            "add" => Some(Self::Add),
+            "remove" => Some(Self::Remove),
+            _ => None,
+        }
     }
 }
 
 async fn dispatch(
     root: &Command,
-    sub: Command,
-    name: &str,
+    subcommand: Subcommand,
+    sub: &Command,
     rest: &[String],
     environment: &McpEnvironment,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> u8 {
-    let prog = format!("{PROG} {name}");
+    let prog = format!("{PROG} {}", sub.get_name());
     let argv = std::iter::once(prog.clone())
         .chain(rest.iter().cloned())
         .map(std::ffi::OsString::from)
         .collect();
     // The sub-command reads its tokens the way argparse does, abbreviations
     // and hyphen-led values included, before clap sees them.
-    let reading = crate::argv::reading::read(&sub, argv, &[]);
+    let reading = crate::argv::reading::read(sub, argv, &[]);
     let parsed = sub.clone().try_get_matches_from(reading.argv);
-    if let (Ok(_), Some(message)) = (&parsed, &reading.refusal) {
-        return fail(&sub, &prog, message, stderr);
+    if let (Ok(_), Some(refusal)) = (&parsed, &reading.refusal) {
+        return fail(sub, &prog, &refusal.to_string(), stderr);
     }
     let matches = match parsed {
         Ok(matches) => matches,
         Err(error) if error.kind() == ErrorKind::DisplayHelp => {
-            return print_help(&sub, stdout);
+            return print_help(sub, stdout);
         }
         Err(error) => {
             let (scope, message) = translate(&error);
             return match scope {
                 Scope::Root => fail(root, PROG, &message, stderr),
-                Scope::Sub => fail(&sub, &prog, &message, stderr),
+                Scope::Sub => fail(sub, &prog, &message, stderr),
             };
         }
     };
-    match name {
-        "remove" => {
+    match subcommand {
+        Subcommand::Remove => {
             let requested = matches
                 .get_one::<String>("name")
                 .cloned()
                 .unwrap_or_default();
             match remove(&requested, environment).await {
                 Ok(message) => write_line(stdout, &message),
-                Err(message) => fail(&sub, &prog, &message, stderr),
+                Err(message) => fail(sub, &prog, &message, stderr),
             }
         }
         // A post-parse failure is reported by the root parser, not by the one
         // that was running: the reference funnels every one of them back
         // through `parser.error` on the parser it built first.
-        _ => match add(&matches, environment, stdout, stderr).await {
+        Subcommand::Add => match add(&matches, environment, stdout, stderr).await {
             Ok(code) => code,
             Err(message) => fail(root, PROG, &message, stderr),
         },
@@ -853,66 +870,51 @@ enum Scope {
 
 /// Reads one clap failure as the argparse message the reference prints.
 fn translate(error: &clap::Error) -> (Scope, String) {
-    match error.kind() {
-        ErrorKind::MissingRequiredArgument => (
-            Scope::Sub,
-            format!(
-                "the following arguments are required: {}",
-                context(error, ContextKind::InvalidArg).join(", ")
-            ),
-        ),
+    let refusal = match error.kind() {
+        ErrorKind::MissingRequiredArgument => {
+            Refusal::Required(context(error, ContextKind::InvalidArg))
+        }
         ErrorKind::InvalidValue => {
-            let flag = flag(error);
+            let argument = flag(error);
             let value = context(error, ContextKind::InvalidValue).join(", ");
             if value.is_empty() {
-                return (
-                    Scope::Sub,
-                    format!("argument {flag}: expected one argument"),
-                );
+                Refusal::ExpectedOne { argument }
+            } else {
+                Refusal::InvalidChoice {
+                    argument,
+                    value,
+                    choices: context(error, ContextKind::ValidValue),
+                }
             }
-            (
-                Scope::Sub,
-                format!(
-                    "argument {flag}: invalid choice: {} (choose from {})",
-                    vibe_core::pycompat::repr_str(&value),
-                    context(error, ContextKind::ValidValue).join(", ")
-                ),
-            )
         }
         // Only the two timeout options parse a value, so a value this port
         // accepted the shape of but could not read is always a float.
-        ErrorKind::ValueValidation => (
-            Scope::Sub,
-            format!(
-                "argument {}: invalid float value: {}",
-                flag(error),
-                vibe_core::pycompat::repr_str(
-                    &context(error, ContextKind::InvalidValue).join(", ")
-                )
-            ),
-        ),
+        ErrorKind::ValueValidation => Refusal::InvalidValue {
+            argument: flag(error),
+            kind: "float",
+            value: context(error, ContextKind::InvalidValue).join(", "),
+        },
         // argparse places what no parser could consume on the root parser,
         // which is why an extra positional names `vibe mcp` and not the
         // sub-command that was actually running.
-        ErrorKind::UnknownArgument | ErrorKind::TooManyValues => (
-            Scope::Root,
-            unrecognized(&context(error, ContextKind::InvalidArg).join(" ")),
-        ),
-        _ => (
-            Scope::Sub,
-            error
-                .to_string()
-                .lines()
-                .next()
-                .unwrap_or("invalid arguments")
-                .trim_start_matches("error: ")
-                .to_owned(),
-        ),
-    }
-}
-
-fn unrecognized(extras: &str) -> String {
-    format!("unrecognized arguments: {extras}")
+        ErrorKind::UnknownArgument | ErrorKind::TooManyValues => {
+            let extras = context(error, ContextKind::InvalidArg).join(" ");
+            return (Scope::Root, Refusal::Unrecognized(extras).to_string());
+        }
+        _ => {
+            return (
+                Scope::Sub,
+                error
+                    .to_string()
+                    .lines()
+                    .next()
+                    .unwrap_or("invalid arguments")
+                    .trim_start_matches("error: ")
+                    .to_owned(),
+            );
+        }
+    };
+    (Scope::Sub, refusal.to_string())
 }
 
 /// The flag a failure names, without the value name clap appends to it.
@@ -923,7 +925,8 @@ fn flag(error: &clap::Error) -> String {
         .unwrap_or_default()
 }
 
-/// One context entry, as the plain strings argparse would print.
+/// One context entry, as the plain strings argparse would print: clap wraps a
+/// positional's name in angle brackets, and argparse does not.
 fn context(error: &clap::Error, kind: ContextKind) -> Vec<String> {
     let strip = |value: &str| value.trim_matches(|c| c == '<' || c == '>').to_owned();
     match error.get(kind) {
@@ -936,221 +939,21 @@ fn context(error: &clap::Error, kind: ContextKind) -> Vec<String> {
 
 /// argparse's `parser.error`: the usage line, one message line, exit 2.
 fn fail(command: &Command, prog: &str, message: &str, stderr: &mut dyn Write) -> u8 {
-    let _ = writeln!(stderr, "{}", usage_line(command));
-    let _ = writeln!(stderr, "{prog}: error: {message}");
+    let _ = write!(
+        stderr,
+        "{}",
+        argparse::error_block(&argparse::usage_line(command), prog, message)
+    );
     USAGE_EXIT
+}
+
+fn print_help(command: &Command, stdout: &mut dyn Write) -> u8 {
+    argparse::print_help(command, stdout);
+    0
 }
 
 fn write_line(stdout: &mut dyn Write, message: &str) -> u8 {
     let _ = writeln!(stdout, "{message}");
-    0
-}
-
-// --------------------------------------------------------------------------
-// The renders
-// --------------------------------------------------------------------------
-
-fn subcommand_names(command: &Command) -> Vec<String> {
-    command
-        .get_subcommands()
-        .map(|sub| sub.get_name().to_owned())
-        .collect()
-}
-
-fn prog_of(command: &Command) -> String {
-    command
-        .get_bin_name()
-        .unwrap_or_else(|| command.get_name())
-        .to_owned()
-}
-
-/// The value a flag or a positional takes, as argparse renders it.
-fn value_display(argument: &Arg) -> Option<String> {
-    if matches!(
-        argument.get_action(),
-        ArgAction::SetTrue | ArgAction::SetFalse | ArgAction::Count | ArgAction::Help
-    ) {
-        return None;
-    }
-    argument
-        .get_value_names()
-        .and_then(<[clap::builder::Str]>::first)
-        .map(|name| name.as_str().to_owned())
-}
-
-/// One argument as argparse spells it in a usage line: its first spelling and
-/// the value it takes.
-fn usage_form(argument: &Arg) -> String {
-    let head = match (argument.get_short(), argument.get_long()) {
-        (Some(short), _) => format!("-{short}"),
-        (None, Some(long)) => format!("--{long}"),
-        (None, None) => argument.get_id().to_string(),
-    };
-    match value_display(argument) {
-        Some(value) => format!("{head} {value}"),
-        None => head,
-    }
-}
-
-/// Every spelling of one argument, joined the way a help block lists them.
-fn help_form(argument: &Arg) -> String {
-    if argument.is_positional() {
-        return value_display(argument).unwrap_or_else(|| argument.get_id().to_string());
-    }
-    let value = value_display(argument);
-    let mut spellings = Vec::new();
-    if let Some(short) = argument.get_short() {
-        spellings.push(format!("-{short}"));
-    }
-    if let Some(long) = argument.get_long() {
-        spellings.push(format!("--{long}"));
-    }
-    for alias in argument.get_visible_aliases().unwrap_or_default() {
-        spellings.push(format!("--{alias}"));
-    }
-    spellings
-        .iter()
-        .map(|spelling| match &value {
-            Some(value) => format!("{spelling} {value}"),
-            None => spelling.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-/// The options of `command`, with the help flag first as argparse orders it.
-fn options_of(command: &Command) -> Vec<&Arg> {
-    let mut options: Vec<&Arg> = command
-        .get_arguments()
-        .filter(|argument| !argument.is_positional())
-        .collect();
-    options.sort_by_key(|argument| usize::from(argument.get_id() != "help"));
-    options
-}
-
-/// argparse's usage line, on one line.
-///
-/// The reference wraps it at the terminal width; this port does not, because
-/// nothing reads the wrapped shape and the wrapping rule is argparse's own
-/// rather than a contract the two surfaces share.
-fn usage_line(command: &Command) -> String {
-    let mut parts = vec![format!("usage: {}", prog_of(command))];
-    for argument in options_of(command) {
-        parts.push(format!("[{}]", usage_form(argument)));
-    }
-    let names = subcommand_names(command);
-    if !names.is_empty() {
-        parts.push(format!("{{{}}} ...", names.join(",")));
-    }
-    for positional in command.get_positionals() {
-        let form = help_form(positional);
-        parts.push(if positional.is_required_set() {
-            form
-        } else {
-            format!("[{form}]")
-        });
-    }
-    parts.join(" ")
-}
-
-/// argparse's help column: two past the widest invocation, capped at 24.
-fn help_position(entries: &[(usize, String, Option<String>)]) -> usize {
-    let widest = entries
-        .iter()
-        .map(|(indent, invocation, _)| indent + invocation.chars().count())
-        .max()
-        .unwrap_or(0);
-    (widest + 2).min(MAX_HELP_POSITION)
-}
-
-fn render_entry(
-    out: &mut dyn Write,
-    position: usize,
-    indent: usize,
-    invocation: &str,
-    description: Option<&str>,
-) {
-    let padding = " ".repeat(indent);
-    let Some(description) = description else {
-        let _ = writeln!(out, "{padding}{invocation}");
-        return;
-    };
-    if indent + invocation.chars().count() <= position.saturating_sub(2) {
-        let width = position - indent - 2;
-        let _ = writeln!(out, "{padding}{invocation:<width$}  {description}");
-    } else {
-        let _ = writeln!(out, "{padding}{invocation}");
-        let _ = writeln!(out, "{}{description}", " ".repeat(position));
-    }
-}
-
-/// argparse's help render: the usage line, the description, the positional
-/// block and the options block.
-fn print_help(command: &Command, stdout: &mut dyn Write) -> u8 {
-    let _ = writeln!(stdout, "{}", usage_line(command));
-    if let Some(description) = command.get_long_about() {
-        let _ = writeln!(stdout);
-        let _ = writeln!(stdout, "{description}");
-    }
-    let mut positionals: Vec<(usize, String, Option<String>)> = Vec::new();
-    let names = subcommand_names(command);
-    if !names.is_empty() {
-        positionals.push((2, format!("{{{}}}", names.join(",")), None));
-        for sub in command.get_subcommands() {
-            positionals.push((
-                4,
-                sub.get_name().to_owned(),
-                sub.get_about().map(ToString::to_string),
-            ));
-        }
-    }
-    for positional in command.get_positionals() {
-        positionals.push((
-            2,
-            help_form(positional),
-            positional.get_help().map(ToString::to_string),
-        ));
-    }
-    let options: Vec<(usize, String, Option<String>)> = options_of(command)
-        .into_iter()
-        .map(|argument| {
-            let description = if argument.get_id() == "help" {
-                Some("show this help message and exit".to_owned())
-            } else {
-                argument.get_help().map(ToString::to_string)
-            };
-            (2, help_form(argument), description)
-        })
-        .collect();
-    let mut every = positionals.clone();
-    every.extend(options.iter().cloned());
-    let position = help_position(&every);
-    if !positionals.is_empty() {
-        let _ = writeln!(stdout);
-        let _ = writeln!(stdout, "positional arguments:");
-        for (indent, invocation, description) in &positionals {
-            render_entry(
-                stdout,
-                position,
-                *indent,
-                invocation,
-                description.as_deref(),
-            );
-        }
-    }
-    if !options.is_empty() {
-        let _ = writeln!(stdout);
-        let _ = writeln!(stdout, "options:");
-        for (indent, invocation, description) in &options {
-            render_entry(
-                stdout,
-                position,
-                *indent,
-                invocation,
-                description.as_deref(),
-            );
-        }
-    }
     0
 }
 

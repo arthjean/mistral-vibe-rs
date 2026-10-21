@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde_json::Value;
 
 use super::super::interaction::{
@@ -5,31 +6,85 @@ use super::super::interaction::{
     OverlayItem, OverlayKind,
 };
 
-/// Reference vocabulary: `mcp_app._source_status` renders `UNAVAILABLE` this way,
-/// and connectors are presented with a `connector` transport tag.
-const UNAVAILABLE_STATUS: &str = "error - try refreshing";
-const CONNECTOR_TRANSPORT: &str = "connector";
+/// One source of the published MCP state, servers and connectors in one list
+/// as `mcp/read` answers it (reference `MCPSourceSummary`).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct McpSource {
+    pub name: String,
+    pub kind: IntegrationKind,
+    pub transport: String,
+    pub status: McpSourceStatus,
+    pub tools: Vec<McpTool>,
+}
+
+/// Reference `MCPToolSummary`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct McpTool {
+    pub name: String,
+    pub description: String,
+    pub enabled: bool,
+}
+
+/// Reference `MCPSourceStatus`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpSourceStatus {
+    Disabled,
+    Connected,
+    Enabled,
+    NeedsAuth,
+    NeedsSetup,
+    Unavailable,
+}
+
+impl McpSourceStatus {
+    /// The wire word, which `/mcp status` prints verbatim.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Connected => "connected",
+            Self::Enabled => "enabled",
+            Self::NeedsAuth => "needs_auth",
+            Self::NeedsSetup => "needs_setup",
+            Self::Unavailable => "unavailable",
+        }
+    }
+
+    /// Reference `mcp_app._source_status`, with one hint for an unavailable
+    /// source of either kind.
+    fn label(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Connected => "connected",
+            Self::Enabled => "enabled",
+            Self::NeedsAuth => "needs auth",
+            Self::NeedsSetup => "needs setup",
+            Self::Unavailable => "error - try refreshing",
+        }
+    }
+}
+
+impl McpSource {
+    /// The sources of a published MCP state: `mcp/read` answers it at the top
+    /// level and `connectors/refresh` under `runtime`. A payload without the
+    /// list publishes no source.
+    ///
+    /// # Errors
+    ///
+    /// Returns the decoding error when the list does not have the published shape.
+    pub fn published(state: &Value) -> Result<Vec<Self>, String> {
+        state
+            .pointer("/mcp/sources")
+            .map_or_else(|| Ok(Vec::new()), Vec::<Self>::deserialize)
+            .map_err(|error| format!("Malformed MCP state: {error}"))
+    }
+}
 
 #[must_use]
-pub fn mcp_overlay(mcp_result: &Value, connector_result: &Value) -> Overlay {
+pub fn mcp_overlay(sources: &[McpSource]) -> Overlay {
     let mut items = Vec::new();
-    let mut servers = mcp_result
-        .pointer("/mcp/sources")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-    servers.sort_by_key(|source| {
-        let has_tools = source
-            .get("tools")
-            .and_then(Value::as_array)
-            .is_some_and(|tools| !tools.is_empty());
-        let name = source
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        (!has_tools, name.to_ascii_lowercase(), name)
-    });
+    let servers = sorted_sources(sources, IntegrationKind::McpServer);
     if !servers.is_empty() {
         items.push(OverlayItem::new(
             "heading:mcp",
@@ -38,29 +93,8 @@ pub fn mcp_overlay(mcp_result: &Value, connector_result: &Value) -> Overlay {
             true,
         ));
     }
-    for source in servers {
-        if let Some(item) = mcp_source_item(source, IntegrationKind::McpServer) {
-            items.push(item);
-        }
-    }
-    let mut connectors = connector_result
-        .pointer("/connectors/sources")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
-    connectors.sort_by_key(|source| {
-        let has_tools = source
-            .get("toolNames")
-            .and_then(Value::as_array)
-            .is_some_and(|tools| !tools.is_empty());
-        let name = source
-            .get("name")
-            .or_else(|| source.get("alias"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        (!has_tools, name.to_ascii_lowercase(), name)
-    });
+    items.extend(servers.into_iter().map(source_item));
+    let connectors = sorted_sources(sources, IntegrationKind::Connector);
     let has_connectors = !connectors.is_empty();
     if has_connectors {
         if !items.is_empty() {
@@ -73,53 +107,7 @@ pub fn mcp_overlay(mcp_result: &Value, connector_result: &Value) -> Overlay {
             true,
         ));
     }
-    for source in connectors {
-        let id = source
-            .get("id")
-            .or_else(|| source.get("name"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        if id.is_empty() {
-            continue;
-        }
-        let label = source
-            .get("name")
-            .or_else(|| source.get("alias"))
-            .and_then(Value::as_str)
-            .unwrap_or(id);
-        let status = connector_status(source);
-        let source_enabled = source
-            .get("enabled")
-            .and_then(Value::as_bool)
-            .unwrap_or(true);
-        let tool_names = source
-            .get("toolNames")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let disabled = source
-            .get("disabledTools")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        let total = tool_names.len();
-        let enabled = tool_names
-            .iter()
-            .filter(|tool| !disabled.contains(tool))
-            .count();
-        items.push(integration_item(
-            IntegrationKind::Connector,
-            id,
-            None,
-            source_enabled,
-            status,
-            label,
-            format!(
-                "{CONNECTOR_TRANSPORT} · {} · {status}",
-                tool_count_text(enabled, total),
-            ),
-        ));
-    }
+    items.extend(connectors.into_iter().map(source_item));
     let title = if has_connectors {
         "MCP Servers & Connectors"
     } else {
@@ -128,87 +116,22 @@ pub fn mcp_overlay(mcp_result: &Value, connector_result: &Value) -> Overlay {
     Overlay::new(OverlayKind::Mcp, title, items)
 }
 
+/// Reference `MCPApp._show_detail_view`: a source's tools, or the one
+/// instruction a source that needs setup gives instead.
 #[must_use]
-pub fn mcp_detail_overlay(
-    mcp_result: &Value,
-    connector_result: &Value,
-    target: &IntegrationTarget,
-) -> Overlay {
-    let (title, mut items, requires_setup) = match target.kind {
-        IntegrationKind::McpServer => {
-            let source = mcp_result
-                .pointer("/mcp/sources")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .find(|source| source.get("name").and_then(Value::as_str) == Some(&target.source));
-            let mut tools = source
-                .and_then(|source| source.get("tools"))
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(|tool| mcp_tool_item(tool, target.kind, &target.source))
-                .collect::<Vec<_>>();
-            tools.sort_by_key(|item| item.label.to_ascii_lowercase());
-            (format!("MCP Server: {}", target.source), tools, false)
-        }
-        IntegrationKind::Connector => {
-            let source = connector_result
-                .pointer("/connectors/sources")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .find(|source| {
-                    source
-                        .get("id")
-                        .or_else(|| source.get("alias"))
-                        .or_else(|| source.get("name"))
-                        .and_then(Value::as_str)
-                        == Some(&target.source)
-                });
-            let status = source.map_or(UNAVAILABLE_STATUS, connector_status);
-            let disabled = source
-                .and_then(|source| source.get("disabledTools"))
-                .and_then(Value::as_array);
-            let mut tools = source
-                .and_then(|source| source.get("toolNames"))
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .map(|name| {
-                    let enabled = !disabled.is_some_and(|tools| {
-                        tools
-                            .iter()
-                            .any(|candidate| candidate.as_str() == Some(name))
-                    });
-                    integration_item(
-                        target.kind,
-                        &target.source,
-                        Some(name),
-                        enabled,
-                        status,
-                        name,
-                        tool_description("", enabled),
-                    )
-                })
-                .collect::<Vec<_>>();
-            tools.sort_by_key(|item| item.label.to_ascii_lowercase());
-            let label = source
-                .and_then(|source| source.get("name").or_else(|| source.get("alias")))
-                .and_then(Value::as_str)
-                .unwrap_or(&target.source);
-            (
-                format!("Connector: {label}"),
-                tools,
-                status == "needs setup",
-            )
-        }
+pub fn mcp_detail_overlay(sources: &[McpSource], target: &IntegrationTarget) -> Overlay {
+    let prefix = match target.kind {
+        IntegrationKind::McpServer => "MCP Server",
+        IntegrationKind::Connector => "Connector",
     };
-    if requires_setup {
-        // Reference `MCPApp._refresh_view` for `NEEDS_SETUP`: one instruction,
-        // and the browser's `r` binding performs the refresh it names.
-        items = vec![
+    let title = format!("{prefix}: {}", target.source);
+    let source = sources
+        .iter()
+        .find(|source| source.kind == target.kind && source.name == target.source);
+    let status = source.map_or(McpSourceStatus::Unavailable, |source| source.status);
+    let mut items = if status == McpSourceStatus::NeedsSetup {
+        // The browser's `r` binding performs the refresh the instruction names.
+        vec![
             OverlayItem::new(
                 "mcp-detail:setup",
                 "Set up credentials in the Mistral dashboard, then press r to refresh.",
@@ -216,8 +139,26 @@ pub fn mcp_detail_overlay(
                 true,
             )
             .with_action(OverlayAction::Integration(target.clone())),
-        ];
-    }
+        ]
+    } else {
+        let mut tools = source
+            .into_iter()
+            .flat_map(|source| &source.tools)
+            .map(|tool| {
+                integration_item(
+                    target.kind,
+                    &target.source,
+                    Some(&tool.name),
+                    tool.enabled,
+                    status,
+                    &tool.name,
+                    tool_description(&tool.description, tool.enabled),
+                )
+            })
+            .collect::<Vec<_>>();
+        tools.sort_by_key(|item| item.label.to_ascii_lowercase());
+        tools
+    };
     if items.is_empty() {
         items.push(
             OverlayItem::new(
@@ -232,53 +173,38 @@ pub fn mcp_detail_overlay(
     Overlay::new(OverlayKind::McpDetail, title, items)
 }
 
-fn mcp_source_item(source: &Value, kind: IntegrationKind) -> Option<OverlayItem> {
-    let name = source.get("name").and_then(Value::as_str)?;
-    let raw_status = source
-        .get("status")
-        .and_then(Value::as_str)
-        .unwrap_or("healthy");
-    let enabled = source
-        .get("enabled")
-        .and_then(Value::as_bool)
-        .unwrap_or(raw_status != "disabled");
-    let status = if enabled {
-        match raw_status {
-            "connected" => "connected",
-            "needs_auth" => "needs auth",
-            "needs_setup" => "needs setup",
-            "unavailable" => UNAVAILABLE_STATUS,
-            _ => "enabled",
-        }
-    } else {
-        "disabled"
-    };
-    let tools = source
-        .get("tools")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let total = tools.len();
-    let enabled_tools = tools
+/// The sources of one kind, the ones with tools first and each group by name.
+fn sorted_sources(sources: &[McpSource], kind: IntegrationKind) -> Vec<&McpSource> {
+    let mut sources = sources
         .iter()
-        .filter(|tool| tool.get("enabled").and_then(Value::as_bool).unwrap_or(true))
-        .count();
-    Some(integration_item(
-        kind,
-        name,
+        .filter(|source| source.kind == kind)
+        .collect::<Vec<_>>();
+    sources.sort_by_key(|source| {
+        (
+            source.tools.is_empty(),
+            source.name.to_ascii_lowercase(),
+            source.name.as_str(),
+        )
+    });
+    sources
+}
+
+fn source_item(source: &McpSource) -> OverlayItem {
+    let enabled = source.tools.iter().filter(|tool| tool.enabled).count();
+    let status = source.status.label();
+    integration_item(
+        source.kind,
+        &source.name,
         None,
-        enabled,
-        status,
-        name,
+        source.status != McpSourceStatus::Disabled,
+        source.status,
+        &source.name,
         format!(
             "{} · {} · {status}",
-            source
-                .get("transport")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown"),
-            tool_count_text(enabled_tools, total),
+            source.transport,
+            tool_count_text(enabled, source.tools.len()),
         ),
-    ))
+    )
 }
 
 fn tool_count_text(enabled: usize, total: usize) -> String {
@@ -294,24 +220,6 @@ fn tool_count_text(enabled: usize, total: usize) -> String {
     }
 }
 
-fn mcp_tool_item(tool: &Value, kind: IntegrationKind, source: &str) -> Option<OverlayItem> {
-    let name = tool.get("name").and_then(Value::as_str)?;
-    let enabled = tool.get("enabled").and_then(Value::as_bool).unwrap_or(true);
-    let description = tool
-        .get("description")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    Some(integration_item(
-        kind,
-        source,
-        Some(name),
-        enabled,
-        if enabled { "enabled" } else { "disabled" },
-        name,
-        tool_description(description, enabled),
-    ))
-}
-
 /// The reference marks a disabled tool with a trailing `(disabled)` tag instead of
 /// a leading state token, so both surfaces present the same sentence.
 fn tool_description(description: &str, enabled: bool) -> String {
@@ -322,24 +230,12 @@ fn tool_description(description: &str, enabled: bool) -> String {
     }
 }
 
-fn connector_status(source: &Value) -> &'static str {
-    if source.get("enabled").and_then(Value::as_bool) == Some(false) {
-        return "disabled";
-    }
-    match source.get("authState").and_then(Value::as_str) {
-        Some("connected" | "not_required") => "connected",
-        Some("disconnected") => "needs auth",
-        Some("setup_required") => "needs setup",
-        _ => UNAVAILABLE_STATUS,
-    }
-}
-
 fn integration_item(
     kind: IntegrationKind,
     source: &str,
     tool: Option<&str>,
     enabled: bool,
-    status: &str,
+    status: McpSourceStatus,
     label: impl Into<String>,
     description: impl Into<String>,
 ) -> OverlayItem {
@@ -357,8 +253,8 @@ fn integration_item(
             source: source.to_owned(),
             tool: tool.map(ToOwned::to_owned),
             enabled,
-            requires_auth: status == "needs auth",
-            requires_setup: status == "needs setup",
+            requires_auth: status == McpSourceStatus::NeedsAuth,
+            requires_setup: status == McpSourceStatus::NeedsSetup,
         },
     ))
 }

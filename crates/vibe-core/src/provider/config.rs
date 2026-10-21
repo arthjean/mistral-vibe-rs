@@ -127,6 +127,44 @@ impl ProviderConfig {
     }
 }
 
+/// How hard a model reasons before it answers. Reference `ThinkingLevel`
+/// (`vibe/config_values.py`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ThinkingLevel {
+    #[default]
+    Off,
+    Low,
+    Medium,
+    High,
+    Max,
+}
+
+impl ThinkingLevel {
+    /// The level a configuration or a session names.
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "off" => Some(Self::Off),
+            "low" => Some(Self::Low),
+            "medium" => Some(Self::Medium),
+            "high" => Some(Self::High),
+            "max" => Some(Self::Max),
+            _ => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Max => "max",
+        }
+    }
+}
+
 /// One `[[models]]` entry.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModelConfig {
@@ -134,8 +172,7 @@ pub struct ModelConfig {
     pub provider: String,
     pub alias: String,
     pub temperature: f64,
-    /// `off`, `low`, `medium`, `high` or `max`.
-    pub thinking: String,
+    pub thinking: ThinkingLevel,
     pub supports_images: bool,
 }
 
@@ -149,7 +186,7 @@ impl ModelConfig {
             name,
             provider: provider.into(),
             temperature: 0.2,
-            thinking: "off".to_owned(),
+            thinking: ThinkingLevel::Off,
             supports_images: false,
         }
     }
@@ -168,20 +205,17 @@ impl ModelConfig {
         if let Some(value) = table.get("temperature").and_then(float) {
             model.temperature = value;
         }
-        if let Some(value) = string(table, "thinking") {
-            model.thinking = value;
+        if let Some(level) = table
+            .get("thinking")
+            .and_then(Value::as_str)
+            .and_then(ThinkingLevel::parse)
+        {
+            model.thinking = level;
         }
         if let Some(value) = table.get("supports_images").and_then(Value::as_bool) {
             model.supports_images = value;
         }
         Some(model)
-    }
-
-    /// The same model at another thinking level.
-    #[must_use]
-    pub fn with_thinking(mut self, thinking: impl Into<String>) -> Self {
-        self.thinking = thinking.into();
-        self
     }
 }
 

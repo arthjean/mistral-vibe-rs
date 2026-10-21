@@ -6,6 +6,7 @@
 //! are what a caller reads a turn through when nothing is on the wire.
 
 use super::*;
+use crate::sync::lock;
 
 pub(super) struct ProgrammaticEventObserver {
     pub(super) reducer: Mutex<ProjectionReducer>,
@@ -306,9 +307,7 @@ impl PendingPublicCall {
                         params: notification.params,
                     });
                 }
-                if let Ok(mut early) = early.lock() {
-                    early.push(frame);
-                }
+                lock(&early).push(frame);
             })
         };
         for work in self.deferred {
@@ -371,9 +370,7 @@ impl PendingPublicCall {
                     self.method
                 )));
             }
-            if let Ok(mut early) = early.lock() {
-                self.outbound.append(&mut early);
-            }
+            self.outbound.append(&mut lock(&early));
             self.outbound.extend(completed.outbound);
         }
         if let Some(later) = self.later {
@@ -581,31 +578,6 @@ impl InProcessClient {
         reservation: &TurnReservation,
         outcome: TurnOutcome,
     ) -> Result<ProgrammaticTurn, ClientError> {
-        let final_assistant = outcome
-            .snapshot
-            .history
-            .iter()
-            .rev()
-            .find_map(|entry| match entry {
-                PublicHistoryEntry::Message {
-                    role: vibe_core::events::PublicMessageRole::Assistant,
-                    content,
-                    ..
-                } => {
-                    let text = content
-                        .iter()
-                        .filter_map(|block| match block {
-                            PublicContentBlock::Text { text } => Some(text.as_str()),
-                            PublicContentBlock::Image { .. }
-                            | PublicContentBlock::Resource { .. } => None,
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n\n");
-                    (!text.is_empty()).then_some(text)
-                }
-                _ => None,
-            })
-            .unwrap_or_default();
         let public_stop_reason = outcome
             .stop_reason
             .is_limit()
@@ -617,29 +589,7 @@ impl InProcessClient {
             public_stop_reason,
             public_turn_error(&outcome.stop_reason),
         )?;
-        let events = outcome
-            .events
-            .iter()
-            .map(serde_json::to_value)
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(ClientError::Json)?;
-        Ok(ProgrammaticTurn {
-            session_id: outcome.session_id,
-            turn_id: reservation.turn_id.clone(),
-            final_assistant,
-            history: outcome.snapshot.history,
-            events,
-            usage: PublicUsage {
-                input_tokens: outcome.usage.input_tokens,
-                output_tokens: outcome.usage.output_tokens,
-                price_micros: outcome.price_micros,
-            },
-            context_tokens: outcome.context_tokens,
-            steps: outcome.steps,
-            checkpoints: outcome.checkpoints,
-            stop_reason: outcome.stop_reason,
-            teleport_events: Vec::new(),
-        })
+        ProgrammaticTurn::settled(&reservation.turn_id, outcome)
     }
 
     pub fn fail_turn(

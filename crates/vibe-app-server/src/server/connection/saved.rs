@@ -8,7 +8,7 @@
 //! host does not serve needs a root, and without one the answer is a conflict.
 
 use super::*;
-use crate::params::{WireCheck, object_of};
+use crate::wire_validation;
 use serde_json::Map;
 use vibe_core::storage::lease::{LeaseError, SessionLease};
 use vibe_core::storage::{SessionInfo, SessionStore, StorageError};
@@ -27,9 +27,6 @@ mod titles;
 /// answers without one.
 pub(in crate::server) const NO_ROOT: &str =
     "Start, resume, or continue a session before using this method";
-
-/// Reference `SessionListParams.limit` and `PageRequest.limit` bounds.
-const PAGE_BOUNDS: (i64, i64) = (1, 500);
 
 impl AppServer {
     /// Takes the lease on `session_id` for this process, or reports who holds
@@ -239,6 +236,17 @@ impl ServerConnection {
 enum Reopen {
     Resume,
     Continue,
+}
+
+// Each handler reads its parameters past the schema that validated them
+// (`wire_validation::validate_params`): only the fields it uses, each
+// defaulted as the reference model defaults it.
+
+/// The parameters of a method that names nothing but its session.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SessionParams {
+    session_id: String,
 }
 
 /// The start parameters a reopening's `agentConfig` spells, in the names the

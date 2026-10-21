@@ -9,7 +9,7 @@
 
 use serde_json::{Value, json};
 use toml::Value as TomlValue;
-use vibe_core::config::DotenvValues;
+use vibe_core::config::{ConfigSnapshot, DotenvValues};
 use vibe_core::pycompat;
 use vibe_core::skills::registry::manifest::{self, SkillManifest};
 use vibe_core::skills::registry::pins::{self, PinTarget, SkillScope};
@@ -286,10 +286,7 @@ impl WorkspaceService {
     /// configuration.
     #[must_use]
     pub fn registry_skills_enabled(&self) -> bool {
-        self.config
-            .load()
-            .ok()
-            .is_some_and(|snapshot| snapshot.registry_skills_enabled())
+        self.read_config(false, ConfigSnapshot::registry_skills_enabled)
     }
 
     /// Reference `AgentLoop._refresh_registry_skills`: the session-start sync

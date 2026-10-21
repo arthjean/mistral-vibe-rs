@@ -11,14 +11,11 @@ use thiserror::Error;
 use tokio::sync::{Mutex, watch};
 use url::Url;
 
-use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
-use crate::remote_tools::{public_tool_name, sanitize_mcp_name, set_all, tool_availability};
+use crate::policy::{ApprovalAgent, PermissionStore};
+use crate::remote_tools::{sanitize_mcp_name, set_all, tool_availability};
 use crate::text::canonical_url;
 
-use crate::tools::{
-    ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler, ToolInvocation, ToolOutputSink,
-    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
-};
+use crate::tools::{ToolAvailability, ToolExecutionOutput, ToolRegistry, ToolSource};
 
 mod auth;
 pub mod authorization;
@@ -179,6 +176,19 @@ pub struct McpServerConfig {
     pub declared: Option<McpDeclared>,
 }
 
+impl McpServerConfig {
+    /// The URL the entry was written with, which the form its transport parsed
+    /// it into may spell differently, and empty for an entry with none.
+    #[must_use]
+    pub(crate) fn declared_url(&self) -> String {
+        self.declared
+            .as_ref()
+            .and_then(|declared| declared.url.clone())
+            .or_else(|| transport_url(&self.transport).map(ToString::to_string))
+            .unwrap_or_default()
+    }
+}
+
 const fn default_startup_timeout_ms() -> u64 {
     DEFAULT_MCP_STARTUP_TIMEOUT_MS
 }
@@ -289,12 +299,9 @@ impl ServerPeer {
                 argv.extend(arguments.iter().map(String::as_str));
                 format!("stdio:{}", argv.join(" "))
             }
-            McpTransportConfig::Http { url, .. }
-            | McpTransportConfig::StreamableHttp { url, .. } => config
-                .declared
-                .as_ref()
-                .and_then(|declared| declared.url.clone())
-                .unwrap_or_else(|| url.to_string()),
+            McpTransportConfig::Http { .. } | McpTransportConfig::StreamableHttp { .. } => {
+                config.declared_url()
+            }
         };
         Self {
             config: config.clone(),

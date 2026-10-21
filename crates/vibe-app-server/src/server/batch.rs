@@ -281,9 +281,7 @@ impl From<WorkspaceServiceError> for ProtocolFault {
             | WorkspaceServiceError::Prompt(message) => {
                 Self::new(ProtocolErrorCode::Conflict, message)
             }
-            WorkspaceServiceError::StatePoisoned | WorkspaceServiceError::Json(_) => {
-                Self::internal(error.to_string())
-            }
+            WorkspaceServiceError::Json(_) => Self::internal(error.to_string()),
             WorkspaceServiceError::Rejected(issues) => {
                 Self::InvalidParams(ParamsRejection::with_issues(issues))
             }

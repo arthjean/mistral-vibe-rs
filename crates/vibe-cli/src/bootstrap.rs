@@ -49,14 +49,14 @@ pub(crate) fn launch_provider(
 ) -> Result<ProviderConfig, CliError> {
     let mut provider = routing
         .launch_provider(
-            &arguments.provider_style,
-            &arguments.api_base,
-            &arguments.credential_environment,
+            arguments.provider_style(),
+            arguments.api_base(),
+            arguments.credential_environment(),
         )
         .ok_or_else(|| {
             CliError::Configuration(format!(
                 "`{}` is not a provider style this build speaks",
-                arguments.provider_style
+                arguments.provider_style()
             ))
         })?;
     // Reference `get_provider_for_model`: a launch that names no endpoint of
@@ -85,13 +85,13 @@ pub(crate) fn model_routing(workspace: &WorkspaceService) -> Result<ModelRouting
     ))
 }
 
-/// The launch arguments this port declares at their defaults: the launch
-/// names no provider of its own, so the configuration decides.
+/// What the port-only launch arguments resolve to when a launch leaves them
+/// out (see [`Arguments::provider_style`] and its siblings).
 pub(crate) const DEFAULT_PROVIDER_STYLE: &str = "mistral";
 pub(crate) const DEFAULT_API_BASE: &str = "https://api.mistral.ai/v1";
 pub(crate) const DEFAULT_CREDENTIAL_ENVIRONMENT: &str = "MISTRAL_API_KEY";
-const DEFAULT_INPUT_PRICE: f64 = 1.5;
-const DEFAULT_OUTPUT_PRICE: f64 = 7.5;
+pub(crate) const DEFAULT_INPUT_PRICE: f64 = 1.5;
+pub(crate) const DEFAULT_OUTPUT_PRICE: f64 = 7.5;
 
 /// What a programmatic launch runs on.
 ///
@@ -114,9 +114,9 @@ pub(crate) struct ProgrammaticRoute {
 
 /// Whether the launch named its provider through the port-only arguments.
 fn provider_arguments_given(arguments: &Arguments) -> bool {
-    arguments.provider_style != DEFAULT_PROVIDER_STYLE
-        || arguments.api_base != DEFAULT_API_BASE
-        || arguments.credential_environment != DEFAULT_CREDENTIAL_ENVIRONMENT
+    arguments.provider_style.is_some()
+        || arguments.api_base.is_some()
+        || arguments.credential_environment.is_some()
 }
 
 pub(crate) fn programmatic_route(
@@ -128,13 +128,12 @@ pub(crate) fn programmatic_route(
         .load()
         .map_err(|error| CliError::Configuration(error.to_string()))?;
     let routing = ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias());
-    let model = if arguments.model == crate::tui::DEFAULT_MODEL {
-        routing
+    let model = match &arguments.model {
+        Some(model) => model.clone(),
+        None => routing
             .active_alias
             .clone()
-            .unwrap_or_else(|| arguments.model.clone())
-    } else {
-        arguments.model.clone()
+            .unwrap_or_else(|| arguments.model().to_owned()),
     };
     let configured = routing.model(Some(&model)).ok();
     let configured_provider = configured
@@ -147,11 +146,10 @@ pub(crate) fn programmatic_route(
     let prices = configured
         .as_ref()
         .and_then(|entry| model_prices(&snapshot.effective, &entry.alias));
-    let default_prices = arguments.input_price == DEFAULT_INPUT_PRICE
-        && arguments.output_price == DEFAULT_OUTPUT_PRICE;
+    let prices_given = arguments.input_price.is_some() || arguments.output_price.is_some();
     let (input_price, output_price) = match prices {
-        Some(prices) if default_prices => prices,
-        _ => (arguments.input_price, arguments.output_price),
+        Some(prices) if !prices_given => prices,
+        _ => (arguments.input_price(), arguments.output_price()),
     };
     let mistral = if provider.backend == BackendKind::Mistral {
         Some(provider.clone())
@@ -241,21 +239,13 @@ pub(crate) fn route_driver_config(
     route: &ProgrammaticRoute,
     workspace: &WorkspaceService,
 ) -> Result<LiveDriverConfig, CliError> {
-    let routing = model_routing(workspace)?;
-    Ok(LiveDriverConfig {
-        compaction_prompts: workspace.compaction_prompts(),
-        provider: route.provider.clone(),
-        providers: routing.providers,
-        allowed_models: routing.allowed_models,
-        utility_models: routing.utility_models,
-        models: routing.models,
-        model: route.model.clone(),
-        api: routing.api,
-        system_prompt: SYSTEM_PROMPT.to_owned(),
-        session_root: workspace.logged_session_root(),
-        input_price_per_million_micros: price_per_million_micros(route.input_price)?,
-        output_price_per_million_micros: price_per_million_micros(route.output_price)?,
-    })
+    driver_config(
+        workspace,
+        model_routing(workspace)?,
+        route.provider.clone(),
+        route.model.clone(),
+        (route.input_price, route.output_price),
+    )
 }
 
 /// [`resource_server`] over the endpoint a programmatic route resolved.
@@ -267,7 +257,7 @@ pub(crate) fn route_resource_server(
     sampling: Option<Arc<dyn SamplingHandler>>,
 ) -> Result<AppServer, CliError> {
     let mut launch = arguments.clone();
-    launch.api_base.clone_from(&route.provider.api_base);
+    launch.api_base = Some(route.provider.api_base.clone());
     // Reference `WebSearch.is_available`: the tool is published when the
     // Mistral provider's key resolves, whichever provider runs the turns.
     let web_search = match &route.mistral {
@@ -280,7 +270,7 @@ pub(crate) fn route_resource_server(
     .filter(|(_, key)| !key.is_empty())
     .map(|(mistral, key)| {
         let mut target = arguments.clone();
-        target.api_base.clone_from(&mistral.api_base);
+        target.api_base = Some(mistral.api_base.clone());
         web_search_access(&target, key)
     });
     Ok(resource_server(&launch, workspace, credential, sampling)?
@@ -293,19 +283,37 @@ pub(crate) fn live_driver_config(
     workspace: &WorkspaceService,
 ) -> Result<LiveDriverConfig, CliError> {
     let routing = model_routing(workspace)?;
+    let provider = launch_provider(arguments, &routing)?;
+    driver_config(
+        workspace,
+        routing,
+        provider,
+        model.to_owned(),
+        (arguments.input_price(), arguments.output_price()),
+    )
+}
+
+/// The driver over `provider` and `model`, priced per million tokens.
+fn driver_config(
+    workspace: &WorkspaceService,
+    routing: ModelRouting,
+    provider: ProviderConfig,
+    model: String,
+    (input_price, output_price): (f64, f64),
+) -> Result<LiveDriverConfig, CliError> {
     Ok(LiveDriverConfig {
         compaction_prompts: workspace.compaction_prompts(),
-        provider: launch_provider(arguments, &routing)?,
-        providers: routing.providers.clone(),
+        provider,
+        providers: routing.providers,
         allowed_models: routing.allowed_models,
         utility_models: routing.utility_models,
         models: routing.models,
-        model: model.to_owned(),
+        model,
         api: routing.api,
         system_prompt: SYSTEM_PROMPT.to_owned(),
         session_root: workspace.logged_session_root(),
-        input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
-        output_price_per_million_micros: price_per_million_micros(arguments.output_price)?,
+        input_price_per_million_micros: price_per_million_micros(input_price)?,
+        output_price_per_million_micros: price_per_million_micros(output_price)?,
     })
 }
 
@@ -343,7 +351,7 @@ pub(crate) fn resource_server(
 fn web_search_access(arguments: &Arguments, credential: String) -> WebSearchAccess {
     // `api_base` is the chat-completions URL, and the conversations endpoint
     // sits at the same origin, which is what the reference derives too.
-    let endpoint = Url::parse(&arguments.api_base)
+    let endpoint = Url::parse(arguments.api_base())
         .ok()
         .map(|url| url.origin().ascii_serialization())
         .unwrap_or_else(|| WebSearchAccess::DEFAULT_ENDPOINT.to_owned());

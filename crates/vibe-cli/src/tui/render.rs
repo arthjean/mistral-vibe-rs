@@ -37,6 +37,7 @@ use overlays::{draw_callback_overlay, draw_overlay};
 use rewind::draw_rewind;
 use text::{MAX_RENDER_LINES, sanitize_inline, truncate_width, wrapped_terminal_lines};
 
+pub(in crate::tui) use text::clean_output;
 pub use text::{MAX_RENDER_CHARS, RenderLimits, sanitize_terminal};
 
 #[derive(Debug, Clone, Copy)]

@@ -51,7 +51,7 @@ async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
     let driver = Arc::new(RecordingDriver::default());
     let server = AppServer::default().using_surface_extension(
         Arc::new(InteractiveApprovalFactory {
-            sender: sender.clone(),
+            channel: crate::client::interactive::CallbackChannel::Shared(sender.clone()),
         }),
         Arc::new(InteractiveSessionToolFactory {
             sender: crate::client::interactive::CallbackChannel::Shared(sender.clone()),
@@ -76,9 +76,8 @@ async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
         )
         .expect("client connects"),
         driver: Arc::clone(&driver),
-        interactive_callbacks: Some(receiver),
-        interactive_backlog: VecDeque::new(),
-        pending_interactive_callbacks: HashMap::new(),
+        callback_requests: Some(receiver),
+        callbacks: CallbackQueue::default(),
     };
     let session_id = service.start_session(&options()).expect("session starts");
     let reservation = service
@@ -190,11 +189,15 @@ async fn interactive_user_input_callbacks_serialize_and_resolve_through_the_serv
     assert!(matches!(first_entry, PublicHistoryEntry::Callback { .. }));
     let PublicHistoryEntry::Callback {
         callback_id: first_callback_id,
+        title,
         ..
     } = first_entry
     else {
         return;
     };
+    // Reference `TurnController._request_user_input` titles every question
+    // the same way, whichever tool asks it.
+    assert_eq!(title, "User input required");
     service
         .respond_callback(json!({
             "sessionId": session_id,
@@ -268,7 +271,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
     let driver = Arc::new(EchoTurnDriver::new("unused"));
     let server = AppServer::default().using_surface_extension(
         Arc::new(InteractiveApprovalFactory {
-            sender: sender.clone(),
+            channel: crate::client::interactive::CallbackChannel::Shared(sender.clone()),
         }),
         Arc::new(InteractiveSessionToolFactory {
             sender: crate::client::interactive::CallbackChannel::Shared(sender.clone()),
@@ -293,9 +296,8 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
         )
         .expect("client connects"),
         driver,
-        interactive_callbacks: Some(receiver),
-        interactive_backlog: VecDeque::new(),
-        pending_interactive_callbacks: HashMap::new(),
+        callback_requests: Some(receiver),
+        callbacks: CallbackQueue::default(),
     };
     let mut session_options = options();
     session_options.auto_approve = false;
@@ -308,7 +310,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
         .expect("turn reserves");
     let approval_agent = InteractiveApprovalAgent {
         session_id: session_id.clone(),
-        sender,
+        channel: crate::client::interactive::CallbackChannel::Shared(sender),
     };
     let requested = tokio::spawn(async move {
         approval_agent
@@ -340,12 +342,16 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
     assert!(matches!(entry, PublicHistoryEntry::Callback { .. }));
     let PublicHistoryEntry::Callback {
         callback_id,
+        title,
         detail,
         ..
     } = entry
     else {
         return;
     };
+    // Reference `TurnController._request_approval` titles an approval
+    // `Allow <tool>?`, as a stdio client reads it.
+    assert_eq!(title, "Allow shell?");
     let detail = serde_json::to_value(&detail).expect("the callback detail serializes");
     assert_eq!(
         detail["requiredPermissions"],

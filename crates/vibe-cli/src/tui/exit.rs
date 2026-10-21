@@ -2,6 +2,7 @@
 //! `vibe.cli.session_exit`.
 
 use vibe_core::pycompat::thousands;
+use vibe_core::storage::short_session_id;
 
 use super::interaction::QuitConfirmation;
 
@@ -30,12 +31,6 @@ pub struct SessionExitSummary {
     pub usage: SessionUsage,
 }
 
-/// Reference `shorten_session_id`.
-#[must_use]
-pub fn shorten_session_id(session_id: &str) -> String {
-    session_id.chars().take(8).collect()
-}
-
 /// Reference `format_session_usage`.
 #[must_use]
 pub fn format_session_usage(usage: SessionUsage) -> String {
@@ -58,7 +53,7 @@ pub fn session_resume_lines(summary: &SessionExitSummary) -> Vec<String> {
         format_session_usage(summary.usage),
         String::new(),
         "To continue this session, run: vibe --continue".to_owned(),
-        format!("Or: vibe --resume {}", shorten_session_id(session_id)),
+        format!("Or: vibe --resume {}", short_session_id(session_id)),
     ]
 }
 

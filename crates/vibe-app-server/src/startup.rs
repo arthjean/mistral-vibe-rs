@@ -90,27 +90,22 @@ impl StartupHost {
         })
     }
 
-    /// Records `decision` and answers whether the working directory is
-    /// trusted afterward.
+    /// Records `decision` about the directory `prompt` asked about, as
+    /// [`decide_workspace_trust`] records one, and answers whether that
+    /// directory is trusted afterward. Reference `_resolve_workspace_trust`
+    /// hands the dialog's answer to that same decision.
     pub fn decide_workspace_trust(
         &self,
         prompt: &WorkspaceTrustPrompt,
         decision: WorkspaceTrustDecision,
     ) -> Result<bool, StartupHostError> {
-        if !prompt.decisions.contains(&decision) {
-            return Err(StartupHostError::InvalidTrustDecision(
-                "trust decision was not offered by the startup host".to_owned(),
-            ));
-        }
         let store = self.trust_store();
-        let core = trust::build_trust_prompt(&prompt.cwd, true, &store).ok_or_else(|| {
-            StartupHostError::InvalidTrustDecision(
-                "this workspace has no trust decision to make".to_owned(),
-            )
-        })?;
-        trust::apply_decision(&core, decision.core(), &store).map_err(|error| match error {
-            TrustError::Io(source) => startup_io(&store.settings_path(), source),
-            TrustError::Unsupported(_) => StartupHostError::InvalidTrustDecision(error.to_string()),
+        record_trust_decision(&store, &prompt.cwd, decision).map_err(|error| match error {
+            WorkspaceTrustError::Io(source) => StartupHostError::Io {
+                path: store.settings_path(),
+                source,
+            },
+            error => StartupHostError::Trust(error),
         })?;
         Ok(store.is_trusted(&prompt.cwd) == Some(true))
     }
@@ -290,8 +285,20 @@ pub fn decide_workspace_trust(
     decision: WorkspaceTrustDecision,
 ) -> Result<serde_json::Map<String, Value>, WorkspaceTrustError> {
     let resolved = trust::resolve(cwd);
-    let prompt = trust::build_trust_prompt(&resolved, true, store)
-        .ok_or(WorkspaceTrustError::NothingToDecide)?;
+    record_trust_decision(store, &resolved, decision)?;
+    Ok(read_workspace_trust(store, &resolved))
+}
+
+/// Records `decision` about the already resolved `cwd` when the prompt the
+/// store builds for it now offers that decision, which is the write both a
+/// startup dialog and a `workspace/trust/decision` request make.
+fn record_trust_decision(
+    store: &TrustStore,
+    cwd: &Path,
+    decision: WorkspaceTrustDecision,
+) -> Result<(), WorkspaceTrustError> {
+    let prompt =
+        trust::build_trust_prompt(cwd, true, store).ok_or(WorkspaceTrustError::NothingToDecide)?;
     if !trust::available_decisions(&prompt, false).contains(&decision.core()) {
         return Err(WorkspaceTrustError::Unsupported(
             decision.as_str().to_owned(),
@@ -300,8 +307,7 @@ pub fn decide_workspace_trust(
     trust::apply_decision(&prompt, decision.core(), store).map_err(|error| match error {
         TrustError::Io(source) => WorkspaceTrustError::Io(source),
         TrustError::Unsupported(name) => WorkspaceTrustError::Unsupported(name.to_owned()),
-    })?;
-    Ok(read_workspace_trust(store, &resolved))
+    })
 }
 
 /// Reference `read_untrusted_config_dirs`: the configuration directories a
@@ -329,8 +335,8 @@ pub enum StartupHostError {
         #[source]
         source: std::io::Error,
     },
-    #[error("invalid workspace trust decision: {0}")]
-    InvalidTrustDecision(String),
+    #[error(transparent)]
+    Trust(WorkspaceTrustError),
     #[error(transparent)]
     Storage(#[from] StorageError),
     #[error(transparent)]
@@ -362,13 +368,6 @@ pub fn saved_session_preview(session_root: &Path, session_id: &str) -> Option<St
             } if !content.is_empty() => Some(content.chars().take(160).collect()),
             _ => None,
         })
-}
-
-fn startup_io(path: &Path, source: std::io::Error) -> StartupHostError {
-    StartupHostError::Io {
-        path: path.to_path_buf(),
-        source,
-    }
 }
 
 #[cfg(test)]

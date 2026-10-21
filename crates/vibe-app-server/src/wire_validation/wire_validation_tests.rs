@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use vibe_protocol::PathSegment;
 
-use super::{Json, custom, schema_functions, validate_model_named};
+use super::{Json, SCHEMA, custom, validate_model_named};
 
 const CASES: &str = include_str!("../../tests/wire-validation/cases.json");
 
@@ -55,13 +55,13 @@ fn same_value(left: &Value, right: &Value) -> bool {
 
 #[test]
 fn the_compiled_schema_parses() {
-    assert!(!super::SCHEMA.defs.is_empty());
-    assert!(super::SCHEMA.methods.contains_key("session/start"));
+    assert!(!SCHEMA.defs.is_empty());
+    assert!(SCHEMA.methods.contains_key("session/start"));
 }
 
 #[test]
 fn every_validator_the_schema_names_is_implemented() {
-    for function in schema_functions() {
+    for function in &SCHEMA.functions {
         assert!(
             custom::KNOWN.contains(&function.as_str()),
             "the reference validator {function} has no counterpart"

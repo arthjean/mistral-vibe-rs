@@ -17,200 +17,15 @@ use std::sync::atomic::AtomicI64;
 use tokio::sync::{Notify, mpsc, oneshot};
 
 use super::*;
+use crate::sync::lock;
 
 /// A session a client opened: its identifier, the answer that opened it and
 /// the work that answer deferred.
 pub(super) type Opened = (String, BTreeMap<String, Value>, Vec<DeferredWork>);
 
-/// One session as its client mirrors it: the state it opened with, each
-/// published event applied in order.
-struct Mirror {
-    state: Value,
-    last_event: u64,
-    /// The accounting the session last published, with its context window:
-    /// reference `ClientState.stats`, which `session/statsUpdated` replaces.
-    accounting: Option<(Value, u64)>,
-    /// The events no running turn took, handed to the next one that runs
-    /// as watermarks so its reader sees an unbroken sequence.
-    skipped: Vec<u64>,
-}
+mod mirror;
 
-/// What one notification changed, for whoever reads the session live.
-enum Published {
-    Entry(Value),
-    TurnCompleted(Value),
-    Stats {
-        context_tokens: u64,
-        input_tokens: u64,
-        output_tokens: u64,
-    },
-    Handoff {
-        from: String,
-        to: String,
-    },
-    Nothing,
-}
-
-impl Mirror {
-    fn new(state: Value) -> Self {
-        let last_event = state["eventId"].as_u64().unwrap_or(0);
-        Self {
-            state,
-            last_event,
-            accounting: None,
-            skipped: Vec::new(),
-        }
-    }
-
-    fn history(&self) -> &[Value] {
-        self.state["history"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-    }
-
-    /// Reference `ClientProjection.consume`. A gap in the event sequence is
-    /// taken as it comes: the next snapshot or read restores whatever it
-    /// missed.
-    fn consume(&mut self, method: &str, params: &BTreeMap<String, Value>) -> Published {
-        if matches!(method, "session/compacted" | "session/contextCleared") {
-            let from = self.state["session"]["id"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            let state = params.get("state").cloned().unwrap_or(Value::Null);
-            let to = state["session"]["id"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            *self = Self::new(state);
-            return Published::Handoff { from, to };
-        }
-        if let Some(event_id) = params.get("eventId").and_then(Value::as_u64) {
-            if event_id <= self.last_event {
-                return Published::Nothing;
-            }
-            self.last_event = event_id;
-        }
-        match method {
-            "session/snapshot" => {
-                if let Some(state) = params.get("state") {
-                    self.state = state.clone();
-                }
-                Published::Nothing
-            }
-            "session/updated" => {
-                if let Some(patch) = params.get("patch").and_then(Value::as_array) {
-                    let _ =
-                        vibe_harness::patch::apply_json_patch(&mut self.state["session"], patch);
-                }
-                Published::Nothing
-            }
-            "history/entryAdded" => {
-                let Some(entry) = params.get("entry").cloned() else {
-                    return Published::Nothing;
-                };
-                if !self.state["history"].is_array() {
-                    self.state["history"] = json!([]);
-                }
-                if let Some(history) = self.state["history"].as_array_mut() {
-                    history.retain(|existing| existing["id"] != entry["id"]);
-                    history.push(entry.clone());
-                }
-                Published::Entry(entry)
-            }
-            "history/entryUpdated" => {
-                let entry_id = params
-                    .get("entryId")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default();
-                let Some(patch) = params.get("patch").and_then(Value::as_array) else {
-                    return Published::Nothing;
-                };
-                let Some(entry) = self.state["history"]
-                    .as_array_mut()
-                    .and_then(|history| history.iter_mut().find(|entry| entry["id"] == entry_id))
-                else {
-                    return Published::Nothing;
-                };
-                if vibe_harness::patch::apply_json_patch(entry, patch).is_err() {
-                    return Published::Nothing;
-                }
-                Published::Entry(entry.clone())
-            }
-            "turn/started" | "turn/completed" => {
-                let Some(turn) = params.get("turn").cloned() else {
-                    return Published::Nothing;
-                };
-                if !self.state["turns"].is_array() {
-                    self.state["turns"] = json!([]);
-                }
-                if let Some(turns) = self.state["turns"].as_array_mut() {
-                    match turns
-                        .iter_mut()
-                        .find(|existing| existing["id"] == turn["id"])
-                    {
-                        Some(existing) => *existing = turn.clone(),
-                        None => turns.push(turn.clone()),
-                    }
-                }
-                if method == "turn/completed" {
-                    Published::TurnCompleted(turn)
-                } else {
-                    Published::Nothing
-                }
-            }
-            "turn/queueUpdated" => {
-                if let Some(queue) = params.get("queue") {
-                    self.state["turnQueue"] = queue.clone();
-                }
-                Published::Nothing
-            }
-            "session/statsUpdated" => {
-                let stats = params.get("stats").cloned().unwrap_or(Value::Null);
-                let context_window = params
-                    .get("contextWindow")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0);
-                self.accounting = Some((stats.clone(), context_window));
-                let tokens = |key: &str| stats[key].as_u64().unwrap_or(0);
-                Published::Stats {
-                    context_tokens: tokens("contextTokens"),
-                    input_tokens: tokens("sessionPromptTokens"),
-                    output_tokens: tokens("sessionCompletionTokens"),
-                }
-            }
-            "session/childSessionUpdated" => {
-                if let Some(child) = params.get("childSession") {
-                    if !self.state["childSessions"].is_array() {
-                        self.state["childSessions"] = json!([]);
-                    }
-                    if let Some(children) = self.state["childSessions"].as_array_mut() {
-                        match children
-                            .iter_mut()
-                            .find(|existing| existing["id"] == child["id"])
-                        {
-                            Some(existing) => *existing = child.clone(),
-                            None => children.push(child.clone()),
-                        }
-                        // Reference `ClientState.apply`: by creation, then id.
-                        children.sort_by(|left, right| {
-                            let key = |child: &Value| {
-                                (
-                                    child["createdAt"].as_i64().unwrap_or(0),
-                                    child["id"].as_str().unwrap_or_default().to_owned(),
-                                )
-                            };
-                            key(left).cmp(&key(right))
-                        });
-                    }
-                }
-                Published::Nothing
-            }
-            _ => Published::Nothing,
-        }
-    }
-}
+use mirror::{Mirror, Published};
 
 /// What the pump and the service share.
 #[derive(Default)]
@@ -241,9 +56,7 @@ pub(super) struct Shared {
 impl Shared {
     /// Whether `session_id` is a session these mirrors follow.
     pub(super) fn serves(&self, session_id: &str) -> bool {
-        self.hub
-            .lock()
-            .is_ok_and(|hub| hub.sessions.contains_key(session_id))
+        lock(&self.hub).sessions.contains_key(session_id)
     }
 
     fn hub(&self) -> Result<std::sync::MutexGuard<'_, Hub>, ClientError> {
@@ -257,164 +70,10 @@ impl Shared {
         let Ok(envelope) = decode_frame(&frame) else {
             return;
         };
-        let Ok(mut hub) = self.hub.lock() else {
-            return;
-        };
+        let mut hub = lock(&self.hub);
         match envelope {
             Envelope::Notification(notification) => {
-                let session_id = notification
-                    .params
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned();
-                let Some(mirror) = hub.sessions.get_mut(&session_id) else {
-                    return;
-                };
-                let active = mirror.state["session"]["status"]["activeTurnId"]
-                    .as_str()
-                    .map(ToOwned::to_owned);
-                let renames = notification.method == "session/updated"
-                    && notification
-                        .params
-                        .get("patch")
-                        .and_then(Value::as_array)
-                        .is_some_and(|patch| {
-                            patch.iter().any(|op| {
-                                matches!(op["path"].as_str(), Some("/title" | "/preview"))
-                            })
-                        });
-                let seen = mirror.last_event;
-                let published = mirror.consume(&notification.method, &notification.params);
-                // Every event the session numbers reaches the turn that
-                // reads it, as an entry or else as a watermark.
-                let fresh = notification
-                    .params
-                    .get("eventId")
-                    .and_then(Value::as_u64)
-                    .filter(|event_id| *event_id > seen);
-                let follower = mirror.state["session"]["status"]["activeTurnId"]
-                    .as_str()
-                    .map(ToOwned::to_owned)
-                    .or_else(|| active.clone());
-                let mut skipped = std::mem::take(&mut mirror.skipped);
-                let mut delivered = false;
-                if renames {
-                    let session = &mirror.state["session"];
-                    let text = |key: &str| session[key].as_str().map(ToOwned::to_owned);
-                    let update = ProgrammaticUpdate::Renamed {
-                        title: text("title"),
-                        preview: text("preview"),
-                    };
-                    let turn_id = session["status"]["activeTurnId"]
-                        .as_str()
-                        .map(ToOwned::to_owned)
-                        .or_else(|| active.clone());
-                    if let Some(turn_id) = turn_id {
-                        hub.deliver(&turn_id, update);
-                    }
-                }
-                match published {
-                    Published::Entry(entry) => 'entry: {
-                        let Ok(parsed) =
-                            serde_json::from_value::<PublicHistoryEntry>(entry.clone())
-                        else {
-                            break 'entry;
-                        };
-                        let turn_id = entry["turnId"].as_str().map(ToOwned::to_owned).or(active);
-                        let event_id = notification
-                            .params
-                            .get("eventId")
-                            .and_then(Value::as_u64)
-                            .unwrap_or_else(|| {
-                                hub.next_update += 1;
-                                hub.next_update
-                            });
-                        let update = ProgrammaticUpdate::HistoryEntry {
-                            event_id,
-                            emitted_at: 0,
-                            entry: Box::new(parsed),
-                        };
-                        if let Some(turn_id) = turn_id.filter(|turn_id| hub.follows(turn_id)) {
-                            hub.flush_skipped(&turn_id, &mut skipped);
-                            hub.deliver(&turn_id, update);
-                            delivered = true;
-                        }
-                    }
-                    Published::Stats {
-                        context_tokens,
-                        input_tokens,
-                        output_tokens,
-                    } => {
-                        if let Some(turn_id) = active {
-                            hub.deliver(
-                                &turn_id,
-                                ProgrammaticUpdate::Stats {
-                                    context_tokens,
-                                    input_tokens,
-                                    output_tokens,
-                                },
-                            );
-                            hub.deliver(
-                                &turn_id,
-                                ProgrammaticUpdate::Accounting {
-                                    stats: notification
-                                        .params
-                                        .get("stats")
-                                        .cloned()
-                                        .unwrap_or(Value::Null),
-                                    context_window: notification
-                                        .params
-                                        .get("contextWindow")
-                                        .and_then(Value::as_u64)
-                                        .unwrap_or(0),
-                                },
-                            );
-                        }
-                    }
-                    Published::TurnCompleted(turn) => {
-                        if let Some(turn_id) = turn["id"].as_str() {
-                            hub.listeners.remove(turn_id);
-                            if let Some(orphans) = hub.orphans.remove(turn_id) {
-                                // Kept for a runner that listens after the
-                                // turn already ended.
-                                let (sender, receiver) =
-                                    tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
-                                for update in orphans {
-                                    let _ = sender.try_send(update);
-                                }
-                                hub.parked.insert(turn_id.to_owned(), receiver);
-                            }
-                            hub.settled.insert(turn_id.to_owned(), turn);
-                        }
-                    }
-                    Published::Handoff { from, to } => {
-                        if let Some(mirror) = hub.sessions.remove(&from) {
-                            hub.sessions.insert(to, mirror);
-                        }
-                    }
-                    Published::Nothing => {}
-                }
-                if let Some(event_id) = fresh.filter(|_| !delivered) {
-                    match follower.filter(|turn_id| hub.follows(turn_id)) {
-                        Some(turn_id) => {
-                            hub.flush_skipped(&turn_id, &mut skipped);
-                            hub.deliver(
-                                &turn_id,
-                                ProgrammaticUpdate::Watermark {
-                                    event_id,
-                                    emitted_at: 0,
-                                },
-                            );
-                        }
-                        None => skipped.push(event_id),
-                    }
-                }
-                if let Some(mirror) = hub.sessions.get_mut(&session_id) {
-                    let excess = skipped.len().saturating_sub(MAX_PROGRAMMATIC_UPDATES);
-                    skipped.drain(..excess);
-                    mirror.skipped = skipped;
-                }
+                hub.publish(&notification.method, &notification.params);
             }
             Envelope::Request(request) if request.method == "callback/call" => {
                 let callback = request
@@ -422,22 +81,14 @@ impl Shared {
                     .get("callback")
                     .cloned()
                     .unwrap_or(Value::Null);
-                let callback_id = callback["callbackId"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned();
-                let session_id = callback["sessionId"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_owned();
                 // Reference `_handle_callback_request`: the delivery is
                 // acknowledged at once, and the answer follows as its own
                 // `callback/result`.
-                server
-                    .client_tools
-                    .resolve(&request.id, Ok(json!({"callbackId": callback_id})));
-                hub.callback_sessions.insert(callback_id, session_id);
-                hub.callbacks.push_back(callback);
+                server.client_tools.resolve(
+                    &request.id,
+                    Ok(json!({"callbackId": callback["callbackId"].as_str().unwrap_or_default()})),
+                );
+                hub.ask(callback);
             }
             Envelope::Success(SuccessResponse { ref id, .. })
             | Envelope::Error(ErrorResponse { ref id, .. }) => {
@@ -453,8 +104,160 @@ impl Shared {
 }
 
 impl Hub {
-    /// Hands `update` to whoever runs `turn_id`, or keeps it until someone
-    /// listens.
+    /// Folds one notification into the mirror of the session that published
+    /// it, and hands what it changed to the turn reading that session. Every
+    /// event the session numbers reaches that turn, as an entry or else as a
+    /// watermark; one no turn reads yet waits for the next that does.
+    fn publish(&mut self, method: &str, params: &BTreeMap<String, Value>) {
+        let session_id = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        let Some(mirror) = self.sessions.get_mut(&session_id) else {
+            return;
+        };
+        let running = mirror.active_turn();
+        let seen = mirror.last_event;
+        let published = mirror.consume(method, params);
+        let event_id = params.get("eventId").and_then(Value::as_u64);
+        let reader = mirror.active_turn().or_else(|| running.clone());
+        let renamed = (method == "session/updated"
+            && params
+                .get("patch")
+                .and_then(Value::as_array)
+                .is_some_and(|patch| {
+                    patch
+                        .iter()
+                        .any(|op| matches!(op["path"].as_str(), Some("/title" | "/preview")))
+                }))
+        .then(|| mirror.renamed());
+        let mut skipped = std::mem::take(&mut mirror.skipped);
+        if let (Some(update), Some(turn_id)) = (renamed, &reader) {
+            self.deliver(turn_id, update);
+        }
+        let delivered = self.route(published, event_id, running, &mut skipped);
+        if let Some(event_id) = event_id.filter(|event_id| *event_id > seen && !delivered) {
+            match reader.filter(|turn_id| self.follows(turn_id)) {
+                Some(turn_id) => {
+                    self.flush_skipped(&turn_id, &mut skipped);
+                    self.deliver(
+                        &turn_id,
+                        ProgrammaticUpdate::Watermark {
+                            event_id,
+                            emitted_at: 0,
+                        },
+                    );
+                }
+                None => skipped.push(event_id),
+            }
+        }
+        if let Some(mirror) = self.sessions.get_mut(&session_id) {
+            let excess = skipped.len().saturating_sub(MAX_PROGRAMMATIC_UPDATES);
+            skipped.drain(..excess);
+            mirror.skipped = skipped;
+        }
+    }
+
+    /// Hands what one notification changed to the turn it concerns, the one
+    /// `running` when it names none, and answers whether an entry reached a
+    /// reader.
+    fn route(
+        &mut self,
+        published: Published,
+        event_id: Option<u64>,
+        running: Option<String>,
+        skipped: &mut Vec<u64>,
+    ) -> bool {
+        match published {
+            Published::Entry(entry) => {
+                let Ok(parsed) = serde_json::from_value::<PublicHistoryEntry>(entry.clone()) else {
+                    return false;
+                };
+                let turn_id = entry["turnId"].as_str().map(ToOwned::to_owned).or(running);
+                let event_id = event_id.unwrap_or_else(|| {
+                    self.next_update += 1;
+                    self.next_update
+                });
+                let Some(turn_id) = turn_id.filter(|turn_id| self.follows(turn_id)) else {
+                    return false;
+                };
+                self.flush_skipped(&turn_id, skipped);
+                self.deliver(
+                    &turn_id,
+                    ProgrammaticUpdate::HistoryEntry {
+                        event_id,
+                        emitted_at: 0,
+                        entry: Box::new(parsed),
+                    },
+                );
+                return true;
+            }
+            Published::Stats {
+                context_tokens,
+                input_tokens,
+                output_tokens,
+                stats,
+                context_window,
+            } => {
+                if let Some(turn_id) = running {
+                    self.deliver(
+                        &turn_id,
+                        ProgrammaticUpdate::Stats {
+                            context_tokens,
+                            input_tokens,
+                            output_tokens,
+                        },
+                    );
+                    self.deliver(
+                        &turn_id,
+                        ProgrammaticUpdate::Accounting {
+                            stats,
+                            context_window,
+                        },
+                    );
+                }
+            }
+            Published::TurnCompleted(turn) => {
+                if let Some(turn_id) = turn["id"].as_str() {
+                    self.listeners.remove(turn_id);
+                    if let Some(orphans) = self.orphans.remove(turn_id) {
+                        // Kept for a runner that listens after the turn
+                        // already ended.
+                        let (sender, receiver) =
+                            tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
+                        for update in orphans {
+                            let _ = sender.try_send(update);
+                        }
+                        self.parked.insert(turn_id.to_owned(), receiver);
+                    }
+                    self.settled.insert(turn_id.to_owned(), turn);
+                }
+            }
+            Published::Handoff { from, to } => {
+                if let Some(mirror) = self.sessions.remove(&from) {
+                    self.sessions.insert(to, mirror);
+                }
+            }
+            Published::Nothing => {}
+        }
+        false
+    }
+
+    /// Keeps a callback a session asked for until the client drains it.
+    fn ask(&mut self, callback: Value) {
+        let callback_id = callback["callbackId"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        let session_id = callback["sessionId"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        self.callback_sessions.insert(callback_id, session_id);
+        self.callbacks.push_back(callback);
+    }
+
     /// Whether `turn_id` still has a reader to hand updates to, now or once
     /// it listens.
     fn follows(&self, turn_id: &str) -> bool {
@@ -474,6 +277,8 @@ impl Hub {
         }
     }
 
+    /// Hands `update` to whoever runs `turn_id`, or keeps it until someone
+    /// listens.
     fn deliver(&mut self, turn_id: &str, update: ProgrammaticUpdate) {
         match self.listeners.get(turn_id) {
             Some(sender) => {
@@ -1031,55 +836,4 @@ pub(super) async fn settled_turn(
         checkpoints: 0,
         stop_reason,
     })
-}
-
-/// Reference `run_programmatic`'s reading of a settled unified turn: the
-/// history it left and the last thing the assistant said.
-pub(super) fn settled_programmatic_turn(
-    reservation: &TurnReservation,
-    outcome: PublicTurnOutcome,
-) -> ProgrammaticTurn {
-    let final_assistant = outcome
-        .snapshot
-        .history
-        .iter()
-        .rev()
-        .find_map(|entry| match entry {
-            PublicHistoryEntry::Message {
-                role: PublicMessageRole::Assistant,
-                content,
-                ..
-            } => {
-                let text = content
-                    .iter()
-                    .filter_map(|block| match block {
-                        PublicContentBlock::Text { text } => Some(text.as_str()),
-                        PublicContentBlock::Image { .. } | PublicContentBlock::Resource { .. } => {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                (!text.is_empty()).then_some(text)
-            }
-            _ => None,
-        })
-        .unwrap_or_default();
-    ProgrammaticTurn {
-        session_id: outcome.session_id,
-        turn_id: reservation.turn_id.clone(),
-        final_assistant,
-        history: outcome.snapshot.history,
-        events: Vec::new(),
-        usage: PublicUsage {
-            input_tokens: outcome.usage.input_tokens,
-            output_tokens: outcome.usage.output_tokens,
-            price_micros: outcome.price_micros,
-        },
-        context_tokens: outcome.context_tokens,
-        steps: outcome.steps,
-        checkpoints: outcome.checkpoints,
-        stop_reason: outcome.stop_reason,
-        teleport_events: Vec::new(),
-    }
 }

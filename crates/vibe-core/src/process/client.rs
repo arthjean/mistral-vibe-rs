@@ -534,7 +534,9 @@ async fn run_client_shell_lifecycle(context: ClientShellLifecycle) {
         }
     };
     active_terminals.lock().await.insert(terminal_id.clone());
-    if abandoned || result_sender.is_closed() || *cancel.borrow() {
+    // Ends a terminal the caller stopped waiting for: the client kills and
+    // releases it, and a caller still listening learns why.
+    let abandon = async |result_sender: oneshot::Sender<_>| {
         cleanup_client_terminal(
             &port,
             &session_id,
@@ -545,55 +547,44 @@ async fn run_client_shell_lifecycle(context: ClientShellLifecycle) {
         .await;
         active_terminals.lock().await.remove(&terminal_id);
         let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
-        return;
+    };
+    if abandoned || result_sender.is_closed() || *cancel.borrow() {
+        return abandon(result_sender).await;
     }
     let terminal = |terminal_id: &str| (session_id.clone(), terminal_id.to_owned());
     let (wait_session, wait_terminal) = terminal(&terminal_id);
-    let waited = tokio::select! {
-        waited = tokio::time::timeout(wait_timeout, port.request(ClientToolRequest::TerminalWait {
+    let waited = tokio::time::timeout(
+        wait_timeout,
+        port.request(ClientToolRequest::TerminalWait {
             session_id: wait_session,
             terminal_id: wait_terminal,
-        })) => waited.unwrap_or(Err(ToolIoError::Unanswered {
-            method: "clientTool/terminal/wait",
-            seconds: wait_timeout.as_secs(),
-        })),
-        () = result_sender.closed() => {
-            cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
-            active_terminals.lock().await.remove(&terminal_id);
-            return;
-        }
-        changed = cancel.changed() => {
-            let _ = changed;
-            cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
-            active_terminals.lock().await.remove(&terminal_id);
-            let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
-            return;
-        }
+        }),
+    );
+    let Some(waited) = unless_abandoned(waited, &mut cancel, &mut result_sender).await else {
+        return abandon(result_sender).await;
     };
+    let waited = waited.unwrap_or(Err(ToolIoError::Unanswered {
+        method: "clientTool/terminal/wait",
+        seconds: wait_timeout.as_secs(),
+    }));
     let (output_session, output_terminal) = terminal(&terminal_id);
     let (waited, output) = match waited {
         Ok(waited) => {
-            let output = tokio::select! {
-                output = tokio::time::timeout(request_timeout, port.request(ClientToolRequest::TerminalOutput {
+            let output = tokio::time::timeout(
+                request_timeout,
+                port.request(ClientToolRequest::TerminalOutput {
                     session_id: output_session,
                     terminal_id: output_terminal,
-                })) => output.unwrap_or(Err(ToolIoError::Unanswered {
-                    method: "clientTool/terminal/output",
-                    seconds: request_timeout.as_secs(),
-                })),
-                () = result_sender.closed() => {
-                    cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
-                    active_terminals.lock().await.remove(&terminal_id);
-                    return;
-                }
-                changed = cancel.changed() => {
-                    let _ = changed;
-                    cleanup_client_terminal(&port, &session_id, &terminal_id, cleanup_grace, &cleanup_failures).await;
-                    active_terminals.lock().await.remove(&terminal_id);
-                    let _ = result_sender.send(Err(ToolIoError::LifecycleCancelled));
-                    return;
-                }
+                }),
+            );
+            let Some(output) = unless_abandoned(output, &mut cancel, &mut result_sender).await
+            else {
+                return abandon(result_sender).await;
             };
+            let output = output.unwrap_or(Err(ToolIoError::Unanswered {
+                method: "clientTool/terminal/output",
+                seconds: request_timeout.as_secs(),
+            }));
             (waited, output)
         }
         // A wait this client failed or never answered leaves its command
@@ -632,6 +623,23 @@ async fn run_client_shell_lifecycle(context: ClientShellLifecycle) {
         (Err(error), _) | (_, Err(error)) => Err(error),
     };
     let _ = result_sender.send(result);
+}
+
+/// What `request` answers, or `None` once the caller cancels or stops
+/// listening first.
+async fn unless_abandoned<T>(
+    request: impl Future<Output = T>,
+    cancel: &mut watch::Receiver<bool>,
+    result_sender: &mut oneshot::Sender<Result<ClientShellResult, ToolIoError>>,
+) -> Option<T> {
+    tokio::select! {
+        answer = request => Some(answer),
+        () = result_sender.closed() => None,
+        changed = cancel.changed() => {
+            let _ = changed;
+            None
+        }
+    }
 }
 
 /// The command outcome the reference assembles from the wait and the output.

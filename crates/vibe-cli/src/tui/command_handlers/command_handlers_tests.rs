@@ -6,8 +6,8 @@ use vibe_core::observability::{LogLevel, LogLevelChain};
 use super::log_level::{Applied, Badge, LogLevelBackend, Picker, apply};
 use super::mcp_arguments::{parse_add, split_posix};
 use super::{
-    Effect, ScheduledLoop, Stats, format_duration, format_loop_list, session_cost,
-    short_session_id, status_document, thousands,
+    Effect, ScheduledLoop, Stats, format_duration, format_loop_list, session_cost, status_document,
+    thousands,
 };
 
 #[test]
@@ -111,7 +111,6 @@ fn status_groups_thousands_and_prices_cached_tokens() {
     assert!(document.contains("- **Session Prompt Tokens**: 12,000 _(including 2,000 cached)_"));
     assert!(document.contains("- **Last Turn Tokens**: 0\n"));
     assert!(document.ends_with("- **Cost**: $0.1235\n"));
-    assert_eq!(short_session_id("0123456789abcdef"), "01234567");
 }
 
 #[derive(Default)]

@@ -378,12 +378,7 @@ async fn handle_modal_key(key: KeyEvent, context: &mut KeyContext<'_>) -> bool {
                         execute_mcp_effect(effect, runtime, context.state, &SystemUrlOpener);
                     }
                     OverlayEffect::RemoteProject(action) => {
-                        handle_project_action(
-                            action,
-                            context.working_directory,
-                            runtime,
-                            context.state,
-                        );
+                        handle_project_action(action, runtime, context.state);
                     }
                     OverlayEffect::TeleportPush(action) => {
                         handle_teleport_push_response(action, runtime, context.state);

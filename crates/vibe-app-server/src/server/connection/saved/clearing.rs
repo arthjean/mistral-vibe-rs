@@ -12,15 +12,12 @@ impl ServerConnection {
         &mut self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        check.extras(&object, &["sessionId"], &[]);
+        let params =
+            wire_validation::validate_params::<SessionParams>(&request.method, &request.params);
         if self.root_key().is_none() {
             return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
         }
-        check.finish().map_err(rejected)?;
-        let session_id = self.require_root(&session_id.unwrap_or_default())?;
+        let session_id = self.require_root(&params.map_err(rejected)?.session_id)?;
         let key = self.root_key().unwrap_or_else(|| session_id.clone());
         {
             let sessions = self.server.lock_sessions()?;

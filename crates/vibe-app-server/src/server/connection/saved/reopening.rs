@@ -12,24 +12,11 @@ impl ServerConnection {
         request: ServerRequest,
         reopen: Reopen,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = match reopen {
-            Reopen::Resume => check.required_string(&object, "sessionId", &[]),
-            Reopen::Continue => None,
-        };
-        let agent_config = check
-            .optional_object(&object, "agentConfig", &[])
-            .cloned()
-            .unwrap_or_default();
-        let history_limit = check.bounded_int(&object, "historyLimit", &[], 200, PAGE_BOUNDS);
-        let declared: &[&str] = match reopen {
-            Reopen::Resume => &["sessionId", "agentConfig", "historyLimit"],
-            Reopen::Continue => &["agentConfig", "historyLimit"],
-        };
-        check.extras(&object, declared, &[]);
-        check.finish().map_err(rejected)?;
-        let history_limit = history_limit.unwrap_or(200);
+        let ReopenParams {
+            session_id,
+            agent_config,
+            history_limit,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
         let config_cwd = ["cwd", "workdir"]
             .into_iter()
             .find_map(|key| agent_config.get(key).and_then(Value::as_str))
@@ -159,4 +146,16 @@ impl ServerConnection {
             Err(error) => Err(storage_fault(error)),
         }
     }
+}
+
+/// Reference `SessionResumeParams` and `SessionContinueParams`: only a
+/// resume names its session.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReopenParams {
+    session_id: Option<String>,
+    #[serde(default)]
+    agent_config: Map<String, Value>,
+    #[serde(default = "default_history_limit")]
+    history_limit: u16,
 }

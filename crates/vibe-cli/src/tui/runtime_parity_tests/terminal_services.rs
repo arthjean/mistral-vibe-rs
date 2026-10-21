@@ -10,7 +10,7 @@ use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::attention::{AttentionNotifier, DEFAULT_TITLE, NotificationContext, THROTTLE_MS};
 use crate::tui::exit::{
     SUSPEND_MESSAGE, SessionExitSummary, SessionUsage, format_session_usage, quit_prompt,
-    session_resume_lines, shorten_session_id,
+    session_resume_lines,
 };
 use crate::tui::interaction::QUIT_CONFIRMATION_WINDOW_MS;
 use crate::tui::narrator::{NarratorEffect, NarratorManager};
@@ -956,7 +956,7 @@ fn assert_terminal_service_contracts(observed: &Value) {
     );
     assert_eq!(
         observed["shortSessionId"].as_str(),
-        Some(shorten_session_id("0123456789abcdef").as_str())
+        Some(vibe_core::storage::short_session_id("0123456789abcdef"))
     );
     // The reference default title is not configurable.
     assert_eq!(DEFAULT_TITLE, "Vibe");

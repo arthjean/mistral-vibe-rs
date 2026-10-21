@@ -12,8 +12,8 @@ use crate::tui::interaction::{
     RemoteProjectAction,
 };
 use crate::tui::pickers::{
-    config_overlay, config_target_overlay, mcp_detail_overlay, mcp_overlay, proxy_overlay,
-    remote_projects_overlay, rewind_targets, sessions_overlay,
+    McpSource, config_overlay, config_target_overlay, mcp_detail_overlay, mcp_overlay,
+    proxy_overlay, remote_projects_overlay, rewind_targets, sessions_overlay,
 };
 use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
 use crate::tui::rewind::{RewindChoice, RewindState};
@@ -564,32 +564,29 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
         Some("session-123")
     );
 
-    let mcp = mcp_overlay(
-        &serde_json::json!({
-            "mcp": {
-                "sources": [{
-                    "name": "github",
-                    "transport": "streamable-http",
-                    "status": "healthy",
-                    "enabled": true,
-                    "tools": [
-                        {"name": "search", "enabled": true},
-                        {"name": "read", "enabled": false}
-                    ]
-                }]
-            }
-        }),
-        &serde_json::json!({
-            "connectors": {
-                "sources": [{
-                    "id": "drive",
-                    "name": "Drive",
-                    "authState": "disconnected",
-                    "toolNames": ["search_files"]
-                }]
-            }
-        }),
-    );
+    let published = |sources: serde_json::Value| {
+        McpSource::published(&serde_json::json!({"mcp": {"sources": sources}}))
+            .expect("published MCP sources")
+    };
+    let mcp = mcp_overlay(&published(serde_json::json!([
+        {
+            "name": "github",
+            "kind": "server",
+            "transport": "streamable-http",
+            "status": "enabled",
+            "tools": [
+                {"name": "search", "description": "", "enabled": true},
+                {"name": "read", "description": "", "enabled": false}
+            ]
+        },
+        {
+            "name": "drive",
+            "kind": "connector",
+            "transport": "connector",
+            "status": "needs_auth",
+            "tools": [{"name": "search_files", "description": "", "enabled": false}]
+        }
+    ])));
     assert!(
         mcp.items
             .iter()
@@ -602,16 +599,16 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
     );
     assert!(!mcp.items.iter().any(|item| item.label.trim() == "read"));
     let detail = mcp_detail_overlay(
-        &serde_json::json!({
-            "mcp": {"sources": [{
-                "name": "github",
-                "tools": [
-                    {"name": "search", "enabled": true},
-                    {"name": "read", "enabled": false}
-                ]
-            }]}
-        }),
-        &serde_json::json!({"connectors": {"sources": []}}),
+        &published(serde_json::json!([{
+            "name": "github",
+            "kind": "server",
+            "transport": "stdio",
+            "status": "enabled",
+            "tools": [
+                {"name": "search", "description": "", "enabled": true},
+                {"name": "read", "description": "", "enabled": false}
+            ]
+        }])),
         &IntegrationTarget {
             kind: IntegrationKind::McpServer,
             source: "github".to_owned(),
@@ -630,15 +627,13 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
             )
     }));
     let setup = mcp_detail_overlay(
-        &serde_json::json!({"mcp": {"sources": []}}),
-        &serde_json::json!({
-            "connectors": {"sources": [{
-                "id": "vault",
-                "name": "Vault",
-                "authState": "setup_required",
-                "toolNames": ["read_secret"]
-            }]}
-        }),
+        &published(serde_json::json!([{
+            "name": "vault",
+            "kind": "connector",
+            "transport": "connector",
+            "status": "needs_setup",
+            "tools": [{"name": "read_secret", "description": "", "enabled": false}]
+        }])),
         &IntegrationTarget {
             kind: IntegrationKind::Connector,
             source: "vault".to_owned(),

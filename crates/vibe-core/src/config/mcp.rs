@@ -754,16 +754,6 @@ fn seconds(milliseconds: u64) -> Value {
     Value::Float(milliseconds as f64 / 1_000.0)
 }
 
-/// The URL an entry addresses, for the equivalence test.
-pub(super) fn mcp_transport_url(transport: &McpTransportConfig) -> Option<&Url> {
-    match transport {
-        McpTransportConfig::Http { url, .. } | McpTransportConfig::StreamableHttp { url, .. } => {
-            Some(url)
-        }
-        McpTransportConfig::Stdio { .. } => None,
-    }
-}
-
 /// Whether `config` can join the servers `table` already declares.
 ///
 /// Both rejections name the entry that stands in the way, which is what tells
@@ -773,7 +763,7 @@ pub(super) fn preflight_mcp_add(
     config: &McpServerConfig,
 ) -> Result<(), ConfigError> {
     let requested_key =
-        mcp_transport_url(&config.transport).map(|url| mcp_server_url_key(url.as_str()));
+        crate::mcp::transport_url(&config.transport).map(|url| mcp_server_url_key(url.as_str()));
     for entry in config_array(table, IntegrationCollection::McpServers)? {
         let entry = entry
             .as_table()
@@ -845,7 +835,7 @@ pub(super) fn decide_mcp_add(
     // the default out.
     let requested = decode_mcp_server(&mcp_server_table(config)?, working_directory)?;
     let requested_key =
-        mcp_transport_url(&requested.transport).map(|url| mcp_server_url_key(url.as_str()));
+        crate::mcp::transport_url(&requested.transport).map(|url| mcp_server_url_key(url.as_str()));
     for entry in entries {
         let table = entry
             .as_table()
@@ -859,8 +849,8 @@ pub(super) fn decide_mcp_add(
         }
         let existing = decode_mcp_server(table, working_directory)?;
         match (
-            mcp_transport_url(&existing.transport).cloned(),
-            mcp_transport_url(&requested.transport),
+            crate::mcp::transport_url(&existing.transport).cloned(),
+            crate::mcp::transport_url(&requested.transport),
         ) {
             (Some(existing_url), Some(requested_url))
                 if mcp_server_url_key(existing_url.as_str())
@@ -941,16 +931,6 @@ pub struct McpOAuthAdded {
     /// The URL as the configuration carries it.
     pub url: String,
     pub created: bool,
-}
-
-/// The URL `server` was written with, which the parsed form may spell
-/// differently.
-pub(super) fn declared_url(server: &McpServerConfig, url: &Url) -> String {
-    server
-        .declared
-        .as_ref()
-        .and_then(|declared| declared.url.clone())
-        .unwrap_or_else(|| url.to_string())
 }
 
 /// What removing a server by name did.

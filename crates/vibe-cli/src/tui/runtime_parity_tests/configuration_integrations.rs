@@ -18,8 +18,8 @@ use crate::tui::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, Overlay, OverlayAction,
 };
 use crate::tui::pickers::{
-    config_overlay, mcp_auth_overlay, mcp_overlay, proxy_overlay, remote_projects_overlay,
-    teleport_push_overlay,
+    McpSource, McpSourceStatus, McpTool, config_overlay, mcp_auth_overlay, mcp_overlay,
+    proxy_overlay, remote_projects_overlay, teleport_push_overlay,
 };
 use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
 use crate::tui::setup::{DetectedTheme, Theme, resolve_theme};
@@ -169,7 +169,8 @@ fn apply(event: Event) -> String {
             )
         }
         Event::Mcp { mcp, connectors } => {
-            overlay_observation("mcp", &mcp_overlay(&mcp, &connectors))
+            let (sources, _) = fixture_sources(&mcp, &connectors);
+            overlay_observation("mcp", &mcp_overlay(&sources))
         }
         Event::McpDetail {
             mcp,
@@ -177,32 +178,29 @@ fn apply(event: Event) -> String {
             source,
             source_kind,
         } => {
-            let auth_state = connectors
-                .pointer("/connectors/sources")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .find(|candidate| {
-                    candidate
-                        .get("id")
-                        .or_else(|| candidate.get("alias"))
-                        .or_else(|| candidate.get("name"))
-                        .and_then(Value::as_str)
-                        == Some(source.as_str())
-                })
-                .and_then(|candidate| candidate.get("authState"))
-                .and_then(Value::as_str);
+            let (sources, connector_names) = fixture_sources(&mcp, &connectors);
+            let kind = integration_kind(&source_kind);
+            let source = match kind {
+                IntegrationKind::McpServer => source,
+                IntegrationKind::Connector => {
+                    connector_names.get(&source).cloned().unwrap_or(source)
+                }
+            };
+            let status = sources
+                .iter()
+                .find(|candidate| candidate.kind == kind && candidate.name == source)
+                .map(|candidate| candidate.status);
             let target = crate::tui::interaction::IntegrationTarget {
-                kind: integration_kind(&source_kind),
+                kind,
                 source,
                 tool: None,
                 enabled: true,
-                requires_auth: auth_state == Some("disconnected"),
-                requires_setup: auth_state == Some("setup_required"),
+                requires_auth: status == Some(McpSourceStatus::NeedsAuth),
+                requires_setup: status == Some(McpSourceStatus::NeedsSetup),
             };
             overlay_observation(
                 "mcp-detail",
-                &crate::tui::pickers::mcp_detail_overlay(&mcp, &connectors, &target),
+                &crate::tui::pickers::mcp_detail_overlay(&sources, &target),
             )
         }
         Event::McpAuth {
@@ -242,6 +240,90 @@ fn apply(event: Event) -> String {
                 |overlay| overlay_observation("teleport-approval", &overlay),
             ),
     }
+}
+
+/// The published sources a fixture describes, translated as the oracle's
+/// `mcp_state` translates it into the reference `MCPState`, with the display
+/// name of each connector id the corpus addresses a connector by.
+fn fixture_sources(mcp: &Value, connectors: &Value) -> (Vec<McpSource>, BTreeMap<String, String>) {
+    let text = |value: &Value, key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let enabled = |value: &Value| value.get("enabled").and_then(Value::as_bool) != Some(false);
+    let list = |value: &Value, pointer: &str| {
+        value
+            .pointer(pointer)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let mut sources = list(mcp, "/mcp/sources")
+        .iter()
+        .map(|raw| McpSource {
+            name: text(raw, "name"),
+            kind: IntegrationKind::McpServer,
+            transport: text(raw, "transport"),
+            status: if enabled(raw) {
+                match raw.get("status").and_then(Value::as_str) {
+                    Some("connected") => McpSourceStatus::Connected,
+                    Some("auth_required") => McpSourceStatus::NeedsAuth,
+                    Some("setup_required") => McpSourceStatus::NeedsSetup,
+                    Some("failed") => McpSourceStatus::Unavailable,
+                    Some("disabled") => McpSourceStatus::Disabled,
+                    _ => McpSourceStatus::Enabled,
+                }
+            } else {
+                McpSourceStatus::Disabled
+            },
+            tools: list(raw, "/tools")
+                .iter()
+                .map(|tool| McpTool {
+                    name: text(tool, "name"),
+                    description: text(tool, "description"),
+                    enabled: enabled(tool),
+                })
+                .collect(),
+        })
+        .collect::<Vec<_>>();
+    let mut connector_names = BTreeMap::new();
+    for raw in list(connectors, "/connectors/sources") {
+        let name = Some(text(&raw, "name"))
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| text(&raw, "id"));
+        connector_names.insert(text(&raw, "id"), name.clone());
+        let disabled = list(&raw, "/disabledTools");
+        sources.push(McpSource {
+            name,
+            kind: IntegrationKind::Connector,
+            transport: "connector".to_owned(),
+            status: if enabled(&raw) {
+                match raw.get("authState").and_then(Value::as_str) {
+                    Some("connected" | "not_required") => McpSourceStatus::Connected,
+                    Some("disconnected") => McpSourceStatus::NeedsAuth,
+                    Some("setup_required") => McpSourceStatus::NeedsSetup,
+                    _ => McpSourceStatus::Unavailable,
+                }
+            } else {
+                McpSourceStatus::Disabled
+            },
+            tools: list(&raw, "/toolNames")
+                .iter()
+                .filter_map(Value::as_str)
+                .map(|tool| McpTool {
+                    name: tool.to_owned(),
+                    description: String::new(),
+                    enabled: !disabled
+                        .iter()
+                        .any(|candidate| candidate.as_str() == Some(tool)),
+                })
+                .collect(),
+        });
+    }
+    (sources, connector_names)
 }
 
 fn integration_kind(value: &str) -> IntegrationKind {
@@ -579,18 +661,17 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
             "Settings",
         ),
         (
-            mcp_overlay(
-                &serde_json::json!({
-                    "mcp": {"sources": [{
-                        "name": "github",
-                        "transport": "streamable-http",
-                        "status": "healthy",
-                        "enabled": true,
-                        "tools": [{"name": "search", "enabled": true}]
-                    }]}
-                }),
-                &serde_json::json!({"connectors": {"sources": []}}),
-            ),
+            mcp_overlay(&[McpSource {
+                name: "github".to_owned(),
+                kind: IntegrationKind::McpServer,
+                transport: "streamable-http".to_owned(),
+                status: McpSourceStatus::Enabled,
+                tools: vec![McpTool {
+                    name: "search".to_owned(),
+                    description: String::new(),
+                    enabled: true,
+                }],
+            }]),
             "MCP",
         ),
         (auth, "Connector: drive"),

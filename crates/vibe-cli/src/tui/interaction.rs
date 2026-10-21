@@ -56,9 +56,13 @@ impl ValueEdit {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Which family a published MCP source belongs to; its wire word is the
+/// source's `kind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
 pub enum IntegrationKind {
+    #[serde(rename = "server")]
     McpServer,
+    #[serde(rename = "connector")]
     Connector,
 }
 

@@ -15,30 +15,14 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let cursor = check.optional_string(&object, "cursor", &[]);
-        let limit = check.bounded_int(&object, "limit", &[], 50, PAGE_BOUNDS);
-        let root_session_id = check.optional_string(&object, "rootSessionId", &[]);
-        let parent_session_id = check.optional_string(&object, "parentSessionId", &[]);
-        let cwd = check.optional_string(&object, "cwd", &[]);
-        let cwds = check.optional_strings(&object, "cwds", &[]);
-        let _pinned = check.optional_bool(&object, "pinned", &[]);
-        check.extras(
-            &object,
-            &[
-                "cursor",
-                "limit",
-                "rootSessionId",
-                "parentSessionId",
-                "cwd",
-                "cwds",
-                "pinned",
-            ],
-            &[],
-        );
-        check.finish().map_err(rejected)?;
-        let limit = usize::try_from(limit.unwrap_or(50)).unwrap_or(50);
+        let ListParams {
+            cursor,
+            limit,
+            root_session_id,
+            parent_session_id,
+            cwd,
+            cwds,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
         let store = self.store();
         store.migrate_legacy().map_err(storage_fault)?;
         // `cwds` is the union of what `cwd` matches for each entry, so an
@@ -220,4 +204,22 @@ fn session_cursor_index(sessions: &[SessionInfo], cursor: Option<&str>) -> usize
         .iter()
         .position(|session| session.updated_at == updated_at && session.session_id == session_id)
         .map_or(sessions.len(), |index| index + 1)
+}
+
+/// Reference `SessionListParams`; the pinned and archived filters are a
+/// unified host's own.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ListParams {
+    cursor: Option<String>,
+    #[serde(default = "default_list_limit")]
+    limit: usize,
+    root_session_id: Option<String>,
+    parent_session_id: Option<String>,
+    cwd: Option<String>,
+    cwds: Option<Vec<String>>,
+}
+
+const fn default_list_limit() -> usize {
+    50
 }

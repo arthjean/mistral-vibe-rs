@@ -13,11 +13,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde_json::{Value, json};
 use vibe_app_server::client::{ClientError, ProtocolErrorCode};
-use vibe_core::events::PublicNoticeLevel;
 
 use super::interaction::{Overlay, OverlayItem, OverlayKind};
-use super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
-use super::{InteractiveRuntime, push_local_document};
+use super::state::TuiState;
+use super::{InteractiveRuntime, move_overlay_selection, push_local_document, push_local_error};
 
 #[cfg(test)]
 #[path = "plugins/plugins_tests.rs"]
@@ -565,12 +564,12 @@ pub(in crate::tui) fn handle_plugins_key(
                 return;
             }
             KeyCode::Up | KeyCode::Char('k') if bare => {
-                move_selection(state, -1);
+                move_overlay_selection(state, -1);
                 runtime.plugins_panel = Some(panel);
                 return;
             }
             KeyCode::Down | KeyCode::Char('j') if bare => {
-                move_selection(state, 1);
+                move_overlay_selection(state, 1);
                 runtime.plugins_panel = Some(panel);
                 return;
             }
@@ -598,12 +597,6 @@ pub(in crate::tui) fn handle_plugins_key(
     runtime.plugins_panel = Some(panel);
 }
 
-fn move_selection(state: &mut TuiState, delta: isize) {
-    if let Some(overlay) = state.overlay.as_mut() {
-        overlay.move_selection(delta);
-    }
-}
-
 /// Runs a reload from the panel and writes its outcome into the transcript, as
 /// `/reload-plugins` does.
 fn report_reload(runtime: &mut InteractiveRuntime, state: &mut TuiState) -> ReloadOutcome {
@@ -613,14 +606,7 @@ fn report_reload(runtime: &mut InteractiveRuntime, state: &mut TuiState) -> Relo
             push_local_document(state, NO_PLUGINS.to_owned());
         }
         ReloadOutcome::Failed(error) => {
-            state.append_local(TranscriptEntry {
-                id: String::new(),
-                revision: 1,
-                kind: TranscriptKind::Notice,
-                text: reload_failure(error),
-                status: EntryStatus::Failed,
-                source: EntrySource::notice(PublicNoticeLevel::Error),
-            });
+            push_local_error(state, reload_failure(error));
         }
         ReloadOutcome::Reloaded { report, .. } => {
             push_local_document(state, report.clone());

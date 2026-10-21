@@ -9,13 +9,8 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        let title = check.required_string(&object, "title", &[]);
-        check.extras(&object, &["sessionId", "title"], &[]);
-        check.finish().map_err(rejected)?;
-        let (session_id, title) = (session_id.unwrap_or_default(), title.unwrap_or_default());
+        let RenameParams { session_id, title } =
+            wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
         let store = self.store();
         let live = self.root_id().as_deref() == Some(session_id.as_str());
         let metadata = if live {
@@ -66,15 +61,12 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        check.extras(&object, &["sessionId"], &[]);
+        let params =
+            wire_validation::validate_params::<SessionParams>(&request.method, &request.params);
         if self.root_key().is_none() {
             return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
         }
-        check.finish().map_err(rejected)?;
-        let session_id = self.require_root(&session_id.unwrap_or_default())?;
+        let session_id = self.require_root(&params.map_err(rejected)?.session_id)?;
         Ok(success_batch(
             request.id.clone(),
             result_map([("log", self.server.session_log_summary(&session_id))]),
@@ -98,4 +90,12 @@ fn rename_live(
     "manual".clone_into(&mut metadata.title_source);
     store.update_metadata(&metadata)?;
     Ok(metadata)
+}
+
+/// Reference `SessionTitleUpdateParams`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameParams {
+    session_id: String,
+    title: String,
 }

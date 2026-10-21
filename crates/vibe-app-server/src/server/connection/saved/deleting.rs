@@ -11,12 +11,8 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let object = object_of(&request.params);
-        let mut check = WireCheck::default();
-        let session_id = check.required_string(&object, "sessionId", &[]);
-        check.extras(&object, &["sessionId"], &[]);
-        check.finish().map_err(rejected)?;
-        let session_id = session_id.unwrap_or_default();
+        let SessionParams { session_id } =
+            wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
         if self.server.harness_selection().use_unified
             && let Some(deleted) = self.unified_delete(&session_id)
         {

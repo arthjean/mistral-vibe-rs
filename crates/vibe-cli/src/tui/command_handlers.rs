@@ -17,12 +17,14 @@
 use std::collections::BTreeMap;
 
 use vibe_core::pycompat::thousands;
+use vibe_core::storage::short_session_id;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::TelemetryCommandKind;
 use vibe_core::workspace::WARNING_TAG;
 
 use super::commands::{CommandContext, CommandId, ParsedCommand, command_echo, command_name};
 use super::help;
+use super::interaction::IntegrationKind;
 use super::plugins::{self, PluginCatalog, PluginsPort, ReloadOutcome};
 
 pub(super) mod log_level;
@@ -184,16 +186,10 @@ pub(super) struct Identity {
     pub organization: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum McpSourceKind {
-    Server,
-    Connector,
-}
-
 /// What `/mcp` reads before it decides. Reference `MCPState`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct McpState {
-    pub sources: Vec<(String, McpSourceKind)>,
+    pub sources: Vec<(String, IntegrationKind)>,
     pub connector_error: Option<String>,
     pub statuses: BTreeMap<String, String>,
 }
@@ -439,11 +435,6 @@ async fn reload<B: CommandBackend>(backend: &mut B) {
             ok: false,
         }),
     }
-}
-
-/// Reference `shorten_session_id`: the first eight characters.
-pub(super) fn short_session_id(session_id: &str) -> String {
-    session_id.chars().take(8).collect()
 }
 
 /// Reference `_clear_history`: the conversation continues under a new session,
@@ -828,7 +819,7 @@ async fn mcp_login<B: CommandBackend>(alias: &str, backend: &mut B) {
             .iter()
             .any(|(name, source_kind)| name == alias && *source_kind == kind)
     };
-    if carries(McpSourceKind::Connector) && !carries(McpSourceKind::Server) {
+    if carries(IntegrationKind::Connector) && !carries(IntegrationKind::McpServer) {
         backend.emit(Effect::ClosePanel);
         backend.emit(Effect::Panel {
             panel: Panel::ConnectorAuth,

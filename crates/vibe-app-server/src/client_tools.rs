@@ -15,8 +15,8 @@
 //! `vibe_core::process::ClientToolIo`.
 
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, PoisonError};
 
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
@@ -26,6 +26,8 @@ use vibe_core::process::{
     ToolIoFuture,
 };
 use vibe_protocol::{Envelope, JsonRpcVersion, RequestId, ServerRequest, encode_frame};
+
+use crate::sync::lock;
 
 /// What one connection lets its server delegate, and where the delegation goes.
 #[derive(Default)]
@@ -57,20 +59,20 @@ impl ClientToolBridge {
     /// Records what the handshake declared. Called on every `initialize`, so a
     /// reconnection that declares less is honored immediately.
     pub fn declare(&self, capabilities: &[ClientToolCapability]) {
-        self.lock().capabilities = capabilities.iter().copied().collect();
+        lock(&self.state).capabilities = capabilities.iter().copied().collect();
     }
 
     /// Claims the write side of the connection, which is what a delegated
     /// request travels on.
     pub fn attach(&self, outbound: mpsc::UnboundedSender<Vec<u8>>) {
-        self.lock().outbound = Some(outbound);
+        lock(&self.state).outbound = Some(outbound);
     }
 
     /// Drops the connection and fails every request still waiting on it, so a
     /// tool blocked on a client that went away reports the loss rather than
     /// waiting out its deadline.
     pub fn detach(&self) {
-        let mut state = self.lock();
+        let mut state = lock(&self.state);
         state.outbound = None;
         state.capabilities.clear();
         state.sessions.clear();
@@ -87,7 +89,7 @@ impl ClientToolBridge {
     /// The connection asks this before its callback registry: an id neither
     /// owns is a protocol fault, and only the caller can tell the difference.
     pub fn resolve(&self, id: &RequestId, result: Result<Value, String>) -> bool {
-        let Some(waiting) = self.lock().pending.remove(id) else {
+        let Some(waiting) = lock(&self.state).pending.remove(id) else {
             return false;
         };
         let _ = waiting.send(result);
@@ -99,7 +101,7 @@ impl ClientToolBridge {
     /// waits on the answer.
     pub fn expect(&self, id: RequestId) {
         let (sender, _receiver) = oneshot::channel();
-        self.lock().pending.insert(id, sender);
+        lock(&self.state).pending.insert(id, sender);
     }
 
     /// The delegation one session's tools use, or `None` when the client hosts
@@ -115,7 +117,7 @@ impl ClientToolBridge {
     /// request nothing carries.
     #[must_use]
     pub fn session_io(self: &std::sync::Arc<Self>, session_id: &str) -> Option<ClientToolIo> {
-        let mut state = self.lock();
+        let mut state = lock(&self.state);
         if state.capabilities.is_empty() || state.outbound.is_none() {
             return None;
         }
@@ -134,16 +136,10 @@ impl ClientToolBridge {
     /// call was abandoned, and nothing else can close one once the session is
     /// gone.
     pub async fn close_session(&self, session_id: &str) -> Result<(), ToolIoError> {
-        let Some(session) = self.lock().sessions.remove(session_id) else {
+        let Some(session) = lock(&self.state).sessions.remove(session_id) else {
             return Ok(());
         };
         session.cleanup_all().await
-    }
-
-    fn lock(&self) -> std::sync::MutexGuard<'_, BridgeState> {
-        // A poisoned registry still has to answer: the alternative is a turn
-        // that hangs on a delegation nobody will ever resolve.
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     /// Puts one request on the wire and registers where its answer goes.
@@ -174,7 +170,7 @@ impl ClientToolBridge {
             params: params.into_iter().collect(),
         }));
         let (sender, receiver) = oneshot::channel();
-        let mut state = self.lock();
+        let mut state = lock(&self.state);
         let Some(outbound) = state.outbound.clone() else {
             return Err(ToolIoError::Request(
                 "no client is connected to delegate to".to_owned(),
@@ -183,7 +179,7 @@ impl ClientToolBridge {
         state.pending.insert(id.clone(), sender);
         drop(state);
         if outbound.send(frame).is_err() {
-            self.lock().pending.remove(&id);
+            lock(&self.state).pending.remove(&id);
             return Err(ToolIoError::Request(
                 "the client transport is closed".to_owned(),
             ));
@@ -207,7 +203,7 @@ impl ClientToolPort for ClientToolBridge {
     }
 
     fn supports(&self, capability: ClientToolCapability) -> bool {
-        self.lock().capabilities.contains(&capability)
+        lock(&self.state).capabilities.contains(&capability)
     }
 }
 

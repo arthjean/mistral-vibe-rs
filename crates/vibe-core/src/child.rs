@@ -1,11 +1,14 @@
 //! Owned child processes and their process groups.
 //!
-//! Spawning a child, tracking the group it leads, and shutting that group down
-//! is identical whether the child is a shell terminal or an MCP stdio server.
-//! Both needed the same escalation ladder (wait, SIGTERM, SIGKILL) applied to
-//! the leader and then to any surviving descendants, so the ladder lives here
-//! once and each caller maps [`TerminationError`] into its own error type.
+//! Tracking the group a child leads and shutting that group down is identical
+//! whether the child is piped, as an MCP stdio server or a shell command is, or
+//! runs under a terminal [`crate::pty`] opened. Every one needs the same
+//! escalation ladder (wait, SIGTERM, SIGKILL) applied to the leader and then to
+//! any surviving descendants, so the ladder lives here once over a [`Leader`],
+//! and each caller maps [`TerminationError`] into its own error type.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
@@ -58,14 +61,79 @@ pub(crate) struct ChildPipes {
     pub(crate) stderr: Option<ChildStderr>,
 }
 
+/// What a [`Leader`] hands back from an operation that waits.
+pub(crate) type LeaderFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+/// The process a [`ChildGroup`] leads, whichever backend started it: a piped
+/// child here, or a terminal's child in [`crate::pty`].
+pub(crate) trait Leader: Send {
+    /// Reports the leader's exit status without blocking.
+    fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>>;
+
+    /// Waits for the leader to exit.
+    fn wait(&mut self) -> LeaderFuture<'_, std::io::Result<ChildExit>>;
+
+    /// Ends the leader itself: the signal a group without an owned process
+    /// group gets, and on Windows the only one.
+    fn kill(&mut self) -> Result<(), TerminationError>;
+
+    /// Closes what keeps the leader's output open once it exits, which only a
+    /// pseudoconsole does.
+    fn close_console(
+        &mut self,
+        _grace: Duration,
+    ) -> LeaderFuture<'_, Result<(), TerminationError>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+#[cfg(not(windows))]
+impl Leader for Child {
+    fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
+        Child::try_wait(self).map(|status| status.map(ChildExit::from))
+    }
+
+    fn wait(&mut self) -> LeaderFuture<'_, std::io::Result<ChildExit>> {
+        Box::pin(async move { Child::wait(self).await.map(ChildExit::from) })
+    }
+
+    fn kill(&mut self) -> Result<(), TerminationError> {
+        self.start_kill()
+            .map_err(|error| TerminationError::Signal(error.to_string()))
+    }
+}
+
+#[cfg(windows)]
+impl Leader for AsyncGroupChild {
+    fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
+        self.inner()
+            .try_wait()
+            .map(|status| status.map(ChildExit::from))
+    }
+
+    fn wait(&mut self) -> LeaderFuture<'_, std::io::Result<ChildExit>> {
+        Box::pin(async move { self.inner().wait().await.map(ChildExit::from) })
+    }
+
+    /// Ends the job object, and with it every descendant.
+    fn kill(&mut self) -> Result<(), TerminationError> {
+        self.start_kill()
+            .map_err(|error| TerminationError::Signal(error.to_string()))
+    }
+}
+
 /// A child process together with the process group it leads.
-pub(crate) struct ChildGroup {
-    child: PlatformChild,
+///
+/// The leader is the last field so that a group of any backend coerces to
+/// `ChildGroup<dyn Leader>`, which is how a caller holding either keeps one
+/// type.
+pub(crate) struct ChildGroup<L: ?Sized = PlatformChild> {
     #[cfg_attr(
         not(unix),
         expect(dead_code, reason = "only the POSIX process-group signals read it")
     )]
     group: Option<i32>,
+    child: L,
 }
 
 /// Where to enter the shutdown ladder.
@@ -118,36 +186,37 @@ impl ChildGroup {
                 stderr: inner.stderr.take(),
             }
         };
-        Ok((Self { child, group }, pipes))
+        Ok((Self::led_by(child, group), pipes))
     }
+}
 
+impl<L: Leader> ChildGroup<L> {
+    /// The group `child` leads, `group` being its id when it owns one.
+    pub(crate) const fn led_by(child: L, group: Option<i32>) -> Self {
+        Self { group, child }
+    }
+}
+
+impl<L: Leader + ?Sized> ChildGroup<L> {
     /// Waits for the group leader to exit.
     pub(crate) async fn wait(&mut self) -> std::io::Result<ChildExit> {
-        #[cfg(not(windows))]
-        {
-            self.child.wait().await.map(ChildExit::from)
-        }
-        #[cfg(windows)]
-        {
-            self.child.inner().wait().await.map(ChildExit::from)
-        }
+        self.child.wait().await
     }
 
     /// Reports the leader's exit status without blocking.
     pub(crate) fn try_wait(&mut self) -> std::io::Result<Option<ChildExit>> {
-        #[cfg(not(windows))]
-        {
-            self.child
-                .try_wait()
-                .map(|status| status.map(ChildExit::from))
-        }
-        #[cfg(windows)]
-        {
-            self.child
-                .inner()
-                .try_wait()
-                .map(|status| status.map(ChildExit::from))
-        }
+        self.child.try_wait()
+    }
+
+    /// Closes the leader's pseudoconsole, when it has one.
+    pub(crate) async fn close_console(&mut self, grace: Duration) -> Result<(), TerminationError> {
+        self.child.close_console(grace).await
+    }
+
+    /// The leader, for a test that has to reach into its backend.
+    #[cfg(all(test, windows))]
+    pub(crate) fn leader(&mut self) -> &mut L {
+        &mut self.child
     }
 
     /// Shuts the leader down, escalating from `from` until it exits.
@@ -178,6 +247,8 @@ impl ChildGroup {
 
     /// Reaps descendants that outlived the group leader.
     ///
+    /// The leader leads its own process group, so a grandchild that ignored
+    /// the leader's exit is still addressable here rather than left running.
     /// `already_signaled` skips the first SIGTERM when the caller has already
     /// sent one while shutting the leader down.
     pub(crate) async fn reap_group(
@@ -187,29 +258,38 @@ impl ChildGroup {
     ) -> Result<(), TerminationError> {
         #[cfg(unix)]
         {
-            if !self.group_alive()? {
+            let Some(group) = self.group else {
+                return Ok(());
+            };
+            if !group_alive(group)? {
                 return Ok(());
             }
             if !already_signaled {
                 self.signal(false)?;
             }
-            if self.wait_for_group_exit(grace).await? {
+            if wait_for_group_exit(group, grace).await? {
                 return Ok(());
             }
             self.signal(true)?;
-            if self.wait_for_group_exit(grace).await? {
+            if wait_for_group_exit(group, grace).await? {
                 return Ok(());
             }
             Err(TerminationError::Deadline)
         }
         #[cfg(windows)]
         {
-            // The job object terminates descendants with the leader, so only the
-            // leader itself has to be confirmed dead.
+            // A piped child's job object terminates its descendants with the
+            // leader. A terminal's child has none: the tree kill reaches the
+            // descendants still parented under a live leader, and closing the
+            // pseudoconsole ends the ones attached to it that the leader left
+            // behind. The console is closed even when the leader would not
+            // die, so that failure is reported only after the close.
             if !already_signaled {
                 self.signal(true)?;
             }
-            self.shut_down(grace, Rung::Wait).await.map(drop)
+            let exit = self.shut_down(grace, Rung::Wait).await.map(drop);
+            let closed = self.close_console(grace).await;
+            exit.and(closed)
         }
     }
 
@@ -219,37 +299,15 @@ impl ChildGroup {
         self.group
     }
 
-    /// Signals the whole group, falling back to the leader when no group is owned.
-    #[cfg(unix)]
+    /// Signals the whole group, falling back to the leader when no group is
+    /// owned. On Windows both rungs end the leader the way its backend does.
     pub(crate) fn signal(&mut self, force: bool) -> Result<(), TerminationError> {
-        let Some(group) = self.group else {
-            return self
-                .child
-                .start_kill()
-                .map_err(|error| TerminationError::Signal(error.to_string()));
-        };
-        signal_group(group, force)
-    }
-
-    #[cfg(windows)]
-    pub(crate) fn signal(&mut self, _force: bool) -> Result<(), TerminationError> {
-        self.child
-            .start_kill()
-            .map_err(|error| TerminationError::Signal(error.to_string()))
-    }
-
-    /// Reports whether any member of the group is still alive.
-    #[cfg(unix)]
-    pub(crate) fn group_alive(&self) -> Result<bool, TerminationError> {
-        self.group.map_or(Ok(false), group_alive)
-    }
-
-    #[cfg(unix)]
-    async fn wait_for_group_exit(&self, grace: Duration) -> Result<bool, TerminationError> {
-        match self.group {
-            Some(group) => wait_for_group_exit(group, grace).await,
-            None => Ok(true),
+        #[cfg(unix)]
+        if let Some(group) = self.group {
+            return signal_group(group, force);
         }
+        let _ = force;
+        self.child.kill()
     }
 }
 

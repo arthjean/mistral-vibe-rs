@@ -14,12 +14,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
+use crate::sync::lock;
+
 mod account;
 pub use account::AccountLookup;
 mod agents;
 mod config;
 mod internal;
 mod provider_auth;
+mod session_config;
 mod sessions;
 mod setup;
 mod skills;
@@ -530,10 +533,10 @@ impl WorkspaceService {
     /// gives for the threshold it publishes.
     #[must_use]
     pub fn compaction_settings(&self) -> CompactionSettings {
-        self.config
-            .load()
-            .map(|snapshot| snapshot.compaction_settings())
-            .unwrap_or_default()
+        self.read_config(
+            CompactionSettings::default(),
+            ConfigSnapshot::compaction_settings,
+        )
     }
 
     /// The three compaction texts `compaction_prompt_id` resolves to, or the
@@ -624,10 +627,7 @@ impl WorkspaceService {
     /// load prices nothing.
     #[must_use]
     pub fn active_model_pricing(&self) -> (f64, f64, Option<f64>) {
-        self.config
-            .load()
-            .map(|snapshot| snapshot.active_model_pricing())
-            .unwrap_or((0.0, 0.0, None))
+        self.read_config((0.0, 0.0, None), ConfigSnapshot::active_model_pricing)
     }
 
     /// The alias of the model the configuration makes active, which is what
@@ -635,7 +635,7 @@ impl WorkspaceService {
     /// configuration that will not load names none.
     #[must_use]
     pub fn active_model_alias(&self) -> Option<String> {
-        self.config.load().ok().and_then(|snapshot| {
+        self.read_config(None, |snapshot| {
             snapshot.config_view()["activeModel"]["alias"]
                 .as_str()
                 .map(ToOwned::to_owned)
@@ -646,13 +646,9 @@ impl WorkspaceService {
     /// names one. Reference `project_workdir`, which shows `displayed_workdir`
     /// in place of the working directory when it is not empty.
     pub fn displayed_workdir(&self) -> Option<String> {
-        self.config.load().ok().and_then(|snapshot| {
-            snapshot
-                .effective
-                .get("displayed_workdir")
-                .and_then(toml::Value::as_str)
+        self.read_config(None, |snapshot| {
+            Some(effective_text(snapshot, "displayed_workdir", ""))
                 .filter(|workdir| !workdir.is_empty())
-                .map(ToOwned::to_owned)
         })
     }
 
@@ -661,26 +657,16 @@ impl WorkspaceService {
     /// A configuration that will not load is read as reading them, so a broken
     /// file never makes a client report that a transcript lost its attachments.
     pub fn active_model_supports_images(&self) -> bool {
-        self.config
-            .load()
-            .ok()
-            .map(|snapshot| snapshot.config_view()["activeModel"]["supportsImages"] == json!(true))
-            .unwrap_or(true)
+        self.read_config(true, |snapshot| {
+            snapshot.config_view()["activeModel"]["supportsImages"] == json!(true)
+        })
     }
 
     /// The base URL an account action points a browser at.
     fn vibe_base_url(&self) -> String {
-        self.config
-            .load()
-            .ok()
-            .and_then(|snapshot| {
-                snapshot
-                    .effective
-                    .get("vibe_base_url")?
-                    .as_str()
-                    .map(ToOwned::to_owned)
-            })
-            .unwrap_or_default()
+        self.read_config(String::new(), |snapshot| {
+            effective_text(snapshot, "vibe_base_url", "")
+        })
     }
 
     /// Whether the configuration asks for sessions to be written to disk.
@@ -689,18 +675,15 @@ impl WorkspaceService {
     /// shipped default: a session that is being written is the normal state, and
     /// reporting otherwise would tell a client its transcript is being dropped.
     pub fn session_logging_enabled(&self) -> bool {
-        self.config
-            .load()
-            .ok()
-            .and_then(|snapshot| {
-                snapshot
-                    .effective
-                    .get("session_logging")?
-                    .as_table()?
-                    .get("enabled")?
-                    .as_bool()
-            })
-            .unwrap_or(true)
+        self.read_config(true, |snapshot| {
+            snapshot
+                .effective
+                .get("session_logging")
+                .and_then(TomlValue::as_table)
+                .and_then(|logging| logging.get("enabled"))
+                .and_then(TomlValue::as_bool)
+                .unwrap_or(true)
+        })
     }
 
     /// Whether the configuration lets a client-recorded event be kept and
@@ -712,77 +695,13 @@ impl WorkspaceService {
     /// will not load at all reads as false, which is what the reference's
     /// `_is_enabled` answers when its getter raises.
     pub fn telemetry_enabled(&self) -> bool {
-        let Ok(snapshot) = self.config.load() else {
-            return false;
-        };
-        snapshot
-            .effective
-            .get("enable_telemetry")
-            .and_then(TomlValue::as_bool)
-            .unwrap_or(true)
-    }
-
-    /// The hooks a session in `working_directory` loads: every open project's
-    /// `.vibe/hooks.toml`, then the user's. Reference `load_hooks_from_fs`
-    /// over the session's `HarnessFilesManager`.
-    #[must_use]
-    pub fn session_hooks(
-        &self,
-        working_directory: &Path,
-        project_trusted: bool,
-        add_directories: &[String],
-    ) -> crate::session_hooks::SessionHooks {
-        // The directory the server runs in is an authorized root, not an
-        // opened project: only its trust makes it one.
-        let mut roots = self
-            .allowed_roots
-            .iter()
-            .filter(|root| **root != self.paths.working_directory)
-            .cloned()
-            .collect::<Vec<_>>();
-        roots.extend(add_directories.iter().map(PathBuf::from));
-        let files = self
-            .config
-            .scoped_to_working_directory(working_directory.to_path_buf(), project_trusted)
-            .with_additional_roots(roots)
-            .harness_files()
-            .hook_files();
-        crate::session_hooks::SessionHooks::load(&files, working_directory)
-    }
-
-    /// Where a unified session opened in `working_directory` looks for
-    /// plugins, with the MCP server names its configuration already holds.
-    /// Reference `PluginResolver.from_harness_files` over the session's
-    /// harness files, rooted like [`Self::session_hooks`] so an untrusted
-    /// project contributes no plugin directory.
-    #[must_use]
-    pub fn plugin_sources(
-        &self,
-        working_directory: &Path,
-        project_trusted: bool,
-        add_directories: &[String],
-        configured_mcp_names: std::collections::BTreeSet<String>,
-    ) -> crate::plugins::PluginSources {
-        let mut roots = self
-            .allowed_roots
-            .iter()
-            .filter(|root| **root != self.paths.working_directory)
-            .cloned()
-            .collect::<Vec<_>>();
-        roots.extend(add_directories.iter().map(PathBuf::from));
-        let files = self
-            .config
-            .scoped_to_working_directory(working_directory.to_path_buf(), project_trusted)
-            .with_additional_roots(roots)
-            .harness_files();
-        crate::plugins::PluginSources {
-            project_roots: files.project_plugins_dirs(),
-            user_roots: files.user_plugins_dirs(),
-            vibe_home: self.paths.vibe_home.clone(),
-            storage_root: self.session_logging.save_dir.clone(),
-            workdir: vibe_core::platform::resolve_lenient(working_directory),
-            configured_mcp_names,
-        }
+        self.read_config(false, |snapshot| {
+            snapshot
+                .effective
+                .get("enable_telemetry")
+                .and_then(TomlValue::as_bool)
+                .unwrap_or(true)
+        })
     }
 
     /// The same service seeding skill discovery with `skills` instead of the
@@ -901,94 +820,34 @@ impl WorkspaceService {
         scoped.dispatch(method, params)
     }
 
-    /// Reference `emit_new_session_telemetry`'s four counts, read off the
-    /// same services a session is built from: the workspace instructions
-    /// file, every discovered skill, the MCP servers this session would
-    /// connect and the models the merged configuration declares.
-    #[must_use]
-    pub fn session_census(
-        &self,
-        working_directory: &Path,
-        trust: bool,
-    ) -> vibe_core::telemetry::records::NewSession {
-        let nb_skills = self
-            .dispatch("skills/list", &BTreeMap::new())
-            .ok()
-            .and_then(|dispatch| dispatch.result.get("skills").cloned())
-            .as_ref()
-            .and_then(Value::as_array)
-            .map_or(0, Vec::len) as u64;
-        let nb_mcp_servers = self
-            .mcp_servers_for_session(working_directory, trust, &[])
-            .map_or(0, |servers| servers.len()) as u64;
-        let nb_models = self
-            .layered_config()
+    /// What `read` answers over the configuration as it loads now, or
+    /// `fallback` when it does not load.
+    fn read_config<T>(&self, fallback: T, read: impl FnOnce(&ConfigSnapshot) -> T) -> T {
+        self.config
             .load()
-            .ok()
-            .and_then(|snapshot| snapshot.effective.get("models").cloned())
-            .map_or(0, |models| match models {
-                TomlValue::Array(entries) => entries.len(),
-                TomlValue::Table(entries) => entries.len(),
-                _ => 0,
-            }) as u64;
-        vibe_core::telemetry::records::NewSession {
-            has_agents_md: has_agents_md(working_directory),
-            nb_skills,
-            nb_mcp_servers,
-            nb_models,
-        }
+            .map_or(fallback, |snapshot| read(&snapshot))
     }
+}
 
-    pub fn mcp_servers_for_session(
-        &self,
-        working_directory: &Path,
-        project_trusted: bool,
-        runtime_servers: &[Value],
-    ) -> Result<Vec<McpServerConfig>, WorkspaceServiceError> {
-        let mut runtime = Table::new();
-        if !runtime_servers.is_empty() {
-            runtime.insert(
-                "mcp_servers".to_owned(),
-                TomlValue::try_from(Value::Array(runtime_servers.to_vec()))
-                    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?,
-            );
-        }
-        let snapshot = LayeredConfig::new(
-            ConfigPaths {
-                vibe_home: self.paths.vibe_home.clone(),
-                working_directory: working_directory.to_path_buf(),
-            },
-            self.defaults.clone(),
-        )
-        .with_environment(vibe_environment(&self.paths.vibe_home))
-        .with_runtime_overrides(runtime)
-        .with_project_trusted(project_trusted)
-        .load()
-        .map_err(config_error)?;
-        snapshot
-            .mcp_servers(working_directory)
-            .map_err(config_error)
-    }
+/// The string `key` holds in the effective document, `default` when it holds
+/// none.
+fn effective_text(snapshot: &ConfigSnapshot, key: &str, default: &str) -> String {
+    snapshot
+        .effective
+        .get(key)
+        .and_then(TomlValue::as_str)
+        .unwrap_or(default)
+        .to_owned()
+}
 
-    /// The `enabled_tools` and `disabled_tools` lists the configuration carries
-    /// for a session opened in `working_directory`, in that order.
-    ///
-    /// The reference reads them from the same layered configuration the session
-    /// runs under, so the project file of the directory being opened counts,
-    /// not the one the service was constructed with.
-    pub fn tool_filters_for_session(
-        &self,
-        working_directory: &Path,
-        project_trusted: bool,
-    ) -> Result<(Vec<String>, Vec<String>), WorkspaceServiceError> {
-        let snapshot = self
-            .config
-            .clone()
-            .scoped_to_working_directory(working_directory.to_path_buf(), project_trusted)
-            .load()
-            .map_err(config_error)?;
-        Ok((snapshot.enabled_tools(), snapshot.disabled_tools()))
-    }
+/// `params` as the request model `T` declares them.
+fn parse_params<T: serde::de::DeserializeOwned>(
+    params: &BTreeMap<String, Value>,
+) -> Result<T, WorkspaceServiceError> {
+    serde_json::from_value(Value::Object(
+        params.clone().into_iter().collect::<Map<_, _>>(),
+    ))
+    .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))
 }
 
 fn config_error(error: vibe_core::config::ConfigError) -> WorkspaceServiceError {
@@ -1029,8 +888,6 @@ pub enum WorkspaceServiceError {
     Extension(String),
     #[error("prompt preparation failed: {0}")]
     Prompt(String),
-    #[error("workspace state lock is poisoned")]
-    StatePoisoned,
     #[error("JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
     /// Parameters the request's model refuses, every violation under its path.

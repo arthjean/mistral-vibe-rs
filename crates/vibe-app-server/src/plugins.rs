@@ -10,36 +10,33 @@
 //! session runs is resolved again from those checkouts, so a session outlives
 //! the plugin being edited or uninstalled.
 
+mod catalog;
+mod issues;
+mod mcp;
+mod package_store;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use serde_json::{Map, Value, json};
 use vibe_core::platform::resolve_lenient;
 use vibe_core::plugins::catalog::{PluginConnectorCatalog, PluginMcpDiscovery};
-use vibe_core::plugins::compatibility::{
-    PluginMcpHttpAuth, PluginMcpServer, plugin_runtime_state_names,
-};
-use vibe_core::plugins::content::{digest_plugin_tree, launched_executables};
+use vibe_core::plugins::compatibility::plugin_runtime_state_names;
 use vibe_core::plugins::drift::{
     PluginRouteKey, PluginRouteStatus, reconcile_plugin_routes, retain_pinned_tools,
 };
 use vibe_core::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
-use vibe_core::plugins::native::PLUGIN_AGENT_TYPE;
-use vibe_core::plugins::paths::{PluginPathRef, resolve_plugin_path};
-use vibe_core::plugins::redaction::{redact_argv, redact_names, redact_url};
 use vibe_core::plugins::snapshot::{ResolvedPluginSnapshot, build_snapshot};
 use vibe_core::plugins::{PluginConfigIssue, PluginResolver, ResolvedPluginSet};
 use vibe_core::skills::SkillScope;
 
-/// The reload notice codes: a source a rescan cannot repair. Reference
-/// `_RELOAD_NOTICE_CODES`.
-const RELOAD_NOTICE_CODES: [&str; 3] = [
-    "plugin.mcp.connection_failed",
-    "plugin.connector.unavailable",
-    "plugin.connector.runtime_unavailable",
-];
+pub use catalog::{
+    PluginComponent, order_skill_rows, plugin_catalog, plugin_components_by_owner, plugin_info,
+};
+pub use issues::{plugin_issues, plugin_reload_notices, runtime_plugin_issues};
+pub(crate) use mcp::plugin_server_configs;
+pub use mcp::{McpDiscoveryRecord, RecordingMcpDiscovery, plugin_mcp_sources};
+use package_store::PackageStore;
 
 /// Where one session looks for plugins and keeps their runtime files.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,43 +149,33 @@ async fn materialize(
     .await
 }
 
-/// Resolves, pins and binds a new session's plugins.
-pub async fn start(
-    sources: &PluginSources,
-    session_id: &str,
-    ports: PluginPorts<'_>,
-) -> SessionPlugins {
-    let installed = resolve_installed(sources, ports).await;
-    pin_and_bind(sources, session_id, &installed, ports, None).await
-}
-
-/// [`start`] with a [`RecordingMcpDiscovery`], run to completion on a thread
-/// and runtime of its own so a caller on the request loop can wait for it, as
-/// the reference's `session/start` waits for its plugin discovery. The
-/// session's own connection to each plugin server follows, as the reference
-/// hands them to its runtime. `None` when that runtime could not be built.
+/// Resolves, pins and binds a new session's plugins through a
+/// [`RecordingMcpDiscovery`], run to completion on a thread and runtime of its
+/// own so a caller on the request loop can wait for it, as the reference's
+/// `session/start` waits for its plugin discovery. The session's own
+/// connection to each plugin server follows, as the reference hands them to
+/// its runtime. `None` when that runtime could not be built.
 #[must_use]
 pub fn start_discovering(sources: &PluginSources, session_id: &str) -> Option<SessionPlugins> {
-    let discovery = RecordingMcpDiscovery::default();
-    let ports = PluginPorts {
-        mcp_discovery: Some(&discovery),
-        connector_catalog: None,
-    };
-    let (mut plugins, connections) = block_on_own_runtime(async {
-        let plugins = start(sources, session_id, ports).await;
-        let connections = connect_plugin_servers(&plugins, &sources.configured_mcp_names).await;
-        (plugins, connections)
-    })?;
-    plugins.mcp_sources = plugin_mcp_sources(&plugins, &discovery.records(), &connections);
-    Some(plugins)
+    bind_discovering(sources, session_id, None)
 }
 
-/// [`reload`] as [`start_discovering`] runs [`start`].
+/// Rescans the installed roots and re-pins the session to what it finds in
+/// place of `previous`, run as [`start_discovering`] runs a new session's.
 #[must_use]
 pub fn reload_discovering(
     sources: &PluginSources,
     session_id: &str,
     previous: &SessionPlugins,
+) -> Option<SessionPlugins> {
+    bind_discovering(sources, session_id, Some(previous))
+}
+
+/// [`bind`] as [`start_discovering`] and [`reload_discovering`] run it.
+fn bind_discovering(
+    sources: &PluginSources,
+    session_id: &str,
+    previous: Option<&SessionPlugins>,
 ) -> Option<SessionPlugins> {
     let discovery = RecordingMcpDiscovery::default();
     let ports = PluginPorts {
@@ -196,8 +183,9 @@ pub fn reload_discovering(
         connector_catalog: None,
     };
     let (mut plugins, connections) = block_on_own_runtime(async {
-        let plugins = reload(sources, session_id, previous, ports).await;
-        let connections = connect_plugin_servers(&plugins, &sources.configured_mcp_names).await;
+        let plugins = bind(sources, session_id, previous, ports).await;
+        let connections =
+            mcp::connect_plugin_servers(&plugins, &sources.configured_mcp_names).await;
         (plugins, connections)
     })?;
     plugins.mcp_sources = plugin_mcp_sources(&plugins, &discovery.records(), &connections);
@@ -222,26 +210,21 @@ pub(crate) fn block_on_own_runtime<T: Send>(
     })
 }
 
-/// Rescans the installed roots and re-pins the session to what it finds.
-/// Reference `UnifiedPluginProvider.rescan` followed by the re-pin
-/// `config/write` performs.
-pub async fn reload(
+/// Resolves the installed roots, pins each package into its checkout and
+/// binds the session to the set resolved from those checkouts.
+///
+/// A new session runs the catalog that set derives. A reload, which names the
+/// set it replaces as `previous`, is reference `UnifiedPluginProvider.rescan`
+/// followed by the re-pin `config/write` performs: the tools `previous`
+/// published stay pinned, each route reports whether its source still offers
+/// it, and the runtime derived when the session started is kept.
+async fn bind(
     sources: &PluginSources,
     session_id: &str,
-    previous: &SessionPlugins,
+    previous: Option<&SessionPlugins>,
     ports: PluginPorts<'_>,
 ) -> SessionPlugins {
     let installed = resolve_installed(sources, ports).await;
-    pin_and_bind(sources, session_id, &installed, ports, Some(previous)).await
-}
-
-async fn pin_and_bind(
-    sources: &PluginSources,
-    session_id: &str,
-    installed: &MaterializedPluginSet,
-    ports: PluginPorts<'_>,
-    previous: Option<&SessionPlugins>,
-) -> SessionPlugins {
     let store = PackageStore::new(&sources.storage_root);
     let mut checkouts = BTreeMap::new();
     let mut pin_issues = Vec::new();
@@ -349,877 +332,6 @@ async fn pin_and_bind(
         ),
         mcp_sources: Vec::new(),
     }
-}
-
-/// The content-addressed package checkouts. Reference `PluginPackageStore`,
-/// whose blob and manifest layers this port does not keep (row 36 owns the
-/// unified session storage that reads them back).
-struct PackageStore {
-    root: PathBuf,
-}
-
-impl PackageStore {
-    fn new(storage_root: &Path) -> Self {
-        Self {
-            root: resolve_lenient(storage_root).join("plugins"),
-        }
-    }
-
-    fn data_root(&self, session_id: &str) -> PathBuf {
-        self.root.join("data").join(session_id)
-    }
-
-    /// The checkout of `source` at `packages/<ab>/<digest>`, copied the first
-    /// time and verified against `digest`.
-    fn checkout(
-        &self,
-        source: &Path,
-        digest: &str,
-        ignored: &BTreeSet<String>,
-    ) -> io::Result<PathBuf> {
-        let shard = digest.get(..2).unwrap_or(digest);
-        let target = self.root.join("packages").join(shard).join(digest);
-        if target.is_dir() {
-            return Ok(target);
-        }
-        let temporary_root = self.root.join("tmp");
-        fs::create_dir_all(&temporary_root)?;
-        let staging = temporary_root.join(format!(
-            "package-{}-{}",
-            digest.get(..16).unwrap_or(digest),
-            std::process::id()
-        ));
-        let _ = fs::remove_dir_all(&staging);
-        let outcome = copy_package(source, &staging, ignored).and_then(|()| {
-            let rebuilt = digest_plugin_tree(&staging, &BTreeSet::new())?;
-            if rebuilt != digest {
-                return Err(io::Error::other(format!(
-                    "the copied package digests to {rebuilt}, not {digest}"
-                )));
-            }
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            match fs::rename(&staging, &target) {
-                Err(_) if target.is_dir() => Ok(()),
-                Err(error) => Err(error),
-                Ok(()) => harden(&target, &launched_executables(&target)),
-            }
-        });
-        let _ = fs::remove_dir_all(&staging);
-        outcome.map(|()| target)
-    }
-}
-
-/// Leaves a checkout readable by its owner alone and writable by nobody:
-/// files `0400`, directories `0500`, as the reference's store leaves them.
-/// Only the files the package's own `mcp.json` launches with a `./` command
-/// stay runnable, at `0500`, as the reference's executable blobs are.
-#[cfg(unix)]
-fn harden(root: &Path, executables: &BTreeSet<PathBuf>) -> io::Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            harden(&entry.path(), executables)?;
-        } else if kind.is_file() {
-            let mode = if executables.contains(&entry.path()) {
-                0o500
-            } else {
-                0o400
-            };
-            fs::set_permissions(entry.path(), fs::Permissions::from_mode(mode))?;
-        }
-    }
-    fs::set_permissions(root, fs::Permissions::from_mode(0o500))
-}
-
-#[cfg(not(unix))]
-fn harden(_root: &Path, _executables: &BTreeSet<PathBuf>) -> io::Result<()> {
-    Ok(())
-}
-
-/// Copies a package tree, keeping symbolic links as links and leaving out
-/// every entry an ignored name covers.
-fn copy_package(source: &Path, target: &Path, ignored: &BTreeSet<String>) -> io::Result<()> {
-    fs::create_dir_all(target)?;
-    let mut entries: Vec<_> = fs::read_dir(source)?.collect::<io::Result<_>>()?;
-    entries.sort_by_key(fs::DirEntry::file_name);
-    for entry in entries {
-        let name = entry.file_name();
-        if ignored.contains(name.to_string_lossy().as_ref()) {
-            continue;
-        }
-        let path = entry.path();
-        let destination = target.join(&name);
-        let kind = entry.file_type()?;
-        if kind.is_symlink() {
-            symlink(&fs::read_link(&path)?, &destination)?;
-        } else if kind.is_dir() {
-            copy_package(&path, &destination, ignored)?;
-        } else if kind.is_file() {
-            fs::copy(&path, &destination)?;
-        } else {
-            return Err(io::Error::other(format!(
-                "{} is neither a file nor a symbolic link",
-                path.display()
-            )));
-        }
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn symlink(original: &Path, link: &Path) -> io::Result<()> {
-    std::os::unix::fs::symlink(original, link)
-}
-
-#[cfg(windows)]
-fn symlink(original: &Path, link: &Path) -> io::Result<()> {
-    std::os::windows::fs::symlink_file(original, link)
-}
-
-/// The resolution diagnostics as `ConfigIssue`s, sorted. Reference
-/// `plugin_issues`.
-#[must_use]
-pub fn plugin_issues(plugins: &SessionPlugins) -> Vec<Value> {
-    sorted_issues(plugins.issues())
-}
-
-/// [`plugin_issues`] over the installed resolve, which is what the runtime
-/// snapshot lists.
-#[must_use]
-pub fn runtime_plugin_issues(plugins: &SessionPlugins) -> Vec<Value> {
-    sorted_issues(&plugins.installed_issues)
-}
-
-fn sorted_issues(issues: &[PluginConfigIssue]) -> Vec<Value> {
-    let mut issues: Vec<&PluginConfigIssue> = issues.iter().collect();
-    issues.sort_by(|left, right| {
-        (
-            left.file.as_os_str(),
-            left.code.as_deref().unwrap_or(""),
-            &left.message,
-        )
-            .cmp(&(
-                right.file.as_os_str(),
-                right.code.as_deref().unwrap_or(""),
-                &right.message,
-            ))
-    });
-    issues
-        .into_iter()
-        .map(|issue| json!({"file": issue.file.to_string_lossy(), "message": issue.message}))
-        .collect()
-}
-
-/// The skill catalogue a unified session publishes: its plugins' model
-/// invocable skills, plugin by plugin in name order, then their other skills,
-/// then every row `rows` holds that no plugin published. Reference
-/// `project_core_skills` over `core_plugins`.
-#[must_use]
-pub fn order_skill_rows(plugins: &SessionPlugins, rows: Vec<Value>) -> Vec<Value> {
-    let skills = &plugins.runtime_skills;
-    let owners = &plugins.runtime_owners;
-    let mut names: Vec<&String> = owners.values().collect();
-    names.sort_unstable();
-    names.dedup();
-    let mut catalogue = Vec::new();
-    for plugin in names {
-        catalogue.extend(
-            skills
-                .iter()
-                .filter(|(alias, skill)| {
-                    skill.model_invocable
-                        && owners.get(alias.split(':').next().unwrap_or_default()) == Some(plugin)
-                })
-                .map(|(_, skill)| vibe_core::skills::skill_summary(skill)),
-        );
-    }
-    catalogue.extend(
-        skills
-            .iter()
-            .filter(|(_, skill)| !skill.model_invocable)
-            .map(|(_, skill)| vibe_core::skills::skill_summary(skill)),
-    );
-    catalogue.extend(rows.into_iter().filter(|row| row["source"] != "plugin"));
-    catalogue
-}
-
-/// The MCP servers a session's plugins declare, as `/mcp` lists them: under
-/// their catalog names, sorted by them, with what `records` holds for each and
-/// the session's connection `connections` holds. A declared source id is its
-/// catalog name unless a second plugin declared it too, when each takes a
-/// digest-suffixed form (reference `PluginMCPCatalog.bind` over
-/// `_catalog_names`, and `sources`, which reports a server never discovered
-/// as `unavailable`).
-#[must_use]
-pub fn plugin_mcp_sources(
-    plugins: &SessionPlugins,
-    records: &BTreeMap<(String, String), McpDiscoveryRecord>,
-    connections: &BTreeMap<(String, String), crate::resources::PluginMcpConnection>,
-) -> Vec<crate::resources::PluginMcpSource> {
-    let mut sources: Vec<crate::resources::PluginMcpSource> = catalog_names(plugins)
-        .into_iter()
-        .filter_map(|(definition, name)| {
-            let key = (definition.plugin_name.clone(), definition.source_id.clone());
-            let record = records.get(&key);
-            Some(crate::resources::PluginMcpSource {
-                name: name?,
-                plugin_name: definition.plugin_name.clone(),
-                transport: plugin_mcp_transport(&definition.server).to_owned(),
-                status: record.map_or("unavailable", |record| record.status),
-                tools: record
-                    .map(|record| record.tools.clone())
-                    .unwrap_or_default(),
-                connection: connections.get(&key).cloned(),
-            })
-        })
-        .collect();
-    sources.sort_by(|left, right| left.name.cmp(&right.name));
-    sources
-}
-
-/// The configuration a session connects to each plugin MCP server with, by
-/// the catalog name a unified session's provided group is named after
-/// (reference `merge_plugin_mcp_into_catalog`, which runs each under that
-/// name).
-pub(crate) fn plugin_server_configs(
-    plugins: &SessionPlugins,
-) -> BTreeMap<String, vibe_core::mcp::McpServerConfig> {
-    catalog_names(plugins)
-        .into_iter()
-        .filter_map(|(definition, name)| {
-            Some((
-                name?,
-                plugin_mcp_config(&definition.private_alias, &definition.server)?,
-            ))
-        })
-        .collect()
-}
-
-/// Each plugin MCP server definition with its catalog name.
-fn catalog_names(
-    plugins: &SessionPlugins,
-) -> Vec<(
-    &vibe_core::plugins::native::PluginMcpServerDefinition,
-    Option<String>,
-)> {
-    use vibe_core::plugins::naming::{ToolGroupIdentity, resolve_tool_group_names};
-    let definitions = &plugins.materialized.resolution.mcp_servers;
-    let identities: Vec<ToolGroupIdentity> = definitions
-        .iter()
-        .map(|definition| ToolGroupIdentity {
-            plugin_name: definition.plugin_name.clone(),
-            base_name: definition.source_id.clone(),
-            source_id: definition.source_id.clone(),
-        })
-        .collect();
-    let names = resolve_tool_group_names(identities.iter(), Vec::<String>::new());
-    definitions
-        .iter()
-        .zip(&identities)
-        .map(|(definition, identity)| (definition, names.get(identity).cloned()))
-        .collect()
-}
-
-/// The session's own connection to every plugin MCP server whose catalog name
-/// no configured server holds, keyed by plugin and source id. Reference
-/// `merge_plugin_mcp_into_catalog` hands those servers to the unified
-/// harness, whose runtime discovers each through every page of `tools/list`
-/// and reports it `enabled`, or `unavailable` with the code of its failure
-/// (`_resolve_server` in
-/// `harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/_mcp_runtime.py`).
-/// An OAuth server awaits its authorization, as one without credentials does
-/// there: this port keeps no plugin credentials to send it.
-async fn connect_plugin_servers(
-    plugins: &SessionPlugins,
-    configured: &BTreeSet<String>,
-) -> BTreeMap<(String, String), crate::resources::PluginMcpConnection> {
-    use crate::resources::PluginMcpConnection;
-    use vibe_core::mcp::{McpAuthConfig, RuntimeDiscoveryFailure, discover_every_page};
-    let pending = catalog_names(plugins)
-        .into_iter()
-        .filter(|(_, name)| name.as_ref().is_some_and(|name| !configured.contains(name)))
-        .map(|(definition, _)| async move {
-            let key = (definition.plugin_name.clone(), definition.source_id.clone());
-            let unavailable = |error| PluginMcpConnection {
-                status: "unavailable",
-                tools: Vec::new(),
-                schemas: BTreeMap::new(),
-                error: Some(error),
-            };
-            let Some(config) = plugin_mcp_config(&definition.private_alias, &definition.server)
-            else {
-                return (key, unavailable("mcp_transport_failed"));
-            };
-            if matches!(config.auth, McpAuthConfig::Oauth(_)) {
-                return (
-                    key,
-                    PluginMcpConnection {
-                        status: "needs_auth",
-                        tools: Vec::new(),
-                        schemas: BTreeMap::new(),
-                        error: None,
-                    },
-                );
-            }
-            let headers = vibe_core::mcp::authorization::http_headers(&config);
-            let connection = match discover_every_page(&config, &headers).await {
-                Ok(tools) => PluginMcpConnection {
-                    status: "enabled",
-                    schemas: tools
-                        .iter()
-                        .map(|tool| (tool.name.clone(), tool.input_schema.clone()))
-                        .collect(),
-                    tools: tools
-                        .into_iter()
-                        .map(|tool| (tool.name, tool.description))
-                        .collect(),
-                    error: None,
-                },
-                Err(RuntimeDiscoveryFailure::Unauthorized) => {
-                    unavailable("authentication was rejected")
-                }
-                Err(RuntimeDiscoveryFailure::Failed(code)) => unavailable(code),
-            };
-            (key, connection)
-        });
-    futures_util::future::join_all(pending)
-        .await
-        .into_iter()
-        .collect()
-}
-
-fn plugin_mcp_transport(server: &PluginMcpServer) -> &str {
-    match server {
-        PluginMcpServer::Stdio { .. } => "stdio",
-        PluginMcpServer::Http { transport, .. } => transport,
-        PluginMcpServer::AuthenticatedHttp { .. } => "http",
-    }
-}
-
-/// What discovering one plugin MCP server answered.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct McpDiscoveryRecord {
-    /// `connected`, `needs_auth` or `unavailable`.
-    pub status: &'static str,
-    pub tools: Vec<(String, Option<String>)>,
-}
-
-/// Discovers a plugin MCP server by connecting to it once and listing its
-/// tools, recording each outcome by plugin and source id (reference
-/// `RegistryMCPDiscovery` wrapped in `_RecordingDiscovery`). An OAuth server
-/// is reported as awaiting authorization: this port keeps no plugin
-/// credentials to send it.
-#[derive(Default)]
-pub struct RecordingMcpDiscovery {
-    factory: vibe_core::mcp::DefaultMcpPeerFactory,
-    records: std::sync::Mutex<BTreeMap<(String, String), McpDiscoveryRecord>>,
-}
-
-impl RecordingMcpDiscovery {
-    #[must_use]
-    pub fn records(&self) -> BTreeMap<(String, String), McpDiscoveryRecord> {
-        self.records
-            .lock()
-            .map(|records| records.clone())
-            .unwrap_or_default()
-    }
-
-    fn record(
-        &self,
-        definition: &vibe_core::plugins::native::PluginMcpServerDefinition,
-        record: McpDiscoveryRecord,
-    ) {
-        if let Ok(mut records) = self.records.lock() {
-            records.insert(
-                (definition.plugin_name.clone(), definition.source_id.clone()),
-                record,
-            );
-        }
-    }
-}
-
-impl PluginMcpDiscovery for RecordingMcpDiscovery {
-    fn discover<'a>(
-        &'a self,
-        definition: &'a vibe_core::plugins::native::PluginMcpServerDefinition,
-    ) -> vibe_core::plugins::catalog::DiscoveryFuture<'a> {
-        use vibe_core::mcp::McpPeerFactory;
-        use vibe_core::plugins::catalog::PluginMcpDiscoveryFailure;
-        Box::pin(async move {
-            let unavailable = McpDiscoveryRecord {
-                status: "unavailable",
-                tools: Vec::new(),
-            };
-            let Some(config) = plugin_mcp_config(&definition.private_alias, &definition.server)
-            else {
-                self.record(definition, unavailable);
-                return Err(PluginMcpDiscoveryFailure::Failed(
-                    "the server URL is not valid".to_owned(),
-                ));
-            };
-            if matches!(config.auth, vibe_core::mcp::McpAuthConfig::Oauth(_)) {
-                self.record(
-                    definition,
-                    McpDiscoveryRecord {
-                        status: "needs_auth",
-                        tools: Vec::new(),
-                    },
-                );
-                return Err(PluginMcpDiscoveryFailure::AuthorizationRequired);
-            }
-            let headers = vibe_core::mcp::authorization::http_headers(&config);
-            let listed = match self.factory.connect(&config).await {
-                Ok(peer) => peer.discover(&headers).await,
-                Err(error) => Err(error),
-            };
-            match listed {
-                Ok(tools) => {
-                    self.record(
-                        definition,
-                        McpDiscoveryRecord {
-                            status: "connected",
-                            tools: tools
-                                .iter()
-                                .map(|tool| (tool.name.clone(), tool.description.clone()))
-                                .collect(),
-                        },
-                    );
-                    Ok(tools)
-                }
-                Err(error) => {
-                    self.record(definition, unavailable);
-                    Err(PluginMcpDiscoveryFailure::Failed(error.to_string()))
-                }
-            }
-        })
-    }
-}
-
-fn plugin_mcp_config(
-    name: &str,
-    server: &PluginMcpServer,
-) -> Option<vibe_core::mcp::McpServerConfig> {
-    use vibe_core::mcp::{McpAuthConfig, McpStaticAuth, McpTransportConfig};
-    let (transport, auth) = match server {
-        PluginMcpServer::Stdio {
-            command,
-            args,
-            env,
-            cwd,
-            ..
-        } => {
-            let (program, leading) = command.split_first()?;
-            let mut arguments = leading.to_vec();
-            arguments.extend(args.iter().cloned());
-            (
-                McpTransportConfig::Stdio {
-                    command: program.clone(),
-                    arguments,
-                    environment: env.clone(),
-                    working_directory: cwd.as_ref().map(PathBuf::from),
-                },
-                McpAuthConfig::default(),
-            )
-        }
-        PluginMcpServer::Http {
-            transport,
-            url,
-            headers,
-            ..
-        } => {
-            let url = url.parse().ok()?;
-            let headers = headers.clone();
-            let transport = if transport == "http" {
-                McpTransportConfig::Http { url, headers }
-            } else {
-                McpTransportConfig::StreamableHttp { url, headers }
-            };
-            (transport, McpAuthConfig::default())
-        }
-        PluginMcpServer::AuthenticatedHttp {
-            url, headers, auth, ..
-        } => {
-            let auth = match auth {
-                PluginMcpHttpAuth::BearerTokenEnv(variable) => {
-                    McpAuthConfig::Static(McpStaticAuth {
-                        api_key_env: variable.clone(),
-                        ..McpStaticAuth::default()
-                    })
-                }
-                PluginMcpHttpAuth::OAuth => {
-                    McpAuthConfig::Oauth(serde_json::from_value(json!({})).ok()?)
-                }
-            };
-            (
-                McpTransportConfig::Http {
-                    url: url.parse().ok()?,
-                    headers: headers.clone(),
-                },
-                auth,
-            )
-        }
-    };
-    Some(vibe_core::mcp::McpServerConfig {
-        alias: name.to_owned(),
-        transport,
-        enabled: true,
-        disabled_tools: BTreeSet::new(),
-        startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
-        tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
-        auth,
-        prompt: None,
-        sampling_enabled: true,
-        declared: None,
-    })
-}
-
-/// The remarks a successful reload still has to make. Reference
-/// `plugin_reload_notices`.
-#[must_use]
-pub fn plugin_reload_notices(plugins: &SessionPlugins) -> Vec<String> {
-    let mut issues: Vec<&PluginConfigIssue> = plugins.issues().iter().collect();
-    issues.sort_by(|left, right| left.message.cmp(&right.message));
-    let mut notices: Vec<String> = issues
-        .into_iter()
-        .filter(|issue| {
-            issue
-                .code
-                .as_deref()
-                .is_some_and(|code| RELOAD_NOTICE_CODES.contains(&code))
-        })
-        .map(|issue| issue.message.clone())
-        .collect();
-    let mut unavailable: Vec<String> = plugins
-        .routes
-        .iter()
-        .filter(|(_, status)| **status == "unavailable")
-        .map(|((group, function), _)| format!("{group}.{function}"))
-        .collect();
-    unavailable.sort();
-    if !unavailable.is_empty() {
-        notices.push(format!(
-            "These plugin tools are no longer offered by their source and calling one will fail: {}.",
-            unavailable.join(", ")
-        ));
-    }
-    notices
-}
-
-/// One entry of the flat component list.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PluginComponent {
-    pub kind: String,
-    pub name: String,
-    pub source_path: Option<String>,
-    pub config: Map<String, Value>,
-}
-
-impl PluginComponent {
-    fn to_wire(&self) -> Value {
-        json!({
-            "kind": self.kind,
-            "name": self.name,
-            "sourcePath": self.source_path,
-            "config": self.config,
-        })
-    }
-}
-
-/// Every plugin's components, kept attributed to their owner, in snapshot
-/// order. Reference `plugin_components_by_owner`.
-#[must_use]
-pub fn plugin_components_by_owner(plugins: &SessionPlugins) -> Vec<(String, Vec<PluginComponent>)> {
-    let resolution = &plugins.materialized.resolution;
-    let roots: BTreeMap<&str, &Path> = resolution
-        .plugins
-        .iter()
-        .map(|plugin| (plugin.name.as_str(), plugin.root.as_path()))
-        .collect();
-    let source_path = |reference: &PluginPathRef| -> Option<String> {
-        let root = roots.get(reference.plugin.as_str())?;
-        Some(
-            resolve_plugin_path(reference, root)
-                .to_string_lossy()
-                .into_owned(),
-        )
-    };
-    let mut listed: BTreeSet<(String, String)> = plugins.materialized.connected_mcp_sources.clone();
-    listed.extend(
-        plugins
-            .snapshot
-            .tool_routes
-            .iter()
-            .filter(|route| route.source_kind == "mcp")
-            .map(|route| (route.plugin_name.clone(), route.source_id.clone())),
-    );
-    let mut mcp_servers: Vec<_> = resolution
-        .mcp_servers
-        .iter()
-        .filter(|definition| {
-            listed.contains(&(definition.plugin_name.clone(), definition.source_id.clone()))
-        })
-        .collect();
-    mcp_servers.sort_by(|left, right| {
-        (&left.plugin_name, &left.source_id).cmp(&(&right.plugin_name, &right.source_id))
-    });
-    let snapshot = &plugins.snapshot;
-    let component = |kind: &str, name: &str, path: Option<&PluginPathRef>| PluginComponent {
-        kind: kind.to_owned(),
-        name: name.to_owned(),
-        source_path: path.and_then(source_path),
-        config: Map::new(),
-    };
-    snapshot
-        .plugins
-        .iter()
-        .map(|entry| {
-            let owner = entry.name.as_str();
-            let mut components = Vec::new();
-            for skill in snapshot
-                .skills
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                components.push(component("skill", &skill.name, Some(&skill.path)));
-            }
-            for folder in snapshot
-                .knowledge
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                components.push(component("knowledge", &folder.name, Some(&folder.path)));
-            }
-            for agent in snapshot
-                .agents
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                let kind = if resolution
-                    .agents
-                    .iter()
-                    .any(|definition| definition.name == agent.name)
-                {
-                    PLUGIN_AGENT_TYPE
-                } else {
-                    "agent"
-                };
-                components.push(component(kind, &agent.name, Some(&agent.path)));
-            }
-            for library in snapshot
-                .libraries
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                components.push(component(
-                    "library",
-                    &library.alias,
-                    Some(&library.source_path),
-                ));
-            }
-            for hook in snapshot
-                .hooks
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                components.push(component(
-                    "hook",
-                    &hook.declared_name,
-                    hook.config_file.as_ref(),
-                ));
-            }
-            for definition in mcp_servers.iter().filter(|item| item.plugin_name == owner) {
-                components.push(PluginComponent {
-                    kind: "mcp_server".to_owned(),
-                    name: definition.source_id.clone(),
-                    source_path: Some(definition.config_file.to_string_lossy().into_owned()),
-                    config: mcp_server_config(&definition.server),
-                });
-            }
-            for connector in snapshot
-                .connectors
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                components.push(component("connector", &connector.source_id, None));
-            }
-            for group in snapshot
-                .tool_groups
-                .iter()
-                .filter(|item| item.plugin_name == owner)
-            {
-                for tool in &group.tools {
-                    components.push(component(
-                        "tool",
-                        &format!("{}.{}", group.name, tool.name),
-                        None,
-                    ));
-                }
-            }
-            (entry.name.clone(), components)
-        })
-        .collect()
-}
-
-/// The redacted configuration `plugin/info` publishes for an MCP server.
-/// Reference `_mcp_server_config`.
-fn mcp_server_config(server: &PluginMcpServer) -> Map<String, Value> {
-    let mut config = Map::new();
-    match server {
-        PluginMcpServer::Stdio { env, cwd, .. } => {
-            config.insert("transport".to_owned(), json!("stdio"));
-            config.insert("argv".to_owned(), json!(redact_argv(&server.argv())));
-            config.insert("env".to_owned(), json!(redact_names(env.keys())));
-            config.insert("cwd".to_owned(), json!(cwd));
-        }
-        PluginMcpServer::Http {
-            transport,
-            url,
-            headers,
-            ..
-        } => {
-            config.insert("transport".to_owned(), json!(transport));
-            config.insert("url".to_owned(), json!(redact_url(url)));
-            config.insert("headers".to_owned(), json!(redact_names(headers.keys())));
-        }
-        PluginMcpServer::AuthenticatedHttp {
-            url, headers, auth, ..
-        } => {
-            let mut names: Vec<String> = headers.keys().cloned().collect();
-            if let PluginMcpHttpAuth::BearerTokenEnv(variable) = auth
-                && std::env::var(variable).is_ok_and(|token| !token.is_empty())
-                && !names
-                    .iter()
-                    .any(|name| name.eq_ignore_ascii_case("authorization"))
-            {
-                names.push("Authorization".to_owned());
-            }
-            config.insert("transport".to_owned(), json!("http"));
-            config.insert("url".to_owned(), json!(redact_url(url)));
-            config.insert("headers".to_owned(), json!(redact_names(names.iter())));
-        }
-    }
-    config
-}
-
-/// The `plugin/info` catalog. Reference `plugin_info`.
-#[must_use]
-pub fn plugin_info(plugins: &SessionPlugins) -> Value {
-    let pins: BTreeMap<&str, &str> = plugins
-        .materialized
-        .resolution
-        .plugins
-        .iter()
-        .map(|plugin| (plugin.name.as_str(), plugin.content_digest.as_str()))
-        .collect();
-    let components: Vec<Value> = plugin_components_by_owner(plugins)
-        .iter()
-        .flat_map(|(_, components)| components.iter().map(PluginComponent::to_wire))
-        .collect();
-    let mut raw_plugins = Map::new();
-    for entry in &plugins.snapshot.plugins {
-        raw_plugins.insert(
-            entry.name.clone(),
-            json!({
-                "manifestDigest": entry.manifest_digest,
-                "contentSha256": pins.get(entry.name.as_str()),
-            }),
-        );
-    }
-    let mut routes = Map::new();
-    for ((group, function), status) in &plugins.routes {
-        if *status != "live" {
-            routes.insert(format!("{group}.{function}"), json!(status));
-        }
-    }
-    json!({
-        "workdir": plugins.workdir.to_string_lossy(),
-        "components": components,
-        "raw": {
-            "version": plugins.snapshot.version,
-            "plugins": raw_plugins,
-            "routes": routes,
-        },
-    })
-}
-
-/// The `/plugins` catalog. Reference `catalog` in
-/// `vibe/app_server/plugin_catalog.py`.
-#[must_use]
-pub fn plugin_catalog(plugins: &SessionPlugins) -> Value {
-    let resolution = &plugins.materialized.resolution;
-    let owners: BTreeMap<&str, &str> = plugins
-        .snapshot
-        .tool_groups
-        .iter()
-        .map(|group| (group.name.as_str(), group.plugin_name.as_str()))
-        .collect();
-    let mut drift: BTreeMap<&str, BTreeMap<String, &str>> = BTreeMap::new();
-    for ((group, function), status) in &plugins.routes {
-        let Some(owner) = owners.get(group.as_str()) else {
-            continue;
-        };
-        if *status == "live" {
-            continue;
-        }
-        drift
-            .entry(owner)
-            .or_default()
-            .insert(format!("{group}.{function}"), status);
-    }
-    let components = plugin_components_by_owner(plugins);
-    let entries: Vec<Value> = plugins
-        .snapshot
-        .plugins
-        .iter()
-        .map(|entry| {
-            let descriptor = resolution
-                .plugins
-                .iter()
-                .find(|plugin| plugin.name == entry.name);
-            let statuses = drift.get(entry.name.as_str());
-            let owned = components
-                .iter()
-                .find(|(owner, _)| *owner == entry.name)
-                .map(|(_, components)| components.as_slice())
-                .unwrap_or_default();
-            json!({
-                "name": entry.name,
-                "version": entry.version,
-                "sourceFormat": entry.source_format,
-                "manifestDigest": entry.manifest_digest,
-                "description": descriptor.map_or("", |plugin| plugin.description.as_str()),
-                "author": descriptor.and_then(|plugin| plugin.author.as_deref()),
-                "scope": descriptor.map(|plugin| plugin.scope),
-                "contentSha256": descriptor.map(|plugin| plugin.content_digest.as_str()),
-                "pinnedRoot": descriptor.map(|plugin| plugin.root.to_string_lossy().into_owned()),
-                "installedRoot": plugins
-                    .installed_roots
-                    .get(&entry.name)
-                    .map(|root| root.to_string_lossy().into_owned()),
-                "components": owned
-                    .iter()
-                    .map(|component| json!({
-                        "kind": component.kind,
-                        "name": component.name,
-                        "status": if component.kind == "tool" {
-                            statuses.and_then(|statuses| statuses.get(&component.name)).copied()
-                        } else {
-                            None
-                        },
-                    }))
-                    .collect::<Vec<_>>(),
-                "drifted": statuses.map_or(0, BTreeMap::len),
-            })
-        })
-        .collect();
-    json!({
-        "plugins": entries,
-        "dropped": plugin_issues(plugins),
-    })
 }
 
 #[cfg(test)]

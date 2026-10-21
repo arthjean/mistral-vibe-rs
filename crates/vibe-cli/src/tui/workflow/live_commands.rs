@@ -11,37 +11,36 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::PublicDispatch;
-use vibe_core::events::PublicNoticeLevel;
 use vibe_core::identity::{HttpIdentityGateway, IdentityCache};
-use vibe_core::observability::{LogLevel, LogLevelChain, log_level_chain, set_session_log_level};
 use vibe_core::telemetry::TelemetryRecord;
 
 use super::super::chat_input::ChatInputState;
 use super::super::clipboard::copy_text_verified;
-use super::super::command_handlers::log_level::{self, Badge, LogLevelBackend, Picker};
 use super::super::command_handlers::{
-    CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpSourceKind, McpState, Panel,
-    ProviderAuth, Reloaded, ScheduledLoop, SessionLog, Stats, session_cost,
+    CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpState, Panel, ProviderAuth,
+    Reloaded, ScheduledLoop, SessionLog, Stats, session_cost,
 };
 use super::super::commands::{CommandContext, parse_command_in};
 use super::super::controls::ControlState;
 use super::super::interaction::{IntegrationKind, Overlay, OverlayItem, OverlayKind};
 use super::super::pickers::{
-    mcp_overlay, sessions_overlay, theme_overlay, thinking_overlay, unified_sessions_overlay,
+    McpSource, mcp_overlay, sessions_overlay, theme_overlay, thinking_overlay,
+    unified_sessions_overlay,
 };
 use super::super::plugins::{PluginCatalog, PluginsPanel, PluginsPort};
 use super::super::remote_project_workflow::{handle_teleport_command, open_project_picker};
 use super::super::setup::ResolvedTheme;
-use super::super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
+use super::super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::super::{
-    Arguments, InteractiveRuntime, adopt_hydrated_session, metadata_session_id,
-    parse_runtime_skills, push_command_echo, push_local_document, refresh_server_banner_metrics,
-    sync_runtime_intent, unix_seconds,
+    Arguments, InteractiveRuntime, adopt_hydrated_session, map_value, metadata_session_id,
+    parse_runtime_skills, push_command_echo, push_local_document, push_local_error,
+    push_local_notice, push_local_warning, refresh_server_banner_metrics, sync_runtime_intent,
+    unix_seconds,
 };
 use super::config::{apply_render_preferences, persisted_theme};
+use super::log_level::open_log_level_picker;
 use super::mcp::{
-    McpEffect, McpLoginOrigin, SystemUrlOpener, connector_sources, execute_mcp_effect,
-    schedule_mcp_login, server_sources,
+    McpEffect, McpLoginOrigin, SystemUrlOpener, execute_mcp_effect, schedule_mcp_login,
 };
 use super::{show_config, show_debug, show_model, show_proxy, show_rewind, show_voice};
 
@@ -57,7 +56,7 @@ pub(in crate::tui) enum FollowUp {
 /// there is no identity.
 const IDENTITY_TIMEOUT: Duration = Duration::from_secs(10);
 
-const SETUP_REQUIRED: &str = "Setup is required before using this command";
+pub(super) const SETUP_REQUIRED: &str = "Setup is required before using this command";
 
 /// The session and the screen a command runs against.
 pub(in crate::tui) struct LiveBackend<'a> {
@@ -74,8 +73,8 @@ pub(in crate::tui) struct LiveBackend<'a> {
     echo: Option<String>,
     /// The picker the saved-session list was read into.
     sessions: Option<Overlay>,
-    /// What `mcp/read` answered, which the MCP browser opens on.
-    mcp: Option<Value>,
+    /// The sources `mcp/read` published, which the MCP browser opens on.
+    mcp: Option<Vec<McpSource>>,
 }
 
 impl<'a> LiveBackend<'a> {
@@ -133,7 +132,7 @@ impl<'a> LiveBackend<'a> {
         runtime
             .service
             .public_call(method, params)
-            .map(|result| Value::Object(result.into_iter().collect()))
+            .map(map_value)
             .map_err(|error| error.to_string())
     }
 
@@ -142,7 +141,7 @@ impl<'a> LiveBackend<'a> {
         self.runtime()?
             .service
             .public_call(method, params)
-            .map(|result| Value::Object(result.into_iter().collect()))
+            .map(map_value)
             .map_err(|error| error.to_string())
     }
 
@@ -163,17 +162,6 @@ impl<'a> LiveBackend<'a> {
             .begin_public_call(method, params)
             .map_err(|error| error.to_string())?;
         pending.complete().await.map_err(|error| error.to_string())
-    }
-
-    fn notice(&mut self, text: String, status: EntryStatus, level: PublicNoticeLevel) {
-        self.state.append_local(TranscriptEntry {
-            id: String::new(),
-            revision: 1,
-            kind: TranscriptKind::Notice,
-            text,
-            status,
-            source: EntrySource::notice(level),
-        });
     }
 
     fn open_panel(&mut self, panel: Panel, initial: Option<String>) {
@@ -205,10 +193,10 @@ impl<'a> LiveBackend<'a> {
             // saved sessions open once they are read.
             Panel::RemoteProjects | Panel::Sessions => {}
             Panel::Mcp => {
-                let Some(value) = self.mcp.as_ref() else {
+                let Some(sources) = self.mcp.as_ref() else {
                     return;
                 };
-                let mut overlay = mcp_overlay(&server_sources(value), &connector_sources(value));
+                let mut overlay = mcp_overlay(sources);
                 if let Some(initial) = initial.filter(|initial| !initial.is_empty()) {
                     overlay.set_query(initial);
                 }
@@ -282,15 +270,12 @@ impl CommandBackend for LiveBackend<'_> {
             Effect::Message(text) => {
                 push_local_document(self.state, text);
             }
-            Effect::Error(text) => self.notice(text, EntryStatus::Failed, PublicNoticeLevel::Error),
-            Effect::Warning(text) => {
-                self.notice(text, EntryStatus::Completed, PublicNoticeLevel::Warning);
+            Effect::Error(text) | Effect::Status { text, ok: false } => {
+                push_local_error(self.state, text);
             }
+            Effect::Warning(text) => push_local_warning(self.state, text),
             Effect::Status { text, ok: true } => {
-                self.notice(text, EntryStatus::Completed, PublicNoticeLevel::Info);
-            }
-            Effect::Status { text, ok: false } => {
-                self.notice(text, EntryStatus::Failed, PublicNoticeLevel::Error);
+                push_local_notice(self.state, &text, EntryStatus::Completed);
             }
             // This client has no transient toast; the diagnostics line is what
             // shows a message without writing it into the transcript.
@@ -315,12 +300,7 @@ impl CommandBackend for LiveBackend<'_> {
             Effect::Exit => self.follow_ups.push(FollowUp::Exit),
             Effect::Teleport { target, .. } => {
                 if let Some(runtime) = self.runtime.as_mut() {
-                    handle_teleport_command(
-                        Some(&target),
-                        self.working_directory,
-                        runtime,
-                        self.state,
-                    );
+                    handle_teleport_command(Some(&target), runtime, self.state);
                 }
             }
             Effect::SessionsLoaded(_) => {
@@ -579,7 +559,7 @@ impl CommandBackend for LiveBackend<'_> {
         let Some(runtime) = self.runtime.as_mut() else {
             return Err(SETUP_REQUIRED.to_owned());
         };
-        open_project_picker(self.working_directory, runtime, self.state);
+        open_project_picker(runtime, self.state);
         Ok(())
     }
 
@@ -625,24 +605,19 @@ impl CommandBackend for LiveBackend<'_> {
         let value = self
             .call_deferred("mcp/read", json!({}))
             .await
-            .map(|dispatch| Value::Object(dispatch.result.into_iter().collect()))
+            .map(|dispatch| map_value(dispatch.result))
             .unwrap_or(Value::Null);
-        let sources = value
-            .pointer("/mcp/sources")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+        let sources = match McpSource::published(&value) {
+            Ok(sources) => sources,
+            Err(error) => {
+                self.state.push_diagnostic(error);
+                Vec::new()
+            }
+        };
         let state = McpState {
             sources: sources
                 .iter()
-                .filter_map(|source| {
-                    let name = source.get("name").and_then(Value::as_str)?;
-                    let kind = match source.get("kind").and_then(Value::as_str) {
-                        Some("connector") => McpSourceKind::Connector,
-                        _ => McpSourceKind::Server,
-                    };
-                    Some((name.to_owned(), kind))
-                })
+                .map(|source| (source.name.clone(), source.kind))
                 .collect(),
             connector_error: value
                 .pointer("/mcp/connectorError")
@@ -650,16 +625,11 @@ impl CommandBackend for LiveBackend<'_> {
                 .map(ToOwned::to_owned),
             statuses: sources
                 .iter()
-                .filter(|source| source.get("kind").and_then(Value::as_str) != Some("connector"))
-                .filter_map(|source| {
-                    Some((
-                        source.get("name").and_then(Value::as_str)?.to_owned(),
-                        source.get("status").and_then(Value::as_str)?.to_owned(),
-                    ))
-                })
+                .filter(|source| source.kind == IntegrationKind::McpServer)
+                .map(|source| (source.name.clone(), source.status.as_str().to_owned()))
                 .collect(),
         };
-        self.mcp = Some(value);
+        self.mcp = Some(sources);
         state
     }
 
@@ -941,154 +911,4 @@ fn skills_overlay(runtime: &InteractiveRuntime) -> Overlay {
         })
         .collect();
     Overlay::new(OverlayKind::Skills, "Skills", items)
-}
-
-// --------------------------------------------------------------------------
-// The log-level picker
-// --------------------------------------------------------------------------
-
-fn open_log_level_picker(state: &mut TuiState) {
-    let picker = Picker::new(log_level_chain());
-    state.overlay = Some(log_level_overlay(&picker));
-    state.log_level_picker = Some(picker);
-}
-
-/// Reference `_build_row`, as a list: the effective level is marked, and each
-/// row names the badges it carries, the highlighted row naming the one that
-/// `Enter` toggles.
-pub(in crate::tui) fn log_level_overlay(picker: &Picker) -> Overlay {
-    let effective = picker.effective();
-    let items = LogLevel::ALL
-        .into_iter()
-        .map(|level| {
-            let marker = if level == effective { "› " } else { "  " };
-            let mut badges = Vec::new();
-            for (badge, name, set) in [
-                (Badge::Session, "session", picker.session() == Some(level)),
-                (Badge::Config, "config", picker.config() == Some(level)),
-            ] {
-                let focused = level == picker.highlighted() && badge == picker.focused();
-                match (focused, set) {
-                    (true, _) => badges.push(format!("[{name}]")),
-                    (false, true) => badges.push(name.to_owned()),
-                    (false, false) => {}
-                }
-            }
-            OverlayItem::new(
-                level.as_str(),
-                format!("{marker}{:<10}", level.as_str()),
-                badges.join("  "),
-                false,
-            )
-        })
-        .collect();
-    let mut overlay = Overlay::new(OverlayKind::LogLevel, "Log Level", items);
-    overlay.select_by_id(picker.highlighted().as_str());
-    overlay.notice = Some(format!(
-        "{}\n↑↓/jk Navigate  ←/→ Switch badge  Enter Toggle  Esc Close",
-        picker.subtitle()
-    ));
-    overlay
-}
-
-/// What the picker's keys do, and applying it when it closes.
-pub(in crate::tui) fn handle_log_level_key(
-    key: crossterm::event::KeyEvent,
-    runtime: &mut Option<InteractiveRuntime>,
-    state: &mut TuiState,
-) {
-    use crossterm::event::KeyCode;
-
-    let Some(mut picker) = state.log_level_picker.take() else {
-        state.overlay = None;
-        return;
-    };
-    let step = |picker: &Picker, delta: isize| {
-        let index = LogLevel::ALL
-            .iter()
-            .position(|level| *level == picker.highlighted())
-            .unwrap_or_default();
-        let next = index
-            .saturating_add_signed(delta)
-            .min(LogLevel::ALL.len() - 1);
-        LogLevel::ALL[next]
-    };
-    match key.code {
-        KeyCode::Up | KeyCode::Char('k') => picker.highlight(step(&picker, -1)),
-        KeyCode::Down | KeyCode::Char('j') => picker.highlight(step(&picker, 1)),
-        KeyCode::Left | KeyCode::Char('h') => picker.focus(Badge::Session),
-        KeyCode::Right | KeyCode::Char('l') => picker.focus(Badge::Config),
-        KeyCode::Enter => picker.toggle(),
-        KeyCode::Esc => {
-            let mut backend = LiveLogLevel { runtime, state };
-            log_level::apply(picker.applied(), &mut backend);
-            return;
-        }
-        _ => {}
-    }
-    state.overlay = Some(log_level_overlay(&picker));
-    state.log_level_picker = Some(picker);
-}
-
-struct LiveLogLevel<'a> {
-    runtime: &'a mut Option<InteractiveRuntime>,
-    state: &'a mut TuiState,
-}
-
-impl LogLevelBackend for LiveLogLevel<'_> {
-    fn chain(&self) -> LogLevelChain {
-        log_level_chain()
-    }
-
-    fn set_session_override(&mut self, level: Option<LogLevel>) {
-        set_session_log_level(level);
-    }
-
-    fn persist(&mut self, level: Option<LogLevel>) -> Result<(), String> {
-        let runtime = self
-            .runtime
-            .as_mut()
-            .ok_or_else(|| SETUP_REQUIRED.to_owned())?;
-        let mutation = match level {
-            Some(level) => json!({"path": ["log_level"], "value": level.as_str()}),
-            None => json!({"path": ["log_level"], "remove": true}),
-        };
-        runtime
-            .service
-            .public_call(
-                "config/batchWrite",
-                json!({
-                    "sessionId": runtime.session_id,
-                    "writes": [{"target": "user", "mutations": [mutation]}],
-                }),
-            )
-            .map_err(|error| error.to_string())?;
-        // Reference `_on_config_changed`: the written level is the configured
-        // tier from now on.
-        vibe_core::observability::set_config_log_level(level);
-        Ok(())
-    }
-
-    fn emit(&mut self, effect: Effect) {
-        match effect {
-            Effect::ClosePanel => {
-                self.state.overlay = None;
-                self.state.log_level_picker = None;
-            }
-            Effect::Message(text) => {
-                push_local_document(self.state, text);
-            }
-            Effect::Error(text) => {
-                self.state.append_local(TranscriptEntry {
-                    id: String::new(),
-                    revision: 1,
-                    kind: TranscriptKind::Notice,
-                    text,
-                    status: EntryStatus::Failed,
-                    source: EntrySource::notice(PublicNoticeLevel::Error),
-                });
-            }
-            _ => {}
-        }
-    }
 }

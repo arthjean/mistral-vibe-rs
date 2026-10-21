@@ -28,10 +28,10 @@ impl AppServer {
                     .ok()
                     .flatten()
             })
-            .map(|model| model.thinking);
+            .map(|model| model.thinking.as_str().to_owned());
         SessionPins {
             model,
-            reasoning_effort: thinking.filter(|level| !level.is_empty()),
+            reasoning_effort: thinking,
             agent: None,
         }
     }

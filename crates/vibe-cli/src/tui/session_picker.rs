@@ -15,12 +15,6 @@ pub struct SessionDeleteState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SessionDeleteDecision {
-    Show(SessionDeleteState),
-    Delete,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionPickerEffect {
     None,
     Close,
@@ -29,28 +23,31 @@ pub enum SessionPickerEffect {
 }
 
 impl SessionDeleteState {
-    #[must_use]
-    pub fn request(
-        existing: Option<&Self>,
-        session_id: &str,
-        current: bool,
-    ) -> SessionDeleteDecision {
-        if current {
-            return SessionDeleteDecision::Show(Self {
-                session_id: session_id.to_owned(),
-                phase: SessionDeletePhase::Feedback("Can't delete current session".to_owned()),
-            });
-        }
-        if existing.is_some_and(|delete| {
+    /// The delete key on `session_id`, which both session pickers bind: the
+    /// first press asks for a confirmation, or says why the session cannot go,
+    /// and a second press on the same session confirms. Answers whether the
+    /// session is to be deleted now.
+    pub fn press(delete: &mut Option<Self>, session_id: &str, current: bool) -> bool {
+        let phase = if current {
+            SessionDeletePhase::Feedback("Can't delete current session".to_owned())
+        } else if delete.as_ref().is_some_and(|delete| {
             delete.session_id == session_id && delete.phase == SessionDeletePhase::Confirmation
         }) {
-            SessionDeleteDecision::Delete
+            return true;
         } else {
-            SessionDeleteDecision::Show(Self {
-                session_id: session_id.to_owned(),
-                phase: SessionDeletePhase::Confirmation,
-            })
-        }
+            SessionDeletePhase::Confirmation
+        };
+        *delete = Some(Self {
+            session_id: session_id.to_owned(),
+            phase,
+        });
+        false
+    }
+
+    /// Whether the delete pending on `session_id` holds back resuming it.
+    #[must_use]
+    pub fn holds(delete: Option<&Self>, session_id: &str) -> bool {
+        delete.is_some_and(|delete| delete.session_id == session_id)
     }
 
     #[must_use]
@@ -103,26 +100,18 @@ pub fn reduce_key(
             let Some(session_id) = overlay.selected_item().map(|item| item.id.clone()) else {
                 return SessionPickerEffect::None;
             };
-            match SessionDeleteState::request(
-                delete.as_ref(),
-                &session_id,
-                session_id == current_session_id,
-            ) {
-                SessionDeleteDecision::Show(next) => {
-                    *delete = Some(next);
-                    SessionPickerEffect::None
-                }
-                SessionDeleteDecision::Delete => SessionPickerEffect::Delete(session_id),
+            let current = session_id == current_session_id;
+            if SessionDeleteState::press(delete, &session_id, current) {
+                SessionPickerEffect::Delete(session_id)
+            } else {
+                SessionPickerEffect::None
             }
         }
         KeyCode::Enter | KeyCode::Char(' ') if key.modifiers.is_empty() => {
             let Some(session_id) = overlay.selected_item().map(|item| item.id.clone()) else {
                 return SessionPickerEffect::None;
             };
-            if delete
-                .as_ref()
-                .is_some_and(|delete| delete.session_id == session_id)
-            {
+            if SessionDeleteState::holds(delete.as_ref(), &session_id) {
                 SessionPickerEffect::None
             } else {
                 SessionPickerEffect::Resume(session_id)

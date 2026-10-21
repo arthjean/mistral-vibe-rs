@@ -3,18 +3,18 @@
 //! Both parsers exit 2 on a refusal and write it to standard error, and there
 //! the agreement stops: argparse prints its usage block and one line reading
 //! `prog: error: message`, while clap prints a paragraph, a tip and a pointer
-//! at `--help`. The sentences argparse renders here are CPython's own
-//! templates rather than anything the reference wrote, so this port reproduces
-//! them exactly and reports them in the same shape
-//! (`vibe/cli/entrypoint.py:27` builds the parser on the default handler).
+//! at `--help`. This module decides which argparse refusal a clap failure is,
+//! and [`crate::argparse`] renders it (`vibe/cli/entrypoint.py:27` builds the
+//! parser on the default handler).
 
 use std::ffi::OsString;
 
-use clap::error::{ContextKind, ContextValue, ErrorKind};
+use clap::error::{ContextKind, ErrorKind};
 use clap::{Arg, Command, CommandFactory, Error, FromArgMatches};
 use vibe_core::pycompat;
 
 use crate::Arguments;
+use crate::argparse::{Refusal, context, error_block, values};
 
 pub(crate) mod reading;
 
@@ -75,8 +75,8 @@ where
     let matches = command
         .try_get_matches_from(reading.argv)
         .map_err(|error| failure(&error))?;
-    if let Some(message) = reading.refusal {
-        return Err(refusal(&message));
+    if let Some(refusal) = reading.refusal {
+        return Err(refused(&refusal));
     }
     let mut arguments = Arguments::from_arg_matches(&matches).map_err(|error| failure(&error))?;
     // Reference `parse_arguments`: smart approve is a Unified Harness gate, so
@@ -95,9 +95,9 @@ where
 
 /// A refusal argparse raises and clap has no kind for, in the same shape as
 /// the ones [`render`] rebuilds.
-fn refusal(message: &str) -> ParseFailure {
+fn refused(refusal: &Refusal) -> ParseFailure {
     ParseFailure {
-        rendered: format!("{}\nvibe: error: {message}\n", usage()),
+        rendered: error_block(&usage(), "vibe", &refusal.to_string()),
         exit: 2,
         use_stderr: true,
     }
@@ -125,74 +125,55 @@ fn failure(error: &Error) -> ParseFailure {
 /// unrecognized refusal that says something the user can act on is worth more
 /// than one shaped like the reference and empty.
 fn render(error: &Error) -> String {
-    let Some(message) = argparse_message(error) else {
+    let Some(refusal) = argparse_refusal(error) else {
         return error.render().to_string();
     };
-    // argparse prints the usage block before the one line that names what
-    // went wrong.
-    format!("{}\nvibe: error: {message}\n", usage())
+    error_block(&usage(), "vibe", &refusal.to_string())
 }
 
-/// The sentence CPython's `argparse` renders for this refusal, where this port
-/// can rebuild it from what clap reports.
-fn argparse_message(error: &Error) -> Option<String> {
+/// The argparse refusal this clap failure is, where this port can rebuild it
+/// from what clap reports.
+fn argparse_refusal(error: &Error) -> Option<Refusal> {
     let command = Arguments::command();
     match error.kind() {
-        ErrorKind::UnknownArgument => Some(format!(
-            "unrecognized arguments: {}",
-            context(error, ContextKind::InvalidArg)?
-        )),
+        ErrorKind::UnknownArgument => Some(Refusal::Unrecognized(context(
+            error,
+            ContextKind::InvalidArg,
+        )?)),
         ErrorKind::InvalidValue => {
             let argument = option_name(&command, &context(error, ContextKind::InvalidArg)?);
             // clap reports an absent value and a rejected one under the same
             // kind, and tells them apart only by the value it carries.
             let value = context(error, ContextKind::InvalidValue)?;
             if value.is_empty() {
-                return Some(format!("argument {argument}: expected one argument"));
+                return Some(Refusal::ExpectedOne { argument });
             }
-            let choices = values(error, ContextKind::ValidValue)?.join(", ");
-            Some(format!(
-                "argument {argument}: invalid choice: {} (choose from {choices})",
-                pycompat::repr_str(&value)
-            ))
+            Some(Refusal::InvalidChoice {
+                argument,
+                value,
+                choices: values(error, ContextKind::ValidValue)?,
+            })
         }
         ErrorKind::ValueValidation => {
             let raw = context(error, ContextKind::InvalidArg)?;
-            let argument = option_name(&command, &raw);
-            let value = context(error, ContextKind::InvalidValue)?;
-            let kind = argparse_type(&command, &raw)?;
-            Some(format!(
-                "argument {argument}: invalid {kind} value: {}",
-                pycompat::repr_str(&value)
-            ))
+            Some(Refusal::InvalidValue {
+                argument: option_name(&command, &raw),
+                kind: argparse_type(&command, &raw)?,
+                value: context(error, ContextKind::InvalidValue)?,
+            })
         }
         ErrorKind::ArgumentConflict => {
             // argparse reports the pair from the argument it was reading when
             // it found the conflict, which is the later of the two; clap names
             // the earlier one first, so the two halves are read the other way
             // round here.
-            let subject = option_name(&command, &context(error, ContextKind::PriorArg)?);
-            let prior = spellings(&command, &context(error, ContextKind::InvalidArg)?);
-            Some(format!(
-                "argument {subject}: not allowed with argument {prior}"
-            ))
+            Some(Refusal::NotAllowed {
+                argument: option_name(&command, &context(error, ContextKind::PriorArg)?),
+                prior: spellings(&command, &context(error, ContextKind::InvalidArg)?),
+            })
         }
         _ => None,
     }
-}
-
-fn context(error: &Error, kind: ContextKind) -> Option<String> {
-    error.get(kind).and_then(|value| match value {
-        ContextValue::String(value) => Some(value.clone()),
-        _ => None,
-    })
-}
-
-fn values(error: &Error, kind: ContextKind) -> Option<Vec<String>> {
-    error.get(kind).and_then(|value| match value {
-        ContextValue::Strings(values) => Some(values.clone()),
-        _ => None,
-    })
 }
 
 /// The argument clap names in `--output <{text,json,streaming}>`, without the

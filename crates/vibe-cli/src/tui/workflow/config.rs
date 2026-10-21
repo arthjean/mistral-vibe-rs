@@ -1,7 +1,10 @@
 use serde_json::{Map, Value, json};
 
+use super::super::config_schema::{declared_types, field_is_secret};
 use super::super::state::{EntryStatus, TuiState};
-use super::super::{InteractiveRuntime, call_runtime, persist_setting, push_local_notice};
+use super::super::{
+    InteractiveRuntime, call_runtime, map_value, persist_setting, push_local_notice,
+};
 
 pub(in crate::tui) fn apply_thinking(
     runtime: &mut InteractiveRuntime,
@@ -119,7 +122,7 @@ pub(super) fn set_config_value(
         ));
         return;
     };
-    if field_is_secret(&path, field_schema) {
+    if field_is_secret(path.iter().copied(), field_schema) {
         state.push_diagnostic("Secret configuration fields cannot be edited in the TUI");
         return;
     }
@@ -243,7 +246,7 @@ pub(super) fn field_surface(
     state: &mut TuiState,
 ) -> Option<Value> {
     let result = call_runtime(runtime, "config/fields/read", json!({}), state)?;
-    Some(Value::Object(result.into_iter().collect()))
+    Some(map_value(result))
 }
 
 /// The published fields as an effective document, keyed by field name.
@@ -295,13 +298,7 @@ pub(super) fn selected_config_target(runtime: &mut InteractiveRuntime) -> Option
     }
     // The writable targets are published with the selected one first, which is
     // the file an unrouted write lands in.
-    runtime
-        .service
-        .public_call(
-            "config/fields/read",
-            json!({"sessionId": runtime.session_id}),
-        )
-        .ok()?
+    quiet_surface(runtime)?
         .get("targets")?
         .get(0)?
         .as_str()
@@ -331,18 +328,24 @@ pub(super) fn persisted_theme(runtime: &mut InteractiveRuntime) -> String {
 }
 
 pub(super) fn configured_value(runtime: &mut InteractiveRuntime, key: &str) -> Option<Value> {
-    let surface = Value::Object(
-        runtime
-            .service
-            .public_call(
-                "config/fields/read",
-                json!({"sessionId": runtime.session_id}),
-            )
-            .ok()?
-            .into_iter()
-            .collect(),
-    );
-    field_of(&surface, key)?.get("value").cloned()
+    field_value(&quiet_surface(runtime)?, key).cloned()
+}
+
+/// The published configuration surface for a read that keeps its default when
+/// the surface cannot be read, so the failure is not reported.
+fn quiet_surface(runtime: &mut InteractiveRuntime) -> Option<Value> {
+    let result = runtime
+        .service
+        .public_call(
+            "config/fields/read",
+            json!({"sessionId": runtime.session_id}),
+        )
+        .ok()?;
+    Some(map_value(result))
+}
+
+fn field_value<'a>(surface: &'a Value, key: &str) -> Option<&'a Value> {
+    field_of(surface, key)?.get("value")
 }
 
 pub(super) fn config_field_schema(
@@ -361,55 +364,41 @@ pub(in crate::tui) fn apply_render_preferences(
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    state.show_reasoning = configured_value(runtime, "show_thinking_nodes")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(true);
+    // One read serves every preference; one the surface lacks keeps its default.
+    let surface = quiet_surface(runtime).unwrap_or(Value::Null);
+    let flag = |key: &str, default: bool| {
+        field_value(&surface, key)
+            .and_then(Value::as_bool)
+            .unwrap_or(default)
+    };
+    state.show_reasoning = flag("show_thinking_nodes", true);
     // Reference `WelcomeBanner.__init__`: the cat keeps still under this key.
-    if configured_value(runtime, "disable_welcome_banner_animation")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false)
-    {
+    if flag("disable_welcome_banner_animation", false) {
         state.banner_cat.stop();
     }
-    state.subagents.enabled = configured_value(runtime, "show_subagent_status_list")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(true);
-    state.autocopy_to_clipboard = configured_value(runtime, "autocopy_to_clipboard")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
-    state.ask_confirmation_on_exit = configured_value(runtime, "ask_confirmation_on_exit")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(true);
+    state.subagents.enabled = flag("show_subagent_status_list", true);
+    state.autocopy_to_clipboard = flag("autocopy_to_clipboard", false);
+    state.ask_confirmation_on_exit = flag("ask_confirmation_on_exit", true);
     // Reference `_normalize_log_level`: the configured level, case-insensitive,
     // sits under the session override and the environment.
     vibe_core::observability::set_config_log_level(
-        configured_value(runtime, "log_level")
-            .as_ref()
+        field_value(&surface, "log_level")
             .and_then(Value::as_str)
             .and_then(|level| vibe_core::observability::LogLevel::parse(level.trim())),
     );
     // Reference `_is_file_watcher_enabled`: the completion index watches the
     // workspace only while this key is on, and stops watching when it goes off.
-    state.file_watcher_for_autocomplete =
-        configured_value(runtime, "file_watcher_for_autocomplete")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(true);
+    state.file_watcher_for_autocomplete = flag("file_watcher_for_autocomplete", true);
     // Reference `get_enabled` and `get_title_enabled`, both on by default.
-    state.notifier.set_enabled(
-        configured_value(runtime, "enable_notifications")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(true),
-    );
-    state.notifier.set_title_enabled(
-        configured_value(runtime, "experimental_enable_tab_status")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(true),
-    );
+    state
+        .notifier
+        .set_enabled(flag("enable_notifications", true));
+    state
+        .notifier
+        .set_title_enabled(flag("experimental_enable_tab_status", true));
     // Reference `_refresh_config_from_disk`: a preference change cancels live
     // narration before the new preference applies.
-    let narrator_enabled = configured_value(runtime, "narrator_enabled")
-        .and_then(|value| value.as_bool())
-        .unwrap_or(false);
+    let narrator_enabled = flag("narrator_enabled", false);
     // Reference `NarratorManager.sync`: the speech client is rebuilt from the
     // configuration as it stands, so an edited active model, provider or
     // credential variable reaches the next turn. `tts_client is not None` is
@@ -430,18 +419,6 @@ fn config_schema_at<'a>(schema: &'a Value, path: &[&str]) -> Option<&'a Value> {
         current = current.get("properties")?.get(*segment)?;
     }
     Some(current)
-}
-
-fn field_is_secret(path: &[&str], schema: &Value) -> bool {
-    schema.get("writeOnly").and_then(Value::as_bool) == Some(true)
-        || schema.get("format").and_then(Value::as_str) == Some("password")
-        || path.iter().any(|segment| {
-            let normalized = segment.to_ascii_lowercase();
-            normalized.contains("password")
-                || normalized.contains("secret")
-                || normalized.contains("api_key")
-                || normalized.contains("token")
-        })
 }
 
 /// The layer a field's effective value comes from.
@@ -474,11 +451,7 @@ fn parse_typed_config_value(raw: &str, schema: &Value) -> Result<Value, String> 
                 )
             });
     }
-    let types = match schema.get("type") {
-        Some(Value::String(kind)) => vec![kind.as_str()],
-        Some(Value::Array(kinds)) => kinds.iter().filter_map(Value::as_str).collect(),
-        _ => Vec::new(),
-    };
+    let types = declared_types(schema);
     if raw == "null" && types.contains(&"null") {
         return Ok(Value::Null);
     }
@@ -518,19 +491,6 @@ mod tests {
         );
         assert!(parse_typed_config_value("yes", &json!({"type": "boolean"})).is_err());
         assert!(parse_typed_config_value("[]", &json!({"type": "mystery"})).is_err());
-    }
-
-    #[test]
-    fn secret_detection_covers_schema_and_conventional_names() {
-        assert!(field_is_secret(&["api_key"], &json!({"type": "string"})));
-        assert!(field_is_secret(
-            &["credential"],
-            &json!({"type": "string", "writeOnly": true})
-        ));
-        assert!(!field_is_secret(
-            &["active_model"],
-            &json!({"type": "string"})
-        ));
     }
 
     /// US-091: the published surface orders a field's layers highest first, so

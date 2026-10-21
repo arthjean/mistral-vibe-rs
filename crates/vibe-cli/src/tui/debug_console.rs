@@ -6,7 +6,7 @@
 //! entries are absorbed once by identity, the visible page grows only on an
 //! explicit request, and a refresh never disturbs the selection.
 
-use serde_json::Value;
+use serde::Deserialize;
 use vibe_core::time::UtcTimestamp;
 
 use super::diagnostics::{debug_log_line, log_level_color};
@@ -23,6 +23,28 @@ pub const POLL_INTERVAL_MS: u64 = 500;
 fn epoch_seconds(timestamp: &str) -> Option<u64> {
     let micros = UtcTimestamp::parse_iso8601(timestamp)?.micros_since_epoch();
     u64::try_from(micros.div_euclid(1_000_000)).ok()
+}
+
+/// One page `diagnostics/logs/read` answers.
+#[derive(Debug, Deserialize)]
+pub struct LogPage {
+    logs: LogWindow,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LogWindow {
+    entries: Vec<LogEntry>,
+    has_more: bool,
+}
+
+/// One published log entry, by the fields a rendered line shows.
+#[derive(Debug, Deserialize)]
+struct LogEntry {
+    id: String,
+    timestamp: String,
+    level: String,
+    message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,51 +100,27 @@ impl DebugConsole {
     /// Absorbs one page. Entries already seen are dropped, so a repeated or
     /// overlapping read cannot duplicate a line, and the visible window follows
     /// the newest entries unless the operator paged back.
-    pub fn absorb(&mut self, page: &Value, now_ms: u64) {
+    pub fn absorb(&mut self, page: LogPage, now_ms: u64) {
         self.polled_at_ms = now_ms;
-        let entries = page
-            .pointer("/logs/entries")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        self.drained = !page
-            .pointer("/logs/hasMore")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        let LogWindow { entries, has_more } = page.logs;
+        self.drained = !has_more;
         let followed_tail = !self.pinned;
-        for entry in &entries {
-            let id = entry
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned();
-            if id.is_empty() || self.lines.iter().any(|line| line.id == id) {
+        self.next_offset = self.next_offset.saturating_add(entries.len());
+        for entry in entries {
+            if self.lines.iter().any(|line| line.id == entry.id) {
                 continue;
             }
-            let level = entry
-                .get("level")
-                .and_then(Value::as_str)
-                .unwrap_or("INFO")
-                .to_owned();
             let text = debug_log_line(
-                entry
-                    .get("timestamp")
-                    .and_then(Value::as_str)
-                    .and_then(epoch_seconds)
-                    .unwrap_or_default(),
-                &level,
-                entry
-                    .get("message")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
+                epoch_seconds(&entry.timestamp).unwrap_or_default(),
+                &entry.level,
+                &entry.message,
             );
             self.lines.push(LogLine {
-                id,
-                color: log_level_color(&level),
+                id: entry.id,
+                color: log_level_color(&entry.level),
                 text,
             });
         }
-        self.next_offset = self.next_offset.saturating_add(entries.len());
         if followed_tail {
             self.visible_from = self.lines.len().saturating_sub(PAGE_SIZE);
         }
@@ -163,10 +161,17 @@ mod tests {
 
     use super::*;
 
+    fn absorb(console: &mut DebugConsole, page: serde_json::Value, now_ms: u64) {
+        console.absorb(
+            serde_json::from_value(page).expect("a published page"),
+            now_ms,
+        );
+    }
+
     /// One page in the shape `diagnostics/logs/read` publishes: the timestamp
     /// is the stamp the log line carried, which the reference sends as a
     /// `datetime` and this port as the text it parsed.
-    fn page(ids: &[usize], has_more: bool) -> Value {
+    fn page(ids: &[usize], has_more: bool) -> serde_json::Value {
         json!({"logs": {
             "entries": ids.iter().map(|index| json!({
                 "id": format!("log-{index}"),
@@ -184,12 +189,12 @@ mod tests {
     #[test]
     fn polling_appends_only_unseen_entries_and_advances_the_read_cursor() {
         let mut console = DebugConsole::default();
-        console.absorb(&page(&[0, 1], true), 0);
+        absorb(&mut console, page(&[0, 1], true), 0);
         assert_eq!(console.next_offset(), 2);
         // A poll that re-delivers what it already has must change nothing.
-        console.absorb(&page(&[0, 1], false), POLL_INTERVAL_MS);
+        absorb(&mut console, page(&[0, 1], false), POLL_INTERVAL_MS);
         assert_eq!(console.overlay(None).items.len(), 2);
-        console.absorb(&page(&[2], false), POLL_INTERVAL_MS * 2);
+        absorb(&mut console, page(&[2], false), POLL_INTERVAL_MS * 2);
         let overlay = console.overlay(None);
         assert_eq!(overlay.items.len(), 3);
         assert_eq!(
@@ -202,14 +207,14 @@ mod tests {
     fn the_window_follows_the_tail_until_the_operator_pages_back() {
         let mut console = DebugConsole::default();
         let ids = (0..PAGE_SIZE + 5).collect::<Vec<_>>();
-        console.absorb(&page(&ids, false), 0);
+        absorb(&mut console, page(&ids, false), 0);
         assert_eq!(console.overlay(None).items.len(), PAGE_SIZE);
         assert!(console.has_older());
         assert!(console.load_older());
         assert!(!console.has_older());
         assert_eq!(console.overlay(None).items.len(), PAGE_SIZE + 5);
         // With an older page pinned, a poll must not scroll the view away.
-        console.absorb(&page(&[100], false), POLL_INTERVAL_MS);
+        absorb(&mut console, page(&[100], false), POLL_INTERVAL_MS);
         assert_eq!(console.overlay(None).items.len(), PAGE_SIZE + 6);
         assert!(!console.load_older());
     }
@@ -222,7 +227,7 @@ mod tests {
         assert_eq!(overlay.items[0].label, "No debug events");
 
         let mut console = DebugConsole::default();
-        console.absorb(&page(&[0, 1, 2], false), 0);
+        absorb(&mut console, page(&[0, 1, 2], false), 0);
         let overlay = console.overlay(Some("log-1"));
         assert_eq!(
             overlay.selected_item().map(|item| item.id.as_str()),
@@ -234,10 +239,10 @@ mod tests {
     fn polling_is_bounded_by_the_reference_interval_once_the_buffer_is_drained() {
         let mut console = DebugConsole::default();
         assert!(console.poll_due(0));
-        console.absorb(&page(&[0], false), 1_000);
+        absorb(&mut console, page(&[0], false), 1_000);
         assert!(!console.poll_due(1_400));
         assert!(console.poll_due(1_500));
-        console.absorb(&page(&[1], true), 2_000);
+        absorb(&mut console, page(&[1], true), 2_000);
         assert!(console.poll_due(2_001), "an undrained buffer keeps reading");
     }
 }

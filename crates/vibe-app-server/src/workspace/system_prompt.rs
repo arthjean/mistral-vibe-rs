@@ -355,21 +355,13 @@ impl WorkspaceService {
             .remove(&agent_name)
             .map(|profile| profile.overrides)
             .unwrap_or_default();
-        // The directory the server runs in is an authorized root, not an
-        // opened project: only its trust makes it one, as `session_hooks`
-        // reads it.
-        let mut roots = self
-            .allowed_roots
-            .iter()
-            .filter(|root| **root != self.paths.working_directory)
-            .cloned()
-            .collect::<Vec<_>>();
-        roots.extend(scope.add_directories.iter().map(PathBuf::from));
         Ok(self
-            .config
-            .scoped_to_working_directory(scope.working_directory.clone(), scope.trusted)
-            .with_project_file_trust(scope.project_file_trust)
-            .with_additional_roots(roots)
+            .session_config(
+                scope.working_directory.clone(),
+                scope.trusted,
+                scope.project_file_trust,
+                &scope.add_directories,
+            )
             .with_agent_overlay(overrides))
     }
 

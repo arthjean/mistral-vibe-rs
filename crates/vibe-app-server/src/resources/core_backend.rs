@@ -1,4 +1,5 @@
 use super::*;
+use crate::sync::lock;
 
 mod mcp_backend;
 pub(crate) use mcp_backend::overlay_plugin_sources;
@@ -39,10 +40,7 @@ impl CoreResourceSession {
     }
 
     fn plugin_sources(&self) -> Vec<crate::resources::PluginMcpSource> {
-        self.plugin_mcp
-            .lock()
-            .map(|sources| sources.clone())
-            .unwrap_or_default()
+        lock(&self.plugin_mcp).clone()
     }
 
     fn config(&self) -> Option<LayeredConfig> {
@@ -61,11 +59,6 @@ struct CoreResourceEntry {
     session: Arc<CoreResourceSession>,
 }
 
-/// What `mcp_catalog/authRequired` is deduplicated on, reference
-/// `_auth_required_key`: the session, the server, the descriptor revision and
-/// the connection revision observed.
-type AuthRequiredKey = (String, String, String, Option<String>);
-
 #[derive(Clone)]
 pub struct CoreResourceBackend {
     sessions: Arc<StdMutex<BTreeMap<String, CoreResourceEntry>>>,
@@ -74,7 +67,7 @@ pub struct CoreResourceBackend {
     /// session's catalog and the credentials they sign in with.
     mcp_authentication: Arc<McpAuthenticationService>,
     mcp_auth_required: Arc<StdMutex<Vec<mcp_backend::PendingAuthRequired>>>,
-    mcp_auth_required_seen: Arc<StdMutex<BTreeSet<AuthRequiredKey>>>,
+    mcp_auth_required_seen: Arc<StdMutex<BTreeSet<mcp_backend::AuthRequiredKey>>>,
     config: Option<LayeredConfig>,
 }
 
@@ -118,11 +111,7 @@ impl CoreResourceBackend {
         &self,
         session_id: &str,
     ) -> Result<Arc<CoreResourceSession>, ResourceError> {
-        self.sessions
-            .lock()
-            .map_err(|_| {
-                ResourceError::Unavailable("resource backend lock is poisoned".to_owned())
-            })?
+        lock(&self.sessions)
             .get(session_id)
             .map(|entry| Arc::clone(&entry.session))
             .ok_or_else(|| ResourceError::NotFound(format!("session `{session_id}` was not found")))
@@ -131,9 +120,7 @@ impl CoreResourceBackend {
 
 impl ResourceBackend for CoreResourceBackend {
     fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError> {
-        let mut sessions = self.sessions.lock().map_err(|_| {
-            ResourceError::Unavailable("resource backend lock is poisoned".to_owned())
-        })?;
+        let mut sessions = lock(&self.sessions);
         if let Some(existing) = sessions.get_mut(&session.session_id) {
             if session.generation > existing.generation {
                 existing.generation = session.generation;
@@ -173,10 +160,8 @@ impl ResourceBackend for CoreResourceBackend {
     }
 
     fn set_plugin_mcp(&self, session_id: &str, sources: Vec<crate::resources::PluginMcpSource>) {
-        if let Ok(session) = self.session(session_id)
-            && let Ok(mut held) = session.plugin_mcp.lock()
-        {
-            *held = sources;
+        if let Ok(session) = self.session(session_id) {
+            *lock(&session.plugin_mcp) = sources;
         }
     }
 
@@ -187,9 +172,7 @@ impl ResourceBackend for CoreResourceBackend {
     ) -> ResourceFuture<'a, ResourceDispatch> {
         Box::pin(async move {
             let session = self.session(session_id)?;
-            if let Ok(mut started) = session.started_mcp.lock() {
-                started.clone_from(&configs);
-            }
+            lock(&session.started_mcp).clone_from(&configs);
             let factory = self.mcp_factory.clone().ok_or_else(|| {
                 ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
             })?;
@@ -238,9 +221,7 @@ impl ResourceBackend for CoreResourceBackend {
     fn close_session<'a>(&'a self, session_id: &'a str, generation: u64) -> ResourceFuture<'a, ()> {
         Box::pin(async move {
             let session = {
-                let mut sessions = self.sessions.lock().map_err(|_| {
-                    ResourceError::Unavailable("resource backend lock is poisoned".to_owned())
-                })?;
+                let mut sessions = lock(&self.sessions);
                 let matches_generation = sessions
                     .get(session_id)
                     .is_some_and(|entry| entry.generation == generation);
@@ -258,12 +239,8 @@ impl ResourceBackend for CoreResourceBackend {
             self.mcp_authentication
                 .release(&Some(session_id.to_owned()))
                 .await;
-            if let Ok(mut seen) = self.mcp_auth_required_seen.lock() {
-                seen.retain(|(session, ..)| session != session_id);
-            }
-            if let Ok(mut pending) = self.mcp_auth_required.lock() {
-                pending.retain(|event| event.session_id() != session_id);
-            }
+            self.forget_auth_required(session_id);
+            lock(&self.mcp_auth_required).retain(|event| event.session_id() != session_id);
             failures.extend(session.mcp.close().await);
             if let Err(error) = session.terminals.cleanup_all().await {
                 failures.push(redact(&error.to_string()));

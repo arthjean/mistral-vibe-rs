@@ -704,7 +704,7 @@ pub(super) fn poll(
         refresh_transcript(&mut state.subagents, &id, &mut |method, params| {
             service
                 .public_call(method, params)
-                .map(|result| Value::Object(result.into_iter().collect()))
+                .map(super::map_value)
                 .map_err(|error| error.to_string())
         });
     }

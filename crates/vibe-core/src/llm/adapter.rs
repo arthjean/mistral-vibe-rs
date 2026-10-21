@@ -8,8 +8,8 @@
 use serde_json::{Map, Value, json};
 
 use super::error::{BackendFailure, LocalFailure, LocalKind};
-use super::types::{Chunk, Message, Role, Tool, ToolCall, ToolChoice, Usage};
-use crate::provider::config::ProviderConfig;
+use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice, Usage};
+use crate::provider::config::{ProviderConfig, ThinkingLevel};
 use crate::pycompat;
 
 /// Everything a dialect needs to write one request.
@@ -24,7 +24,7 @@ pub struct RequestParts<'a> {
     pub streaming: bool,
     pub provider: &'a ProviderConfig,
     pub api_key: Option<&'a str>,
-    pub thinking: &'a str,
+    pub thinking: ThinkingLevel,
 }
 
 impl RequestParts<'_> {
@@ -80,6 +80,23 @@ impl Dialect {
                 Reader::Anthropic(super::anthropic::AnthropicReader::default())
             }
             Self::Responses => Reader::Responses(super::responses::ResponsesReader::default()),
+        }
+    }
+
+    /// The URL a streamed call to `model` is sent to: the dialect's endpoint
+    /// under the provider's base, or the regional Vertex AI address of the
+    /// model.
+    #[must_use]
+    pub fn streaming_url(self, provider: &ProviderConfig, model: &str) -> String {
+        let base = provider.api_base.as_str();
+        match self {
+            Self::OpenAi | Self::Reasoning => format!("{base}{}", super::chat::ENDPOINT),
+            Self::Anthropic => format!("{base}{}", super::anthropic::ENDPOINT),
+            Self::Responses => format!("{base}{}", super::responses::ENDPOINT),
+            Self::VertexAnthropic => {
+                super::vertex::base_url(&provider.region)
+                    + &super::vertex::endpoint(&provider.region, &provider.project_id, model, true)
+            }
         }
     }
 
@@ -186,8 +203,11 @@ pub fn chat_payload(parts: &RequestParts<'_>, messages: Vec<Value>) -> Map<Strin
     payload.insert("model".to_owned(), json!(parts.model_name));
     payload.insert("messages".to_owned(), Value::Array(messages));
     payload.insert("temperature".to_owned(), json!(parts.temperature));
-    if parts.thinking != "off" {
-        payload.insert("reasoning_effort".to_owned(), json!(parts.thinking));
+    if parts.thinking != ThinkingLevel::Off {
+        payload.insert(
+            "reasoning_effort".to_owned(),
+            json!(parts.thinking.as_str()),
+        );
     }
     if let Some(tools) = parts.declared_tools() {
         payload.insert(
@@ -208,6 +228,40 @@ pub fn chat_payload(parts: &RequestParts<'_>, messages: Vec<Value>) -> Map<Strin
         payload.insert("max_tokens".to_owned(), json!(max_tokens));
     }
     payload
+}
+
+/// The parts a user message with images is sent as: its text, when it has
+/// some, as a part of type `text_kind`, then its images as `image` writes
+/// each one.
+pub(super) fn image_parts(
+    message: &Message,
+    text_kind: &str,
+    image: impl Fn(&Image) -> Value,
+) -> Vec<Value> {
+    let mut parts = Vec::new();
+    if !message.text().is_empty() {
+        parts.push(json!({"type": text_kind, "text": message.text()}));
+    }
+    parts.extend(message.images.iter().map(image));
+    parts
+}
+
+/// An image as the chat dialects embed it.
+pub(super) fn chat_image(picture: &Image) -> Value {
+    json!({"type": "image_url", "image_url": {"url": picture.data_uri()}})
+}
+
+/// An assistant's content when it carries reasoning: the reasoning as a
+/// `thinking` chunk, then the text when there is some.
+pub(super) fn thinking_content(reasoning: &str, text: &str) -> Value {
+    let mut chunks = vec![json!({
+        "type": "thinking",
+        "thinking": [{"type": "text", "text": reasoning}],
+    })];
+    if !text.is_empty() {
+        chunks.push(json!({"type": "text", "text": text}));
+    }
+    Value::Array(chunks)
 }
 
 /// Adds the streaming switch and its options to a chat payload.

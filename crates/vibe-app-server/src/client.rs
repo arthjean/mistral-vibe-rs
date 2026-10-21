@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -10,14 +10,13 @@ use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::engine::{EngineError, SessionStats, TurnOutcome};
 use vibe_core::events::{
-    ApplyOutcome, CallbackKind as EngineCallbackKind, EventEnvelope, LifecycleState, ModelMessage,
-    ProjectionReducer,
+    ApplyOutcome, EventEnvelope, LifecycleState, ModelMessage, ProjectionReducer,
 };
 use vibe_core::llm::error::FailureCode;
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::provider::{ProviderError, Usage};
-use vibe_core::storage::{HydratedSession, SessionStore};
+use vibe_core::storage::HydratedSession;
 use vibe_core::telemetry::ClientTelemetry;
 use vibe_core::tools::ToolRegistry;
 pub use vibe_protocol::{
@@ -393,6 +392,62 @@ pub struct ProgrammaticTurn {
     pub teleport_events: Vec<ProgrammaticTeleportEvent>,
 }
 
+impl ProgrammaticTurn {
+    /// A settled turn as a program reads it: the history it left, the last
+    /// thing the assistant said in it, and its accounting. Reference
+    /// `run_programmatic`'s reading of the turn's outcome.
+    fn settled(turn_id: &str, outcome: TurnOutcome) -> Result<Self, ClientError> {
+        let final_assistant = outcome
+            .snapshot
+            .history
+            .iter()
+            .rev()
+            .find_map(|entry| match entry {
+                PublicHistoryEntry::Message {
+                    role: PublicMessageRole::Assistant,
+                    content,
+                    ..
+                } => {
+                    let text = content
+                        .iter()
+                        .filter_map(|block| match block {
+                            PublicContentBlock::Text { text } => Some(text.as_str()),
+                            PublicContentBlock::Image { .. }
+                            | PublicContentBlock::Resource { .. } => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n\n");
+                    (!text.is_empty()).then_some(text)
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let events = outcome
+            .events
+            .iter()
+            .map(serde_json::to_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ClientError::Json)?;
+        Ok(Self {
+            session_id: outcome.session_id,
+            turn_id: turn_id.to_owned(),
+            final_assistant,
+            history: outcome.snapshot.history,
+            events,
+            usage: PublicUsage {
+                input_tokens: outcome.usage.input_tokens,
+                output_tokens: outcome.usage.output_tokens,
+                price_micros: outcome.price_micros,
+            },
+            context_tokens: outcome.context_tokens,
+            steps: outcome.steps,
+            checkpoints: outcome.checkpoints,
+            stop_reason: outcome.stop_reason,
+            teleport_events: Vec::new(),
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct PublicNotification {
     pub method: String,
@@ -426,6 +481,7 @@ pub enum ProgrammaticTeleportEvent {
     },
     PushRequired {
         operation_id: String,
+        #[serde(default)]
         unpushed_count: u64,
         #[serde(default)]
         branch_not_pushed: bool,
@@ -440,10 +496,22 @@ pub enum ProgrammaticTeleportEvent {
         operation_id: String,
         url: String,
     },
+    /// A run that failed, or one that was cancelled, which publishes no error
+    /// of its own.
+    #[serde(alias = "cancelled")]
     Failed {
         operation_id: String,
+        #[serde(default = "teleport_cancelled")]
         error: vibe_core::events::PublicError,
     },
+}
+
+fn teleport_cancelled() -> PublicError {
+    PublicError {
+        message: "Teleport was cancelled".to_owned(),
+        code: Some("teleport_cancelled".to_owned()),
+        details: Value::Null,
+    }
 }
 
 impl ProgrammaticTeleportEvent {
@@ -460,81 +528,6 @@ impl ProgrammaticTeleportEvent {
             | Self::Failed { operation_id, .. } => operation_id,
         }
     }
-}
-
-fn teleport_events(
-    notifications: &[PublicNotification],
-) -> Result<Vec<ProgrammaticTeleportEvent>, ClientError> {
-    notifications
-        .iter()
-        .filter(|notification| notification.method == "vibeCode/teleport/event")
-        .map(|notification| {
-            let event = notification.params.get("event").ok_or_else(|| {
-                ClientError::InvalidResponse("Teleport notification omitted event".to_owned())
-            })?;
-            let operation_id = event
-                .get("operationId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    ClientError::InvalidResponse(
-                        "Teleport notification omitted operationId".to_owned(),
-                    )
-                })?
-                .to_owned();
-            match event.get("kind").and_then(Value::as_str) {
-                Some("summarizing_context") => {
-                    Ok(ProgrammaticTeleportEvent::SummarizingContext { operation_id })
-                }
-                Some("checking_git") => Ok(ProgrammaticTeleportEvent::CheckingGit { operation_id }),
-                Some("push_required") => Ok(ProgrammaticTeleportEvent::PushRequired {
-                    operation_id,
-                    unpushed_count: event
-                        .get("unpushedCount")
-                        .and_then(Value::as_u64)
-                        .unwrap_or_default(),
-                    branch_not_pushed: event
-                        .get("branchNotPushed")
-                        .and_then(Value::as_bool)
-                        .unwrap_or(false),
-                }),
-                Some("pushing") => Ok(ProgrammaticTeleportEvent::Pushing { operation_id }),
-                Some("starting_workflow") => {
-                    Ok(ProgrammaticTeleportEvent::StartingWorkflow { operation_id })
-                }
-                Some("complete") => Ok(ProgrammaticTeleportEvent::Complete {
-                    operation_id,
-                    url: event
-                        .get("url")
-                        .and_then(Value::as_str)
-                        .ok_or_else(|| {
-                            ClientError::InvalidResponse(
-                                "completed Teleport notification omitted URL".to_owned(),
-                            )
-                        })?
-                        .to_owned(),
-                }),
-                Some("failed" | "cancelled") => {
-                    let error = event.get("error").cloned().unwrap_or_else(|| {
-                        json!({
-                            "message": "Teleport was cancelled",
-                            "code": "teleport_cancelled",
-                            "details": Value::Null,
-                        })
-                    });
-                    Ok(ProgrammaticTeleportEvent::Failed {
-                        operation_id,
-                        error: serde_json::from_value(error).map_err(ClientError::Json)?,
-                    })
-                }
-                Some(kind) => Err(ClientError::InvalidResponse(format!(
-                    "unknown Teleport event kind `{kind}`"
-                ))),
-                None => Err(ClientError::InvalidResponse(
-                    "Teleport notification omitted kind".to_owned(),
-                )),
-            }
-        })
-        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -592,153 +585,6 @@ pub fn programmatic_update_channel(
         }),
         receiver,
     )
-}
-
-#[derive(Debug, Clone)]
-pub struct EchoTurnDriver {
-    response: String,
-    session_root: Option<PathBuf>,
-}
-
-impl EchoTurnDriver {
-    #[must_use]
-    pub fn new(response: impl Into<String>) -> Self {
-        Self {
-            response: response.into(),
-            session_root: None,
-        }
-    }
-
-    #[must_use]
-    pub fn with_session_root(mut self, session_root: impl Into<PathBuf>) -> Self {
-        self.session_root = Some(session_root.into());
-        self
-    }
-}
-
-impl TurnDriver for EchoTurnDriver {
-    fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a> {
-        Box::pin(async move {
-            let mut reducer = vibe_core::events::ProjectionReducer::for_turn(
-                &reservation.session_id,
-                &reservation.turn_id,
-            );
-            let mut events = Vec::new();
-            for (event_id, event) in [
-                vibe_core::events::EngineEvent::UserMessage {
-                    attachments: Vec::new(),
-                    message_id: None,
-                    content: reservation.prompt.clone(),
-                    user_display_content: None,
-                },
-                vibe_core::events::EngineEvent::ModelText {
-                    message_id: None,
-                    text: self.response.clone(),
-                },
-                vibe_core::events::EngineEvent::Lifecycle {
-                    state: LifecycleState::Completed,
-                    message: Some("Turn completed".to_owned()),
-                },
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let envelope = vibe_core::events::EventEnvelope {
-                    session_id: reservation.session_id.clone(),
-                    turn_id: Some(reservation.turn_id.clone()),
-                    emitted_at: crate::host::now_millis(),
-                    working_directory: None,
-                    event_id: u64::try_from(event_id).unwrap_or(0).saturating_add(1),
-                    event,
-                };
-                reducer
-                    .apply(&envelope)
-                    .map_err(vibe_core::engine::EngineError::Projection)
-                    .map_err(DriverError::Engine)?;
-                events.push(envelope);
-            }
-            let outcome = TurnOutcome {
-                session_id: reservation.session_id.clone(),
-                events,
-                snapshot: reducer.state().clone(),
-                messages: vec![
-                    ModelMessage::user(reservation.prompt.clone()),
-                    ModelMessage::Assistant {
-                        message_id: None,
-                        reasoning_message_id: None,
-                        content: self.response.clone(),
-                        reasoning: None,
-                        reasoning_payloads: Vec::new(),
-                        tool_calls: Vec::new(),
-                        keeps_empty_content: false,
-                    },
-                ],
-                usage: vibe_core::provider::Usage {
-                    input_tokens: 1,
-                    output_tokens: 1,
-                    cached_tokens: 0,
-                },
-                context_tokens: 2,
-                price_micros: 0,
-                steps: 1,
-                checkpoints: 1,
-                stop_reason: PublicTurnStopReason::Complete,
-            };
-            if let Some(session_root) = &self.session_root {
-                let store = SessionStore::new(session_root);
-                let timestamp = crate::host::now_millis();
-                let mut metadata = match store.open(&reservation.session_id) {
-                    Ok(hydrated) => hydrated.metadata,
-                    Err(vibe_core::storage::StorageError::SessionNotFound(_)) => store
-                        .create(
-                            &reservation.session_id,
-                            &reservation.working_directory,
-                            None,
-                            timestamp,
-                        )
-                        .map_err(DriverError::Storage)?,
-                    Err(error) => return Err(DriverError::Storage(error)),
-                };
-                for message in &outcome.messages {
-                    store
-                        .append_message(&mut metadata, message, timestamp)
-                        .map_err(DriverError::Storage)?;
-                }
-            }
-            Ok(outcome)
-        })
-    }
-
-    fn steer(
-        &self,
-        _session_id: &str,
-        _turn_id: &str,
-        _content: &str,
-        _inject_invoked_skill: bool,
-    ) -> Result<(), DriverError> {
-        Ok(())
-    }
-
-    fn inject_context(
-        &self,
-        _session_id: &str,
-        _content: &str,
-        _as_message: bool,
-        _inject_invoked_skill: bool,
-    ) -> Result<(), DriverError> {
-        Ok(())
-    }
-
-    fn resolve_callback(
-        &self,
-        _session_id: &str,
-        _turn_id: &str,
-        _callback_id: &str,
-        _accepted: bool,
-        _value: Option<&str>,
-    ) -> Result<(), DriverError> {
-        Ok(())
-    }
 }
 
 #[derive(Debug, Error)]
@@ -1043,12 +889,14 @@ fn decode_public_dispatch(
     })
 }
 
+mod echo;
 pub(crate) mod headless;
 pub(crate) mod in_process;
 pub(crate) mod interactive;
 pub(crate) mod live;
 pub(crate) mod unified;
 
+pub use echo::EchoTurnDriver;
 pub use headless::HeadlessService;
 pub use in_process::{InProcessClient, LiveNotificationListener, PendingPublicCall};
 

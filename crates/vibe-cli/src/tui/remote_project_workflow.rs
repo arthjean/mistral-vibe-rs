@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use serde_json::{Value, json};
 use vibe_app_server::client::{PublicDispatch, PublicNotification};
 
@@ -8,7 +6,8 @@ use super::interaction::RemoteProjectAction;
 use super::pickers::remote_projects_overlay;
 use super::runtime::{UiOperation, schedule_ui_background, schedule_ui_call};
 use super::{
-    EntryStatus, InteractiveRuntime, TuiState, apply_public_notifications, push_local_notice,
+    EntryStatus, InteractiveRuntime, TuiState, apply_public_notifications, map_value,
+    push_local_notice,
 };
 
 /// The failure code a Teleport run reports when the project its saved link
@@ -50,91 +49,43 @@ pub(in crate::tui) enum ProjectPendingOperation {
     },
 }
 
-pub(super) fn handle_project_action(
-    action: RemoteProjectAction,
-    _working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    execute_project_command(action.into(), runtime, state);
-}
-
 /// Reference `_vibe_code_project_command`: `/remote-project` opens the
 /// project picker and reads no arguments; what the picker offers is chosen in
 /// the picker.
-pub(super) fn open_project_picker(
-    _working_directory: &Path,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    execute_project_command(ProjectCommand::Open, runtime, state);
-}
-
-#[derive(PartialEq, Eq)]
-enum ProjectCommand {
-    Open,
-    Select(String),
-    More,
-    Create {
-        name: String,
-        default_branch: String,
-    },
-    Unlink,
-    Cancel,
-}
-
-impl From<RemoteProjectAction> for ProjectCommand {
-    fn from(action: RemoteProjectAction) -> Self {
-        match action {
-            RemoteProjectAction::Select { project_id } => Self::Select(project_id),
-            RemoteProjectAction::Create {
-                name,
-                default_branch,
-            } => Self::Create {
-                name,
-                default_branch,
-            },
-            RemoteProjectAction::More => Self::More,
-            RemoteProjectAction::Unlink => Self::Unlink,
-            RemoteProjectAction::Cancel => Self::Cancel,
-        }
-    }
-}
-
-fn execute_project_command(
-    command: ProjectCommand,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    if command == ProjectCommand::Open {
-        if let Err(message) = runtime.cloud.ensure_idle() {
-            state.push_diagnostic(message);
-            return;
-        }
-        schedule_project_call(
-            runtime,
-            "vibeCode/projects/open",
-            json!({"purpose": "configure"}),
-            ProjectPendingOperation::Open {
-                teleport: false,
-                prompt: None,
-            },
-            state,
-        );
+pub(super) fn open_project_picker(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
+    if let Err(message) = runtime.cloud.ensure_idle() {
+        state.push_diagnostic(message);
         return;
     }
+    schedule_project_call(
+        runtime,
+        "vibeCode/projects/open",
+        json!({"purpose": "configure"}),
+        ProjectPendingOperation::Open {
+            teleport: false,
+            prompt: None,
+        },
+        state,
+    );
+}
+
+/// What a row of the open project picker asks of it.
+pub(super) fn handle_project_action(
+    action: RemoteProjectAction,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
     let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
         state.push_diagnostic("Open the remote project picker first");
         return;
     };
-    let (method, params, operation) = match command {
-        ProjectCommand::Open => return,
-        ProjectCommand::Select(project_id) => (
+    let (method, params, operation) = match action {
+        RemoteProjectAction::Select { project_id } => (
             "vibeCode/projects/select",
             json!({"pickerId": picker_id, "projectId": project_id}),
             ProjectPendingOperation::Select { project_id },
         ),
-        ProjectCommand::More => {
+        RemoteProjectAction::More => {
             let query = state
                 .overlay
                 .as_ref()
@@ -146,7 +97,7 @@ fn execute_project_command(
                 ProjectPendingOperation::More { query },
             )
         }
-        ProjectCommand::Create {
+        RemoteProjectAction::Create {
             name,
             default_branch,
         } => (
@@ -160,12 +111,12 @@ fn execute_project_command(
                 requested_name: name,
             },
         ),
-        ProjectCommand::Unlink => (
+        RemoteProjectAction::Unlink => (
             "vibeCode/projects/unlink",
             json!({"pickerId": picker_id}),
             ProjectPendingOperation::ClosePicker { unlink: true },
         ),
-        ProjectCommand::Cancel => (
+        RemoteProjectAction::Cancel => (
             "vibeCode/projects/cancel",
             json!({"pickerId": picker_id}),
             ProjectPendingOperation::ClosePicker { unlink: false },
@@ -178,16 +129,10 @@ fn execute_project_command(
 /// as it stands, and `&prompt` teleports it with `prompt` to run remotely.
 pub(super) fn handle_teleport_command(
     prompt: Option<&str>,
-    working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    start_teleport(
-        prompt.filter(|prompt| !prompt.is_empty()),
-        working_directory,
-        runtime,
-        state,
-    );
+    start_teleport(prompt.filter(|prompt| !prompt.is_empty()), runtime, state);
 }
 
 pub(super) fn handle_teleport_push_response(
@@ -210,7 +155,6 @@ pub(super) fn handle_teleport_push_response(
 /// one from.
 pub(super) fn start_teleport(
     prompt: Option<&str>,
-    _working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
@@ -269,7 +213,7 @@ pub(in crate::tui) fn apply_pending_operation(
             return;
         }
     };
-    let value = Value::Object(dispatch.result.clone().into_iter().collect());
+    let value = map_value(dispatch.result.clone());
     match operation {
         ProjectPendingOperation::Open { teleport, prompt } => {
             apply_open_result(&value, teleport, prompt, runtime, state);
@@ -319,7 +263,7 @@ pub(in crate::tui) fn apply_pending_operation(
             state.overlay = None;
             runtime.remote_project_overlay = None;
             runtime.remote_project_draft = None;
-            execute_project_command(ProjectCommand::Select(project_id), runtime, state);
+            handle_project_action(RemoteProjectAction::Select { project_id }, runtime, state);
         }
         ProjectPendingOperation::ClosePicker { unlink } => {
             runtime.cloud.cancel_project_selection();

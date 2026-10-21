@@ -783,19 +783,10 @@ pub fn oauth_fingerprint(server: &McpServerConfig) -> Option<Value> {
             .map_or_else(|| "<dcr>".to_owned(), ToString::to_string)
     });
     Some(json!({
-        "url": declared_url(server),
+        "url": server.declared_url(),
         "scopes_sorted": scopes,
         "client_marker": marker,
     }))
-}
-
-fn declared_url(server: &McpServerConfig) -> String {
-    server
-        .declared
-        .as_ref()
-        .and_then(|declared| declared.url.clone())
-        .or_else(|| super::transport_url(&server.transport).map(ToString::to_string))
-        .unwrap_or_default()
 }
 
 /// The canonical identity reference `_server_fingerprint` hashes.
@@ -857,7 +848,7 @@ pub fn server_identity(server: &McpServerConfig) -> Value {
             let mut value = json!({
                 "name": server.alias,
                 "transport": super::transport_name(&server.transport),
-                "url": declared_url(server),
+                "url": server.declared_url(),
                 "auth": auth,
                 "prompt": server.prompt,
                 "sampling_enabled": server.sampling_enabled,

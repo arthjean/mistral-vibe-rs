@@ -172,8 +172,12 @@ async fn a_console_that_does_not_close_is_reported_and_the_tree_still_dies() {
     assert!(alive(descendant), "the background job never ran");
 
     // The console takes longer to close than the session waits for it.
-    let console = terminal.master.take().expect("the console is open");
-    terminal.master = Some(Box::new(SlowConsole(Some(console))));
+    let console = terminal
+        .leader()
+        .master
+        .take()
+        .expect("the console is open");
+    terminal.leader().master = Some(Box::new(SlowConsole(Some(console))));
     let failed = terminal.reap_group(Duration::from_millis(500), false).await;
     assert!(
         matches!(failed, Err(TerminationError::Console(_))),

@@ -6,12 +6,14 @@ mod integrations;
 mod remote_projects;
 
 pub use integrations::{
-    mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay, mcp_overlay,
+    McpSource, McpSourceStatus, McpTool, mcp_auth_failed_overlay, mcp_auth_overlay,
+    mcp_detail_overlay, mcp_overlay,
 };
 pub use remote_projects::{
     remote_project_create_overlay, remote_projects_overlay, teleport_push_overlay,
 };
 
+use super::config_schema::{declared_types, field_is_secret};
 use super::interaction::{ConfigLayerTarget, Overlay, OverlayAction, OverlayItem, OverlayKind};
 use super::rewind::RewindTarget;
 
@@ -85,7 +87,7 @@ pub fn config_overlay(snapshot: &Value, schema: &Value) -> Overlay {
                 path.clone(),
                 path.replace('.', " › ").replace('_', " "),
                 details,
-                !schema_available || config_field_is_secret(&path, &field_schema),
+                !schema_available || field_is_secret(path.split('.'), &field_schema),
             )
         })
     {
@@ -685,31 +687,10 @@ fn schema_kind(schema: &Value) -> Option<&str> {
     if schema.get("enum").is_some() || schema.get("const").is_some() {
         return Some("choice");
     }
-    schema
-        .get("type")
-        .and_then(Value::as_str)
-        .or_else(|| {
-            schema
-                .get("type")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .filter_map(Value::as_str)
-                .find(|kind| *kind != "null")
-        })
+    declared_types(schema)
+        .into_iter()
+        .find(|kind| *kind != "null")
         .or_else(|| schema.get("format").and_then(Value::as_str))
-}
-
-fn config_field_is_secret(path: &str, schema: &Value) -> bool {
-    schema.get("writeOnly").and_then(Value::as_bool) == Some(true)
-        || schema.get("format").and_then(Value::as_str) == Some("password")
-        || path.split('.').any(|segment| {
-            let normalized = segment.to_ascii_lowercase();
-            normalized.contains("password")
-                || normalized.contains("secret")
-                || normalized.contains("api_key")
-                || normalized.contains("token")
-        })
 }
 
 fn value_kind(value: &Value) -> &'static str {

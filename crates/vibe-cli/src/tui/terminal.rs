@@ -9,6 +9,8 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,24 +94,14 @@ impl<O> TerminalGuard<O>
 where
     O: TerminalOps,
 {
-    pub fn enter(mut ops: O) -> Result<Self, TerminalEnterError> {
-        let mut active = Vec::new();
-        for step in TerminalStep::ENTER_ORDER {
-            if let Err(message) = ops.enter(step) {
-                let cleanup = restore_steps(&mut ops, &mut active);
-                return Err(TerminalEnterError {
-                    step,
-                    message,
-                    cleanup,
-                });
-            }
-            active.push(step);
-        }
-        Ok(Self {
+    pub fn enter(ops: O) -> Result<Self, TerminalEnterError> {
+        let mut guard = Self {
             ops,
-            active,
+            active: Vec::new(),
             restore_errors: Vec::new(),
-        })
+        };
+        guard.resume()?;
+        Ok(guard)
     }
 
     pub fn restore(&mut self) -> Result<(), TerminalRestoreError> {
@@ -145,6 +137,35 @@ where
     #[must_use]
     pub fn is_restored(&self) -> bool {
         self.active.is_empty()
+    }
+}
+
+/// A full-screen surface on standard output: the modes [`TerminalGuard`]
+/// enters and the ratatui terminal drawing into them, which is what each
+/// screen run before the session (the startup dialogs, onboarding) holds.
+pub(in crate::tui) struct FullScreen {
+    // Declared first so it drops before the modes are left.
+    pub terminal: Terminal<CrosstermBackend<Stdout>>,
+    guard: TerminalGuard<CrosstermOps<Stdout>>,
+}
+
+impl FullScreen {
+    pub(in crate::tui) fn enter() -> Result<Self, String> {
+        let guard =
+            TerminalGuard::enter(CrosstermOps::stdout()).map_err(|error| error.to_string())?;
+        let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))
+            .map_err(|error| error.to_string())?;
+        Ok(Self { terminal, guard })
+    }
+
+    /// Gives the screen back, reporting a mode that could not be left.
+    pub(in crate::tui) fn restore(self) -> Result<(), String> {
+        let Self {
+            terminal,
+            mut guard,
+        } = self;
+        drop(terminal);
+        guard.restore().map_err(|error| error.to_string())
     }
 }
 

@@ -10,33 +10,15 @@
 use serde_json::{Map, Value, json};
 
 use super::adapter::{
-    PreparedRequest, RequestParts, bearer_headers, chat_finish_reason, chat_payload, chat_usage,
-    finalize_chat, optional_index, optional_string, truthy, validate_message,
+    PreparedRequest, RequestParts, bearer_headers, chat_finish_reason, chat_image, chat_payload,
+    chat_usage, finalize_chat, image_parts, optional_index, optional_string, thinking_content,
+    truthy, validate_message,
 };
 use super::error::{LocalFailure, LocalKind};
 use super::types::{Chunk, Message, Role, StopInfo, ToolCall};
 use crate::provider::config::ProviderConfig;
 
-const ENDPOINT: &str = "/chat/completions";
-
-/// The parts a user message with images is sent as.
-fn image_parts(message: &Message, text_kind: &str, image: impl Fn(String) -> Value) -> Vec<Value> {
-    let mut parts = Vec::new();
-    if let Some(text) = message.content.as_deref().filter(|text| !text.is_empty()) {
-        parts.push(json!({"type": text_kind, "text": text}));
-    }
-    parts.extend(
-        message
-            .images
-            .iter()
-            .map(|picture| image(picture.data_uri())),
-    );
-    parts
-}
-
-fn chat_image(url: String) -> Value {
-    json!({"type": "image_url", "image_url": {"url": url}})
-}
+pub(super) const ENDPOINT: &str = "/chat/completions";
 
 /// A message as the message model dumps it, without the fields that never
 /// reach a provider.
@@ -81,18 +63,10 @@ fn openai_message(message: &Message, reasoning_field: &str) -> Value {
         dumped.insert("tool_call_id".to_owned(), json!(id));
     }
     if message.role == Role::User && !message.images.is_empty() {
-        let text = message.content.as_deref().unwrap_or_default();
-        let mut parts = Vec::new();
-        if !text.is_empty() {
-            parts.push(json!({"type": "text", "text": text}));
-        }
-        parts.extend(
-            message
-                .images
-                .iter()
-                .map(|picture| chat_image(picture.data_uri())),
+        dumped.insert(
+            "content".to_owned(),
+            Value::Array(image_parts(message, "text", chat_image)),
         );
-        dumped.insert("content".to_owned(), Value::Array(parts));
     }
     Value::Object(dumped)
 }
@@ -135,16 +109,7 @@ fn reasoning_message(message: &Message) -> Value {
                 .as_deref()
                 .filter(|reasoning| !reasoning.is_empty())
             {
-                Some(reasoning) => {
-                    let mut blocks = vec![json!({
-                        "type": "thinking",
-                        "thinking": [{"type": "text", "text": reasoning}],
-                    })];
-                    if !message.text().is_empty() {
-                        blocks.push(json!({"type": "text", "text": message.text()}));
-                    }
-                    Value::Array(blocks)
-                }
+                Some(reasoning) => thinking_content(reasoning, message.text()),
                 None => json!(message.text()),
             };
             converted.insert("content".to_owned(), content);

@@ -10,7 +10,8 @@
 
 use std::time::Duration;
 
-use reqwest::{Client, StatusCode};
+use reqwest::{Client, Method, RequestBuilder, StatusCode};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use super::git::FailureClass;
@@ -84,30 +85,16 @@ impl ProjectClient {
             query.push(("cursor", cursor.to_owned()));
         }
         query.push(("limit", PAGE_LIMIT.to_string()));
-        let response = self
-            .client
-            .get(format!("{}/api/v1/code/projects", self.base_url))
-            .bearer_auth(&self.api_key)
+        let request = self
+            .request(Method::GET)
             .header("content-type", "application/json")
-            .query(&query)
-            .send()
-            .await
-            .map_err(|_| "Reaching Vibe Code Web to list projects failed.".to_owned())?;
-        let (status, body) = read(response)
-            .await
-            .map_err(|_| "Reaching Vibe Code Web to list projects failed.".to_owned())?;
-        if !status.is_success() {
-            return Err(format!(
-                "Listing Vibe Code Web projects failed (status {}): {body}",
-                status.as_u16()
-            ));
-        }
-        let value: serde_json::Value = serde_json::from_str(&body).map_err(|_| {
-            "Vibe Code Web answered the project list with something other than JSON.".to_owned()
-        })?;
-        let page: ProjectPage = serde_json::from_value(value).map_err(|_| {
-            "Vibe Code Web answered the project list in an unexpected shape.".to_owned()
-        })?;
+            .query(&query);
+        let wording = Wording {
+            purpose: "list projects",
+            attempt: "Listing Vibe Code Web projects",
+            answer: "the project list",
+        };
+        let page: ProjectPage = exchange(request, &wording).await?;
         Ok((page.items, page.next_cursor))
     }
 
@@ -137,30 +124,74 @@ impl ProjectClient {
                 default_branch,
             }],
         };
-        let response = self
-            .client
-            .post(format!("{}/api/v1/code/projects", self.base_url))
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|_| "Reaching Vibe Code Web to create the project failed.".to_owned())?;
-        let (status, body) = read(response)
-            .await
-            .map_err(|_| "Reaching Vibe Code Web to create the project failed.".to_owned())?;
-        if !status.is_success() {
-            return Err(format!(
-                "Creating the Vibe Code Web project failed (status {}): {body}",
-                status.as_u16()
-            ));
-        }
-        let value: serde_json::Value = serde_json::from_str(&body).map_err(|_| {
-            "Vibe Code Web answered the new project with something other than JSON.".to_owned()
-        })?;
-        serde_json::from_value(value).map_err(|_| {
-            "Vibe Code Web answered the new project in an unexpected shape.".to_owned()
-        })
+        let wording = Wording {
+            purpose: "create the project",
+            attempt: "Creating the Vibe Code Web project",
+            answer: "the new project",
+        };
+        exchange(self.request(Method::POST).json(&body), &wording).await
     }
+
+    /// A request to the project collection under this client's key.
+    fn request(&self, method: Method) -> RequestBuilder {
+        self.client
+            .request(method, format!("{}/api/v1/code/projects", self.base_url))
+            .bearer_auth(&self.api_key)
+    }
+}
+
+/// What one project exchange is called in the sentences its failures carry.
+struct Wording {
+    /// `Reaching Vibe Code Web to {purpose} failed.`
+    purpose: &'static str,
+    /// `{attempt} failed (status {code}): {body}`.
+    attempt: &'static str,
+    /// `Vibe Code Web answered {answer} ...` (see [`Malformed::sentence`]).
+    answer: &'static str,
+}
+
+/// One project exchange: `request` sent, a success status required, and the
+/// body read as a `T`.
+async fn exchange<T: DeserializeOwned>(
+    request: RequestBuilder,
+    wording: &Wording,
+) -> Result<T, String> {
+    let unreachable = || format!("Reaching Vibe Code Web to {} failed.", wording.purpose);
+    let response = request.send().await.map_err(|_| unreachable())?;
+    let (status, body) = read(response).await.map_err(|_| unreachable())?;
+    if !status.is_success() {
+        return Err(format!(
+            "{} failed (status {}): {body}",
+            wording.attempt,
+            status.as_u16()
+        ));
+    }
+    decode(&body).map_err(|malformed| malformed.sentence(wording.answer))
+}
+
+/// Why an answer that came back could not be read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Malformed {
+    NotJson,
+    Shape,
+}
+
+impl Malformed {
+    /// The sentence that reports `answer` as unreadable.
+    fn sentence(self, answer: &str) -> String {
+        match self {
+            Self::NotJson => {
+                format!("Vibe Code Web answered {answer} with something other than JSON.")
+            }
+            Self::Shape => format!("Vibe Code Web answered {answer} in an unexpected shape."),
+        }
+    }
+}
+
+/// `body` as a `T`, telling a body that is not JSON from one of another shape.
+fn decode<T: DeserializeOwned>(body: &str) -> Result<T, Malformed> {
+    let value: serde_json::Value = serde_json::from_str(body).map_err(|_| Malformed::NotJson)?;
+    serde_json::from_value(value).map_err(|_| Malformed::Shape)
 }
 
 /// Reference `NuageRequest`, serialized by alias with absent values left out.
@@ -257,15 +288,27 @@ pub(crate) struct StartFailure {
 }
 
 impl StartFailure {
-    fn ambiguous(http_status_code: Option<u16>) -> Self {
+    /// Every start failure is the service's.
+    fn new(
+        message: impl Into<String>,
+        failure_kind: Option<&'static str>,
+        http_status_code: Option<u16>,
+    ) -> Self {
         Self {
-            message: "Vibe Code Web never confirmed the session was created, even after \
-                      retrying. Check Vibe Code Web before teleporting again."
-                .to_owned(),
+            message: message.into(),
             class: FailureClass::Service,
-            failure_kind: Some("ambiguous_create"),
+            failure_kind,
             http_status_code,
         }
+    }
+
+    fn ambiguous(http_status_code: Option<u16>) -> Self {
+        Self::new(
+            "Vibe Code Web never confirmed the session was created, even after retrying. \
+             Check Vibe Code Web before teleporting again.",
+            Some("ambiguous_create"),
+            http_status_code,
+        )
     }
 }
 
@@ -277,18 +320,10 @@ pub(crate) async fn start_session(
     api_key: &str,
     request: &StartRequest,
 ) -> Result<String, StartFailure> {
-    let client = http_client(START_TIMEOUT).map_err(|message| StartFailure {
-        message,
-        class: FailureClass::Service,
-        failure_kind: None,
-        http_status_code: None,
-    })?;
-    let body = serde_json::to_vec(request).map_err(|error| StartFailure {
-        message: error.to_string(),
-        class: FailureClass::Service,
-        failure_kind: None,
-        http_status_code: None,
-    })?;
+    let client =
+        http_client(START_TIMEOUT).map_err(|message| StartFailure::new(message, None, None))?;
+    let body = serde_json::to_vec(request)
+        .map_err(|error| StartFailure::new(error.to_string(), None, None))?;
     let endpoint = format!("{}/api/v1/code/sessions", base_url.trim_end_matches('/'));
     let mut answer: Option<(StatusCode, String)> = None;
     for attempt in 0..START_ATTEMPTS {
@@ -326,25 +361,22 @@ pub(crate) async fn start_session(
         return Err(StartFailure::ambiguous(Some(code)));
     }
     if !status.is_success() {
-        return Err(StartFailure {
-            message: format!("Vibe Code Web could not start the session (status {code}): {text}"),
-            class: FailureClass::Service,
-            failure_kind: Some("http_error"),
-            http_status_code: Some(code),
-        });
+        return Err(StartFailure::new(
+            format!("Vibe Code Web could not start the session (status {code}): {text}"),
+            Some("http_error"),
+            Some(code),
+        ));
     }
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(|_| StartFailure {
-        message: "Vibe Code Web answered the session start with something other than JSON."
-            .to_owned(),
-        class: FailureClass::Service,
-        failure_kind: Some("invalid_json"),
-        http_status_code: Some(code),
-    })?;
-    let response: StartResponse = serde_json::from_value(value).map_err(|_| StartFailure {
-        message: "Vibe Code Web answered the session start in an unexpected shape.".to_owned(),
-        class: FailureClass::Service,
-        failure_kind: Some("invalid_schema"),
-        http_status_code: Some(code),
+    let response: StartResponse = decode(&text).map_err(|malformed| {
+        let kind = match malformed {
+            Malformed::NotJson => "invalid_json",
+            Malformed::Shape => "invalid_schema",
+        };
+        StartFailure::new(
+            malformed.sentence("the session start"),
+            Some(kind),
+            Some(code),
+        )
     })?;
     Ok(response.url)
 }
