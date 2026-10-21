@@ -180,9 +180,9 @@ fn answer_document(answers: &[PublishedAnswer], cancelled: bool) -> Document {
                 .field("answer", answer.answer.as_str())
                 .field("is_other", answer.is_other)
         })
-        .collect();
+        .collect::<Vec<_>>();
     Document::new()
-        .nested_list("answers", answers)
+        .field("answers", answers)
         .field("cancelled", cancelled)
 }
 

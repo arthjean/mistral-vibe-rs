@@ -19,8 +19,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::html::{self, Document, NodeKind};
-use super::numeric::{DECIMAL, DIGIT, NUMERIC};
-use crate::pycompat::{isspace, strip};
+use crate::pycompat::{decimal, isdigit, isnumeric, isspace, strip};
 
 /// How deep an element may nest before the conversion gives up.
 ///
@@ -67,32 +66,11 @@ enum Method {
     None,
 }
 
-fn range_order(ranges: &[(u32, u32)], character: char) -> Option<usize> {
-    let code = u32::from(character);
-    ranges
-        .binary_search_by(|(start, end)| {
-            if code < *start {
-                std::cmp::Ordering::Greater
-            } else if code > *end {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        })
-        .ok()
-}
-
-/// The value `int()` reads from one decimal digit of any script.
-fn decimal_value(character: char) -> Option<u32> {
-    let index = range_order(DECIMAL, character)?;
-    Some((u32::from(character) - DECIMAL[index].0) % 10)
-}
-
 /// `h` followed by digits at the start of a tag name, as `re_html_heading`
 /// matches it, with the level those digits name held to 1 through 6.
 fn heading_level(name: &str) -> Option<usize> {
     let digits = name.strip_prefix('h')?;
-    let values = digits.chars().map_while(decimal_value).collect::<Vec<_>>();
+    let values = digits.chars().map_while(decimal).collect::<Vec<_>>();
     if values.is_empty() {
         return None;
     }
@@ -110,7 +88,7 @@ fn heading_level(name: &str) -> Option<usize> {
 fn python_int(text: &str) -> Result<String, ConversionError> {
     let digits = text
         .chars()
-        .map(decimal_value)
+        .map(decimal)
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| {
             ConversionError(format!("invalid literal for int() with base 10: '{text}'"))
@@ -165,9 +143,7 @@ fn add_decimal(decimal: &str, addend: usize) -> Result<String, ConversionError> 
 /// A `colspan` held to 1 through 1000 when `str.isdigit` holds for it, and 1
 /// otherwise.
 fn colspan_of(value: Option<&str>) -> Result<usize, ConversionError> {
-    let Some(value) = value.filter(|value| {
-        !value.is_empty() && value.chars().all(|c| range_order(DIGIT, c).is_some())
-    }) else {
+    let Some(value) = value.filter(|value| !value.is_empty() && value.chars().all(isdigit)) else {
         return Ok(1);
     };
     let canonical = python_int(value)?;
@@ -786,9 +762,7 @@ impl Converter<'_> {
         let bullet = if self.name(parent) == Some("ol") {
             let start = parent
                 .and_then(|parent| self.document.attribute(parent, "start"))
-                .filter(|start| {
-                    !start.is_empty() && start.chars().all(|c| range_order(NUMERIC, c).is_some())
-                });
+                .filter(|start| !start.is_empty() && start.chars().all(isnumeric));
             let start = match start {
                 Some(start) => python_int(start)?,
                 None => "1".to_owned(),

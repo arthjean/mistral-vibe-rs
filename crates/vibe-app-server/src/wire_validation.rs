@@ -21,17 +21,16 @@
 //! this port's own, as `NOTICE` requires.
 
 mod custom;
-mod json;
 mod schema;
 mod walk;
 
 use std::collections::BTreeMap;
 
+use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use vibe_protocol::{InvalidParamsIssue, PathSegment};
 
-pub(crate) use json::{Json, ordered_params};
 use schema::SCHEMA;
 use walk::Walk;
 
@@ -53,15 +52,32 @@ impl Issue {
     }
 }
 
+/// The parameters a request frame carries, with their key order kept.
+///
+/// `serde_json` keeps an object's keys in the order they were written (the
+/// workspace builds it with `preserve_order`), and a duplicated key keeps its
+/// first position and its last value, which is what Python's `json.loads`
+/// produces. `None` when the frame does not parse or carries no `params`; the
+/// envelope has already refused such a frame by the time this is asked.
+pub(crate) fn ordered_params(frame: &[u8]) -> Option<Value> {
+    #[derive(Deserialize)]
+    struct Frame {
+        params: Option<Value>,
+    }
+    serde_json::from_slice::<Frame>(frame)
+        .ok()
+        .and_then(|frame| frame.params)
+}
+
 /// Validates `params` as the reference validates `method`'s parameters.
 ///
 /// `Ok` carries the validated value, with every coercion applied and only the
 /// fields the client sent, which is what pydantic dumps with `exclude_unset`.
 /// A method the reference declares without a model accepts any object.
-pub(crate) fn validate_method(method: &str, params: &Json) -> Result<Value, Vec<Issue>> {
+pub(crate) fn validate_method(method: &str, params: &Value) -> Result<Value, Vec<Issue>> {
     match SCHEMA.methods.get(method) {
         Some(Some(model)) => validate_model_named(model, params),
-        _ => Ok(params.clone().into_value()),
+        _ => Ok(params.clone()),
     }
 }
 
@@ -77,12 +93,7 @@ pub(crate) fn validate_params<T: DeserializeOwned>(
     method: &str,
     params: &BTreeMap<String, Value>,
 ) -> Result<T, Vec<InvalidParamsIssue>> {
-    let input = Json::Object(
-        params
-            .iter()
-            .map(|(key, value)| (key.clone(), Json::from_value(value)))
-            .collect(),
-    );
+    let input = Value::Object(crate::params::object_of(params));
     let validated = validate_method(method, &input)
         .map_err(|issues| issues.iter().map(Issue::wire).collect::<Vec<_>>())?;
     serde_json::from_value(validated).map_err(|error| {
@@ -95,10 +106,10 @@ pub(crate) fn validate_params<T: DeserializeOwned>(
 
 /// Validates `params` as the reference validates a lifecycle frame's
 /// parameters, such as `initialize`.
-pub(crate) fn validate_lifecycle(frame: &str, params: &Json) -> Result<Value, Vec<Issue>> {
+pub(crate) fn validate_lifecycle(frame: &str, params: &Value) -> Result<Value, Vec<Issue>> {
     match SCHEMA.lifecycle.get(frame) {
         Some(model) => validate_model_named(model, params),
-        None => Ok(params.clone().into_value()),
+        None => Ok(params.clone()),
     }
 }
 
@@ -125,7 +136,7 @@ pub(crate) fn validate_nested_field(
         return Ok(value.clone());
     };
     let mut walk = Walk::default();
-    let validated = walk.node(schema, &Json::from_value(value), &mut Vec::new());
+    let validated = walk.node(schema, value, &mut Vec::new());
     if walk.issues.is_empty() {
         Ok(validated.unwrap_or(Value::Null))
     } else {
@@ -134,7 +145,7 @@ pub(crate) fn validate_nested_field(
 }
 
 /// Validates `input` against the named reference model.
-pub(crate) fn validate_model_named(model: &str, input: &Json) -> Result<Value, Vec<Issue>> {
+pub(crate) fn validate_model_named(model: &str, input: &Value) -> Result<Value, Vec<Issue>> {
     let mut walk = Walk::default();
     let value = walk.model(model, input, &mut Vec::new(), false);
     if walk.issues.is_empty() {

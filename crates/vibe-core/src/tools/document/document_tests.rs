@@ -28,7 +28,7 @@ fn scalars_are_rendered_with_python_spelling() {
 #[test]
 fn a_nested_string_is_quoted_and_escaped() {
     let nested = Document::new().field("inner", "a\nb\t\\c\x07");
-    let text = Document::new().nested("field", Some(nested)).model_text();
+    let text = Document::new().field("field", nested).model_text();
     assert_eq!(text, "field: {'inner': 'a\\nb\\t\\\\c\\x07'}");
 }
 
@@ -36,14 +36,12 @@ fn a_nested_string_is_quoted_and_escaped() {
 fn a_nested_string_carrying_a_quote_switches_delimiter() {
     let apostrophe = Document::new().field("inner", "it's");
     assert_eq!(
-        Document::new()
-            .nested("field", Some(apostrophe))
-            .model_text(),
+        Document::new().field("field", apostrophe).model_text(),
         "field: {'inner': \"it's\"}"
     );
     let both = Document::new().field("inner", "it's \"quoted\"");
     assert_eq!(
-        Document::new().nested("field", Some(both)).model_text(),
+        Document::new().field("field", both).model_text(),
         "field: {'inner': 'it\\'s \"quoted\"'}"
     );
 }
@@ -53,7 +51,7 @@ fn a_document_keeps_its_field_order_in_the_text_and_the_typed_result() {
     let document = Document::new()
         .field("zulu", 1)
         .field("alpha", 2)
-        .nested_list("sessions", vec![Document::new().field("id", "s0")]);
+        .field("sessions", vec![Document::new().field("id", "s0")]);
     assert_eq!(
         document.model_text(),
         "zulu: 1\nalpha: 2\nsessions: [{'id': 's0'}]"

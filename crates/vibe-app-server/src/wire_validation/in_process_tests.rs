@@ -6,7 +6,7 @@
 use serde_json::{Value, json};
 use vibe_protocol::{Envelope, TransportKind, decode_frame};
 
-use super::{Issue, Json, validate_method};
+use super::{Issue, validate_method};
 use crate::server::{AppServer, ServerConnection};
 
 /// The methods only a root answers, over either transport.
@@ -148,8 +148,7 @@ fn a_saved_session_method_refuses_an_in_process_request_as_the_schema_does() {
         }
         let refusal = answer(&mut local, method, &params)
             .unwrap_or_else(|| unreachable!("{method} {params} was accepted"));
-        let expected = validate_method(method, &Json::from_value(&params))
-            .expect_err("the schema refuses it too");
+        let expected = validate_method(method, &params).expect_err("the schema refuses it too");
         assert_eq!(
             refusal["code"],
             json!("invalid_params"),

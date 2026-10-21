@@ -741,9 +741,12 @@ pub(super) fn reduce_event(
         | EngineEvent::RequestSent { .. }
         | EngineEvent::TurnOpened { .. }
         | EngineEvent::CompactionOutcome { .. } => {}
+        // A failure's message reaches a client through `turn/completed` and
+        // the session status, so the transcript carries no notice of it: the
+        // reference declares no notice kind for one.
         EngineEvent::Lifecycle {
             state: next,
-            message,
+            message: _,
         } => {
             state.lifecycle.transition_to(*next)?;
             state.lifecycle = *next;
@@ -754,20 +757,11 @@ pub(super) fn reduce_event(
                 settle_unfinished_effects(state, *next == LifecycleState::Cancelled, emitted_at);
             }
             complete_streaming_entries(state, emitted_at);
-            // A failed turn used to append a notice whose `kind` the reference
-            // does not declare, which a conforming client rejects. The failure
-            // reaches a client through `turn/completed` and the session status,
-            // both of which carry the message this notice repeated.
-            let _ = message;
         }
     }
     Ok(())
 }
 
-/// The session a subagent ran in, as its delegation result names it.
-///
-/// The public identifier is the one a client may open; the internal one is the
-/// fallback for a result that only carries it.
 /// A completed user turn, however it reached the transcript.
 ///
 /// The operator's own message, a steer landing mid-turn and a harness injection

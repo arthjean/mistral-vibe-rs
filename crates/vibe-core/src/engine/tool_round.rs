@@ -328,43 +328,23 @@ where
                     approval_source: decision.map(|approval| approval.approval_source),
                 },
             })?;
-            let mut content = INTERRUPTED_TOOL_RESULT.to_owned();
             // Reference `_finalize_cancelled_tool`: a call whose body started
             // is still shown to the post-tool hooks, shielded from the
             // cancellation, and one cancelled before it ran is not.
-            if let (Some(hooks), Some(tool_input)) = (
-                self.settings.hooks.as_ref(),
-                slot.prepared_input
-                    .take()
-                    .filter(|_| slot.stages.progress.started()),
-            ) {
-                let call = slot.call;
-                // Only the text survives: the reference yields the chain's
-                // events from a generator its interrupted consumer has left,
-                // so no client ever reads them.
-                hooks
-                    .manager
-                    .run(
-                        HookInvocation::PostTool {
-                            context: hooks.context(&session_id),
-                            tool_name: call.name.clone(),
-                            tool_call_id: call.id.clone(),
-                            tool_input,
-                            tool_status: ToolStatus::Cancelled,
-                            tool_output: None,
-                            tool_output_text: content.clone(),
-                            tool_error: Some(content.clone()),
-                            duration_ms: 0.0,
-                        },
-                        |item| {
-                            if let HookYield::TextReplacement(text) = item {
-                                content = text;
-                            }
-                            std::ops::ControlFlow::Continue(())
-                        },
-                    )
-                    .await;
-            }
+            let tool_input = slot
+                .prepared_input
+                .take()
+                .filter(|_| slot.stages.progress.started());
+            let content = self
+                .post_tool_text(
+                    slot.call,
+                    tool_input,
+                    &session_id,
+                    ToolStatus::Cancelled,
+                    INTERRUPTED_TOOL_RESULT.to_owned(),
+                    INTERRUPTED_TOOL_RESULT.to_owned(),
+                )
+                .await;
             slot.answer = Some(Answer::text(content, true));
             order.push(index);
         }
@@ -392,33 +372,61 @@ where
         recorder.emit(EngineEvent::ToolCallAbandoned {
             call_id: call.id.clone(),
         })?;
-        let mut content = format!("<tool_error>{} failed: {rejection}</tool_error>", call.name);
-        if let (Some(hooks), Some(tool_input)) = (self.settings.hooks.as_ref(), tool_input) {
-            // Only the text survives, as for an interrupted call.
-            hooks
-                .manager
-                .run(
-                    HookInvocation::PostTool {
-                        context: hooks.context(session_id),
-                        tool_name: call.name.clone(),
-                        tool_call_id: call.id.clone(),
-                        tool_input,
-                        tool_status: ToolStatus::Failure,
-                        tool_output: None,
-                        tool_output_text: content.clone(),
-                        tool_error: Some(rejection.to_owned()),
-                        duration_ms: 0.0,
-                    },
-                    |item| {
-                        if let HookYield::TextReplacement(text) = item {
-                            content = text;
-                        }
-                        std::ops::ControlFlow::Continue(())
-                    },
-                )
-                .await;
-        }
-        Ok(content)
+        let content = format!("<tool_error>{} failed: {rejection}</tool_error>", call.name);
+        Ok(self
+            .post_tool_text(
+                call,
+                tool_input,
+                session_id,
+                ToolStatus::Failure,
+                content,
+                rejection.to_owned(),
+            )
+            .await)
+    }
+
+    /// `content` as the post-tool hooks leave it, for a call that answers
+    /// without an output of its own; a call with no input to show them, or a
+    /// turn with no hooks, keeps it as is.
+    ///
+    /// Only the text survives: the reference yields the chain's events from a
+    /// generator its interrupted consumer has left, so no client ever reads
+    /// them.
+    async fn post_tool_text(
+        &self,
+        call: &ModelToolCall,
+        tool_input: Option<Value>,
+        session_id: &str,
+        tool_status: ToolStatus,
+        mut content: String,
+        tool_error: String,
+    ) -> String {
+        let (Some(hooks), Some(tool_input)) = (self.settings.hooks.as_ref(), tool_input) else {
+            return content;
+        };
+        hooks
+            .manager
+            .run(
+                HookInvocation::PostTool {
+                    context: hooks.context(session_id),
+                    tool_name: call.name.clone(),
+                    tool_call_id: call.id.clone(),
+                    tool_input,
+                    tool_status,
+                    tool_output: None,
+                    tool_output_text: content.clone(),
+                    tool_error: Some(tool_error),
+                    duration_ms: 0.0,
+                },
+                |item| {
+                    if let HookYield::TextReplacement(text) = item {
+                        content = text;
+                    }
+                    std::ops::ControlFlow::Continue(())
+                },
+            )
+            .await;
+        content
     }
 }
 

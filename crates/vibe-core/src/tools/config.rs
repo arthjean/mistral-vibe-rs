@@ -23,7 +23,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, RwLock, TryLockError};
+use std::sync::{Arc, Mutex, RwLock};
 
 use toml::{Table, Value};
 
@@ -468,24 +468,19 @@ tool_view!(
 /// `PermissionStore.get_tool_permission`.
 pub type SessionPermissions = Arc<dyn Fn(&str) -> Option<PermissionMode> + Send + Sync>;
 
-/// How long a resolution may wait on the settings lock before it falls back to
-/// the declared defaults.
-///
-/// Nothing waits at all: the settings are read through `try_read`, so a turn
-/// never blocks behind the refresh that a configuration write triggers. This
-/// constant records the bound the non-functional requirement states, and the
-/// test that measures it.
-pub const MAX_RESOLUTION_BLOCK_MILLIS: u128 = 50;
-
 /// Hands every tool the configuration it reads at each call.
 ///
 /// One resolver serves the process: the settings it caches are shared by every
 /// clone, so a configuration write observed once is observed by every session.
 /// A session narrows it with [`Self::with_session_permissions`], which is the
 /// only per-session part of the composition.
+///
+/// The settings are held as one shared table that a refresh replaces whole:
+/// the lock guards only that pointer, so a turn resolving a tool while a
+/// configuration write is validated reads the settings it had before.
 #[derive(Clone)]
 pub struct ToolConfigResolver {
-    settings: Arc<RwLock<Table>>,
+    settings: Arc<RwLock<Arc<Table>>>,
     diagnostics: Arc<Mutex<Vec<String>>>,
     /// The shell rollout the merged configuration resolved, shared with every
     /// clone so a narrowed resolver still answers what the configuration says.
@@ -518,7 +513,7 @@ impl ToolConfigResolver {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            settings: Arc::new(RwLock::new(Table::new())),
+            settings: Arc::new(RwLock::new(Arc::new(Table::new()))),
             diagnostics: Arc::new(Mutex::new(Vec::new())),
             managed_shell: Arc::new(AtomicBool::new(false)),
             mistral_server_url: Arc::new(RwLock::new(None)),
@@ -597,7 +592,7 @@ impl ToolConfigResolver {
             }
             accepted.insert(tool, Value::Table(kept));
         }
-        *sync::write(&self.settings) = accepted;
+        *sync::write(&self.settings) = Arc::new(accepted);
         *sync::lock(&self.diagnostics) = diagnostics;
     }
 
@@ -694,16 +689,8 @@ impl ToolConfigResolver {
             .iter()
             .map(|key| (key.name.to_owned(), key.default.value(self.posix_shell)))
             .collect::<BTreeMap<_, _>>();
-        // A turn never waits behind the refresh a configuration write triggers:
-        // a contended cache resolves to the declared defaults rather than
-        // blocking, and a poisoned one is read through the poison.
-        match self.settings.try_read() {
-            Ok(settings) => merge_entry(&mut values, &settings, tool),
-            Err(TryLockError::Poisoned(poisoned)) => {
-                merge_entry(&mut values, &poisoned.into_inner(), tool);
-            }
-            Err(TryLockError::WouldBlock) => {}
-        }
+        let settings = Arc::clone(&sync::read(&self.settings));
+        merge_entry(&mut values, &settings, tool);
         if let Some(permissions) = &self.session_permissions
             && let Some(mode) = permissions(tool)
         {

@@ -2,7 +2,23 @@
 //! resource and catalog commands, the requests answered over the network,
 //! and the MCP servers a session still has to connect.
 
+use std::pin::Pin;
+
 use super::*;
+
+/// What [`AppServer::execute_deferred`] made of one unit of deferred work.
+pub(crate) enum Execution {
+    /// The work ran in place.
+    Done,
+    /// The work settles on its own, with the batch that answers it, and hands
+    /// what it publishes before then to the sink it was given. The host runs
+    /// it beside its request loop or awaits it.
+    Pending(Pin<Box<dyn Future<Output = DispatchBatch> + Send>>),
+    /// The work is the host's own: a control of the turn driver the server
+    /// does not hold, or a session's resource teardown, which a host orders
+    /// against the requests it reads next.
+    Host(Box<DeferredWork>),
+}
 
 /// Reference `SkillsVersionsParams` and `SkillsDetailParams`: the skill a
 /// registry read is about, and for a detail the version it names.
@@ -15,6 +31,121 @@ struct SkillParams {
 }
 
 impl AppServer {
+    /// Runs the part of `work` the server owns, handing every frame it
+    /// publishes before it answers to `sink`.
+    pub(crate) fn execute_deferred(&self, work: DeferredWork, sink: FrameSink) -> Execution {
+        let server = self.clone();
+        match work {
+            DeferredWork::AttachUnified { session_id } => {
+                self.attach_unified(&session_id, sink);
+                Execution::Done
+            }
+            DeferredWork::ReleaseUnifiedCallback {
+                session_id,
+                callback_id,
+                cancel_turn,
+            } => {
+                self.release_unified_callback(&session_id, &callback_id, cancel_turn);
+                Execution::Done
+            }
+            DeferredWork::RunUnifiedTurn(work) => pending(async move {
+                drive_unified_turn(work, sink).await;
+                DispatchBatch::default()
+            }),
+            DeferredWork::ResourceRequest {
+                request_id,
+                session_id,
+                command,
+            } => pending(async move {
+                server
+                    .execute_resource_request(request_id, session_id, command)
+                    .await
+            }),
+            DeferredWork::McpCatalog {
+                request_id,
+                call,
+                target,
+                publish,
+            } => {
+                // A sign-in hands out its URL while the call is still waiting
+                // on the browser.
+                let notify = mcp_catalog_notifier(publish, move |frame| sink(frame));
+                pending(async move {
+                    server
+                        .execute_mcp_catalog(request_id, call, target, notify)
+                        .await
+                })
+            }
+            // A Teleport start answers, then its run publishes events long
+            // after this call returned.
+            DeferredWork::VibeCode {
+                request_id,
+                session_id,
+                method,
+                params,
+                launch,
+            } => pending(async move {
+                server
+                    .execute_vibe_code(request_id, session_id, method, params, launch, sink)
+                    .await
+            }),
+            DeferredWork::ShellCommand {
+                request_id,
+                session_id,
+                operation_id,
+                command,
+                cwd,
+                timeout_ms,
+            } => pending(async move {
+                server
+                    .execute_shell_command(
+                        request_id,
+                        session_id,
+                        operation_id,
+                        command,
+                        cwd,
+                        timeout_ms,
+                        move |frame| sink(frame),
+                    )
+                    .await
+            }),
+            DeferredWork::ShellInterrupt {
+                request_id,
+                session_id,
+                operation_id,
+            } => pending(async move {
+                server
+                    .answer_shell_interrupt(request_id, session_id, operation_id)
+                    .await
+            }),
+            DeferredWork::CloudRequest {
+                request_id,
+                method,
+                params,
+            } => pending(async move {
+                server
+                    .execute_cloud_request(request_id, method, params)
+                    .await
+            }),
+            DeferredWork::ConfigureMcp {
+                session_id,
+                configs,
+            } => pending(async move {
+                DispatchBatch {
+                    outbound: server.configure_mcp_servers(&session_id, configs).await,
+                    ..DispatchBatch::default()
+                }
+            }),
+            work @ (DeferredWork::RunTurn { .. }
+            | DeferredWork::InterruptTurn { .. }
+            | DeferredWork::SteerTurn { .. }
+            | DeferredWork::InjectContext { .. }
+            | DeferredWork::ResolveCallback { .. }
+            | DeferredWork::CompactSession { .. }
+            | DeferredWork::CloseResources { .. }) => Execution::Host(Box::new(work)),
+        }
+    }
+
     pub async fn invoke_tool(
         &self,
         session_id: &str,
@@ -350,4 +481,8 @@ impl AppServer {
         }
         signal_frames(self, session_id, &signals)
     }
+}
+
+fn pending(work: impl Future<Output = DispatchBatch> + Send + 'static) -> Execution {
+    Execution::Pending(Box::pin(work))
 }

@@ -5,8 +5,42 @@
 //! `str.isnumeric` and `unicodedata.decimal`; regenerate on an interpreter
 //! upgrade rather than editing by hand.
 
+/// `str.isdigit` of one character.
+pub(crate) fn isdigit(character: char) -> bool {
+    range_order(DIGIT, character).is_some()
+}
+
+/// `str.isnumeric` of one character.
+pub(crate) fn isnumeric(character: char) -> bool {
+    range_order(NUMERIC, character).is_some()
+}
+
+/// `unicodedata.decimal`: the value of a decimal digit of any script, which
+/// is what `int()` and `float()` read it as.
+pub(crate) fn decimal(character: char) -> Option<u32> {
+    let index = range_order(DECIMAL, character)?;
+    Some((u32::from(character) - DECIMAL[index].0) % 10)
+}
+
+/// The index of the range in `ranges`, sorted and disjoint, that holds
+/// `character`.
+fn range_order(ranges: &[(u32, u32)], character: char) -> Option<usize> {
+    let code = u32::from(character);
+    ranges
+        .binary_search_by(|(start, end)| {
+            if code < *start {
+                std::cmp::Ordering::Greater
+            } else if code > *end {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        })
+        .ok()
+}
+
 /// Inclusive ranges where `str.isdigit` holds.
-pub(super) const DIGIT: &[(u32, u32)] = &[
+const DIGIT: &[(u32, u32)] = &[
     (0x0030, 0x0039),
     (0x00B2, 0x00B3),
     (0x00B9, 0x00B9),
@@ -93,7 +127,7 @@ pub(super) const DIGIT: &[(u32, u32)] = &[
 ];
 
 /// Inclusive ranges where `str.isnumeric` holds.
-pub(super) const NUMERIC: &[(u32, u32)] = &[
+const NUMERIC: &[(u32, u32)] = &[
     (0x0030, 0x0039),
     (0x00B2, 0x00B3),
     (0x00B9, 0x00B9),
@@ -307,7 +341,7 @@ pub(super) const NUMERIC: &[(u32, u32)] = &[
 
 /// Inclusive ranges of decimal digits `int()` reads, each a run of whole
 /// 0 to 9 sequences so a digit's value is its offset from the run start modulo 10.
-pub(super) const DECIMAL: &[(u32, u32)] = &[
+const DECIMAL: &[(u32, u32)] = &[
     (0x0030, 0x0039),
     (0x0660, 0x0669),
     (0x06F0, 0x06F9),

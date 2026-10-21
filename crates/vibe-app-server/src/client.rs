@@ -32,7 +32,8 @@ use vibe_protocol::{
 pub use crate::images::PreparedImages;
 use crate::images::{provider_images, snapshot_attachments, validate_prepared_images};
 use crate::server::{
-    AppServer, DeferredWork, ServerConnection, ServerError, SessionIntent, SessionView,
+    AppServer, DeferredWork, DispatchBatch, Execution, FrameSink, ServerConnection, ServerError,
+    SessionIntent, SessionView,
 };
 
 pub use vibe_core::engine::EventObserver;
@@ -640,6 +641,8 @@ pub enum ClientError {
     Server(#[from] ServerError),
     #[error(transparent)]
     Driver(#[from] DriverError),
+    #[error("a unified session's work needs a Tokio runtime to run on")]
+    NoRuntime,
 }
 
 #[derive(Debug, Error)]

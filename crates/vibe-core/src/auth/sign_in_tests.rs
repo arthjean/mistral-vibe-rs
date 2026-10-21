@@ -100,7 +100,6 @@ fn malformed_timestamps_parse_to_none() {
         "2026-13-01T00:00:00Z",
         "2026-01-32T00:00:00Z",
         "2026-01-01T24:00:00Z",
-        "2026-01-01",
         "2026-01-01T00:00:00+1:00",
     ] {
         assert!(
@@ -108,6 +107,14 @@ fn malformed_timestamps_parse_to_none() {
             "{value:?} parsed"
         );
     }
+}
+
+/// Reference `_parse_expires_at` hands the stamp to `fromisoformat`, which
+/// reads a bare date as its midnight.
+#[test]
+fn a_bare_date_is_read_as_its_midnight() {
+    let parsed = UtcTimestamp::parse_iso8601("2026-01-01").expect("a bare date parses");
+    assert_eq!(parsed.to_iso8601(), "2026-01-01T00:00:00+00:00");
 }
 
 // --------------------------------------------------------------------------

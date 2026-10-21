@@ -7,6 +7,7 @@ mod approvals;
 mod attachment;
 mod batch;
 
+pub(crate) use attachment::Execution;
 use attachment::apply_agent_profile_settings;
 mod callbacks;
 mod compaction;
@@ -39,7 +40,8 @@ pub use projection::entry_preview;
 pub(crate) use projection::message_preview;
 pub use runtime::SessionView;
 pub(crate) use runtime::*;
-pub use unified::{UnifiedTurnWork, drive_unified_turn};
+pub use unified::UnifiedTurnWork;
+use unified::drive_unified_turn;
 pub use wire::SessionIntent;
 pub(crate) use wire::*;
 

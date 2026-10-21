@@ -2886,6 +2886,26 @@ async fn the_manifest_is_written_in_the_reference_key_order_and_indentation() {
     assert_eq!(raw, expected);
 }
 
+/// Reference `_save_manifest` leaves `json.dumps` its default `ensure_ascii`,
+/// so a non-ASCII command is written as `\uXXXX` escapes, a character outside
+/// the BMP as a surrogate pair.
+#[tokio::test]
+async fn the_manifest_escapes_a_non_ascii_command() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 5 # é 😀").await;
+    let raw = std::fs::read_to_string(
+        harness
+            .shell()
+            .sessions_directory()
+            .join(format!("{session}.json")),
+    )
+    .expect("the manifest is written");
+    assert!(
+        raw.contains(r#""command": "sleep 5 # \u00e9 \ud83d\ude00","#),
+        "{raw}"
+    );
+}
+
 /// A session left running by a previous process is listed as orphaned, and its
 /// log is still readable.
 #[tokio::test]

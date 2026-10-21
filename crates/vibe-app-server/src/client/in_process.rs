@@ -290,7 +290,7 @@ impl PendingPublicCall {
     pub async fn complete(mut self) -> Result<PublicDispatch, ClientError> {
         // What a call publishes before it answers comes ahead of its answer.
         let early = Arc::new(std::sync::Mutex::new(Vec::<Vec<u8>>::new()));
-        let live: Arc<dyn Fn(Vec<u8>) + Send + Sync> = {
+        let live: crate::server::FrameSink = {
             let early = early.clone();
             let listener = self.listener.clone();
             Arc::new(move |frame: Vec<u8>| {
@@ -306,118 +306,40 @@ impl PendingPublicCall {
             })
         };
         for work in self.deferred {
-            let completed = match work {
-                DeferredWork::ResourceRequest {
-                    request_id,
-                    session_id,
-                    command,
-                } => {
-                    self.server
-                        .execute_resource_request(request_id, session_id, command)
-                        .await
-                }
-                DeferredWork::CloudRequest {
-                    request_id,
-                    method,
-                    params,
-                } => {
-                    self.server
-                        .execute_cloud_request(request_id, method, params)
-                        .await
-                }
-                DeferredWork::VibeCode {
-                    request_id,
-                    session_id,
-                    method,
-                    params,
-                    launch,
-                } => {
-                    let live = live.clone();
-                    let deliver: crate::server::FrameSink = Arc::new(move |frame| live(frame));
-                    self.server
-                        .execute_vibe_code(request_id, session_id, method, params, launch, deliver)
-                        .await
-                }
-                // A manual command publishes its entry as it runs, and a
-                // session that saves nothing hands the result to its driver
-                // before the command is answered.
-                DeferredWork::ShellCommand {
-                    request_id,
-                    session_id,
-                    operation_id,
-                    command,
-                    cwd,
-                    timeout_ms,
-                } => {
-                    let live = live.clone();
-                    let mut completed = self
-                        .server
-                        .execute_shell_command(
-                            request_id,
-                            session_id,
-                            operation_id,
-                            command,
-                            cwd,
-                            timeout_ms,
-                            move |frame| live(frame),
-                        )
-                        .await;
-                    for work in std::mem::take(&mut completed.deferred) {
-                        let DeferredWork::InjectContext {
-                            session_id,
-                            content,
-                            as_message,
-                            inject_invoked_skill,
-                        } = work
-                        else {
-                            continue;
-                        };
-                        let driver = self.driver.as_ref().ok_or_else(|| {
-                            ClientError::InvalidResponse(format!(
-                                "`{}` handed context to a driver this call does not hold",
-                                self.method
-                            ))
-                        })?;
-                        driver.inject_context(
-                            &session_id,
-                            &content,
-                            as_message,
-                            inject_invoked_skill,
-                        )?;
-                    }
-                    completed
-                }
-                DeferredWork::ShellInterrupt {
-                    request_id,
-                    session_id,
-                    operation_id,
-                } => {
-                    self.server
-                        .answer_shell_interrupt(request_id, session_id, operation_id)
-                        .await
-                }
-                DeferredWork::McpCatalog {
-                    request_id,
-                    call,
-                    target,
-                    publish,
-                } => {
-                    let live = live.clone();
-                    let notify = crate::server::mcp_catalog_notifier(publish, move |frame| {
-                        live(frame);
-                    });
-                    self.server
-                        .execute_mcp_catalog(request_id, call, target, notify)
-                        .await
-                }
-                _ => {
+            let mut completed = match self.server.execute_deferred(work, live.clone()) {
+                Execution::Done => DispatchBatch::default(),
+                Execution::Pending(pending) => pending.await,
+                Execution::Host(_) => {
                     return Err(ClientError::InvalidResponse(format!(
                         "unsupported deferred work returned by `{}`",
                         self.method
                     )));
                 }
             };
-            if completed.close_after_flush || !completed.deferred.is_empty() {
+            // A manual command of a session that saves nothing hands its
+            // result to the driver before the command is answered.
+            for work in std::mem::take(&mut completed.deferred) {
+                let DeferredWork::InjectContext {
+                    session_id,
+                    content,
+                    as_message,
+                    inject_invoked_skill,
+                } = work
+                else {
+                    return Err(ClientError::InvalidResponse(format!(
+                        "deferred work returned nested work for `{}`",
+                        self.method
+                    )));
+                };
+                let driver = self.driver.as_ref().ok_or_else(|| {
+                    ClientError::InvalidResponse(format!(
+                        "`{}` handed context to a driver this call does not hold",
+                        self.method
+                    ))
+                })?;
+                driver.inject_context(&session_id, &content, as_message, inject_invoked_skill)?;
+            }
+            if completed.close_after_flush {
                 return Err(ClientError::InvalidResponse(format!(
                     "deferred work returned nested work for `{}`",
                     self.method

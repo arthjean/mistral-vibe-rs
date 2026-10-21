@@ -22,124 +22,55 @@ use crate::pycompat;
 use crate::tools::ToolExecutionOutput;
 
 /// One published result: the fields the reference declares, in its order.
+///
+/// A nested result model is a field whose value is another document. The
+/// workspace's maps keep insertion order, so it keeps its own field order once
+/// it is a JSON value, and the rendered text is the Python `str` of each value.
 #[derive(Default)]
 pub struct Document {
-    fields: Vec<(&'static str, Node)>,
-}
-
-/// What one field holds. A nested result model keeps its own field order, which
-/// the rendered text depends on, so it stays a [`Document`] rather than
-/// collapsing to a `Value` on the way in.
-enum Node {
-    Leaf(Value),
-    Object(Document),
-    List(Vec<Document>),
+    fields: Map<String, Value>,
 }
 
 impl Document {
     #[must_use]
     pub fn new() -> Self {
-        Self { fields: Vec::new() }
+        Self { fields: Map::new() }
     }
 
+    /// One field. A nested result model, an optional one left unset (`null`),
+    /// and a list of them are a [`Document`], an `Option<Document>` and a
+    /// `Vec<Document>`.
     #[must_use]
     pub fn field(mut self, name: &'static str, value: impl Into<Value>) -> Self {
-        self.fields.push((name, Node::Leaf(value.into())));
-        self
-    }
-
-    /// A nested result model, or `null` where the reference declares the field
-    /// optional and this action leaves it unset.
-    #[must_use]
-    pub fn nested(mut self, name: &'static str, value: Option<Self>) -> Self {
-        let node = value.map_or(Node::Leaf(Value::Null), Node::Object);
-        self.fields.push((name, node));
-        self
-    }
-
-    #[must_use]
-    pub fn nested_list(mut self, name: &'static str, values: Vec<Self>) -> Self {
-        self.fields.push((name, Node::List(values)));
+        self.fields.insert(name.to_owned(), value.into());
         self
     }
 
     #[must_use]
     pub fn typed(&self) -> Value {
-        let mut map = Map::new();
-        for (name, node) in &self.fields {
-            map.insert((*name).to_owned(), node.value());
-        }
-        Value::Object(map)
+        Value::Object(self.fields.clone())
     }
 
     #[must_use]
     pub fn model_text(&self) -> String {
-        let mut text = String::new();
-        for (index, (name, node)) in self.fields.iter().enumerate() {
-            if index > 0 {
-                text.push('\n');
-            }
-            text.push_str(name);
-            text.push_str(": ");
-            node.display(&mut text);
-        }
-        text
+        self.fields
+            .iter()
+            .map(|(name, value)| format!("{name}: {}", pycompat::str_json(value)))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[must_use]
     pub fn into_output(self, display: Value) -> ToolExecutionOutput {
         ToolExecutionOutput::new(self.model_text())
             .displayed_as(display)
-            .typed(self.typed())
-    }
-
-    fn repr(&self, out: &mut String) {
-        out.push('{');
-        for (index, (name, node)) in self.fields.iter().enumerate() {
-            if index > 0 {
-                out.push_str(", ");
-            }
-            out.push_str(&pycompat::repr_str(name));
-            out.push_str(": ");
-            node.repr(out);
-        }
-        out.push('}');
+            .typed(Value::Object(self.fields))
     }
 }
 
-impl Node {
-    fn value(&self) -> Value {
-        match self {
-            Self::Leaf(value) => value.clone(),
-            Self::Object(document) => document.typed(),
-            Self::List(documents) => Value::Array(documents.iter().map(Document::typed).collect()),
-        }
-    }
-
-    /// Python `str`, which the top level of a result is rendered with: a string
-    /// is itself, and everything else is its `repr`.
-    fn display(&self, out: &mut String) {
-        match self {
-            Self::Leaf(Value::String(text)) => out.push_str(text),
-            other => other.repr(out),
-        }
-    }
-
-    fn repr(&self, out: &mut String) {
-        match self {
-            Self::Leaf(value) => out.push_str(&pycompat::repr_json(value)),
-            Self::Object(document) => document.repr(out),
-            Self::List(documents) => {
-                out.push('[');
-                for (index, document) in documents.iter().enumerate() {
-                    if index > 0 {
-                        out.push_str(", ");
-                    }
-                    document.repr(out);
-                }
-                out.push(']');
-            }
-        }
+impl From<Document> for Value {
+    fn from(document: Document) -> Self {
+        Self::Object(document.fields)
     }
 }
 

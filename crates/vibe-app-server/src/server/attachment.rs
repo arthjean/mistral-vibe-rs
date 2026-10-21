@@ -11,6 +11,8 @@ use super::*;
 mod deferred;
 mod runtime_view;
 
+pub(crate) use deferred::Execution;
+
 pub(super) fn apply_persisted_session_settings(
     intent: &mut SessionIntent,
     hydrated: &HydratedSession,

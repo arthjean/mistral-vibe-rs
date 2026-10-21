@@ -38,39 +38,16 @@ pub fn lax_bool_value(value: &Value) -> Option<bool> {
 #[must_use]
 pub fn lax_int(text: &str) -> Option<i128> {
     let trimmed = text.trim();
-    let (negative, body) = match trimmed.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, trimmed.strip_prefix('+').unwrap_or(trimmed)),
-    };
-    let (whole, fraction) = match body.split_once('.') {
-        Some((whole, fraction)) => (whole, Some(fraction)),
-        None => (body, None),
-    };
-    if fraction
-        .is_some_and(|fraction| fraction.is_empty() || fraction.bytes().any(|byte| byte != b'0'))
-    {
-        return None;
-    }
-    let mut value: i128 = 0;
-    let mut previous_underscore = true;
-    let mut digits = 0_usize;
-    for byte in whole.bytes() {
-        match byte {
-            b'0'..=b'9' => {
-                value = value
-                    .saturating_mul(10)
-                    .saturating_add(i128::from(byte - b'0'));
-                previous_underscore = false;
-                digits += 1;
-            }
-            b'_' if !previous_underscore => previous_underscore = true,
-            _ => return None,
+    let whole = match trimmed.split_once('.') {
+        Some((whole, fraction))
+            if !fraction.is_empty() && fraction.bytes().all(|byte| byte == b'0') =>
+        {
+            whole
         }
-    }
-    if digits == 0 || previous_underscore {
-        return None;
-    }
-    Some(if negative { -value } else { value })
+        Some(_) => return None,
+        None => trimmed,
+    };
+    super::number::ascii_int(whole)
 }
 
 /// A string read as a `float`: surrounding `White_Space` and Rust's float

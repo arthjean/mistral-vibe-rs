@@ -16,7 +16,7 @@ use super::turn::SteerAnswer;
 use super::*;
 use crate::params::object_of;
 use crate::server::session_management;
-use crate::wire_validation::{self, Json};
+use crate::wire_validation;
 
 /// How the reference reaches a method.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,13 +153,13 @@ impl ServerConnection {
     pub(super) fn reference_request(
         &mut self,
         request: ServerRequest,
-        ordered: Option<Json>,
+        ordered: Option<Value>,
     ) -> DispatchBatch {
         let id = request.id.clone();
         let method = request.method.clone();
         let params = ordered
-            .filter(|params| matches!(params, Json::Object(_)))
-            .unwrap_or_else(|| Json::from_value(&Value::Object(object_of(&request.params))));
+            .filter(Value::is_object)
+            .unwrap_or_else(|| Value::Object(object_of(&request.params)));
         let mut batch = answered(id, self.route_request(request, &params));
         // `session/stop` closes the server once it is answered, whatever the
         // answer was (`_handle_request_once`).
@@ -173,7 +173,7 @@ impl ServerConnection {
     fn route_request(
         &mut self,
         request: ServerRequest,
-        params: &Json,
+        params: &Value,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let method = request.method.clone();
         let method = method.as_str();
@@ -727,7 +727,7 @@ impl ServerConnection {
     /// The parameters an in-process narration call is held to, which the
     /// reference routing applies over stdio.
     pub(super) fn narration_request(&self, request: ServerRequest) -> DispatchBatch {
-        let params = Json::from_value(&Value::Object(object_of(&request.params)));
+        let params = Value::Object(object_of(&request.params));
         if let Err(issues) = wire_validation::validate_method(&request.method, &params) {
             return self
                 .rejected(&request.method, &issues)

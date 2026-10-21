@@ -6,8 +6,6 @@
 
 use serde_json::Value;
 
-use super::Json;
-
 pub(super) fn run(function: &str, value: Value) -> Result<Value, String> {
     match function {
         // Reference `AgentConfig._reject_empty_cwd`.
@@ -114,12 +112,12 @@ pub(super) fn run(function: &str, value: Value) -> Result<Value, String> {
 
 /// Each `function-before` validator: it takes the raw input and answers
 /// what the schema under it validates.
-pub(super) fn before(function: &str, input: &Json) -> Json {
+pub(super) fn before(function: &str, input: &Value) -> Value {
     match (function, input) {
         // Reference `_infer_resource_kind` (`vibe/user_content.py`): a
         // resource stored without its `kind` tag takes the variant its
         // payload names, `text` before `blob`.
-        ("_infer_resource_kind", Json::Object(entries)) if input.get("kind").is_none() => {
+        ("_infer_resource_kind", Value::Object(entries)) if input.get("kind").is_none() => {
             let kind = if input.get("text").is_some() {
                 "text"
             } else if input.get("blob").is_some() {
@@ -128,8 +126,8 @@ pub(super) fn before(function: &str, input: &Json) -> Json {
                 return input.clone();
             };
             let mut entries = entries.clone();
-            entries.push(("kind".to_owned(), Json::String(kind.to_owned())));
-            Json::Object(entries)
+            entries.insert("kind".to_owned(), Value::String(kind.to_owned()));
+            Value::Object(entries)
         }
         _ => input.clone(),
     }

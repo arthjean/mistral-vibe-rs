@@ -151,7 +151,10 @@ pub(super) fn run_todo(
     // items travel there rather than in the display metadata.
     Ok(Document::new()
         .field("verb", verb)
-        .nested_list("todos", items.iter().map(TodoItem::document).collect())
+        .field(
+            "todos",
+            items.iter().map(TodoItem::document).collect::<Vec<_>>(),
+        )
         .field("total_count", total)
         .field("message", message)
         .into_output(json!({"kind": "todo", "count": total})))

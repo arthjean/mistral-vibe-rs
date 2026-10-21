@@ -19,7 +19,10 @@ use crate::client::{
 use crate::live_projection::{
     AppServerUpdate, app_server_notification, app_server_update_channel_for_turn,
 };
-use crate::server::{AppServer, DeferredWork, ServerConnection, ServerError, server_error_frame};
+use crate::server::{
+    AppServer, DeferredWork, Execution, FrameSink, ServerConnection, ServerError,
+    server_error_frame,
+};
 use vibe_core::sync::lock;
 
 pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
@@ -426,48 +429,52 @@ where
 
     /// Performs one unit of deferred work.
     ///
-    /// Anything that can block on I/O is spawned so a slow backend never
-    /// stalls the read loop or the notifications of a turn that is already
-    /// streaming. The driver controls are cheap and stay inline, where their
-    /// errors are still fatal to the connection.
+    /// Work the server runs settles off the read loop, so a slow backend
+    /// never stalls it or the notifications of a turn already streaming. The
+    /// driver controls are cheap and stay inline, where their errors are still
+    /// fatal to the connection, and so does a resource teardown.
     ///
     /// Returns the frames the caller must flush before reading the next
     /// request.
     async fn run_deferred(&mut self, work: DeferredWork) -> Result<Vec<Vec<u8>>, TransportError> {
+        let live = self.events.clone();
+        let sink: FrameSink = Arc::new(move |frame| {
+            let _ = live.send(ServeEvent::Frame(frame));
+        });
+        let work = match self.server.execute_deferred(work, sink) {
+            Execution::Done => return Ok(Vec::new()),
+            Execution::Pending(pending) => {
+                let driver = Arc::clone(&self.driver);
+                spawn_frames(&mut self.tasks, self.events.clone(), async move {
+                    let completed = pending.await;
+                    // A session that saves nothing hands a manual command's
+                    // result to its driver, before the command is answered.
+                    for work in completed.deferred {
+                        if let DeferredWork::InjectContext {
+                            session_id,
+                            content,
+                            as_message,
+                            inject_invoked_skill,
+                        } = work
+                        {
+                            driver
+                                .inject_context(
+                                    &session_id,
+                                    &content,
+                                    as_message,
+                                    inject_invoked_skill,
+                                )
+                                .map_err(TransportError::Driver)?;
+                        }
+                    }
+                    Ok(completed.outbound)
+                });
+                return Ok(Vec::new());
+            }
+            Execution::Host(work) => *work,
+        };
         let (server, driver, events) = (&self.server, &self.driver, &self.events);
         match work {
-            DeferredWork::RunUnifiedTurn(work) => {
-                let events = events.clone();
-                self.tasks.spawn(async move {
-                    let (frames, mut raised) = mpsc::unbounded_channel();
-                    let forward = async {
-                        while let Some(frame) = raised.recv().await {
-                            let _ = events.send(ServeEvent::Frame(frame));
-                        }
-                    };
-                    tokio::join!(crate::server::drive_unified_turn(work, frames), forward);
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::ReleaseUnifiedCallback {
-                session_id,
-                callback_id,
-                cancel_turn,
-            } => {
-                server.release_unified_callback(&session_id, &callback_id, cancel_turn);
-                Ok(Vec::new())
-            }
-            DeferredWork::AttachUnified { session_id } => {
-                let (frames, mut raised) = mpsc::unbounded_channel();
-                let events = events.clone();
-                tokio::spawn(async move {
-                    while let Some(frame) = raised.recv().await {
-                        let _ = events.send(ServeEvent::Frame(frame));
-                    }
-                });
-                server.attach_unified(&session_id, frames);
-                Ok(Vec::new())
-            }
             work @ DeferredWork::RunTurn { .. } => {
                 let reservation = server.reserve_turn(work).map_err(TransportError::Server)?;
                 self.active
@@ -524,150 +531,6 @@ where
                 )
                 .map(|()| Vec::new())
                 .map_err(TransportError::Driver),
-            DeferredWork::ResourceRequest {
-                request_id,
-                session_id,
-                command,
-            } => {
-                let server = server.clone();
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    Ok(server
-                        .execute_resource_request(request_id, session_id, command)
-                        .await
-                        .outbound)
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::McpCatalog {
-                request_id,
-                call,
-                target,
-                publish,
-            } => {
-                let server = server.clone();
-                let live = events.clone();
-                // A sign-in hands out its URL while the call is still waiting on
-                // the browser, so it goes out through the loop at once.
-                let notify = crate::server::mcp_catalog_notifier(publish, move |frame| {
-                    let _ = live.send(ServeEvent::Frame(frame));
-                });
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    Ok(server
-                        .execute_mcp_catalog(request_id, call, target, notify)
-                        .await
-                        .outbound)
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::VibeCode {
-                request_id,
-                session_id,
-                method,
-                params,
-                launch,
-            } => {
-                let server = server.clone();
-                let live = events.clone();
-                // A Teleport start answers, then its run publishes events long
-                // after this call returned, so both go out through the loop.
-                let deliver: crate::server::FrameSink = Arc::new(move |frame| {
-                    let _ = live.send(ServeEvent::Frame(frame));
-                });
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    Ok(server
-                        .execute_vibe_code(request_id, session_id, method, params, launch, deliver)
-                        .await
-                        .outbound)
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::ShellCommand {
-                request_id,
-                session_id,
-                operation_id,
-                command,
-                cwd,
-                timeout_ms,
-            } => {
-                let server = server.clone();
-                let driver = Arc::clone(driver);
-                let live = events.clone();
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    let completed = server
-                        .execute_shell_command(
-                            request_id,
-                            session_id,
-                            operation_id,
-                            command,
-                            cwd,
-                            timeout_ms,
-                            move |frame| {
-                                let _ = live.send(ServeEvent::Frame(frame));
-                            },
-                        )
-                        .await;
-                    // A session that saves nothing hands the result to its driver,
-                    // before the command is answered.
-                    for work in completed.deferred {
-                        if let DeferredWork::InjectContext {
-                            session_id,
-                            content,
-                            as_message,
-                            inject_invoked_skill,
-                        } = work
-                        {
-                            driver
-                                .inject_context(
-                                    &session_id,
-                                    &content,
-                                    as_message,
-                                    inject_invoked_skill,
-                                )
-                                .map_err(TransportError::Driver)?;
-                        }
-                    }
-                    Ok(completed.outbound)
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::ShellInterrupt {
-                request_id,
-                session_id,
-                operation_id,
-            } => {
-                let server = server.clone();
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    Ok(server
-                        .answer_shell_interrupt(request_id, session_id, operation_id)
-                        .await
-                        .outbound)
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::CloudRequest {
-                request_id,
-                method,
-                params,
-            } => {
-                let server = server.clone();
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    Ok(server
-                        .execute_cloud_request(request_id, method, params)
-                        .await
-                        .outbound)
-                });
-                Ok(Vec::new())
-            }
-            DeferredWork::ConfigureMcp {
-                session_id,
-                configs,
-            } => {
-                let server = server.clone();
-                spawn_frames(&mut self.tasks, events.clone(), async move {
-                    Ok(server.configure_mcp_servers(&session_id, configs).await)
-                });
-                Ok(Vec::new())
-            }
             DeferredWork::CompactSession {
                 request_id,
                 session_id,
@@ -705,6 +568,8 @@ where
                 .await
                 .map(|()| Vec::new())
                 .map_err(TransportError::Server),
+            // The server ran everything else.
+            _ => Ok(Vec::new()),
         }
     }
 }

@@ -239,11 +239,26 @@ fn int_and_float_read_what_python_reads() {
         ("-5", -5),
         ("1_000", 1000),
         ("007", 7),
+        ("\u{661}\u{662}", 12),
+        ("1\u{662}", 12),
+        ("\u{661}_\u{662}", 12),
+        ("\u{ff11}\u{ff12}", 12),
+        ("\u{1d7cf}\u{1d7d0}", 12),
     ] {
         assert_eq!(parse_int(raw), Some(expected), "{raw:?}");
     }
     for raw in [
-        "", "1e3", "1__0", "_1", "1_", "+_1", "1.0", "+", "- 1", "\u{1c}1",
+        "",
+        "1e3",
+        "1__0",
+        "_1",
+        "1_",
+        "+_1",
+        "1.0",
+        "+",
+        "- 1",
+        "\u{1c}1",
+        "\u{661}\u{662}.\u{665}",
     ] {
         assert_eq!(parse_int(raw), None, "{raw:?}");
     }
@@ -254,12 +269,14 @@ fn int_and_float_read_what_python_reads() {
         (".5_5", 0.55),
         ("5.", 5.0),
         ("-iNfInItY", f64::NEG_INFINITY),
+        ("\u{661}\u{662}.\u{665}", 12.5),
+        ("\u{661}e\u{662}", 100.0),
     ] {
         assert_eq!(parse_float(raw), Some(expected), "{raw:?}");
     }
     assert!(parse_float("+nan").is_some_and(f64::is_nan));
     for raw in [
-        "", "1__0", "1_.5", "1._5", "_1", "1_e5", "in_f", "1e", "0x10", "\u{1c}1",
+        "", "1__0", "1_.5", "1._5", "_1", "1_e5", "in_f", "1e", "0x10", "\u{1c}1", "\u{66b}5",
     ] {
         assert_eq!(parse_float(raw), None, "{raw:?}");
     }
@@ -283,7 +300,19 @@ fn lax_mode_reads_strings_the_way_pydantic_does() {
         assert_eq!(pydantic::lax_int(raw), Some(expected), "{raw:?}");
     }
     for raw in [
-        "1.", "1.5", "1e3", "_1", "1__0", "1_", "+_1", ".0", "1.0_0", "0x10", "",
+        "1.",
+        "1.5",
+        "1e3",
+        "_1",
+        "1__0",
+        "1_",
+        "+_1",
+        ".0",
+        "1.0_0",
+        "0x10",
+        "",
+        // Pydantic reads ASCII digits only, where `int()` reads every script's.
+        "\u{661}\u{662}",
     ] {
         assert_eq!(pydantic::lax_int(raw), None, "{raw:?}");
     }

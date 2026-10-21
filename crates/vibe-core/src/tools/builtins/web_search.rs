@@ -136,11 +136,11 @@ pub(super) async fn run_web_search(
                 .field("title", source["title"].clone())
                 .field("url", source["url"].clone())
         })
-        .collect();
+        .collect::<Vec<_>>();
     Ok(Document::new()
         .field("query", query)
         .field("answer", answer)
-        .nested_list("sources", sources)
+        .field("sources", sources)
         .into_output(json!({"kind": "webSearch", "query": query})))
 }
 

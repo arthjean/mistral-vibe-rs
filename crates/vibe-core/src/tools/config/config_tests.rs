@@ -3,7 +3,6 @@
 
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
 
 use super::*;
 
@@ -237,32 +236,29 @@ fn the_shell_lists_follow_the_branch_the_host_drives() {
     );
 }
 
+/// A refresh replaces the settings whole, so a resolution racing one reads
+/// either table and never falls back to the declared defaults.
 #[test]
-fn resolution_does_not_wait_behind_a_settings_write() {
+fn resolution_racing_a_settings_write_reads_the_operator_settings() {
     let resolver = ToolConfigResolver::new();
     resolver.update(settings("[todo]\nmax_todos = 7\n"));
-    let held = resolver.settings.clone();
-    let (blocked, release) = std::sync::mpsc::channel::<()>();
-    let writer = thread::spawn(move || {
-        let guard = sync::write(&held);
-        blocked.send(()).expect("the reader is waiting");
-        thread::sleep(Duration::from_millis(200));
-        drop(guard);
-    });
-    release.recv().expect("the writer holds the lock");
-    let started = Instant::now();
-    let todo: TodoConfig = resolver.view("todo");
-    let elapsed = started.elapsed().as_millis();
-    assert!(
-        elapsed < MAX_RESOLUTION_BLOCK_MILLIS,
-        "resolution waited {elapsed} ms behind a settings write"
-    );
-    assert_eq!(
-        todo.max_todos, 100,
-        "a contended cache resolves to the declared defaults rather than blocking"
-    );
+    let writer = {
+        let resolver = resolver.clone();
+        thread::spawn(move || {
+            for round in 0..200 {
+                let max_todos = if round % 2 == 0 { 8 } else { 7 };
+                resolver.update(settings(&format!("[todo]\nmax_todos = {max_todos}\n")));
+            }
+        })
+    };
+    while !writer.is_finished() {
+        let max_todos = resolver.view::<TodoConfig>("todo").max_todos;
+        assert!(
+            matches!(max_todos, 7 | 8),
+            "resolved max_todos = {max_todos}"
+        );
+    }
     writer.join().expect("the writer finishes");
-    assert_eq!(resolver.view::<TodoConfig>("todo").max_todos, 7);
 }
 
 #[test]

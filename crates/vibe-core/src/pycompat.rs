@@ -11,6 +11,7 @@
 
 mod json;
 mod number;
+mod numeric;
 mod os_error;
 pub(crate) mod path;
 pub mod pydantic;
@@ -19,6 +20,7 @@ mod text;
 
 pub use json::{Dumps, dumps, python_eq, truthy};
 pub use number::{parse_float, parse_int, repr_float, thousands};
+pub(crate) use numeric::{decimal, isdigit, isnumeric};
 pub use os_error::os_error;
 pub use repr::{repr_json, repr_str, str_json};
 pub use text::{clip, is_line_boundary, isprintable, isspace, splitlines, strip, title};

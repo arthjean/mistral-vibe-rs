@@ -165,7 +165,7 @@ mod timestamp {
         deserializer: D,
     ) -> Result<UtcTimestamp, D::Error> {
         let text = String::deserialize(deserializer)?;
-        UtcTimestamp::parse_iso8601(&text)
+        UtcTimestamp::parse_pydantic(&text)
             .ok_or_else(|| serde::de::Error::custom(format!("not an ISO 8601 instant: {text}")))
     }
 }

@@ -22,6 +22,7 @@ use tokio::sync::Mutex;
 
 use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
 use crate::process::{ProcessChunk, TerminalManager, TerminalState};
+use crate::pycompat::{self, Dumps};
 use crate::shell::ShellConfig;
 use crate::sync;
 use crate::time::UtcTimestamp;
@@ -273,25 +274,21 @@ impl ManagedSession {
     /// change, so a client that dies between two of them still leaves a
     /// manifest describing the session as it last was.
     pub(super) fn save_manifest(&self) {
-        let _ = write_manifest(&self.manifest_path, &self.info());
+        let _ = write_manifest(&self.manifest_path, &self.info().typed());
     }
 }
 
 /// Writes one manifest the way reference `_save_manifest` writes it:
 /// `json.dumps(metadata, indent=2, sort_keys=True)`, no trailing newline.
-///
-/// The fields are sorted here, since this workspace's maps keep insertion
-/// order, and the pretty writer indents by two spaces with `": "` between a
-/// key and its value, which is what Python emits for those two arguments. The
-/// one difference is escaping: Python's default `ensure_ascii` writes a
-/// non-ASCII character as `\uXXXX` where this writes it as UTF-8, and both
-/// parse back to the same string.
-fn write_manifest(path: &Path, metadata: &impl Serialize) -> Result<(), String> {
-    let mut sorted = serde_json::to_value(metadata).map_err(|error| error.to_string())?;
-    if let Value::Object(fields) = &mut sorted {
-        fields.sort_keys();
-    }
-    let rendered = serde_json::to_vec_pretty(&sorted).map_err(|error| error.to_string())?;
+fn write_manifest(path: &Path, metadata: &Value) -> Result<(), String> {
+    let rendered = pycompat::dumps(
+        metadata,
+        Dumps {
+            sort_keys: true,
+            indent: Some(2),
+            ..Dumps::DEFAULT
+        },
+    );
     std::fs::write(path, rendered).map_err(|error| error.to_string())
 }
 

@@ -44,6 +44,15 @@
   2.13: boolean words are no longer trimmed, `"1_000.0"` is an integer, and
   `"1.5"` is not.
 
+- Timestamps read back from sessions, sign-in tokens and logs follow Python's
+  `datetime.fromisoformat` exactly: compact and week dates, hour-only times
+  and offsets with seconds are accepted, while a lowercase `z`, an impossible
+  date and surrounding whitespace are refused, as in the reference.
+
+- Integer and float options such as `--max-turns` accept decimal digits of
+  any script, as Python's `int()` does, and a shell session manifest escapes
+  non-ASCII characters as the reference writes it.
+
 - Listing shell sessions refuses a session whose manifest lacks a required
   field or holds one of the wrong type, as the reference does, instead of
   listing it with blank or verbatim values.

@@ -366,8 +366,9 @@ impl<C: SignInHttpClient + Send> SignInGateway for HttpSignInGateway<C> {
         let poll_url =
             rehome_url_against_base(&poll_url, &self.api_base_url, self.allow_origin_rewrite)
                 .map_err(|UrlRejection| SignInError::new(code))?;
-        let expires_at =
-            UtcTimestamp::parse_iso8601(&expires_at).ok_or_else(|| SignInError::new(code))?;
+        // Reference `_parse_expires_at` rewrites every `Z` before parsing.
+        let expires_at = UtcTimestamp::parse_iso8601(&expires_at.replace('Z', "+00:00"))
+            .ok_or_else(|| SignInError::new(code))?;
         Ok(SignInProcess {
             process_id,
             sign_in_url,

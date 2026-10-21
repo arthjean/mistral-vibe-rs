@@ -2,6 +2,8 @@
 
 use std::fmt::Write as _;
 
+use super::numeric::decimal;
+
 /// `repr(float)`, which `str(float)` and `json.dumps` share: the shortest
 /// digits that read back as the same value, positional while the decimal
 /// exponent lies in `-4..16` and scientific with a signed exponent of at least
@@ -75,16 +77,21 @@ pub fn thousands(value: impl TryInto<i128>) -> String {
     grouped
 }
 
-/// `int(text)`: surrounding `White_Space`, a sign, and ASCII digits that a
-/// single underscore may separate. Python's integers are unbounded; this one
-/// saturates at the `i128` range, and the caller decides what a value past
-/// its own range means.
+/// `int(text)`: surrounding `White_Space`, a sign, and decimal digits of any
+/// script that a single underscore may separate. Python's integers are
+/// unbounded; this one saturates at the `i128` range, and the caller decides
+/// what a value past its own range means.
 #[must_use]
 pub fn parse_int(text: &str) -> Option<i128> {
-    let trimmed = text.trim();
-    let (negative, digits) = match trimmed.strip_prefix('-') {
+    ascii_int(ascii_decimals(text).trim())
+}
+
+/// A sign and ASCII digits a single underscore may separate, with nothing
+/// around them.
+pub(super) fn ascii_int(text: &str) -> Option<i128> {
+    let (negative, digits) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
-        None => (false, trimmed.strip_prefix('+').unwrap_or(trimmed)),
+        None => (false, text.strip_prefix('+').unwrap_or(text)),
     };
     if digits.is_empty()
         || digits.starts_with('_')
@@ -107,12 +114,24 @@ pub fn parse_int(text: &str) -> Option<i128> {
     Some(if negative { -magnitude } else { magnitude })
 }
 
-/// `float(text)`: surrounding `White_Space`, a sign, digits with an optional
-/// fraction and exponent where a single underscore may separate two ASCII
-/// digits, and `inf`, `infinity` and `nan` in any case.
+/// `text` with every decimal digit of another script spelled as its ASCII
+/// digit, which is how `int()` and `float()` read one.
+fn ascii_decimals(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            decimal(character)
+                .and_then(|digit| char::from_digit(digit, 10))
+                .unwrap_or(character)
+        })
+        .collect()
+}
+
+/// `float(text)`: surrounding `White_Space`, a sign, decimal digits of any
+/// script with an optional fraction and exponent where a single underscore may
+/// separate two digits, and `inf`, `infinity` and `nan` in any case.
 #[must_use]
 pub fn parse_float(text: &str) -> Option<f64> {
-    let characters = text.trim().chars().collect::<Vec<_>>();
+    let characters = ascii_decimals(text).trim().chars().collect::<Vec<_>>();
     let mut cleaned = String::with_capacity(characters.len());
     for (index, character) in characters.iter().enumerate() {
         if *character != '_' {

@@ -6,7 +6,7 @@ use vibe_core::pycompat::{self, pydantic};
 use vibe_protocol::PathSegment;
 
 use super::schema::{Extra, Node, SCHEMA};
-use super::{Issue, Json, custom};
+use super::{Issue, custom};
 
 #[derive(Default)]
 pub(super) struct Walk {
@@ -38,7 +38,7 @@ impl Walk {
     pub(super) fn model(
         &mut self,
         name: &str,
-        input: &Json,
+        input: &Value,
         path: &mut Vec<PathSegment>,
         from_attributes: bool,
     ) -> Option<Value> {
@@ -46,7 +46,7 @@ impl Walk {
             self.fail(path, "model_type", format!("Unknown model {name}"));
             return None;
         };
-        let Json::Object(entries) = input else {
+        let Value::Object(entries) = input else {
             if from_attributes {
                 self.fail(
                     path,
@@ -102,7 +102,7 @@ impl Walk {
                 }
                 Extra::Ignore => {}
                 Extra::Allow => {
-                    output.insert(key.clone(), value.clone().into_value());
+                    output.insert(key.clone(), value.clone());
                 }
             }
         }
@@ -126,14 +126,14 @@ impl Walk {
     pub(super) fn node(
         &mut self,
         node: &Node,
-        input: &Json,
+        input: &Value,
         path: &mut Vec<PathSegment>,
     ) -> Option<Value> {
         match node {
             Node::Ref { name } => self.model(name, input, path, false),
             Node::Default { schema } => self.node(schema, input, path),
             Node::Nullable { schema } => match input {
-                Json::Null => Some(Value::Null),
+                Value::Null => Some(Value::Null),
                 _ => self.node(schema, input, path),
             },
             Node::FunctionBefore { function, schema } => {
@@ -161,12 +161,11 @@ impl Walk {
                 choices,
             } => self.tagged(discriminator, choices, input, path),
             Node::Literal { expected } => {
-                let value = input.clone().into_value();
                 if expected
                     .iter()
-                    .any(|candidate| pycompat::python_eq(candidate, &value))
+                    .any(|candidate| pycompat::python_eq(candidate, input))
                 {
-                    Some(value)
+                    Some(input.clone())
                 } else {
                     self.fail(
                         path,
@@ -177,9 +176,8 @@ impl Walk {
                 }
             }
             Node::Enum { values } => {
-                let value = input.clone().into_value();
-                if values.iter().any(|candidate| candidate == &value) {
-                    Some(value)
+                if values.iter().any(|candidate| candidate == input) {
+                    Some(input.clone())
                 } else {
                     self.fail(
                         path,
@@ -201,10 +199,7 @@ impl Walk {
                 le,
                 lt,
             } => {
-                let value = self.read(
-                    pydantic::integer(&input.clone().into_value(), *strict),
-                    path,
-                )?;
+                let value = self.read(pydantic::integer(input, *strict), path)?;
                 // Bounds compare the integer exactly while it fits a float's
                 // mantissa, which every bound the reference declares does.
                 #[expect(
@@ -225,8 +220,7 @@ impl Walk {
                 le,
                 lt,
             } => {
-                let value =
-                    self.read(pydantic::float(&input.clone().into_value(), *strict), path)?;
+                let value = self.read(pydantic::float(input, *strict), path)?;
                 if !value.is_finite() && self.finite.last().copied().unwrap_or(false) {
                     self.fail(path, "finite_number", "Input should be a finite number");
                     return None;
@@ -237,19 +231,16 @@ impl Walk {
                 Some(Number::from_f64(value).map_or(Value::Null, Value::Number))
             }
             Node::Bool { strict } => self
-                .read(
-                    pydantic::boolean(&input.clone().into_value(), *strict),
-                    path,
-                )
+                .read(pydantic::boolean(input, *strict), path)
                 .map(Value::Bool),
             Node::None => match input {
-                Json::Null => Some(Value::Null),
+                Value::Null => Some(Value::Null),
                 _ => {
                     self.fail(path, "none_required", "Input should be None");
                     None
                 }
             },
-            Node::Any | Node::JsonValue => Some(input.clone().into_value()),
+            Node::Any | Node::JsonValue => Some(input.clone()),
         }
     }
 
@@ -258,10 +249,10 @@ impl Walk {
         items: &Node,
         min_length: Option<usize>,
         max_length: Option<usize>,
-        input: &Json,
+        input: &Value,
         path: &mut Vec<PathSegment>,
     ) -> Option<Value> {
-        let Json::Array(entries) = input else {
+        let Value::Array(entries) = input else {
             self.fail(path, "list_type", "Input should be a valid list");
             return None;
         };
@@ -312,10 +303,10 @@ impl Walk {
         &mut self,
         keys: &Node,
         values: &Node,
-        input: &Json,
+        input: &Value,
         path: &mut Vec<PathSegment>,
     ) -> Option<Value> {
-        let Json::Object(entries) = input else {
+        let Value::Object(entries) = input else {
             self.fail(path, "dict_type", "Input should be a valid dictionary");
             return None;
         };
@@ -324,7 +315,7 @@ impl Walk {
         for (key, value) in entries {
             path.push(PathSegment::Field(key.clone()));
             path.push(PathSegment::Field("[key]".to_owned()));
-            let validated_key = self.node(keys, &Json::String(key.clone()), path);
+            let validated_key = self.node(keys, &Value::String(key.clone()), path);
             path.pop();
             let validated_value = self.node(values, value, path);
             path.pop();
@@ -339,10 +330,10 @@ impl Walk {
         &mut self,
         discriminator: &str,
         choices: &[(String, Node)],
-        input: &Json,
+        input: &Value,
         path: &mut Vec<PathSegment>,
     ) -> Option<Value> {
-        if !matches!(input, Json::Object(_)) {
+        if !matches!(input, Value::Object(_)) {
             self.fail(
                 path,
                 "model_attributes_type",
@@ -359,7 +350,7 @@ impl Walk {
             return None;
         };
         let chosen = match tag {
-            Json::String(tag) => choices
+            Value::String(tag) => choices
                 .iter()
                 .find(|(name, _)| name == tag)
                 .map(|(name, node)| (name.clone(), node)),
@@ -377,7 +368,7 @@ impl Walk {
                 format!(
                     "Input tag '{}' found using '{discriminator}' does not match any of the \
                      expected tags: {expected}",
-                    pycompat::str_json(&tag.clone().into_value())
+                    pycompat::str_json(tag)
                 ),
             );
             return None;
@@ -396,11 +387,11 @@ impl Walk {
         strict: bool,
         min_length: Option<usize>,
         max_length: Option<usize>,
-        input: &Json,
+        input: &Value,
         path: &mut [PathSegment],
     ) -> Option<Value> {
         let _ = strict;
-        let Json::String(text) = input else {
+        let Value::String(text) = input else {
             self.fail(path, "string_type", "Input should be a valid string");
             return None;
         };

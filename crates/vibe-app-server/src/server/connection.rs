@@ -212,11 +212,7 @@ impl ServerConnection {
         self.attached_sessions.iter().cloned().collect()
     }
 
-    fn handle_request(
-        &mut self,
-        request: ServerRequest,
-        ordered: Option<wire_validation::Json>,
-    ) -> DispatchBatch {
+    fn handle_request(&mut self, request: ServerRequest, ordered: Option<Value>) -> DispatchBatch {
         if request.method == INITIALIZE_METHOD {
             return self.initialize(request, ordered);
         }
@@ -384,11 +380,7 @@ impl ServerConnection {
         }
     }
 
-    fn initialize(
-        &mut self,
-        request: ServerRequest,
-        ordered: Option<wire_validation::Json>,
-    ) -> DispatchBatch {
+    fn initialize(&mut self, request: ServerRequest, ordered: Option<Value>) -> DispatchBatch {
         if self.state != ConnectionState::New {
             return error_batch(
                 request.id,
@@ -396,9 +388,7 @@ impl ServerConnection {
                 "initialize may only be called once",
             );
         }
-        let params = ordered.unwrap_or_else(|| {
-            wire_validation::Json::from_value(&Value::Object(object_of(&request.params)))
-        });
+        let params = ordered.unwrap_or_else(|| Value::Object(object_of(&request.params)));
         let validated = match wire_validation::validate_lifecycle(INITIALIZE_METHOD, &params) {
             Ok(validated) => validated,
             Err(issues) => {

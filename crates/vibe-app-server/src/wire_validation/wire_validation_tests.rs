@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use vibe_protocol::PathSegment;
 
-use super::{Json, SCHEMA, custom, validate_model_named};
+use super::{SCHEMA, custom, ordered_params, validate_method, validate_model_named};
 
 const CASES: &str = include_str!("../../tests/wire-validation/cases.json");
 
@@ -20,7 +20,7 @@ struct Corpus {
 #[derive(Deserialize)]
 struct Case {
     model: String,
-    input: Json,
+    input: Value,
     #[serde(default)]
     errors: Option<Vec<(Vec<Value>, String)>>,
     #[serde(default)]
@@ -103,8 +103,7 @@ fn validation_answers_as_the_reference_does() {
         if !equal {
             failures.push(format!(
                 "{} {}\n  expected {expected}\n  observed {observed}",
-                case.model,
-                case.input.clone().into_value()
+                case.model, case.input
             ));
         }
     }
@@ -132,10 +131,10 @@ fn an_unmatched_tag_is_quoted_with_python_str() {
         (serde_json::json!(1e16), "1e+16"),
         (serde_json::json!({"a": 1}), "{'a': 1}"),
     ] {
-        let input = Json::from_value(&serde_json::json!({
+        let input = serde_json::json!({
             "sessionId": "s",
             "input": [{"type": tag}],
-        }));
+        });
         let issues = validate_model_named("ContextInjectParams", &input)
             .expect_err("the tag matches no content block");
         assert_eq!(issues[0].kind, "union_tag_invalid");
@@ -147,4 +146,30 @@ fn an_unmatched_tag_is_quoted_with_python_str() {
             )
         );
     }
+}
+
+/// The parameters read back from the raw frame keep the order the client
+/// wrote, a duplicated key in its first position with its last value, so
+/// extra keys are reported in that order rather than sorted.
+#[test]
+fn raw_frame_parameters_keep_the_written_key_order() {
+    let frame = br#"{"jsonrpc":"2.0","id":1,"method":"stats/read","params":{"zeta":1,"sessionId":"s","alpha":2,"zeta":3}}"#;
+    let params = ordered_params(frame).expect("the frame carries parameters");
+    let object = params.as_object().expect("the parameters are an object");
+    assert_eq!(
+        object.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["zeta", "sessionId", "alpha"]
+    );
+    assert_eq!(object["zeta"], 3);
+    let issues = validate_method("stats/read", &params).expect_err("two keys are extra");
+    assert_eq!(
+        issues
+            .iter()
+            .map(|issue| (location(&issue.path), issue.kind))
+            .collect::<Vec<_>>(),
+        [
+            (vec![Value::from("zeta")], "extra_forbidden"),
+            (vec![Value::from("alpha")], "extra_forbidden"),
+        ]
+    );
 }

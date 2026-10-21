@@ -15,7 +15,6 @@ use url::Url;
 mod entities;
 mod html;
 mod markdown;
-mod numeric;
 
 use super::{MAX_FETCH_REDIRECTS, declared_document};
 use crate::schema::{ObjectSchema, Property};

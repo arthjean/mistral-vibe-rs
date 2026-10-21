@@ -58,19 +58,10 @@ impl SessionInfo {
 
     /// The session as the tools that embed one publish it, in the order
     /// reference `SessionInfo` declares its fields.
-    pub(super) fn document(&self) -> Document {
-        Document::new()
-            .field("session_id", self.session_id.clone())
-            .field("command", self.command.clone())
-            .field("cwd", self.cwd.clone())
-            .field("shell", self.shell.clone())
-            .field("pty_backend", self.pty_backend.clone())
-            .field("status", self.status.as_str())
-            .field("exit_code", self.exit_code)
-            .field("output_path", self.output_path.clone())
-            .field("created_at", self.created_at.clone())
-            .field("updated_at", self.updated_at.clone())
-            .field("reader_error", self.reader_error.clone())
+    #[allow(clippy::expect_used)]
+    pub(super) fn typed(&self) -> Value {
+        serde_json::to_value(self)
+            .expect("a session record serializes: its fields are strings, integers and nulls")
     }
 }
 

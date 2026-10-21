@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde_json::{Map, Value, json};
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 use vibe_core::clock::{now_micros, now_millis};
 use vibe_core::time::{format_iso_micros, format_iso_millis, parse_iso_millis};
 use vibe_harness::engine::{
@@ -57,7 +57,7 @@ pub(crate) struct UnifiedSession {
     /// are not saved.
     session_root: Option<PathBuf>,
     /// Where frames go between turns: the connection that drove the last one.
-    outbox: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
+    outbox: Mutex<Option<FrameSink>>,
     /// What a turn the session starts on its own runs with: the launch
     /// context and the client callbacks are put to.
     driver: Mutex<Option<UnifiedDriver>>,
@@ -267,9 +267,10 @@ impl UnifiedSession {
 
     /// Sends `frames` to the connection that drove the last turn.
     fn send(&self, frames: Vec<Vec<u8>>) {
-        if let Some(outbox) = lock(&self.outbox).as_ref() {
+        let outbox = lock(&self.outbox).clone();
+        if let Some(outbox) = outbox {
             for frame in frames {
-                let _ = outbox.send(frame);
+                outbox(frame);
             }
         }
     }
@@ -668,7 +669,7 @@ impl Clone for UnifiedTurnWork {
 }
 
 /// Runs a unified turn, sending every frame it raises to `frames`.
-pub async fn drive_unified_turn(work: UnifiedTurnWork, frames: mpsc::UnboundedSender<Vec<u8>>) {
+pub(crate) async fn drive_unified_turn(work: UnifiedTurnWork, frames: FrameSink) {
     let session = Arc::clone(&work.session);
     *lock(&session.outbox) = Some(frames.clone());
     let sink_session = Arc::clone(&session);
@@ -676,13 +677,13 @@ pub async fn drive_unified_turn(work: UnifiedTurnWork, frames: mpsc::UnboundedSe
     let delivery = work.delivery.clone();
     let sink: vibe_harness::engine::Sink = Arc::new(move |publication: Publication| {
         for frame in sink_session.publish(&publication) {
-            let _ = sink_frames.send(frame);
+            sink_frames(frame);
         }
         sink_session.tick_title(&publication);
         if let Some(CallbackEvent::Requested(entry)) = &publication.event
             && let Some(frame) = delivery.request_frame(entry)
         {
-            let _ = sink_frames.send(frame);
+            sink_frames(frame);
         }
     });
     if let Some(compaction) = work.compaction {
@@ -715,7 +716,7 @@ pub async fn drive_unified_turn(work: UnifiedTurnWork, frames: mpsc::UnboundedSe
             .outbound
             .concat(),
         };
-        let _ = frames.send(frame);
+        frames(frame);
         return;
     }
     let end = run_turn(
@@ -736,7 +737,7 @@ pub async fn drive_unified_turn(work: UnifiedTurnWork, frames: mpsc::UnboundedSe
     // interrupted pauses the queue rather than starting the next one.
     if paused {
         for frame in queue::publish_queue(&session) {
-            let _ = frames.send(frame);
+            frames(frame);
         }
     }
     session.wake();

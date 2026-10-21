@@ -8,6 +8,11 @@
 //! is the instant a caller carries; the free functions serve callers that hold
 //! milliseconds or microseconds since the epoch. The wall clock itself is read
 //! through [`crate::clock`].
+//!
+//! A stamp is read with the grammar of the reference call that reads it:
+//! `datetime.fromisoformat` ([`UtcTimestamp::parse_iso8601`], which every
+//! free reader derives from) or a pydantic `datetime` field
+//! ([`UtcTimestamp::parse_pydantic`]).
 
 /// A UTC instant with microsecond precision, the resolution the reference's
 /// `datetime` carries: parsed from an ISO 8601 stamp, compared, offset and
@@ -35,63 +40,60 @@ impl UtcTimestamp {
         }
     }
 
-    /// Parses `YYYY-MM-DD[T ]HH:MM[:SS[.ffffff]]` with an optional `Z` or
-    /// `±HH[:]MM` offset, normalizing to UTC. This covers what the reference
-    /// accepts through `value.replace("Z", "+00:00")` plus `fromisoformat`
-    /// over the server's expiry field.
+    /// Reference `datetime.fromisoformat`, as the pinned interpreter's C
+    /// parser reads a stamp, normalized to UTC. A stamp with no offset is read
+    /// as UTC, where the reference's callers read it in local time; every
+    /// stamp either implementation writes carries one.
     pub fn parse_iso8601(value: &str) -> Option<Self> {
-        let (head, offset_seconds) = split_utc_offset(value)?;
-        let year: i64 = parse_digits(head, 0..4)?;
-        if head.as_bytes().get(4) != Some(&b'-') || head.as_bytes().get(7) != Some(&b'-') {
-            return None;
+        fromisoformat::parse(value)
+    }
+
+    /// Pydantic's `datetime` validation of a string, normalized to UTC: a
+    /// `YYYY-MM-DD` date, alone or followed by `T`, `t`, a space or `_` and
+    /// `HH:MM[:SS[(.|,)f+]]`, then `Z`, `z` or `±HH[:]MM`. A naive stamp is
+    /// read as UTC. A string pydantic reads as a Unix timestamp is refused.
+    pub fn parse_pydantic(value: &str) -> Option<Self> {
+        pydantic::parse(value)
+    }
+
+    /// The instant `millis` milliseconds after the epoch.
+    #[must_use]
+    pub(crate) fn from_millis_since_epoch(millis: u64) -> Self {
+        Self {
+            micros_since_epoch: i64::try_from(millis)
+                .map_or(i64::MAX, |millis| millis.saturating_mul(1_000)),
         }
-        let month: i64 = parse_digits(head, 5..7)?;
-        let day: i64 = parse_digits(head, 8..10)?;
-        if !matches!(head.as_bytes().get(10), Some(b'T' | b't' | b' ')) {
-            return None;
+    }
+
+    /// The UTC calendar fields of the instant.
+    #[must_use]
+    pub(crate) fn civil(self) -> CivilTime {
+        let seconds = self.micros_since_epoch.div_euclid(1_000_000);
+        let (year, month, day) = civil_from_days(seconds.div_euclid(86_400));
+        let of_day = seconds.rem_euclid(86_400);
+        CivilTime {
+            year,
+            month,
+            day,
+            hour: of_day / 3_600,
+            minute: (of_day % 3_600) / 60,
+            second: of_day % 60,
+            micros: self.micros_since_epoch.rem_euclid(1_000_000),
         }
-        let hour: i64 = parse_digits(head, 11..13)?;
-        if head.as_bytes().get(13) != Some(&b':') {
-            return None;
-        }
-        let minute: i64 = parse_digits(head, 14..16)?;
-        let (second, fraction_micros) = match head.as_bytes().get(16) {
-            None => (0, 0),
-            Some(b':') => {
-                let second: i64 = parse_digits(head, 17..19)?;
-                let fraction = match head.as_bytes().get(19) {
-                    None => 0,
-                    Some(b'.' | b',') => parse_fraction_micros(head.get(20..)?)?,
-                    Some(_) => return None,
-                };
-                (second, fraction)
-            }
-            Some(_) => return None,
-        };
-        if !(1..=12).contains(&month)
-            || !(1..=31).contains(&day)
-            || !(0..24).contains(&hour)
-            || !(0..60).contains(&minute)
-            || !(0..60).contains(&second)
-        {
-            return None;
-        }
-        let seconds =
-            days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second
-                - offset_seconds;
-        Some(Self {
-            micros_since_epoch: seconds * 1_000_000 + fraction_micros,
-        })
     }
 
     /// The Python `isoformat` shape the corpus and the editor protocol carry:
     /// `+00:00` suffix, fractional seconds only when they are nonzero.
     pub fn to_iso8601(self) -> String {
-        let seconds = self.micros_since_epoch.div_euclid(1_000_000);
-        let micros = self.micros_since_epoch.rem_euclid(1_000_000);
-        let (year, month, day) = civil_from_days(seconds.div_euclid(86_400));
-        let of_day = seconds.rem_euclid(86_400);
-        let (hour, minute, second) = (of_day / 3_600, (of_day % 3_600) / 60, of_day % 60);
+        let CivilTime {
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            micros,
+        } = self.civil();
         if micros == 0 {
             format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}+00:00")
         } else {
@@ -113,53 +115,84 @@ impl UtcTimestamp {
     }
 }
 
-fn split_utc_offset(value: &str) -> Option<(&str, i64)> {
-    if let Some(head) = value.strip_suffix(['Z', 'z']) {
-        return Some((head, 0));
-    }
-    if value.len() > 10
-        && let Some(position) = value[10..].rfind(['+', '-'])
+/// The UTC calendar fields of an instant: the proleptic Gregorian date, the
+/// time of day, and the microseconds within the second.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CivilTime {
+    pub(crate) year: i64,
+    pub(crate) month: i64,
+    pub(crate) day: i64,
+    pub(crate) hour: i64,
+    pub(crate) minute: i64,
+    pub(crate) second: i64,
+    pub(crate) micros: i64,
+}
+
+/// A time of day as a stamp spells it, before it is checked against the
+/// calendar.
+#[derive(Debug, Clone, Copy, Default)]
+struct Clock {
+    hour: i64,
+    minute: i64,
+    second: i64,
+    micros: i64,
+}
+
+/// What `n` fraction digits are multiplied by to count microseconds.
+const FRACTION_SCALE: [i64; 7] = [0, 100_000, 10_000, 1_000, 100, 10, 1];
+
+/// The byte at `index`, or NUL past the end, which is what a parser reading
+/// a NUL-terminated buffer sees there.
+fn byte_at(bytes: &[u8], index: usize) -> u8 {
+    bytes.get(index).copied().unwrap_or(0)
+}
+
+/// `count` ASCII digits starting at `at`, as one number.
+fn digits(bytes: &[u8], at: usize, count: usize) -> Option<i64> {
+    (at..at + count).try_fold(0, |value, index| {
+        let digit = byte_at(bytes, index);
+        digit
+            .is_ascii_digit()
+            .then(|| value * 10 + i64::from(digit - b'0'))
+    })
+}
+
+fn is_leap_year(year: i64) -> bool {
+    year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
+}
+
+/// The instant a calendar date, a time of day and an offset east of UTC name,
+/// once `datetime` would accept them: a year from 1 to 9999, a day the month
+/// holds, and a time of day below 24:00.
+fn civil_instant(
+    year: i64,
+    month: i64,
+    day: i64,
+    clock: Clock,
+    offset_micros: i64,
+) -> Option<UtcTimestamp> {
+    let month_days = match month {
+        2 if is_leap_year(year) => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        1..=12 => 31,
+        _ => return None,
+    };
+    if !(1..=9999).contains(&year)
+        || !(1..=month_days).contains(&day)
+        || !(0..24).contains(&clock.hour)
+        || !(0..60).contains(&clock.minute)
+        || !(0..60).contains(&clock.second)
     {
-        let (head, offset) = value.split_at(10 + position);
-        return Some((head, parse_utc_offset(offset)?));
-    }
-    // A naive timestamp is read as UTC; the server contract always sends an
-    // offset, so nothing measured reaches this line.
-    Some((value, 0))
-}
-
-fn parse_utc_offset(offset: &str) -> Option<i64> {
-    let sign = match offset.as_bytes().first()? {
-        b'+' => 1,
-        b'-' => -1,
-        _ => return None,
-    };
-    let digits: String = offset[1..].chars().filter(|c| *c != ':').collect();
-    let (hours, minutes): (i64, i64) = match digits.len() {
-        2 => (digits.parse().ok()?, 0),
-        4 => (
-            digits.get(0..2)?.parse().ok()?,
-            digits.get(2..4)?.parse().ok()?,
-        ),
-        _ => return None,
-    };
-    Some(sign * (hours * 3_600 + minutes * 60))
-}
-
-fn parse_digits(value: &str, range: std::ops::Range<usize>) -> Option<i64> {
-    let slice = value.get(range)?;
-    if !slice.bytes().all(|byte| byte.is_ascii_digit()) {
         return None;
     }
-    slice.parse().ok()
-}
-
-fn parse_fraction_micros(digits: &str) -> Option<i64> {
-    if digits.is_empty() || digits.len() > 9 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    let padded = format!("{digits:0<6}");
-    padded.get(0..6)?.parse().ok()
+    let seconds = days_from_civil(year, month, day) * 86_400
+        + clock.hour * 3_600
+        + clock.minute * 60
+        + clock.second;
+    Some(UtcTimestamp {
+        micros_since_epoch: seconds * 1_000_000 + clock.micros - offset_micros,
+    })
 }
 
 /// Days between 1970-01-01 and a proleptic Gregorian date (Howard Hinnant's
@@ -192,60 +225,19 @@ pub fn civil_from_days(days_since_epoch: i64) -> (i64, i64, i64) {
     (year, month, day)
 }
 
-/// Milliseconds since the epoch of an ISO 8601 instant, as reference
-/// `datetime.fromisoformat` reads one: a date, a `T` or a space, a time with an
-/// optional fraction, and an optional `Z` or `+HH:MM` offset. A reading with no
-/// offset is taken as UTC; every timestamp either implementation writes
-/// carries one.
+/// Reference `_parse_time_ms`: milliseconds since the epoch of the instant
+/// [`UtcTimestamp::parse_iso8601`] reads, or nothing for one before the epoch.
 #[must_use]
 pub fn parse_iso_millis(value: &str) -> Option<u64> {
-    let value = value.trim();
-    let (date, rest) = value.split_at_checked(10)?;
-    let mut date_parts = date.split('-');
-    let year: i64 = date_parts.next()?.parse().ok()?;
-    let month: i64 = date_parts.next()?.parse().ok()?;
-    let day: i64 = date_parts.next()?.parse().ok()?;
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) {
-        return None;
-    }
-    let mut seconds_of_day = 0_i64;
-    let mut fraction_millis = 0_i64;
-    let mut offset_seconds = 0_i64;
-    if !rest.is_empty() {
-        let rest = rest.strip_prefix('T').or_else(|| rest.strip_prefix(' '))?;
-        let offset_start = rest.find(['Z', 'z', '+', '-']).unwrap_or(rest.len());
-        let (clock, offset) = rest.split_at(offset_start);
-        let (clock, fraction) = clock.split_once('.').unwrap_or((clock, ""));
-        let mut clock_parts = clock.split(':');
-        let hour: i64 = clock_parts.next()?.parse().ok()?;
-        let minute: i64 = clock_parts.next().unwrap_or("0").parse().ok()?;
-        let second: i64 = clock_parts.next().unwrap_or("0").parse().ok()?;
-        seconds_of_day = hour * 3_600 + minute * 60 + second;
-        if !fraction.is_empty() {
-            let digits: String = fraction.chars().chain("000".chars()).take(3).collect();
-            fraction_millis = digits.parse().ok()?;
-        }
-        if let Some(sign) = offset
-            .chars()
-            .next()
-            .filter(|sign| matches!(sign, '+' | '-'))
-        {
-            let offset = offset.get(1..)?.replace(':', "");
-            let hours: i64 = offset.get(..2)?.parse().ok()?;
-            let minutes: i64 = offset.get(2..4).unwrap_or("0").parse().ok()?;
-            offset_seconds = (hours * 3_600 + minutes * 60) * if sign == '-' { -1 } else { 1 };
-        }
-    }
-    let days = days_from_civil(year, month, day);
-    let seconds = days * 86_400 + seconds_of_day - offset_seconds;
-    u64::try_from(seconds * 1_000 + fraction_millis).ok()
+    let micros = UtcTimestamp::parse_iso8601(value)?.micros_since_epoch();
+    u64::try_from(micros.div_euclid(1_000)).ok()
 }
 
-/// The ISO instant [`parse_iso_millis`] reads, rewritten in UTC the way the
-/// reference's listing index normalizes every timestamp it keeps.
+/// Reference `_convert_to_utc_iso`: the instant [`UtcTimestamp::parse_iso8601`]
+/// reads, rewritten in UTC the way the listing index keeps every timestamp.
 #[must_use]
 pub fn normalize_iso_utc(value: &str) -> Option<String> {
-    parse_iso_micros(value).map(format_iso_micros)
+    UtcTimestamp::parse_iso8601(value).map(UtcTimestamp::to_iso8601)
 }
 
 /// Reference `datetime.isoformat()` of a UTC instant in microseconds since
@@ -265,7 +257,16 @@ pub fn format_iso_millis(millis: u64) -> String {
 /// `Z`: the fraction is always three digits.
 #[must_use]
 pub fn format_iso_millis_z(millis: u64) -> String {
-    let (year, month, day, hour, minute, second, millis) = utc_fields(millis);
+    let CivilTime {
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+        micros,
+    } = UtcTimestamp::from_millis_since_epoch(millis).civil();
+    let millis = micros / 1_000;
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
 }
 
@@ -282,39 +283,8 @@ pub fn format_local_timestamp(epoch_seconds: f64) -> Option<String> {
     Some(zoned.strftime("%Y-%m-%d %H:%M:%S %Z").to_string())
 }
 
-/// [`parse_iso_millis`] at microsecond precision, which is what the listing
-/// index keeps when it rewrites a timestamp in UTC.
-fn parse_iso_micros(value: &str) -> Option<u64> {
-    let value = value.trim();
-    let millis = parse_iso_millis(value)?;
-    let fraction = value
-        .split_once('.')
-        .map(|(_, rest)| {
-            rest.chars()
-                .take_while(char::is_ascii_digit)
-                .chain("000000".chars())
-                .take(6)
-                .collect::<String>()
-        })
-        .and_then(|digits| digits.parse::<u64>().ok())
-        .unwrap_or(0);
-    Some(millis / 1_000 * 1_000_000 + fraction)
-}
+mod fromisoformat;
+mod pydantic;
 
-/// The UTC calendar fields of an instant in milliseconds since the epoch:
-/// year, month, day, hour, minute, second and millisecond.
-pub(crate) fn utc_fields(milliseconds: u64) -> (i64, u64, u64, u64, u64, u64, u64) {
-    let seconds = milliseconds / 1_000;
-    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
-    let seconds_of_day = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
-    (
-        year,
-        u64::try_from(month).unwrap_or_default(),
-        u64::try_from(day).unwrap_or_default(),
-        seconds_of_day / 3_600,
-        (seconds_of_day % 3_600) / 60,
-        seconds_of_day % 60,
-        milliseconds % 1_000,
-    )
-}
+#[cfg(test)]
+mod time_tests;

@@ -285,6 +285,19 @@ impl Hub {
     }
 }
 
+/// Whether a unified session's stream carries what `work` publishes, its
+/// answer included, rather than the call that deferred it.
+fn streams(work: &DeferredWork) -> bool {
+    matches!(
+        work,
+        DeferredWork::AttachUnified { .. }
+            | DeferredWork::RunUnifiedTurn(_)
+            | DeferredWork::ReleaseUnifiedCallback { .. }
+            | DeferredWork::ShellCommand { .. }
+            | DeferredWork::ShellInterrupt { .. }
+    )
+}
+
 fn request_key(id: &RequestId) -> String {
     serde_json::to_string(id).unwrap_or_default()
 }
@@ -417,86 +430,41 @@ impl UnifiedLink {
         lock(&self.shared.hub)
             .sessions
             .insert(session_id.clone(), Mirror::new(state));
-        let rest = self.settle(server, batch.deferred);
+        let rest = self.settle(server, batch.deferred)?;
         self.connections.insert(session_id.clone(), connection);
         Ok((session_id, result, rest))
     }
 
-    /// Runs the unified work a dispatch deferred and hands back the rest.
-    fn settle(&self, server: &AppServer, deferred: Vec<DeferredWork>) -> Vec<DeferredWork> {
-        let mut rest = Vec::new();
-        for work in deferred {
-            match work {
-                DeferredWork::AttachUnified { session_id } => {
-                    server.attach_unified(&session_id, self.frames.clone());
-                }
-                DeferredWork::RunUnifiedTurn(work) => {
-                    let frames = self.frames.clone();
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.spawn(crate::server::drive_unified_turn(work, frames));
+    /// Runs the work a dispatch deferred that the session's own stream
+    /// carries, its answer included, and hands back the rest.
+    ///
+    /// That work starts the session's loops or runs beside the client, so it
+    /// needs a runtime: without one the dispatch fails rather than drop it.
+    fn settle(
+        &self,
+        server: &AppServer,
+        deferred: Vec<DeferredWork>,
+    ) -> Result<Vec<DeferredWork>, ClientError> {
+        let (streamed, rest): (Vec<_>, Vec<_>) = deferred.into_iter().partition(streams);
+        if streamed.is_empty() {
+            return Ok(rest);
+        }
+        let handle = tokio::runtime::Handle::try_current().map_err(|_| ClientError::NoRuntime)?;
+        for work in streamed {
+            let frames = self.frames.clone();
+            let sink: FrameSink = Arc::new(move |frame| {
+                let _ = frames.send(frame);
+            });
+            if let Execution::Pending(pending) = server.execute_deferred(work, sink) {
+                let frames = self.frames.clone();
+                handle.spawn(async move {
+                    for frame in pending.await.outbound {
+                        let _ = frames.send(frame);
                     }
-                }
-                DeferredWork::ReleaseUnifiedCallback {
-                    session_id,
-                    callback_id,
-                    cancel_turn,
-                } => server.release_unified_callback(&session_id, &callback_id, cancel_turn),
-                // A manual command publishes its entry as it runs and
-                // answers through the same stream once it settled.
-                DeferredWork::ShellCommand {
-                    request_id,
-                    session_id,
-                    operation_id,
-                    command,
-                    cwd,
-                    timeout_ms,
-                } => {
-                    let frames = self.frames.clone();
-                    let server = server.clone();
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.spawn(async move {
-                            let live = frames.clone();
-                            let completed = server
-                                .execute_shell_command(
-                                    request_id,
-                                    session_id,
-                                    operation_id,
-                                    command,
-                                    cwd,
-                                    timeout_ms,
-                                    move |frame| {
-                                        let _ = live.send(frame);
-                                    },
-                                )
-                                .await;
-                            for frame in completed.outbound {
-                                let _ = frames.send(frame);
-                            }
-                        });
-                    }
-                }
-                DeferredWork::ShellInterrupt {
-                    request_id,
-                    session_id,
-                    operation_id,
-                } => {
-                    let frames = self.frames.clone();
-                    let server = server.clone();
-                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                        handle.spawn(async move {
-                            let completed = server
-                                .answer_shell_interrupt(request_id, session_id, operation_id)
-                                .await;
-                            for frame in completed.outbound {
-                                let _ = frames.send(frame);
-                            }
-                        });
-                    }
-                }
-                other => rest.push(other),
+                });
             }
         }
-        rest
+        Ok(rest)
     }
 
     /// The connection serving `session_id`, re-filed under it when a rewind
@@ -575,7 +543,7 @@ impl UnifiedLink {
             }
             None => None,
         };
-        let deferred = self.settle(server, batch.deferred);
+        let deferred = self.settle(server, batch.deferred)?;
         if let Some(moved) = moved.filter(|moved| moved != session_id)
             && let Some(connection) = self.connections.remove(session_id)
         {

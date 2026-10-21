@@ -369,7 +369,7 @@ fn aware_timestamp(text: &str) -> Option<UtcTimestamp> {
     if !has_offset {
         return None;
     }
-    UtcTimestamp::parse_iso8601(text)
+    UtcTimestamp::parse_pydantic(text)
 }
 
 #[cfg(test)]

@@ -174,8 +174,8 @@ pub(super) fn stdin_bytes(family: ShellFamily, arguments: &Value) -> Result<Vec<
 /// than left out, so the four actions publish one shape.
 #[derive(Default)]
 struct SessionsResult {
-    sessions: Vec<Document>,
-    session: Option<Document>,
+    sessions: Vec<Value>,
+    session: Option<Value>,
     output: Option<String>,
     next_cursor: Option<u64>,
     truncated: Option<bool>,
@@ -186,8 +186,8 @@ impl SessionsResult {
     fn document(self, action: &str) -> Document {
         Document::new()
             .field("action", action)
-            .nested_list("sessions", self.sessions)
-            .nested("session", self.session)
+            .field("sessions", self.sessions)
+            .field("session", self.session)
             .field("output", json!(self.output))
             .field("next_cursor", json!(self.next_cursor))
             .field("truncated", json!(self.truncated))
@@ -226,7 +226,7 @@ pub(super) async fn run_sessions(
                     .then_with(|| left.session_id.cmp(&right.session_id))
             });
             Ok(SessionsResult {
-                sessions: infos.iter().map(SessionInfo::document).collect(),
+                sessions: infos.iter().map(SessionInfo::typed).collect(),
                 ..SessionsResult::default()
             }
             .document("list")
@@ -249,7 +249,7 @@ pub(super) async fn run_sessions(
             let (output, next_cursor, truncated) =
                 read_file_window(&log_path, cursor, limit, handle.is_running())?;
             Ok(SessionsResult {
-                session: Some(info.document()),
+                session: Some(info.typed()),
                 output: Some(output),
                 next_cursor: Some(next_cursor),
                 truncated: Some(truncated),
@@ -269,7 +269,7 @@ pub(super) async fn run_sessions(
             kill_managed_session(&shell, &session, SessionStatus::Killed).await?;
             let display = json!({"kind": "shell", "command": session.command});
             Ok(SessionsResult {
-                session: Some(session.info().document()),
+                session: Some(session.info().typed()),
                 message: Some(format!("Killed session {}", session.id)),
                 ..SessionsResult::default()
             }
@@ -317,7 +317,7 @@ pub(super) async fn run_sessions(
             }
             let message = format!("Stopped {} {} sessions", killed.len(), shell.family.name());
             Ok(SessionsResult {
-                sessions: killed.iter().map(SessionInfo::document).collect(),
+                sessions: killed.iter().map(SessionInfo::typed).collect(),
                 message: Some(message),
                 ..SessionsResult::default()
             }

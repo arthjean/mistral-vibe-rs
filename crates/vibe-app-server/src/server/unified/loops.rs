@@ -62,7 +62,7 @@ impl ServerConnection {
 impl AppServer {
     /// The connection now holding `session_id` takes the frames the session
     /// raises on its own, and the session's scheduled loops start running.
-    pub(crate) fn attach_unified(&self, session_id: &str, frames: mpsc::UnboundedSender<Vec<u8>>) {
+    pub(crate) fn attach_unified(&self, session_id: &str, frames: FrameSink) {
         let Some(session) = self.unified_session(session_id) else {
             return;
         };
