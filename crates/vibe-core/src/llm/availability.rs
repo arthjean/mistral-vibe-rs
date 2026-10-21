@@ -22,6 +22,7 @@ use super::{Backend, BackendContext, Credentials, ModelRequest};
 use crate::credential_cache::{read_entries, write_entries};
 use crate::observability::{self, LogLevel};
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
+use crate::sync::lock;
 use crate::telemetry::TelemetryCallType;
 
 /// The cache file's name under the vibe home. Reference
@@ -316,9 +317,7 @@ impl ModelAvailability {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
-        self.state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        lock(&self.state)
     }
 }
 

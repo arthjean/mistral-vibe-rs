@@ -29,7 +29,6 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Deserialize;
 
@@ -37,7 +36,7 @@ use super::store::SESSION_APPROVAL;
 use super::tool_rules::{matched_path_pattern, pure_path_match};
 use super::*;
 use crate::matching::pattern_matches;
-use crate::parity::{off_pin_reason, pinned_interpreter, reference_root};
+use crate::parity::replay::{Capture, pinned_reference};
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
@@ -1236,38 +1235,20 @@ fn an_unreadable_sensitive_pattern_raises_nothing_and_stops_nothing() {
 /// reference that moves is reported rather than silently replayed.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "permission surface") {
-        eprintln!("{reason}");
-        return;
-    }
-    let Some(interpreter) = pinned_interpreter(&root) else {
-        eprintln!("skipping the live permission-surface probe: no reference interpreter");
+    let Some(root) = pinned_reference("permission surface") else {
         return;
     };
-    let workspace =
-        crate::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
-            .expect("workspace root");
     let temporary = tempfile::tempdir().expect("temporary root");
-    let captured = temporary.path().join("vocabulary.json");
-    let output = Command::new(&interpreter)
-        .arg(workspace.join(CAPTURE_SCRIPT))
-        .arg("--reference")
-        .arg(&root)
-        .arg("--output")
-        .arg(&captured)
-        .output()
-        .expect("the capture script runs");
-    assert!(
-        output.status.success(),
-        "{CAPTURE_SCRIPT} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let recaptured = fs::read_to_string(&captured).expect("captured corpus reads");
-    let committed = fs::read_to_string(corpus_path()).expect("committed corpus reads");
-    assert_eq!(
-        recaptured.replace("\r\n", "\n"),
-        committed.replace("\r\n", "\n"),
-        "the committed corpus no longer matches the pinned reference; rerun {CAPTURE_SCRIPT}"
+    let recaptured = temporary.path().join("corpus.json");
+    let capture = Capture {
+        script: CAPTURE_SCRIPT,
+        family: &[],
+        arguments: &[],
+    };
+    capture.recapture(
+        &root,
+        &["--output".as_ref(), recaptured.as_os_str()],
+        &recaptured,
+        &corpus_path(),
     );
 }

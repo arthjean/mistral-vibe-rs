@@ -8,11 +8,11 @@
 
 use serde_json::{Map, Value};
 
-use crate::llm::adapter::{lax_count, truthy};
+use crate::llm::adapter::lax_count;
 use crate::llm::error::{BackendFailure, LocalFailure, LocalKind};
 use crate::llm::pump::EventSource;
 use crate::llm::types::{Chunk, Message, StopInfo, ToolCall, Usage};
-use crate::pycompat::{self, Dumps};
+use crate::pycompat::{self, Dumps, truthy};
 
 /// The text and the reasoning of a content value.
 fn parse_content(content: &Value) -> Result<(String, Option<String>), LocalFailure> {

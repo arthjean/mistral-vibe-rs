@@ -272,19 +272,6 @@ pub fn finalize_chat(payload: &mut Map<String, Value>, streaming: bool, options:
     }
 }
 
-/// Python truthiness of a JSON value.
-#[must_use]
-pub fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|number| number != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(items) => !items.is_empty(),
-        Value::Object(fields) => !fields.is_empty(),
-    }
-}
-
 /// A token count as a lenient integer field reads it: an integer, a float
 /// without a fraction, or a string of digits. Anything else is refused.
 ///
@@ -333,7 +320,7 @@ pub fn object_or_empty<'a>(
     name: &str,
 ) -> Result<Option<&'a Map<String, Value>>, LocalFailure> {
     match object.get(name) {
-        Some(value) if truthy(value) => value.as_object().map(Some).ok_or_else(|| {
+        Some(value) if pycompat::truthy(value) => value.as_object().map(Some).ok_or_else(|| {
             LocalFailure::new(LocalKind::Attribute, format!("`{name}` is not an object"))
         }),
         _ => Ok(None),

@@ -42,7 +42,7 @@ use vibe_core::mcp::{
     McpServerConfig, McpStaticAuth, McpTransportConfig, SamplingHandler, SamplingRequest,
     SamplingResponse, SamplingRole,
 };
-use vibe_core::parity::replay::{Capture, digest};
+use vibe_core::parity::replay::{Capture, digest, valued_differences};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
 };
@@ -823,28 +823,6 @@ fn extract_prose(observed: &mut Value) -> BTreeMap<String, Value> {
     prose
 }
 
-fn differences(expected: &Value, actual: &Value, pointer: &str, found: &mut Vec<String>) {
-    match (expected, actual) {
-        (Value::Object(left), Value::Object(right)) => {
-            for key in left.keys().chain(right.keys()).collect::<BTreeSet<_>>() {
-                let escaped = key.replace('~', "~0").replace('/', "~1");
-                let next = format!("{pointer}/{escaped}");
-                match (left.get(key), right.get(key)) {
-                    (Some(left), Some(right)) => differences(left, right, &next, found),
-                    _ => found.push(next),
-                }
-            }
-        }
-        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
-            for (index, (left, right)) in left.iter().zip(right).enumerate() {
-                differences(left, right, &format!("{pointer}/{index}"), found);
-            }
-        }
-        _ if expected == actual => {}
-        _ => found.push(pointer.to_owned()),
-    }
-}
-
 fn ledgered(scenario: &str, pointer: &str) -> Option<&'static Divergence> {
     LEDGER.iter().find(|entry| {
         let applies = entry
@@ -917,8 +895,10 @@ async fn every_scenario_matches_the_reference_mcp_client() {
         let mut actual = run_scenario(&scenario["spec"], &token, &inherited).await;
         let reference_prose = extract_prose(&mut expected);
         let port_prose = extract_prose(&mut actual);
-        let mut found = Vec::new();
-        differences(&expected, &actual, "", &mut found);
+        let mut found: Vec<String> = valued_differences(&expected, &actual)
+            .into_iter()
+            .map(|difference| difference.pointer)
+            .collect();
         for (pointer, reference) in &reference_prose {
             if port_prose.get(pointer) == Some(reference) {
                 found.push(format!(

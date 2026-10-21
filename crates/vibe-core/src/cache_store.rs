@@ -7,10 +7,11 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use crate::atomic_file::{FileMode, write_atomically};
 use crate::observability::{self, LogLevel};
+use crate::sync::lock;
 
 /// Reference `_FILE_LOCK`: the read-modify-write of one section must not
 /// interleave with another's, or the later write drops the earlier section.
@@ -40,7 +41,7 @@ impl CacheStore {
     /// something other than a table there.
     #[must_use]
     pub fn read_section(&self, section: &str) -> toml::Table {
-        let _guard = FILE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = lock(&FILE_LOCK);
         match self
             .read_document()
             .and_then(|mut document| document.remove(section))
@@ -55,14 +56,17 @@ impl CacheStore {
     /// that is not a table is replaced outright. A failed write is logged at
     /// debug level and otherwise ignored, as the reference ignores it.
     pub fn write_section(&self, section: &str, data: toml::Table) {
-        let _guard = FILE_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+        let _guard = lock(&FILE_LOCK);
         let mut document = self.read_document().unwrap_or_default();
-        let mut merged = match document.remove(section) {
-            Some(toml::Value::Table(table)) => table,
-            _ => toml::Table::new(),
-        };
-        merged.extend(data);
-        document.insert(section.to_owned(), toml::Value::Table(merged));
+        let slot = document
+            .entry(section)
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+        if !slot.is_table() {
+            *slot = toml::Value::Table(toml::Table::new());
+        }
+        if let toml::Value::Table(merged) = slot {
+            merged.extend(data);
+        }
         let written = toml::to_string_pretty(&toml::Value::Table(document))
             .map_err(|error| error.to_string())
             .and_then(|encoded| {
@@ -94,3 +98,6 @@ impl CacheStore {
         toml::from_str(&fs::read_to_string(&self.path).ok()?).ok()
     }
 }
+
+#[cfg(test)]
+mod cache_store_tests;

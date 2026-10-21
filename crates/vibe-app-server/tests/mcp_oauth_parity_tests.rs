@@ -41,7 +41,7 @@ use vibe_core::mcp::{
     McpAuthConfig, McpAuthenticationError, McpAuthenticationService, McpAuthorization, McpDeclared,
     McpOAuthConfig, McpServerConfig, McpStaticAuth, McpTransportConfig,
 };
-use vibe_core::parity::replay::{Capture, digest, pointer_matches};
+use vibe_core::parity::replay::{Capture, digest, pointer_matches, valued_differences};
 
 const CORPUS: &str = include_str!("mcp-oauth/corpus.json");
 const FIXTURE: &str = env!("CARGO_BIN_EXE_vibe-oauth-script-fixture");
@@ -655,33 +655,6 @@ async fn run_scenario(spec: &Value) -> Value {
 // Comparing.
 // --------------------------------------------------------------------------
 
-/// Every pointer at which two observations differ.
-fn differences(expected: &Value, actual: &Value, pointer: &str, found: &mut Vec<String>) {
-    match (expected, actual) {
-        (Value::Object(left), Value::Object(right)) => {
-            let keys = left
-                .keys()
-                .chain(right.keys())
-                .collect::<std::collections::BTreeSet<_>>();
-            for key in keys {
-                differences(
-                    left.get(key).unwrap_or(&Value::Null),
-                    right.get(key).unwrap_or(&Value::Null),
-                    &format!("{pointer}/{key}"),
-                    found,
-                );
-            }
-        }
-        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
-            for (index, (left, right)) in left.iter().zip(right).enumerate() {
-                differences(left, right, &format!("{pointer}/{index}"), found);
-            }
-        }
-        _ if expected == actual => {}
-        _ => found.push(pointer.to_owned()),
-    }
-}
-
 fn is_page(pointer: &str) -> bool {
     pointer.contains("/browser/") && pointer.contains("/page/")
 }
@@ -706,8 +679,10 @@ async fn every_scenario_matches_the_reference_capture() {
                 entry["observed"], observed
             );
         }
-        let mut found = Vec::new();
-        differences(&entry["observed"], &observed, "", &mut found);
+        let found: Vec<String> = valued_differences(&entry["observed"], &observed)
+            .into_iter()
+            .map(|difference| difference.pointer)
+            .collect();
         // The pages are the reference's own prose: they must differ, and only
         // they may differ by right.
         let pages = found

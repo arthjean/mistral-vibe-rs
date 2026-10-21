@@ -96,7 +96,7 @@ pub(super) fn marks_of(meta: &Map<String, Value>) -> SessionMarks {
 
 /// A mark's time as the session metadata stores it.
 fn mark_time(at: Option<u64>) -> Value {
-    at.map_or(Value::Null, |millis| json!(iso_micros(millis * 1000)))
+    at.map_or(Value::Null, |millis| json!(format_iso_millis(millis)))
 }
 
 impl UnifiedSession {

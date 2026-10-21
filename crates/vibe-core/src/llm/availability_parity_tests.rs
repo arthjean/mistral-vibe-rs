@@ -26,11 +26,12 @@ use super::backend_parity_tests::{
     toml_table,
 };
 use super::retry::{Clock, SleepFuture, SleepKind};
-use super::utility::{self, UtilityFeature};
+use super::utility;
 use super::{BackendContext, Credentials, MapCredentials};
 use crate::credential_cache::read_entries;
 use crate::provider::config::{
-    ApiSettings, BackendKind, ModelConfig, ModelRouting, ProviderConfig, UtilityModels,
+    ApiSettings, BackendKind, ModelConfig, ModelRouting, ProviderConfig, UtilityFeature,
+    UtilityModels,
 };
 use crate::telemetry::{ClientTelemetry, LaunchContext, TelemetryCallType, TelemetryRecord};
 

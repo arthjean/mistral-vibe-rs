@@ -32,6 +32,7 @@ use tempfile::TempDir;
 
 use super::session::{ManagedSession, SessionStatus, kill_managed_session};
 use super::*;
+use crate::parity::replay::{ValuedDifference, valued_differences};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::platform::Platform;
 use crate::policy::{
@@ -617,67 +618,22 @@ fn authored_vocabulary(corpus: &Corpus) -> BTreeSet<String> {
 // Diffing
 // --------------------------------------------------------------------------
 
-#[derive(Debug)]
-struct Difference {
-    pointer: String,
-    expected: Value,
-    actual: Value,
-}
-
 /// Every difference between the two documents, as a JSON pointer and both
 /// values.
 ///
 /// When the two sides disagree on the outcome itself, only that is reported:
 /// every field below it is a consequence of returning where the reference
 /// raised.
-fn compare(expected: &Value, actual: &Value) -> Vec<Difference> {
+fn compare(expected: &Value, actual: &Value) -> Vec<ValuedDifference> {
     let outcome = |document: &Value| document.get("outcome").cloned().unwrap_or(Value::Null);
     if outcome(expected) != outcome(actual) {
-        return vec![Difference {
+        return vec![ValuedDifference {
             pointer: "/outcome".to_owned(),
             expected: outcome(expected),
             actual: outcome(actual),
         }];
     }
-    let mut found = Vec::new();
-    differences("", expected, actual, &mut found);
-    found
-}
-
-fn differences(pointer: &str, expected: &Value, actual: &Value, into: &mut Vec<Difference>) {
-    match (expected, actual) {
-        (Value::Object(left), Value::Object(right)) => {
-            for (key, value) in left {
-                let nested = format!("{pointer}/{key}");
-                match right.get(key) {
-                    Some(other) => differences(&nested, value, other, into),
-                    None => into.push(Difference {
-                        pointer: nested,
-                        expected: value.clone(),
-                        actual: Value::String("absent".to_owned()),
-                    }),
-                }
-            }
-            for key in right.keys().filter(|key| !left.contains_key(*key)) {
-                into.push(Difference {
-                    pointer: format!("{pointer}/{key}"),
-                    expected: Value::String("absent".to_owned()),
-                    actual: right[key].clone(),
-                });
-            }
-        }
-        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
-            for (index, (a, b)) in left.iter().zip(right).enumerate() {
-                differences(&format!("{pointer}/{index}"), a, b, into);
-            }
-        }
-        _ if expected == actual => {}
-        _ => into.push(Difference {
-            pointer: pointer.to_owned(),
-            expected: expected.clone(),
-            actual: actual.clone(),
-        }),
-    }
+    valued_differences(expected, actual)
 }
 
 // --------------------------------------------------------------------------
@@ -1042,7 +998,7 @@ fn error_type(error: &ToolError) -> &'static str {
 }
 
 /// Replays the whole corpus, returning the differences found per case.
-async fn replay(corpus: &Corpus, scratch: &Path) -> Vec<(String, String, Vec<Difference>)> {
+async fn replay(corpus: &Corpus, scratch: &Path) -> Vec<(String, String, Vec<ValuedDifference>)> {
     let authored = authored_vocabulary(corpus);
     let mut found = Vec::new();
     // Every scenario is held until the end so the sweep below can answer for

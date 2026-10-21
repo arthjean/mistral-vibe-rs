@@ -69,6 +69,25 @@
   configured route whenever they are given; one that repeated its default
   value used to count as left out.
 
+- Installed registry skills are written as the reference writes them: the
+  skills manifest keeps a tab literal, spells control characters as lowercase
+  `\uXXXX` and leaves C1 characters raw, and the frontmatter quotes exactly
+  where PyYAML does (`08`, `_1` and `1.5e5` stay plain; timestamps, `<<` and
+  `=` are quoted). Writing a section of `cache.toml` updates it where it sits
+  instead of moving it to the end of the file.
+
+- A permanent approval whose pattern the tool's allowlist cannot keep is
+  recorded as a session approval, which is what it is.
+
+- After a panic, configuration, permission, hook, keyring cache, telemetry and
+  session state recover their lock instead of silently dropping updates or
+  failing with a "lock is poisoned" error.
+
+- Session metadata timestamps written on an exact second carry no zero
+  fraction, as Python's `isoformat` writes them, in legacy and Unified Harness
+  sessions alike, and a Unified Harness `meta.json` writes floats as Python
+  does (`1e-07`).
+
 - `/status` and the exit summary of a Unified Harness session report its
   runtime stats before its first stats update, and a malformed teleport event
   fails `teleport` instead of being skipped.

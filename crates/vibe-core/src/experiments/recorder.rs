@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use serde_json::Value;
 
 use super::client::{EvalFuture, EvalHttpResponse, EvalRequest, EvalTransport, EvalTransportError};
+use crate::sync::lock;
 
 /// What the transport does with a request.
 #[derive(Debug, Clone)]
@@ -62,24 +63,15 @@ impl RecordingTransport {
     }
 
     pub fn requests(&self) -> Vec<RecordedRequest> {
-        self.requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        lock(&self.requests).clone()
     }
 
     pub fn request_count(&self) -> usize {
-        self.requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
+        lock(&self.requests).len()
     }
 
     pub fn closes(&self) -> usize {
-        *self
-            .closes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        *lock(&self.closes)
     }
 }
 
@@ -98,10 +90,7 @@ impl EvalTransport for RecordingTransport {
                 .collect(),
             payload: serde_json::to_value(request.payload).unwrap_or(Value::Null),
         };
-        self.requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(recorded);
+        lock(&self.requests).push(recorded);
         let outcome = self.outcome.clone();
         Box::pin(async move {
             match outcome {
@@ -112,10 +101,7 @@ impl EvalTransport for RecordingTransport {
     }
 
     fn close(&self) -> EvalFuture<'_, ()> {
-        let mut closes = self
-            .closes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut closes = lock(&self.closes);
         *closes = closes.saturating_add(1);
         drop(closes);
         Box::pin(std::future::ready(()))
@@ -131,18 +117,12 @@ pub struct RecordingSink {
 
 impl RecordingSink {
     pub fn count(&self) -> usize {
-        self.persisted
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
+        lock(&self.persisted).len()
     }
 }
 
 impl super::session::ExperimentStateSink for RecordingSink {
     fn persist(&self, state: &super::models::EvalResponse) {
-        self.persisted
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(state.clone());
+        lock(&self.persisted).push(state.clone());
     }
 }

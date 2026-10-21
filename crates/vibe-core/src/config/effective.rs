@@ -25,7 +25,9 @@ use super::{
     ACTIVE_MODEL_FIELD, ConfigError, ROUTED_DEFAULT_MODEL_FIELD, ROUTED_MODEL_CONFIG_FIELD, merge,
     registry,
 };
-use crate::provider::config::{ACTIVE_MODEL_SELECTOR, UtilityFeature, UtilityModels};
+use crate::provider::config::{
+    ACTIVE_MODEL_SELECTOR, ThinkingLevel, UtilityFeature, UtilityModels,
+};
 use crate::pycompat::pydantic;
 
 /// The models an experiment adds to the picker without changing the default.
@@ -317,15 +319,15 @@ fn coerce_model_field(key: &str, value: &JsonValue) -> Option<Option<Value>> {
             .map(|level| {
                 level
                     .as_str()
-                    .filter(|level| registry::THINKING_VALUES.contains(level))
+                    .filter(|level| ThinkingLevel::parse(level).is_some())
                     .map(|level| Value::String(level.to_owned()))
             })
             .collect::<Option<Vec<_>>>()
             .map(Value::Array),
-        "supports_images" => as_flag(value).map(Value::Boolean),
+        "supports_images" => pydantic::lax_bool_value(value).map(Value::Boolean),
         "thinking" => value
             .as_str()
-            .filter(|level| registry::THINKING_VALUES.contains(level))
+            .filter(|level| ThinkingLevel::parse(level).is_some())
             .map(|level| Value::String(level.to_owned())),
         _ => return Some(None),
     };
@@ -360,22 +362,6 @@ fn as_integer(value: &JsonValue) -> Option<i64> {
                     && *number <= i64::MAX as f64
             })
             .map(|number| number as i64),
-    }
-}
-
-/// A boolean as lax mode reads one: the JSON boolean, the number one or zero,
-/// or one of the words pydantic spells them with, which it reads without
-/// trimming and without regard to case.
-fn as_flag(value: &JsonValue) -> Option<bool> {
-    match value {
-        JsonValue::Bool(flag) => Some(*flag),
-        JsonValue::Number(_) => match as_number(value)? {
-            1.0 => Some(true),
-            0.0 => Some(false),
-            _ => None,
-        },
-        JsonValue::String(text) => pydantic::lax_bool(text),
-        _ => None,
     }
 }
 

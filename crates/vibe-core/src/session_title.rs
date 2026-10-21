@@ -14,9 +14,10 @@ use regex::Regex;
 
 use crate::events::ModelMessage;
 use crate::llm::BackendContext;
-use crate::llm::utility::{self, Attribution, UtilityFeature, UtilityRequest, UtilitySelection};
+use crate::llm::utility::{self, Attribution, UtilityRequest, UtilitySelection};
 use crate::observability::{self, LogLevel};
 use crate::prompt::library::UtilityPrompt;
+use crate::provider::config::UtilityFeature;
 
 /// Reference `TitlePolicy.refresh_every_steps`.
 pub const REFRESH_EVERY_STEPS: u64 = 6;

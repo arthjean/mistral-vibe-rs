@@ -18,10 +18,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::atomic_file;
 use crate::platform::{resolve_lenient, strip_verbatim_prefix};
+use crate::sync::lock;
 
 /// The trust file's name under the vibe home.
 pub const TRUST_FILE: &str = "trusted_folders.toml";
@@ -290,7 +291,7 @@ impl TrustStore {
     #[must_use]
     pub fn for_vibe_home(vibe_home: &Path) -> Self {
         let path = vibe_home.join(TRUST_FILE);
-        let mut stores = STORES.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut stores = lock(&STORES);
         let folders = stores
             .entry(path.clone())
             .or_insert_with(|| Arc::new(Mutex::new(Folders::load(path))))
@@ -299,7 +300,7 @@ impl TrustStore {
     }
 
     fn with<T>(&self, read: impl FnOnce(&mut Folders) -> T) -> T {
-        read(&mut self.folders.lock().unwrap_or_else(PoisonError::into_inner))
+        read(&mut lock(&self.folders))
     }
 
     /// Where the decisions persist.

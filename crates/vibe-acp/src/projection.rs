@@ -95,14 +95,11 @@ pub(crate) fn session_info_update(title: Option<&str>, updated_at_ms: u64) -> Va
     if let Some(title) = title {
         update.insert("title".to_owned(), json!(title));
     }
-    update.insert("updatedAt".to_owned(), json!(iso_timestamp(updated_at_ms)));
+    update.insert(
+        "updatedAt".to_owned(),
+        json!(vibe_core::time::format_iso_millis(updated_at_ms)),
+    );
     Value::Object(update)
-}
-
-/// Milliseconds since the epoch as an ISO 8601 UTC timestamp with an explicit
-/// offset, the form Python's `datetime.isoformat` writes for an aware time.
-pub(crate) fn iso_timestamp(millis: u64) -> String {
-    vibe_core::time::format_iso_micros(millis.saturating_mul(1_000))
 }
 
 fn kind(entry: &Value) -> &str {

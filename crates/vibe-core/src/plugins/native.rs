@@ -21,9 +21,9 @@ use serde_json::{Map, Value};
 
 use super::canonical::canonical_json_digest;
 use super::compatibility::{
-    DetectedPluginFormat, PluginMcpServer, PluginToolOverride, author_display_name,
-    detect_plugin_source_format, plugin_runtime_state_names, relative_plugin_path,
-    typescript_identifier,
+    DetectedPluginFormat, PluginMcpServer, PluginToolOverride, UnsupportedKind,
+    author_display_name, detect_plugin_source_format, plugin_runtime_state_names,
+    relative_plugin_path, typescript_identifier,
 };
 use super::content::digest_plugin_tree;
 use super::diagnostics::{self as codes, PluginConfigIssue};
@@ -199,7 +199,7 @@ impl PluginHookSource {
 pub struct PluginUnsupportedComponent {
     pub plugin_name: String,
     pub source_format: DetectedPluginFormat,
-    pub kind: String,
+    pub kind: UnsupportedKind,
     pub path: PathBuf,
     pub reason: String,
 }

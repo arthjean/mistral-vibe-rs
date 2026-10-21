@@ -61,8 +61,11 @@ pub struct AcpClientCapabilities {
 
 impl AcpClientCapabilities {
     fn from_value(value: &Value) -> Self {
-        let flag =
-            |value: Option<&Value>| value.and_then(crate::validation::lax_bool).unwrap_or(false);
+        let flag = |value: Option<&Value>| {
+            value
+                .and_then(vibe_core::pycompat::pydantic::lax_bool_value)
+                .unwrap_or(false)
+        };
         let fs = value.get("fs").filter(|fs| fs.is_object());
         Self {
             fs: AcpFilesystemCapabilities {

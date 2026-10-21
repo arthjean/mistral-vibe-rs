@@ -470,6 +470,20 @@ pub enum GrantLifetime<'a> {
     PermanentWithin(&'a [PermissionScope]),
 }
 
+impl GrantLifetime<'_> {
+    /// Whether the approval of `requirement` lasts beyond the session.
+    fn outlives_session(self, requirement: &PermissionRequirement) -> bool {
+        match self {
+            Self::Session => false,
+            Self::Permanent => true,
+            Self::PermanentWithin(scopes) => {
+                !requirement.session_pattern.trim().is_empty()
+                    && scopes.contains(&requirement.scope)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApprovalRequest {
     pub tool: String,

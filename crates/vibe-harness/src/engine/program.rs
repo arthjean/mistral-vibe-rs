@@ -8,6 +8,7 @@ use futures_util::stream::FuturesUnordered;
 use serde_json::{Value, json};
 use vibe_core::clock::now_millis;
 use vibe_core::session_id::{random_bytes, uuid_v4};
+use vibe_core::sync::lock;
 
 use super::calls::compact;
 use super::execute::{CallOutcome, gated_execute};
@@ -31,23 +32,20 @@ pub(super) async fn run_program(
         Ok(javascript) => javascript,
         Err(error) => return CallOutcome::Done(program_failure(&error, "", "")),
     };
-    let message_count = core
-        .lock()
-        .map(|core| core.conversation.len() + 1)
-        .unwrap_or_default();
+    let (message_count, mut barriers) = {
+        let core = lock(core);
+        let barriers = StartBarriers {
+            manager: Arc::clone(&core.processes),
+            session_id: core.projector.state.session.id.clone(),
+            started: Vec::new(),
+            applied: Vec::new(),
+        };
+        (core.conversation.len() + 1, barriers)
+    };
     let seed_bytes = random_bytes::<4>();
     let tools = crate::programmatic::namespaces(&environment.callables);
     let now = now_millis();
     let mut record: Vec<Recorded> = Vec::new();
-    let mut barriers = StartBarriers {
-        manager: core.lock().ok().map(|core| Arc::clone(&core.processes)),
-        session_id: core
-            .lock()
-            .map(|core| core.projector.state.session.id.clone())
-            .unwrap_or_default(),
-        started: Vec::new(),
-        applied: Vec::new(),
-    };
     for round in 0usize.. {
         let facts = Facts {
             tools: tools.clone(),
@@ -114,9 +112,7 @@ pub(super) async fn run_program(
                 arguments: callable.runtime_arguments(call.arguments.clone()),
             };
             {
-                let Ok(mut core) = core.lock() else {
-                    return CallOutcome::FailTurn("the session is gone".to_owned());
-                };
+                let mut core = lock(core);
                 let advance = core.projector.apply_action_started(&action, now_millis());
                 sink(core.publication(advance, None));
             }
@@ -144,9 +140,7 @@ pub(super) async fn run_program(
                 other => return other,
             };
             slots[slot] = Some(crate::programmatic::settled_value(&result));
-            let Ok(mut core) = core.lock() else {
-                return CallOutcome::FailTurn("the session is gone".to_owned());
-            };
+            let mut core = lock(core);
             let input = core.next_input();
             let advance = core.projector.apply(
                 input,
@@ -184,7 +178,7 @@ pub(super) async fn run_program(
 /// two publications, so a start is acknowledged after the second. A program
 /// that ends, fails or is dropped acknowledges every start it made.
 struct StartBarriers {
-    manager: Option<Arc<crate::processes::ProcessManager>>,
+    manager: Arc<crate::processes::ProcessManager>,
     session_id: String,
     /// Each `process.start` action started, with the process it names.
     started: Vec<(String, String)>,
@@ -213,10 +207,8 @@ impl StartBarriers {
     }
 
     fn open_applied(&mut self) {
-        if let Some(manager) = &self.manager {
-            for process_id in self.applied.drain(..) {
-                manager.acknowledge_start(&process_id);
-            }
+        for process_id in self.applied.drain(..) {
+            self.manager.acknowledge_start(&process_id);
         }
     }
 }
@@ -224,10 +216,8 @@ impl StartBarriers {
 impl Drop for StartBarriers {
     fn drop(&mut self) {
         self.open_applied();
-        if let Some(manager) = &self.manager {
-            for (_, process_id) in self.started.drain(..) {
-                manager.acknowledge_start(&process_id);
-            }
+        for (_, process_id) in self.started.drain(..) {
+            self.manager.acknowledge_start(&process_id);
         }
     }
 }

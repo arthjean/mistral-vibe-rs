@@ -8,12 +8,12 @@ use std::path::Path;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use super::time::format_iso_timestamp;
 use super::{
     MESSAGES_FILE, METADATA_FILE, SessionStore, StorageError, registry, validate_session_id,
 };
 use crate::atomic_file::{FileMode, write_atomically};
 use crate::platform::BackgroundCommand as _;
+use crate::time::format_iso_millis;
 use crate::time::parse_iso_millis;
 
 /// Reference `SessionMetadata` (`vibe/core/types.py`), in its field order, plus
@@ -150,7 +150,7 @@ impl SessionStore {
         SessionMetadata {
             id: id.to_owned(),
             parent_session_id,
-            start_time: format_iso_timestamp(now_ms),
+            start_time: format_iso_millis(now_ms),
             end_time: None,
             git_commit,
             git_branch,
@@ -273,7 +273,7 @@ impl SessionStore {
         {
             return Ok(current);
         }
-        metadata.bumped_at = Some(format_iso_timestamp(now_ms));
+        metadata.bumped_at = Some(format_iso_millis(now_ms));
         self.write_metadata(metadata)?;
         Ok(now_ms)
     }
@@ -297,7 +297,7 @@ impl SessionStore {
             Err(error) => return Err(error),
         };
         metadata.updated_at_ms = now_ms;
-        metadata.end_time = Some(format_iso_timestamp(now_ms));
+        metadata.end_time = Some(format_iso_millis(now_ms));
         self.write_metadata(&metadata)
     }
 

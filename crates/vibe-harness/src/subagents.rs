@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use tokio::sync::watch;
+use vibe_core::sync::lock;
 
 use crate::engine::{
     ConversationMessage, Publication, SessionCore, TurnEnd, TurnEnvironment, TurnRequest, run_turn,
@@ -182,9 +183,7 @@ impl SubagentManager {
 
     /// Sets where children's states go.
     pub fn listen(&self, listener: Listener) {
-        if let Ok(mut slot) = self.listener.lock() {
-            *slot = Some(listener);
-        }
+        *lock(&self.listener) = Some(listener);
     }
 
     /// The child holding the callback `callback_id`, open or answered.
@@ -193,9 +192,9 @@ impl SubagentManager {
         &self,
         callback_id: &str,
     ) -> Option<(String, Arc<Mutex<SessionCore>>)> {
-        let children = self.children.lock().ok()?;
+        let children = lock(&self.children);
         children.iter().find_map(|child| {
-            let core = child.core.lock().ok()?;
+            let core = lock(&child.core);
             let book = &core.callbacks;
             let holds = book.is_open(callback_id)
                 || book.answered.contains_key(callback_id)
@@ -207,8 +206,7 @@ impl SubagentManager {
     /// The child `child_id`'s session.
     #[must_use]
     pub fn child_core(&self, child_id: &str) -> Option<Arc<Mutex<SessionCore>>> {
-        let children = self.children.lock().ok()?;
-        children
+        lock(&self.children)
             .iter()
             .find(|child| child.id == child_id)
             .map(|child| Arc::clone(&child.core))
@@ -216,8 +214,9 @@ impl SubagentManager {
 
     /// Interrupts the running turn of the child `child_id`, for `reason`.
     pub fn interrupt_child(&self, child_id: &str, reason: &str) {
-        if let Ok(children) = self.children.lock()
-            && let Some(child) = children.iter().find(|child| child.id == child_id)
+        if let Some(child) = lock(&self.children)
+            .iter()
+            .find(|child| child.id == child_id)
             && let Some(interrupt) = &child.interrupt
         {
             interrupt.send_replace(Some(reason.to_owned()));
@@ -226,7 +225,7 @@ impl SubagentManager {
 
     /// Hands a state the child `child_id` reached to the listener.
     pub fn announce(&self, child_id: &str, publication: Publication) {
-        let listener = self.listener.lock().ok().and_then(|slot| slot.clone());
+        let listener = lock(&self.listener).clone();
         if let Some(listener) = listener {
             listener(child_id, publication);
         }
@@ -235,10 +234,7 @@ impl SubagentManager {
     /// The runtime notifications the parent's model has not read yet, each
     /// as the text it reads.
     pub fn take_notifications(&self) -> Vec<String> {
-        self.notifications
-            .lock()
-            .map(|mut pending| std::mem::take(&mut *pending))
-            .unwrap_or_default()
+        std::mem::take(&mut *lock(&self.notifications))
     }
 
     /// Runs one `subagent.*` operation for the session `parent_session_id`.
@@ -306,9 +302,7 @@ impl SubagentManager {
     }
 
     fn list(&self) -> Value {
-        let Ok(children) = self.children.lock() else {
-            return json!({"agents": []});
-        };
+        let children = lock(&self.children);
         let agents: Vec<Value> = children
             .iter()
             .map(|child| {
@@ -352,10 +346,7 @@ impl SubagentManager {
             },
         };
         let core = {
-            let mut children = self
-                .children
-                .lock()
-                .map_err(|_| failure("subagent_spawn_failed", "the session is gone"))?;
+            let mut children = lock(&self.children);
             if children.iter().any(|child| child.name == spawn.name) {
                 return Err(failure(
                     "subagent_name_conflict",
@@ -410,7 +401,8 @@ impl SubagentManager {
             });
             core
         };
-        if let Ok(locked) = core.lock() {
+        {
+            let locked = lock(&core);
             let store = environment
                 .session_dir
                 .as_ref()
@@ -420,8 +412,9 @@ impl SubagentManager {
                 });
             let publication = locked.publication(crate::state::Advance::Journaled, None);
             drop(locked);
-            if let Ok(mut children) = self.children.lock()
-                && let Some(child) = children.iter_mut().find(|child| child.id == spawn.id)
+            if let Some(child) = lock(&self.children)
+                .iter_mut()
+                .find(|child| child.id == spawn.id)
             {
                 child.store = store;
             }
@@ -436,9 +429,7 @@ impl SubagentManager {
     /// Starts the next turn of `name` with `message`.
     fn start_turn(self: &Arc<Self>, name: &str, message: &str, environment: TurnEnvironment) {
         let (core, id, generation, interrupted) = {
-            let Ok(mut children) = self.children.lock() else {
-                return;
-            };
+            let mut children = lock(&self.children);
             let Some(child) = children.iter_mut().find(|child| child.name == name) else {
                 return;
             };
@@ -459,7 +450,8 @@ impl SubagentManager {
             content: vec![json!({"type": "text", "text": message})],
             ..TurnRequest::default()
         };
-        if let Ok(mut locked) = core.lock() {
+        {
+            let mut locked = lock(&core);
             locked.begin_turn_as(&request, turn_id.clone());
             let publication = locked.publication(crate::state::Advance::Journaled, None);
             drop(locked);
@@ -493,17 +485,13 @@ impl SubagentManager {
 
     /// Records how turn `generation` of `name` ended, and tells the parent.
     fn finish(&self, name: &str, generation: u64, outcome: Outcome) {
-        let Ok(mut children) = self.children.lock() else {
-            return;
-        };
+        let mut children = lock(&self.children);
         let Some(child) = children.iter_mut().find(|child| child.name == name) else {
             return;
         };
         child.interrupt = None;
-        if let Some(store) = child.store.as_mut()
-            && let Ok(core) = child.core.lock()
-        {
-            let _ = store.commit(&core, false);
+        if let Some(store) = child.store.as_mut() {
+            let _ = store.commit(&lock(&child.core), false);
         }
         let outcome = match outcome {
             Outcome::Interrupted(_) if child.interrupted => Outcome::Failed(Failure {
@@ -542,17 +530,13 @@ impl SubagentManager {
         if let Some(content) = content.filter(|content| !content.is_empty()) {
             text = format!("{text}\n\n{content}");
         }
-        if let Ok(mut pending) = self.notifications.lock() {
-            pending.push(text);
-        }
+        lock(&self.notifications).push(text);
         child.outcomes.send_replace(Some((generation, outcome)));
     }
 
     async fn wait(&self, name: &str, timeout: Duration) -> Value {
         let (mut outcomes, generation) = {
-            let Ok(children) = self.children.lock() else {
-                return not_found(name);
-            };
+            let children = lock(&self.children);
             let Some(child) = children.iter().find(|child| child.name == name) else {
                 return not_found(name);
             };
@@ -585,9 +569,7 @@ impl SubagentManager {
         message_id: Option<String>,
     ) -> Value {
         let steer = {
-            let Ok(children) = self.children.lock() else {
-                return not_found(name);
-            };
+            let children = lock(&self.children);
             let Some(child) = children.iter().find(|child| child.name == name) else {
                 return not_found(name);
             };
@@ -607,27 +589,19 @@ impl SubagentManager {
             }
         };
         if let Some(core) = steer {
-            if let Ok(mut core) = core.lock() {
-                core.conversation.push(ConversationMessage::User {
-                    content: vec![json!({"type": "text", "text": message})],
-                    injected: false,
-                });
-            }
+            lock(&core).conversation.push(ConversationMessage::User {
+                content: vec![json!({"type": "text", "text": message})],
+                injected: false,
+            });
             return success();
         }
         let Some(setup) = environment.subagents.as_ref() else {
             return stopped();
         };
-        let declared = self
-            .children
-            .lock()
-            .ok()
-            .and_then(|children| {
-                children
-                    .iter()
-                    .find(|child| child.name == name)
-                    .and_then(|child| child.agent_type.clone())
-            })
+        let declared = lock(&self.children)
+            .iter()
+            .find(|child| child.name == name)
+            .and_then(|child| child.agent_type.clone())
             .and_then(|kind| {
                 setup
                     .agent_types
@@ -644,9 +618,7 @@ impl SubagentManager {
     }
 
     fn interrupt(&self, name: &str) -> Value {
-        let Ok(mut children) = self.children.lock() else {
-            return not_found(name);
-        };
+        let mut children = lock(&self.children);
         let Some(child) = children.iter_mut().find(|child| child.name == name) else {
             return not_found(name);
         };
@@ -668,9 +640,7 @@ impl SubagentManager {
 
     async fn stop(&self, name: &str) -> Value {
         let (mut outcomes, generation) = {
-            let Ok(mut children) = self.children.lock() else {
-                return not_found(name);
-            };
+            let mut children = lock(&self.children);
             let Some(child) = children.iter_mut().find(|child| child.name == name) else {
                 return not_found(name);
             };
@@ -694,8 +664,9 @@ impl SubagentManager {
         };
         if let Some(outcomes) = outcomes.as_mut() {
             turn_outcome(outcomes, generation).await;
-            if let Ok(mut children) = self.children.lock()
-                && let Some(child) = children.iter_mut().find(|child| child.name == name)
+            if let Some(child) = lock(&self.children)
+                .iter_mut()
+                .find(|child| child.name == name)
             {
                 child.status = Status::Stopped;
                 discard(child);
@@ -706,11 +677,9 @@ impl SubagentManager {
 
     /// Interrupts every running child, as the session closes.
     pub fn shut_down(&self) {
-        if let Ok(children) = self.children.lock() {
-            for child in children.iter() {
-                if let Some(interrupt) = &child.interrupt {
-                    interrupt.send_replace(Some(INTERRUPT_REASON.to_owned()));
-                }
+        for child in lock(&self.children).iter() {
+            if let Some(interrupt) = &child.interrupt {
+                interrupt.send_replace(Some(INTERRUPT_REASON.to_owned()));
             }
         }
     }
@@ -761,31 +730,25 @@ fn running(children: &[Child]) -> usize {
 
 /// Why the child's last turn was interrupted, as its state records it.
 fn interrupt_reason(core: &Arc<Mutex<SessionCore>>) -> String {
-    core.lock()
-        .ok()
-        .and_then(|core| {
-            core.projector
-                .state
-                .latest_turn
-                .as_ref()
-                .and_then(|turn| turn.reason.clone())
-        })
+    lock(core)
+        .projector
+        .state
+        .latest_turn
+        .as_ref()
+        .and_then(|turn| turn.reason.clone())
         .filter(|reason| !reason.is_empty())
         .unwrap_or_else(|| INTERRUPT_REASON.to_owned())
 }
 
 /// The text of the last answer the child's model gave.
 fn final_answer(core: &Arc<Mutex<SessionCore>>) -> String {
-    core.lock()
-        .ok()
-        .and_then(|core| {
-            core.conversation
-                .iter()
-                .rev()
-                .find_map(|message| match message {
-                    ConversationMessage::Assistant { text, .. } => Some(text.clone()),
-                    _ => None,
-                })
+    lock(core)
+        .conversation
+        .iter()
+        .rev()
+        .find_map(|message| match message {
+            ConversationMessage::Assistant { text, .. } => Some(text.clone()),
+            _ => None,
         })
         .unwrap_or_default()
 }

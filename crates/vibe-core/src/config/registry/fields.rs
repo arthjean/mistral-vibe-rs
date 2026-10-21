@@ -6,10 +6,11 @@
 //! the pinned reference; descriptions are original prose.
 
 use super::{
-    FieldDefault, FieldKind, FieldSpec, MergeStrategy, THINKING_VALUES, UNPINNED_ACTIVE_MODEL,
+    FieldDefault, FieldKind, FieldSpec, MergeStrategy, UNPINNED_ACTIVE_MODEL,
     UNSET_AUTO_COMPACT_THRESHOLD,
 };
 use crate::config::THEME_VALUES;
+use crate::provider::config::ThinkingLevel;
 
 const REPLACE: MergeStrategy = MergeStrategy::Replace;
 const CONCAT: MergeStrategy = MergeStrategy::Concat;
@@ -841,7 +842,7 @@ pub static FIELDS: &[FieldSpec] = &[
     // out in the divergence table of `docs/parity.md`.
     FieldSpec::declared("thinking", FieldKind::Enum, REPLACE)
         .local()
-        .choices(THINKING_VALUES)
+        .choices(&ThinkingLevel::NAMES)
         .published(
             FieldDefault::Str("off"),
             "Reasoning effort for the active model.",

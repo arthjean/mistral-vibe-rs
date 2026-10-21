@@ -325,7 +325,7 @@ fn hides_environment(tools: &ToolRegistry, action: &ToolAction) -> bool {
     let arguments = &action.arguments;
     if arguments
         .get("env")
-        .is_some_and(vibe_core::llm::adapter::truthy)
+        .is_some_and(vibe_core::pycompat::truthy)
     {
         return true;
     }
@@ -333,7 +333,7 @@ fn hides_environment(tools: &ToolRegistry, action: &ToolAction) -> bool {
         return false;
     };
     let Some(cwd) = cwd.as_str() else {
-        return vibe_core::llm::adapter::truthy(cwd);
+        return vibe_core::pycompat::truthy(cwd);
     };
     let root = tools
         .guard()

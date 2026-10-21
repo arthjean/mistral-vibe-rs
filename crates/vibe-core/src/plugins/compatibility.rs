@@ -319,11 +319,77 @@ impl PluginAdapterDiagnostic {
     }
 }
 
+/// What kind of component a foreign adapter could not carry, spelled as the
+/// reference's `kind` literal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnsupportedKind {
+    SessionStart,
+    ManifestFields,
+    Hooks,
+    Agents,
+    Lsp,
+    OutputStyles,
+    Workflows,
+    Settings,
+    Themes,
+    Monitors,
+    InstallUi,
+    InterfaceMetadata,
+    OpenaiApp,
+    CodexHooks,
+    AgentMetadata,
+    ExecutablePlugin,
+    CustomTool,
+    Agent,
+    Command,
+    PluginDependency,
+    ProviderExtension,
+    McpOauth,
+    McpEnvironmentReference,
+}
+
+impl UnsupportedKind {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SessionStart => "session_start",
+            Self::ManifestFields => "manifest_fields",
+            Self::Hooks => "hooks",
+            Self::Agents => "agents",
+            Self::Lsp => "lsp",
+            Self::OutputStyles => "output_styles",
+            Self::Workflows => "workflows",
+            Self::Settings => "settings",
+            Self::Themes => "themes",
+            Self::Monitors => "monitors",
+            Self::InstallUi => "install_ui",
+            Self::InterfaceMetadata => "interface_metadata",
+            Self::OpenaiApp => "openai_app",
+            Self::CodexHooks => "codex_hooks",
+            Self::AgentMetadata => "agent_metadata",
+            Self::ExecutablePlugin => "executable_plugin",
+            Self::CustomTool => "custom_tool",
+            Self::Agent => "agent",
+            Self::Command => "command",
+            Self::PluginDependency => "plugin_dependency",
+            Self::ProviderExtension => "provider_extension",
+            Self::McpOauth => "mcp_oauth",
+            Self::McpEnvironmentReference => "mcp_environment_reference",
+        }
+    }
+}
+
+impl fmt::Display for UnsupportedKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 /// A component a foreign adapter recognized and could not carry. Reference
 /// `AdaptedUnsupportedComponent`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdaptedUnsupportedComponent {
-    pub kind: String,
+    pub kind: UnsupportedKind,
     pub path: PathBuf,
     pub reason: String,
 }

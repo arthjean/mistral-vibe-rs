@@ -33,7 +33,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::{Map, Value as JsonValue};
@@ -43,7 +42,8 @@ use super::registry::{FIELDS, MergeStrategy};
 use super::*;
 use crate::provider::config::{ModelRouting, UtilityFeature};
 
-use crate::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::{Capture, pinned_reference};
 use crate::redaction::is_sensitive_key;
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
@@ -1300,50 +1300,22 @@ fn a_divergence_names_its_pointer_and_redacts_a_sensitive_value() {
     assert_eq!(actual, "absent");
 }
 
-/// The pinned checkout and an interpreter that can drive it, or `None` when the
-/// live probe cannot run here. Every replay above still ran against the
-/// committed corpus.
-fn pinned_reference() -> Option<(PathBuf, PathBuf)> {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "configuration oracle") {
-        eprintln!("{reason}");
-        return None;
-    }
-    let interpreter = pinned_interpreter(&root)?;
-    Some((root, interpreter))
-}
-
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let Some((root, interpreter)) = pinned_reference() else {
-        eprintln!(
-            "skipping the live configuration oracle probe: no pinned checkout to capture from"
-        );
+    let Some(root) = pinned_reference("configuration oracle") else {
         return;
     };
-    let workspace =
-        crate::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
-            .expect("workspace root");
     let temporary = tempfile::tempdir().expect("temporary root");
-    let captured = temporary.path().join("corpus.json");
-    let output = Command::new(&interpreter)
-        .arg(workspace.join(CAPTURE_SCRIPT))
-        .arg("--reference")
-        .arg(&root)
-        .arg("--output")
-        .arg(&captured)
-        .output()
-        .expect("the capture script runs");
-    assert!(
-        output.status.success(),
-        "{CAPTURE_SCRIPT} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let recaptured = fs::read_to_string(&captured).expect("captured corpus reads");
-    let committed = fs::read_to_string(corpus_path()).expect("committed corpus reads");
-    assert_eq!(
-        recaptured.replace("\r\n", "\n"),
-        committed.replace("\r\n", "\n"),
-        "the committed corpus no longer matches the pinned reference; rerun {CAPTURE_SCRIPT}"
+    let recaptured = temporary.path().join("corpus.json");
+    let capture = Capture {
+        script: CAPTURE_SCRIPT,
+        family: &[],
+        arguments: &[],
+    };
+    capture.recapture(
+        &root,
+        &["--output".as_ref(), recaptured.as_os_str()],
+        &recaptured,
+        &corpus_path(),
     );
 }

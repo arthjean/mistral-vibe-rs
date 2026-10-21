@@ -30,7 +30,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
 
 use serde_json::{Map, Value};
@@ -52,7 +51,8 @@ use crate::experiments::{
 };
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::{Capture, pinned_reference};
 use crate::pycompat::{Dumps, dumps};
 use crate::telemetry::{
     ExperimentAssignment, HARNESS_LEGACY, LaunchContext, platform_arch, platform_id, version,
@@ -2097,43 +2097,34 @@ fn the_committed_corpus_replays_against_this_port() {
 /// pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "experiments") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("experiments") else {
         return;
-    }
-    let repository = repo_root();
-    let script = repository.join(CAPTURE_SCRIPT);
-    let recaptured = repository.join("target/experiments-corpus.json");
-    let promo = repository.join("target/experiments-promo-corpus.json");
-    let output = Command::new("python3")
-        .arg(&script)
-        .args(["--reference".as_ref(), root.as_os_str()])
-        .arg("--output")
-        .arg(repository.join("target/experiments-full.json"))
-        .arg("--corpus")
-        .arg(&recaptured)
-        .arg("--promo-corpus")
-        .arg(&promo)
-        .arg("--startup-corpus")
-        .arg(repository.join("target/experiments-startup-corpus.json"))
-        .current_dir(&repository)
-        .output()
-        .expect("the experiments capture script runs");
-    assert!(
-        output.status.success(),
-        "the experiments capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+    };
+    let target = repo_root().join("target");
+    let recaptured = target.join("experiments-corpus.json");
+    let (full, promo, startup) = (
+        target.join("experiments-full.json"),
+        target.join("experiments-promo-corpus.json"),
+        target.join("experiments-startup-corpus.json"),
     );
-    let fresh = fs::read_to_string(&recaptured).expect("the recaptured corpus is readable");
-    let committed =
-        fs::read_to_string(repository.join(CORPUS_RELATIVE)).expect("the corpus is readable");
-    let fresh: Value = serde_json::from_str(&fresh).expect("the recaptured corpus parses");
-    let committed: Value = serde_json::from_str(&committed).expect("the corpus parses");
-    assert_eq!(
-        fresh, committed,
-        "the pinned reference no longer answers what the committed corpus records; regenerate it \
-         with `{CAPTURE_SCRIPT}`"
+    let capture = Capture {
+        script: CAPTURE_SCRIPT,
+        family: &[],
+        arguments: &[],
+    };
+    capture.recapture(
+        &root,
+        &[
+            "--output".as_ref(),
+            full.as_os_str(),
+            "--corpus".as_ref(),
+            recaptured.as_os_str(),
+            "--promo-corpus".as_ref(),
+            promo.as_os_str(),
+            "--startup-corpus".as_ref(),
+            startup.as_os_str(),
+        ],
+        &recaptured,
+        &repo_root().join(CORPUS_RELATIVE),
     );
 }

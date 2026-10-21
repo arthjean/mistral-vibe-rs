@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::metadata::default_title_source;
-use super::time::format_iso_timestamp;
 use super::{
     FileLock, HANDOFF_JOURNAL_PREFIX, HANDOFF_LOCK_PREFIX, HydratedSession, LAST_SESSION_DIRECTORY,
     SessionMetadata, SessionStore, StorageError, TEMP_SEQUENCE, ensure_private_directory,
@@ -28,6 +27,7 @@ use super::{
 };
 use crate::atomic_file::{FileMode, write_atomically};
 use crate::events::ModelMessage;
+use crate::time::format_iso_millis;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -175,7 +175,7 @@ impl SessionStore {
         let mut metadata = parent.metadata.clone();
         new_id.clone_into(&mut metadata.id);
         metadata.directory = String::new();
-        metadata.start_time = format_iso_timestamp(now_ms);
+        metadata.start_time = format_iso_millis(now_ms);
         metadata.end_time = None;
         metadata.child_sessions = Vec::new();
         metadata.loops = Vec::new();

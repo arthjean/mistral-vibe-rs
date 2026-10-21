@@ -149,7 +149,7 @@ impl ServerConnection {
         let meta = store::new_meta(
             &session_id,
             Some(&unified.id),
-            &iso_millis(now),
+            &format_iso_millis(now),
             &unified.cwd,
             &store::username(),
         );

@@ -28,7 +28,6 @@ pub const EXCHANGE_PATH_TEMPLATE: &str = "/vibe/sign-in/{process_id}/exchange";
 /// The poll status the reference maps to an expired attempt rather than a
 /// transport failure.
 pub const HTTP_GONE: u16 = 410;
-pub use crate::pyurl::DEFAULT_PORTS;
 
 /// The browser-auth defaults the mistral provider resolves to when its entry
 /// carries no explicit URL, matching the registry's published defaults.

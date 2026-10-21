@@ -15,6 +15,8 @@ use std::sync::{Arc, Mutex};
 
 use thiserror::Error;
 
+use crate::sync::lock;
+
 #[cfg(any(windows, test))]
 mod win_vault;
 
@@ -98,10 +100,7 @@ pub(super) fn map_native_error(error: keyring::Error) -> KeyringFailure {
 
 impl KeyringBackend for NativeKeyringBackend {
     fn get(&self, service: &str, account: &str) -> Result<Option<String>, KeyringFailure> {
-        let _guard = self
-            .serialization
-            .lock()
-            .map_err(|_| KeyringFailure::Backend("keyring serialization poisoned".to_owned()))?;
+        let _guard = lock(&self.serialization);
         #[cfg(target_os = "windows")]
         {
             win_vault::WinVaultLayout::new(win_vault::NativeTargets).get(service, account)
@@ -122,10 +121,7 @@ impl KeyringBackend for NativeKeyringBackend {
     }
 
     fn set(&self, service: &str, account: &str, secret: &str) -> Result<(), KeyringFailure> {
-        let _guard = self
-            .serialization
-            .lock()
-            .map_err(|_| KeyringFailure::Backend("keyring serialization poisoned".to_owned()))?;
+        let _guard = lock(&self.serialization);
         #[cfg(target_os = "windows")]
         {
             win_vault::WinVaultLayout::new(win_vault::NativeTargets).set(service, account, secret)
@@ -144,10 +140,7 @@ impl KeyringBackend for NativeKeyringBackend {
     }
 
     fn delete(&self, service: &str, account: &str) -> Result<(), KeyringFailure> {
-        let _guard = self
-            .serialization
-            .lock()
-            .map_err(|_| KeyringFailure::Backend("keyring serialization poisoned".to_owned()))?;
+        let _guard = lock(&self.serialization);
         #[cfg(target_os = "windows")]
         {
             win_vault::WinVaultLayout::new(win_vault::NativeTargets).delete(service, account)
@@ -182,36 +175,25 @@ impl MemoryKeyringBackend {
     /// Every entry, keyed by service and account.
     #[must_use]
     pub fn entries(&self) -> BTreeMap<(String, String), String> {
-        self.entries
-            .lock()
-            .map(|entries| entries.clone())
-            .unwrap_or_default()
+        lock(&self.entries).clone()
     }
 }
 
 impl KeyringBackend for MemoryKeyringBackend {
     fn get(&self, service: &str, account: &str) -> Result<Option<String>, KeyringFailure> {
-        let entries = self
-            .entries
-            .lock()
-            .map_err(|_| KeyringFailure::Backend("keyring poisoned".to_owned()))?;
+        let entries = lock(&self.entries);
         Ok(entries
             .get(&(service.to_owned(), account.to_owned()))
             .cloned())
     }
 
     fn set(&self, service: &str, account: &str, secret: &str) -> Result<(), KeyringFailure> {
-        self.entries
-            .lock()
-            .map_err(|_| KeyringFailure::Backend("keyring poisoned".to_owned()))?
-            .insert((service.to_owned(), account.to_owned()), secret.to_owned());
+        lock(&self.entries).insert((service.to_owned(), account.to_owned()), secret.to_owned());
         Ok(())
     }
 
     fn delete(&self, service: &str, account: &str) -> Result<(), KeyringFailure> {
-        self.entries
-            .lock()
-            .map_err(|_| KeyringFailure::Backend("keyring poisoned".to_owned()))?
+        lock(&self.entries)
             .remove(&(service.to_owned(), account.to_owned()))
             .map(drop)
             .ok_or(KeyringFailure::NoEntry)
@@ -270,23 +252,17 @@ impl KeyringStore {
         if account.is_empty() {
             return value;
         }
-        if let Ok(mut cache) = self.cache.lock() {
-            cache
-                .entry(account.to_owned())
-                .or_insert(value.clone())
-                .clone()
-        } else {
-            value
-        }
+        lock(&self.cache)
+            .entry(account.to_owned())
+            .or_insert(value)
+            .clone()
     }
 
     fn cache_forget(&self, account: &str) {
         if account.is_empty() {
             return;
         }
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.remove(account);
-        }
+        lock(&self.cache).remove(account);
     }
 
     /// Reads the credential for `account`, consulting the current service
@@ -314,9 +290,7 @@ impl KeyringStore {
         if account.is_empty() || self.disabled {
             return Ok(None);
         }
-        if let Ok(cache) = self.cache.lock()
-            && let Some(cached) = cache.get(account)
-        {
+        if let Some(cached) = lock(&self.cache).get(account) {
             return Ok(cached.clone());
         }
         let services = if search_legacy { usize::MAX } else { 1 };

@@ -31,7 +31,6 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Arc;
 
 use serde::Deserialize;
@@ -49,7 +48,8 @@ use crate::observability::{
     LOG_RELATIVE_FILE, LogInitError, LogLevel, LogReader, LogSettings, decode_log_message,
     encode_log_message, format_log_line, log_pattern_groups, parse_log_line, process_identifiers,
 };
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::{Capture, pinned_reference};
 use crate::time::UtcTimestamp;
 use crate::tracing::{
     AGENT_NAME, AgentSpan, BackendFailure, HOOK_NAME_KEY, HOOK_TYPE_KEY, HookSpan,
@@ -3351,38 +3351,28 @@ fn the_committed_corpus_replays_against_this_port() {
 /// pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "telemetry") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("telemetry") else {
         return;
-    }
-    let repository = repo_root();
-    let script = repository.join(CAPTURE_SCRIPT);
-    let recaptured = repository.join("target/telemetry-corpus.json");
-    let output = Command::new("python3")
-        .arg(&script)
-        .args(["--reference".as_ref(), root.as_os_str()])
-        .arg("--output")
-        .arg(repository.join("target/telemetry-full.json"))
-        .arg("--corpus")
-        .arg(&recaptured)
-        .current_dir(&repository)
-        .output()
-        .expect("the telemetry capture script runs");
-    assert!(
-        output.status.success(),
-        "the telemetry capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+    };
+    let target = repo_root().join("target");
+    let (full, recaptured) = (
+        target.join("telemetry-full.json"),
+        target.join("telemetry-corpus.json"),
     );
-    let fresh = fs::read_to_string(&recaptured).expect("the recaptured corpus is readable");
-    let committed =
-        fs::read_to_string(repository.join(CORPUS_RELATIVE)).expect("the corpus is readable");
-    let fresh: Value = serde_json::from_str(&fresh).expect("the recaptured corpus parses");
-    let committed: Value = serde_json::from_str(&committed).expect("the corpus parses");
-    assert_eq!(
-        fresh, committed,
-        "the pinned reference no longer answers what the committed corpus records; regenerate it \
-         with `{CAPTURE_SCRIPT}`"
+    let capture = Capture {
+        script: CAPTURE_SCRIPT,
+        family: &[],
+        arguments: &[],
+    };
+    capture.recapture(
+        &root,
+        &[
+            "--output".as_ref(),
+            full.as_os_str(),
+            "--corpus".as_ref(),
+            recaptured.as_os_str(),
+        ],
+        &recaptured,
+        &repo_root().join(CORPUS_RELATIVE),
     );
 }

@@ -126,7 +126,7 @@ impl AppServer {
             .then(|| {
                 self.workspace.session_utility(
                     &scope,
-                    vibe_core::llm::utility::UtilityFeature::SmartApprove,
+                    vibe_core::provider::config::UtilityFeature::SmartApprove,
                     true,
                 )
             })
@@ -170,7 +170,7 @@ impl AppServer {
                 self.workspace
                     .session_utility_override(
                         &scope,
-                        vibe_core::llm::utility::UtilityFeature::Title,
+                        vibe_core::provider::config::UtilityFeature::Title,
                     )
                     .or_else(|| model.clone())
             })

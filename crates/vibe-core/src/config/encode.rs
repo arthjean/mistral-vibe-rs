@@ -139,8 +139,9 @@ fn key_part(key: &str) -> String {
 }
 
 /// A basic string: a quote, a backslash and every control character but the
-/// tab escaped, the short escapes where TOML has one.
-fn basic_string(text: &str) -> String {
+/// tab escaped, the short escapes where TOML has one. This is how `tomli_w`
+/// writes every string, the configuration's and the skills manifest's alike.
+pub(crate) fn basic_string(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('"');
     for character in text.chars() {

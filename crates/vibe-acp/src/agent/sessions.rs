@@ -305,7 +305,7 @@ where
                 let mut info = json!({
                     "sessionId": item.get("id").cloned().unwrap_or(Value::Null),
                     "cwd": text(item, "cwd").unwrap_or_default(),
-                    "updatedAt": crate::projection::iso_timestamp(
+                    "updatedAt": vibe_core::time::format_iso_millis(
                         item.get("updatedAt").and_then(Value::as_u64).unwrap_or(0),
                     ),
                 });

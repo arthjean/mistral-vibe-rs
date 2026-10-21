@@ -30,7 +30,7 @@ use vibe_core::extensions::{
 };
 use vibe_core::llm::availability::ModelAvailability;
 use vibe_core::llm::completion::LlmCompletion;
-use vibe_core::llm::utility::{self, UtilityFeature, UtilitySelection};
+use vibe_core::llm::utility::{self, UtilitySelection};
 use vibe_core::llm::{AmbientCredentials, BackendContext, Credentials, MapCredentials};
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::{
@@ -38,8 +38,8 @@ use vibe_core::mcp::{
 };
 use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware, PlanAgentMiddleware};
 use vibe_core::policy::{PolicyGuardedTool, resolve_task_tool_permission};
-use vibe_core::provider::config::UtilityModels;
 use vibe_core::provider::config::{ApiSettings, ModelConfig, ModelRouting, ProviderConfig};
+use vibe_core::provider::config::{UtilityFeature, UtilityModels};
 use vibe_core::provider::{
     ProviderError, ProviderInput, RequestLimits, ToolChoice, ToolDefinition,
 };

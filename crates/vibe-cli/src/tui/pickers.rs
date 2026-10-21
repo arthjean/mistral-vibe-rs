@@ -381,7 +381,7 @@ pub fn thinking_overlay(current: &str) -> Overlay {
     fixed_choice_overlay(
         OverlayKind::Thinking,
         "Thinking level",
-        &["off", "low", "medium", "high", "max"],
+        &vibe_core::provider::config::ThinkingLevel::NAMES,
         current,
     )
 }

@@ -25,6 +25,7 @@ use super::models::{
 };
 use crate::matching::NameFilter;
 use crate::pycompat::{self, pydantic};
+use crate::sync::lock;
 
 /// How many times one post-agent hook may send the model back per user turn.
 /// Reference `_MAX_RETRIES`.
@@ -96,9 +97,7 @@ impl HooksManager {
     /// Forgets every retry, which a new user turn does. Reference
     /// `reset_retry_count`.
     pub fn reset_retry_count(&self) {
-        if let Ok(mut retries) = self.retries.lock() {
-            retries.clear();
-        }
+        lock(&self.retries).clear();
     }
 
     /// Runs every hook matching `invocation`, handing each yield to `sink` as
@@ -254,10 +253,8 @@ impl HooksManager {
 
     /// Reference `on_passthrough`: only a post-agent hook remembers it.
     fn on_passthrough(&self, hook: &HookConfig) {
-        if hook.hook_type == HookType::PostAgent
-            && let Ok(mut retries) = self.retries.lock()
-        {
-            retries.remove(&hook.name);
+        if hook.hook_type == HookType::PostAgent {
+            lock(&self.retries).remove(&hook.name);
         }
     }
 
@@ -296,9 +293,7 @@ impl HooksManager {
                 }
             }
             HookInvocation::PostAgent { .. } => {
-                let Ok(mut retries) = self.retries.lock() else {
-                    return HookAction::completed(HookSeverity::Error, None);
-                };
+                let mut retries = lock(&self.retries);
                 let used = retries.get(&hook.name).copied().unwrap_or_default();
                 if used >= MAX_RETRIES {
                     return HookAction::completed(
@@ -385,9 +380,7 @@ impl HooksManager {
                 }
             }
             HookInvocation::PostAgent { .. } => {
-                if let Ok(mut retries) = self.retries.lock() {
-                    retries.remove(&hook.name);
-                }
+                lock(&self.retries).remove(&hook.name);
                 HookAction::completed(HookSeverity::Ok, response.system_message)
             }
         }

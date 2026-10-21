@@ -41,7 +41,8 @@ mod session_core;
 mod stream;
 mod turn;
 
-pub use calls::{model_content, sorted};
+pub use calls::model_content;
+pub(crate) use calls::sorted;
 pub use compaction_run::{CompactionEnd, compact_session};
 pub use conversation::{ConversationMessage, FILE_IMAGE_LINK};
 pub use fork::{fork_core, fork_core_before, fork_core_through, import_core};

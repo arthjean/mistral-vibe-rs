@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as JsonValue};
 use toml::Table;
 
+use crate::sync::lock;
 use crate::text::sha256_hex;
 use document::{fingerprint_optional, read_table_optional, validate_table};
 use effective::finalize_effective;
@@ -20,7 +21,7 @@ pub mod admin;
 mod document;
 pub mod dotenv;
 mod effective;
-mod encode;
+pub(crate) mod encode;
 mod environment;
 mod error;
 pub mod events;
@@ -349,9 +350,7 @@ impl LayeredConfig {
     /// cache of part of the document is refreshed: it covers a file edited
     /// outside this process, which the change bus never reports.
     pub fn observe(&self, observer: ConfigObserver) {
-        if let Ok(mut observers) = self.observers.lock() {
-            observers.push(observer);
-        }
+        lock(&self.observers).push(observer);
     }
 
     /// Restricts the store to the configuration sources `sources` enables.
@@ -425,10 +424,7 @@ impl LayeredConfig {
     /// already taken its handle. The next [`Self::load`] composes it, which is
     /// what carries it to the caches that follow a load.
     pub fn set_experiments(&self, values: Table) {
-        *self
-            .experiments
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = values;
+        *lock(&self.experiments) = values;
     }
 
     /// Publishes whether a rollout that may route this store's sessions onto
@@ -475,13 +471,7 @@ impl LayeredConfig {
     /// fails validation can be put back. Reference
     /// `AdminConfigLayer.load_managed_toml` and `restore`.
     pub fn set_admin(&self, values: Table) -> Table {
-        std::mem::replace(
-            &mut *self
-                .admin
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-            values,
-        )
+        std::mem::replace(&mut *lock(&self.admin), values)
     }
 
     #[must_use]
@@ -571,10 +561,7 @@ impl LayeredConfig {
     }
 
     pub fn load(&self) -> Result<ConfigSnapshot, ConfigError> {
-        let _guard = self
-            .transaction_lock
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?;
+        let _guard = lock(&self.transaction_lock);
         ensure_private_directory(&self.paths.vibe_home)?;
         let _file_guard = ConfigFileLock::acquire(&self.paths.vibe_home)?;
         recover_transaction(&self.paths)?;
@@ -608,7 +595,7 @@ impl LayeredConfig {
             (ConfigTarget::Project, project_values),
         ]);
         if selected_target == ConfigTarget::Ephemeral {
-            target_values.insert(ConfigTarget::Ephemeral, self.ephemeral_document()?);
+            target_values.insert(ConfigTarget::Ephemeral, self.ephemeral_document());
         }
         // The in-memory document is written where reference writes reach its
         // overrides layer, so it composes with the runtime overrides.
@@ -634,11 +621,7 @@ impl LayeredConfig {
             // telemetry, but it never silently overrides a value a human wrote.
             ConfigLayer {
                 kind: ConfigLayerKind::Experiments,
-                values: self
-                    .experiments
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone(),
+                values: lock(&self.experiments).clone(),
             },
             ConfigLayer {
                 kind: ConfigLayerKind::UserToml,
@@ -668,11 +651,7 @@ impl LayeredConfig {
             },
             ConfigLayer {
                 kind: ConfigLayerKind::Admin,
-                values: self
-                    .admin
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .clone(),
+                values: lock(&self.admin).clone(),
             },
         ];
         let mut effective = Table::new();
@@ -683,11 +662,7 @@ impl LayeredConfig {
         // What a migration could not write is reported by every snapshot that
         // follows it, so a client reading the configuration sees why its file
         // still carries the old shape.
-        let mut validation_warnings = self
-            .migration_warnings
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?
-            .clone();
+        let mut validation_warnings = lock(&self.migration_warnings).clone();
         // One entry, whatever the pass was enumerating: the snapshot reports
         // that the discovered layer is empty and why, not every item it failed
         // to reach.
@@ -763,21 +738,15 @@ impl LayeredConfig {
         // The observers run under the same guards the load holds, which is what
         // keeps a cache from reading a document another load is replacing. None
         // of them writes configuration, so the lock cannot come back around.
-        if let Ok(observers) = self.observers.lock() {
-            for observer in observers.iter() {
-                observer(&snapshot);
-            }
+        for observer in lock(&self.observers).iter() {
+            observer(&snapshot);
         }
         Ok(snapshot)
     }
 
     /// The in-memory document behind [`ConfigTarget::Ephemeral`].
-    fn ephemeral_document(&self) -> Result<Table, ConfigError> {
-        Ok(self
-            .ephemeral
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?
-            .clone())
+    fn ephemeral_document(&self) -> Table {
+        lock(&self.ephemeral).clone()
     }
 
     /// The JSON Schema for the published configuration surface, generated from

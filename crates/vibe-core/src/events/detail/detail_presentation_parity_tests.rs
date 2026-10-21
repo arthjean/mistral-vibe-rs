@@ -32,6 +32,7 @@ use sha2::{Digest as _, Sha256};
 
 use crate::text::hex_encode;
 
+use crate::parity::replay::valued_differences;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::{EffectDetail, EffectResultDisplay, RemoteSettlement, RemoteToolOrigin};
@@ -770,65 +771,6 @@ fn observed_document(case: &Case) -> Value {
 }
 
 // --------------------------------------------------------------------------
-// Diffing
-// --------------------------------------------------------------------------
-
-#[derive(Debug)]
-struct Difference {
-    pointer: String,
-    expected: Value,
-    actual: Value,
-}
-
-/// Every difference under `pointer`, as a JSON pointer and both values.
-///
-/// All of them rather than the first, because the ledger is matched per
-/// pointer: reporting only the earliest would leave an entry for a later field
-/// permanently unexercised, and the staleness check would then delete a gap
-/// that is still open.
-fn differences(pointer: &str, expected: &Value, actual: &Value, into: &mut Vec<Difference>) {
-    match (expected, actual) {
-        (Value::Object(left), Value::Object(right)) => {
-            for (key, value) in left {
-                let nested = format!("{pointer}/{key}");
-                match right.get(key) {
-                    Some(other) => differences(&nested, value, other, into),
-                    None => into.push(Difference {
-                        pointer: nested,
-                        expected: value.clone(),
-                        actual: Value::String("absent".to_owned()),
-                    }),
-                }
-            }
-            for key in right.keys().filter(|key| !left.contains_key(*key)) {
-                into.push(Difference {
-                    pointer: format!("{pointer}/{key}"),
-                    expected: Value::String("absent".to_owned()),
-                    actual: right[key].clone(),
-                });
-            }
-        }
-        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
-            for (index, (a, b)) in left.iter().zip(right).enumerate() {
-                differences(&format!("{pointer}/{index}"), a, b, into);
-            }
-        }
-        _ if expected == actual => {}
-        _ => into.push(Difference {
-            pointer: pointer.to_owned(),
-            expected: expected.clone(),
-            actual: actual.clone(),
-        }),
-    }
-}
-
-fn compare(expected: &Value, actual: &Value) -> Vec<Difference> {
-    let mut found = Vec::new();
-    differences("", expected, actual, &mut found);
-    found
-}
-
-// --------------------------------------------------------------------------
 // The tests
 // --------------------------------------------------------------------------
 
@@ -846,7 +788,7 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut tolerated: BTreeSet<(String, &'static str)> = BTreeSet::new();
     let mut unlisted = Vec::new();
     for case in &corpus.cases {
-        let found = compare(&case.document(), &observed_document(case));
+        let found = valued_differences(&case.document(), &observed_document(case));
         if found.is_empty() {
             conforming += 1;
             continue;
@@ -913,7 +855,7 @@ fn a_ledger_entry_whose_divergence_is_fixed_fails_the_suite() {
     let ledger = ledger();
     let mut exercised: BTreeSet<usize> = BTreeSet::new();
     for case in &corpus.cases {
-        for difference in compare(&case.document(), &observed_document(case)) {
+        for difference in valued_differences(&case.document(), &observed_document(case)) {
             if let Some(position) = ledger
                 .iter()
                 .position(|entry| entry.covers(&case.tool, &case.case, &difference.pointer))

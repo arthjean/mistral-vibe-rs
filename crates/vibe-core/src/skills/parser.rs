@@ -202,79 +202,131 @@ fn mapping_key(value: &Value) -> String {
     }
 }
 
-/// Resolves one plain scalar with PyYAML's vocabulary: its boolean set is the
-/// YAML 1.1 words in their three exact capitalizations, without the
-/// single-letter `y` and `n` the 1.1 specification also names, so those stay
-/// strings here exactly as they do upstream.
-fn resolve_plain(text: &str) -> Value {
-    match text {
-        "" | "~" | "null" | "Null" | "NULL" => return Value::Null,
-        "true" | "True" | "TRUE" | "yes" | "Yes" | "YES" | "on" | "On" | "ON" => {
-            return Value::Bool(true);
-        }
-        "false" | "False" | "FALSE" | "no" | "No" | "NO" | "off" | "Off" | "OFF" => {
-            return Value::Bool(false);
-        }
-        _ => {}
-    }
-    resolve_number(text).unwrap_or_else(|| Value::String(text.to_owned()))
+/// The tag PyYAML's implicit resolver gives a plain scalar, [`None`] for a
+/// string. Reference `yaml.resolver.Resolver`: its boolean set is the YAML 1.1
+/// words in their three exact capitalizations, without the single-letter `y`
+/// and `n` the 1.1 specification also names, so those stay strings here
+/// exactly as they do upstream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ImplicitTag {
+    Null,
+    Bool(bool),
+    Int,
+    Float,
+    /// A timestamp, a merge key or a value key, which the loader below keeps
+    /// as the string it reads and the dumper still has to quote.
+    Other,
 }
 
-/// The integer forms PyYAML resolves: binary, hexadecimal, legacy
-/// leading-zero octal, and decimal, each with `_` separators.
+/// Classifies `text` as PyYAML's resolver does, which is what decides both
+/// how a plain scalar loads and whether a string dumps plain.
+pub(super) fn implicit_tag(text: &str) -> Option<ImplicitTag> {
+    match text {
+        "" | "~" | "null" | "Null" | "NULL" => Some(ImplicitTag::Null),
+        "true" | "True" | "TRUE" | "yes" | "Yes" | "YES" | "on" | "On" | "ON" => {
+            Some(ImplicitTag::Bool(true))
+        }
+        "false" | "False" | "FALSE" | "no" | "No" | "NO" | "off" | "Off" | "OFF" => {
+            Some(ImplicitTag::Bool(false))
+        }
+        "<<" | "=" => Some(ImplicitTag::Other),
+        _ if PLAIN_INT.is_match(text) => Some(ImplicitTag::Int),
+        _ if PLAIN_FLOAT.is_match(text) => Some(ImplicitTag::Float),
+        _ if PLAIN_TIMESTAMP.is_match(text) => Some(ImplicitTag::Other),
+        _ => None,
+    }
+}
+
+/// Resolves one plain scalar with PyYAML's vocabulary.
+fn resolve_plain(text: &str) -> Value {
+    let resolved = match implicit_tag(text) {
+        Some(ImplicitTag::Null) => Some(Value::Null),
+        Some(ImplicitTag::Bool(flag)) => Some(Value::Bool(flag)),
+        Some(ImplicitTag::Int) => resolve_int(text),
+        Some(ImplicitTag::Float) => resolve_float(text),
+        Some(ImplicitTag::Other) | None => None,
+    };
+    resolved.unwrap_or_else(|| Value::String(text.to_owned()))
+}
+
+/// The integer forms PyYAML resolves: binary, legacy leading-zero octal,
+/// decimal, hexadecimal and sexagesimal, each with `_` separators.
 #[expect(
     clippy::expect_used,
     reason = "the pattern is a compile-time constant that compiles"
 )]
 static PLAIN_INT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[-+]?(0b[0-1_]+|0x[0-9a-fA-F_]+|0[0-7_]+|0|[1-9][0-9_]*)$")
-        .expect("the integer pattern compiles")
+    Regex::new(
+        r"^[-+]?(0b[0-1_]+|0[0-7_]+|0|[1-9][0-9_]*|0x[0-9a-fA-F_]+|[1-9][0-9_]*(:[0-5]?[0-9])+)$",
+    )
+    .expect("the integer pattern compiles")
 });
 
-/// The float forms PyYAML resolves, minus the sexagesimal and non-finite
-/// spellings JSON cannot carry: a dot is mandatory and an exponent needs an
-/// explicit sign, so `1e5` stays a string upstream and here alike.
+/// The float forms PyYAML resolves: a dot is mandatory and an exponent needs
+/// an explicit sign, so `1e5` stays a string upstream and here alike.
 #[expect(
     clippy::expect_used,
     reason = "the pattern is a compile-time constant that compiles"
 )]
 static PLAIN_FLOAT: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[-+]?([0-9][0-9_]*\.[0-9_]*|\.[0-9_]+)([eE][-+][0-9]+)?$")
-        .expect("the float pattern compiles")
+    Regex::new(concat!(
+        r"^([-+]?[0-9][0-9_]*\.[0-9_]*([eE][-+][0-9]+)?",
+        r"|\.[0-9][0-9_]*([eE][-+][0-9]+)?",
+        r"|[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+\.[0-9_]*",
+        r"|[-+]?\.(inf|Inf|INF)",
+        r"|\.(nan|NaN|NAN))$",
+    ))
+    .expect("the float pattern compiles")
 });
 
-fn resolve_number(text: &str) -> Option<Value> {
-    if PLAIN_INT.is_match(text) {
-        let negative = text.starts_with('-');
-        let body = text.strip_prefix(['-', '+']).unwrap_or(text);
-        let digits: String = body.chars().filter(|character| *character != '_').collect();
-        let magnitude = if let Some(binary) = digits.strip_prefix("0b") {
-            i64::from_str_radix(binary, 2)
-        } else if let Some(hexadecimal) = digits.strip_prefix("0x") {
-            i64::from_str_radix(hexadecimal, 16)
-        } else if digits != "0" && digits.starts_with('0') {
-            i64::from_str_radix(&digits, 8)
-        } else {
-            digits.parse()
-        };
-        return match magnitude {
-            Ok(magnitude) => Some(Value::Number(Number::from(if negative {
-                -magnitude
-            } else {
-                magnitude
-            }))),
-            // An integer wider than 64 bits is arbitrary-precision upstream;
-            // this port has no such number, so the scalar stays a string.
-            Err(_) => None,
-        };
-    }
-    if PLAIN_FLOAT.is_match(text) {
-        let digits: String = text.chars().filter(|character| *character != '_').collect();
-        return digits
-            .parse::<f64>()
-            .ok()
-            .and_then(Number::from_f64)
-            .map(Value::Number);
-    }
-    None
+/// The timestamp forms PyYAML resolves: a date, or a date and a time with an
+/// optional fraction and zone.
+#[expect(
+    clippy::expect_used,
+    reason = "the pattern is a compile-time constant that compiles"
+)]
+static PLAIN_TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"^([0-9]{4}-[0-9]{2}-[0-9]{2}",
+        r"|[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}([Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]*)?",
+        r"([ \t]*(Z|[-+][0-9]{1,2}(:[0-9]{2})?))?)$",
+    ))
+    .expect("the timestamp pattern compiles")
+});
+
+/// The value of an integer tag, or [`None`] for a form this port keeps as the
+/// string it reads.
+fn resolve_int(text: &str) -> Option<Value> {
+    let negative = text.starts_with('-');
+    let body = text.strip_prefix(['-', '+']).unwrap_or(text);
+    let digits: String = body.chars().filter(|character| *character != '_').collect();
+    let magnitude = if let Some(binary) = digits.strip_prefix("0b") {
+        i64::from_str_radix(binary, 2)
+    } else if let Some(hexadecimal) = digits.strip_prefix("0x") {
+        i64::from_str_radix(hexadecimal, 16)
+    } else if digits != "0" && digits.starts_with('0') {
+        i64::from_str_radix(&digits, 8)
+    } else {
+        digits.parse()
+    };
+    // An integer wider than 64 bits is arbitrary-precision upstream, and a
+    // sexagesimal one is base 60; this port reads neither, so the scalar stays
+    // a string.
+    let magnitude = magnitude.ok()?;
+    Some(Value::Number(Number::from(if negative {
+        -magnitude
+    } else {
+        magnitude
+    })))
+}
+
+/// The value of a float tag, or [`None`] for the sexagesimal and non-finite
+/// spellings JSON cannot carry, which stay strings.
+fn resolve_float(text: &str) -> Option<Value> {
+    let digits: String = text.chars().filter(|character| *character != '_').collect();
+    digits
+        .parse::<f64>()
+        .ok()
+        .and_then(Number::from_f64)
+        .map(Value::Number)
 }

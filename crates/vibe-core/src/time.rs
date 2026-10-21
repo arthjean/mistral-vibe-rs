@@ -3,10 +3,11 @@
 //!
 //! Dates are derived from counts since the epoch with Howard Hinnant's
 //! civil-from-days algorithm rather than a date dependency, because the whole
-//! need is a handful of fixed spellings. [`UtcTimestamp`] is the instant a
-//! caller carries; the free functions serve callers that hold milliseconds or
-//! microseconds since the epoch. The wall clock itself is read through
-//! [`crate::clock`].
+//! need is a handful of fixed spellings; only [`format_local_timestamp`],
+//! which needs the system time zone, reads it through `jiff`. [`UtcTimestamp`]
+//! is the instant a caller carries; the free functions serve callers that hold
+//! milliseconds or microseconds since the epoch. The wall clock itself is read
+//! through [`crate::clock`].
 
 /// A UTC instant with microsecond precision, the resolution the reference's
 /// `datetime` carries: parsed from an ISO 8601 stamp, compared, offset and
@@ -252,6 +253,33 @@ pub fn normalize_iso_utc(value: &str) -> Option<String> {
 #[must_use]
 pub fn format_iso_micros(micros: u64) -> String {
     UtcTimestamp::from_micros_since_epoch(i64::try_from(micros).unwrap_or(i64::MAX)).to_iso8601()
+}
+
+/// [`format_iso_micros`] of an instant in milliseconds since the epoch.
+#[must_use]
+pub fn format_iso_millis(millis: u64) -> String {
+    format_iso_micros(millis.saturating_mul(1_000))
+}
+
+/// Reference `isoformat(timespec="milliseconds")` with the UTC offset spelled
+/// `Z`: the fraction is always three digits.
+#[must_use]
+pub fn format_iso_millis_z(millis: u64) -> String {
+    let (year, month, day, hour, minute, second, millis) = utc_fields(millis);
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
+}
+
+/// A moment in local time as Python's `%Y-%m-%d %H:%M:%S %Z` renders it.
+#[must_use]
+pub fn format_local_timestamp(epoch_seconds: f64) -> Option<String> {
+    if !epoch_seconds.is_finite() {
+        return None;
+    }
+    #[allow(clippy::cast_possible_truncation)]
+    let whole = epoch_seconds.floor() as i64;
+    let timestamp = jiff::Timestamp::from_second(whole).ok()?;
+    let zoned = timestamp.to_zoned(jiff::tz::TimeZone::system());
+    Some(zoned.strftime("%Y-%m-%d %H:%M:%S %Z").to_string())
 }
 
 /// [`parse_iso_millis`] at microsecond precision, which is what the listing

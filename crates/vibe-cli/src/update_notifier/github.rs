@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+use vibe_core::pycompat::truthy;
+
 use super::gateway::{
     GATEWAY_TIMEOUT, UpdateFetch, UpdateGateway, UpdateGatewayCause, UpdateGatewayError, exchange,
     gateway_client,
@@ -145,7 +147,8 @@ pub fn select_latest_release(payload: &serde_json::Value) -> Option<String> {
         .as_array()?
         .iter()
         .filter(|release| {
-            !python_truthy(release.get("prerelease")) && !python_truthy(release.get("draft"))
+            !release.get("prerelease").is_some_and(truthy)
+                && !release.get("draft").is_some_and(truthy)
         })
         .map(|release| {
             (
@@ -175,18 +178,6 @@ fn extract_release_version(tag_name: &str) -> Option<String> {
     let tag = vibe_core::pycompat::strip(tag_name);
     let version = tag.strip_prefix(['v', 'V']).unwrap_or(tag);
     (!version.is_empty()).then(|| version.to_owned())
-}
-
-/// Python truthiness of one JSON value.
-fn python_truthy(value: Option<&serde_json::Value>) -> bool {
-    match value {
-        None | Some(serde_json::Value::Null) => false,
-        Some(serde_json::Value::Bool(flag)) => *flag,
-        Some(serde_json::Value::Number(number)) => number.as_f64().is_some_and(|n| n != 0.0),
-        Some(serde_json::Value::String(text)) => !text.is_empty(),
-        Some(serde_json::Value::Array(items)) => !items.is_empty(),
-        Some(serde_json::Value::Object(entries)) => !entries.is_empty(),
-    }
 }
 
 #[cfg(test)]

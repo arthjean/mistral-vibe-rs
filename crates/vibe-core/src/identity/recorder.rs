@@ -12,6 +12,7 @@ use super::{
     IdentityEntity, IdentityFuture, IdentityHttpResponse, IdentityRequest, IdentityResolver,
     IdentityResult, IdentityTransport, IdentityTransportError,
 };
+use crate::sync::lock;
 
 /// What the transport does with a request.
 #[derive(Debug, Clone)]
@@ -76,17 +77,11 @@ impl RecordingIdentityTransport {
     }
 
     pub fn requests(&self) -> Vec<RecordedIdentityRequest> {
-        self.requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        lock(&self.requests).clone()
     }
 
     pub fn request_count(&self) -> usize {
-        self.requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
+        lock(&self.requests).len()
     }
 }
 
@@ -110,10 +105,7 @@ impl IdentityTransport for RecordingIdentityTransport {
                 .any(|(name, value)| *name == "Authorization" && *value == expected),
             timeout: request.timeout,
         };
-        self.requests
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(recorded);
+        lock(&self.requests).push(recorded);
         let outcome = self.outcome.clone();
         Box::pin(async move {
             match outcome {
@@ -153,10 +145,7 @@ impl RecordingResolver {
     }
 
     pub fn calls(&self) -> Vec<RecordedResolution> {
-        self.calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        lock(&self.calls).clone()
     }
 }
 
@@ -167,14 +156,11 @@ impl IdentityResolver for RecordingResolver {
         api_key: &'a str,
         timeout: Option<Duration>,
     ) -> IdentityFuture<'a, Option<IdentityResult>> {
-        self.calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .push(RecordedResolution {
-                base_url: base_url.to_owned(),
-                timeout,
-                carries_key: api_key == self.api_key,
-            });
+        lock(&self.calls).push(RecordedResolution {
+            base_url: base_url.to_owned(),
+            timeout,
+            carries_key: api_key == self.api_key,
+        });
         let organization = self.organization.clone();
         Box::pin(async move {
             organization.map(|id| IdentityResult {

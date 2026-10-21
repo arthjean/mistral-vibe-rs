@@ -17,8 +17,9 @@ use vibe_core::pycompat::truthy;
 use vibe_protocol::ProtocolErrorCode;
 
 use crate::agent::{AcpAgent, voice};
-use crate::projection::{iso_timestamp, session_info_update};
+use crate::projection::session_info_update;
 use crate::protocol::AcpError;
+use vibe_core::time::format_iso_millis;
 
 impl<D> AcpAgent<D>
 where
@@ -115,10 +116,10 @@ where
         // A Unified Harness rename answers no time, which the reference then
         // leaves off the update.
         let updated_at = match renamed.get("updatedAt") {
-            Some(Value::Number(millis)) => millis.as_u64().map(iso_timestamp),
+            Some(Value::Number(millis)) => millis.as_u64().map(format_iso_millis),
             Some(Value::String(stamp)) => Some(stamp.clone()),
             Some(Value::Null) => None,
-            _ => Some(iso_timestamp(vibe_core::clock::now_millis())),
+            _ => Some(format_iso_millis(vibe_core::clock::now_millis())),
         };
         if let Some(harness) = &live {
             // Reference `_forward_unsolicited_events`: the session update the
@@ -429,9 +430,10 @@ where
             "connectors/toggle" => {
                 let name = text(params, "name")?;
                 let disabled = match params.get("disabled") {
-                    Some(value) => crate::validation::lax_bool(value).ok_or_else(|| {
-                        AcpError::InvalidParams("`disabled` must be a boolean".to_owned())
-                    })?,
+                    Some(value) => vibe_core::pycompat::pydantic::lax_bool_value(value)
+                        .ok_or_else(|| {
+                            AcpError::InvalidParams("`disabled` must be a boolean".to_owned())
+                        })?,
                     None => {
                         return Err(AcpError::InvalidParams("`disabled` is required".to_owned()));
                     }

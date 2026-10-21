@@ -27,6 +27,7 @@ use std::sync::{Mutex, OnceLock};
 use regex::Regex;
 use thiserror::Error;
 
+use crate::sync::lock;
 use crate::time::UtcTimestamp;
 
 #[cfg(test)]
@@ -448,9 +449,7 @@ pub fn env_log_level(read: &dyn Fn(&str) -> Option<String>) -> Option<LogLevel> 
 static LEVEL_STATE: Mutex<(Option<LogLevel>, Option<LogLevel>)> = Mutex::new((None, None));
 
 fn level_state() -> (Option<LogLevel>, Option<LogLevel>) {
-    *LEVEL_STATE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
+    *lock(&LEVEL_STATE)
 }
 
 /// The chain as this process stands. Reference `get_log_level_chain`, which
@@ -467,18 +466,12 @@ pub fn log_level_chain() -> LogLevelChain {
 
 /// Reference `set_session_override`.
 pub fn set_session_log_level(level: Option<LogLevel>) {
-    LEVEL_STATE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .0 = level;
+    lock(&LEVEL_STATE).0 = level;
 }
 
 /// Reference `set_config_log_level`, called whenever the configuration is read.
 pub fn set_config_log_level(level: Option<LogLevel>) {
-    LEVEL_STATE
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .1 = level;
+    lock(&LEVEL_STATE).1 = level;
 }
 
 // --------------------------------------------------------------------------

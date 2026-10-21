@@ -436,7 +436,14 @@ fn codex_plugins_resolve_as_the_reference_resolves_them() {
     let mut unsupported: Vec<Value> = resolved
         .unsupported_components
         .iter()
-        .map(|item| json!([item.plugin_name, item.kind, rel(&item.path), item.reason]))
+        .map(|item| {
+            json!([
+                item.plugin_name,
+                item.kind.as_str(),
+                rel(&item.path),
+                item.reason
+            ])
+        })
         .collect();
     unsupported.sort_by_key(ToString::to_string);
     let actual = json!({

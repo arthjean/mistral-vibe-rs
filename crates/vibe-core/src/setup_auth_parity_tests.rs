@@ -580,7 +580,7 @@ fn run_constants(corpus: &Constants) -> usize {
         "defaultPorts",
         "default port table",
         &corpus.default_ports,
-        &auth::sign_in_http::DEFAULT_PORTS
+        &crate::pyurl::DEFAULT_PORTS
             .iter()
             .map(|(scheme, port)| ((*scheme).to_owned(), *port))
             .collect::<BTreeMap<_, _>>(),

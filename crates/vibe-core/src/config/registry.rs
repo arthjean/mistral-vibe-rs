@@ -270,8 +270,6 @@ impl FieldSpec {
     }
 }
 
-pub(super) const THINKING_VALUES: &[&str] = &["off", "low", "medium", "high", "max"];
-
 /// The providers the reference ships, which a provider named by an onboarding
 /// client resolves against after the configured ones (reference
 /// `DEFAULT_PROVIDERS`).

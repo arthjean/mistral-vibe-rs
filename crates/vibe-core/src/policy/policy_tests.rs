@@ -7,7 +7,7 @@
 //! atomicity of a revocation, and the wiring from a registered tool to a
 //! decision.
 
-use super::store::SESSION_APPROVAL;
+use super::store::{PERMANENT_APPROVAL, SESSION_APPROVAL};
 use super::*;
 use crate::scratchpad::init_scratchpad;
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver};
@@ -458,6 +458,42 @@ async fn a_permanent_approval_writes_the_allowlist_a_session_one_does_not() {
             PermissionMode::Always,
             "`{covered}`"
         );
+    }
+}
+
+/// A permanent approval whose tool's allowlist does not read a pattern back
+/// keeps that pattern for the session only, and says so on the rule it stores.
+#[tokio::test]
+async fn a_pattern_the_allowlist_drops_is_stored_as_a_session_approval() {
+    let store = PermissionStore::default();
+    let kept = PermissionRequirement::command("cargo test");
+    let dropped = PermissionRequirement::command("npm run build");
+    let scopes = [kept.scope];
+    store
+        .grant(
+            "bash",
+            std::slice::from_ref(&kept),
+            PathGrantScope::Exact,
+            GrantLifetime::PermanentWithin(&scopes),
+        )
+        .await;
+    store
+        .grant(
+            "bash",
+            std::slice::from_ref(&dropped),
+            PathGrantScope::Exact,
+            GrantLifetime::PermanentWithin(&[]),
+        )
+        .await;
+
+    for (requirement, rationale) in [(kept, PERMANENT_APPROVAL), (dropped, SESSION_APPROVAL)] {
+        let matched = store
+            .resolve("bash", &PermissionContext::asking(vec![requirement]))
+            .await
+            .expect("resolution")
+            .matched_rule
+            .expect("a stored rule covers the call");
+        assert_eq!(matched.rationale, rationale);
     }
 }
 

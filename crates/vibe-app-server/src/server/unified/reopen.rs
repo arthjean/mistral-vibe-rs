@@ -190,7 +190,7 @@ impl ServerConnection {
                 let meta = store::new_meta(
                     session_id,
                     None,
-                    &iso_millis(created_at),
+                    &format_iso_millis(created_at),
                     &cwd,
                     &store::username(),
                 );
@@ -378,7 +378,7 @@ impl ServerConnection {
         let meta = store::new_meta(
             &session_id,
             None,
-            &iso_millis(now),
+            &format_iso_millis(now),
             &cwd,
             &store::username(),
         );
@@ -511,7 +511,7 @@ impl ServerConnection {
         let meta = store::new_meta(
             &session_id,
             Some(&source_id),
-            &iso_millis(now),
+            &format_iso_millis(now),
             &cwd,
             &store::username(),
         );

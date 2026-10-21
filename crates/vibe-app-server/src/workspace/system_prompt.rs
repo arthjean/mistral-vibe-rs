@@ -291,7 +291,7 @@ impl WorkspaceService {
     pub fn session_utility(
         &self,
         scope: &SessionPromptScope,
-        feature: vibe_core::llm::utility::UtilityFeature,
+        feature: vibe_core::provider::config::UtilityFeature,
         probe: bool,
     ) -> Option<vibe_core::llm::utility::UtilitySelection> {
         use vibe_core::llm::availability::ModelAvailability;
@@ -325,7 +325,7 @@ impl WorkspaceService {
     pub fn session_utility_override(
         &self,
         scope: &SessionPromptScope,
-        feature: vibe_core::llm::utility::UtilityFeature,
+        feature: vibe_core::provider::config::UtilityFeature,
     ) -> Option<ModelConfig> {
         let snapshot = self.session_prompt_config(scope).ok()?.load().ok()?;
         ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias())

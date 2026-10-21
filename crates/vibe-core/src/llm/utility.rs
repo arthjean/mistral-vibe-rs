@@ -20,9 +20,8 @@ use super::types::Message;
 use super::{Backend, BackendContext, Credentials, ModelRequest};
 use crate::matching::NameFilter;
 use crate::observability::{self, LogLevel};
-pub use crate::provider::config::UtilityFeature;
 use crate::provider::config::{
-    ApiSettings, ModelConfig, ModelRouting, ProviderConfig, RoutingError,
+    ApiSettings, ModelConfig, ModelRouting, ProviderConfig, RoutingError, UtilityFeature,
 };
 use crate::pyurl::PyUrl;
 use crate::telemetry::records::RequestSent;

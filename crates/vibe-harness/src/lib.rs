@@ -13,7 +13,6 @@
 //! turns them into notifications.
 
 pub mod catalog;
-pub mod clock;
 pub mod code_mode;
 pub mod compaction;
 mod connector_labels;

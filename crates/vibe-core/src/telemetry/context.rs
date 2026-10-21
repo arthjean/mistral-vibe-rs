@@ -15,6 +15,7 @@ use super::{
     TELEMETRY_HOST_KIND, TelemetryBaseMetadata, TelemetryCallType, TelemetryRequestMetadata,
     VERSION, platform_arch, platform_id, platform_version,
 };
+use crate::sync::lock;
 
 /// The experiment state every event of this process reports, as the handle a
 /// session publishes into and a census reads out of.
@@ -30,12 +31,7 @@ pub struct ExperimentExposures(Arc<Mutex<ExperimentCensus>>);
 
 impl ExperimentExposures {
     fn with<R>(&self, read: impl FnOnce(&mut ExperimentCensus) -> R) -> R {
-        read(
-            &mut self
-                .0
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
+        read(&mut lock(&self.0))
     }
 
     /// Replaces the confirmed exposures every later event reports.
@@ -94,18 +90,12 @@ pub struct DeclaredLaunch(Arc<Mutex<Option<LaunchContext>>>);
 impl DeclaredLaunch {
     /// Replaces what every later event reports.
     pub fn declare(&self, launch: LaunchContext) {
-        *self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(launch);
+        *lock(&self.0) = Some(launch);
     }
 
     #[must_use]
     pub fn get(&self) -> Option<LaunchContext> {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        lock(&self.0).clone()
     }
 }
 
@@ -127,28 +117,18 @@ pub struct SessionParents(Arc<Mutex<BTreeMap<String, Option<String>>>>);
 
 impl SessionParents {
     pub fn bind(&self, session_id: &str, parent_session_id: Option<String>) {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(session_id.to_owned(), parent_session_id);
+        lock(&self.0).insert(session_id.to_owned(), parent_session_id);
     }
 
     #[must_use]
     pub fn get(&self, session_id: &str) -> Option<Option<String>> {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(session_id)
-            .cloned()
+        lock(&self.0).get(session_id).cloned()
     }
 }
 
 impl SessionParents {
     fn snapshot(&self) -> BTreeMap<String, Option<String>> {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        lock(&self.0).clone()
     }
 }
 
@@ -174,20 +154,14 @@ pub struct SessionResets(Arc<Mutex<Vec<std::sync::Weak<dyn SessionReset>>>>);
 
 impl SessionResets {
     pub fn register(&self, reset: std::sync::Weak<dyn SessionReset>) {
-        let mut resets = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut resets = lock(&self.0);
         resets.retain(|reset| reset.strong_count() > 0);
         resets.push(reset);
     }
 
     /// Hands the reset of `from_session_id` to whichever reset owns it.
     pub fn reset(&self, from_session_id: &str, to_session_id: &str) -> bool {
-        let resets = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        let resets = lock(&self.0)
             .iter()
             .filter_map(std::sync::Weak::upgrade)
             .collect::<Vec<_>>();

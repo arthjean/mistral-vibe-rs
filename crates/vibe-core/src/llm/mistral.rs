@@ -163,13 +163,7 @@ impl MistralBackend {
         if let Some(key) = &self.api_key {
             headers.push(("Authorization".to_owned(), format!("Bearer {key}")));
         }
-        merge_headers(
-            &mut headers,
-            request
-                .extra_headers
-                .iter()
-                .map(|(name, value)| (name, value)),
-        );
+        merge_headers(&mut headers, request.extra_headers);
         headers
     }
 

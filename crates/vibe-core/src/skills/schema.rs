@@ -15,6 +15,8 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value};
 use thiserror::Error;
 
+use crate::pycompat::pydantic::lax_bool_value;
+
 /// A frontmatter mapping the schema rejected, with the field and the reason.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("{0}")]
@@ -61,7 +63,7 @@ impl SkillMetadata {
             parsed_allowed_tools(aliased(frontmatter, "allowed-tools", "allowed_tools"))?;
         let user_invocable = match aliased(frontmatter, "user-invocable", "user_invocable") {
             None => true,
-            Some(value) => lax_bool(value)
+            Some(value) => lax_bool_value(value)
                 .ok_or_else(|| SkillValidationError::new("user-invocable", "must be a boolean"))?,
         };
         let disable_model_invocation = match aliased(
@@ -70,7 +72,7 @@ impl SkillMetadata {
             "disable_model_invocation",
         ) {
             None => false,
-            Some(value) => lax_bool(value).ok_or_else(|| {
+            Some(value) => lax_bool_value(value).ok_or_else(|| {
                 SkillValidationError::new("disable-model-invocation", "must be a boolean")
             })?,
         };
@@ -177,29 +179,5 @@ fn parsed_allowed_tools(value: Option<&Value>) -> Result<Vec<String>, SkillValid
             "allowed-tools",
             "must be a string, a list of strings, or null",
         )),
-    }
-}
-
-/// The reference validator's lax boolean: a boolean as itself, the word list
-/// including single letters from a string, and zero or one from a number.
-fn lax_bool(value: &Value) -> Option<bool> {
-    match value {
-        Value::Bool(flag) => Some(*flag),
-        Value::String(text) => match text.to_ascii_lowercase().as_str() {
-            "true" | "t" | "yes" | "y" | "on" | "1" => Some(true),
-            "false" | "f" | "no" | "n" | "off" | "0" => Some(false),
-            _ => None,
-        },
-        Value::Number(number) => {
-            let float = number.as_f64()?;
-            if float == 0.0 {
-                Some(false)
-            } else if float == 1.0 {
-                Some(true)
-            } else {
-                None
-            }
-        }
-        _ => None,
     }
 }

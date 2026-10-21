@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use serde_json::{Map, Value, json};
 use tokio::sync::{mpsc, watch};
 use vibe_core::clock::{now_micros, now_millis};
-use vibe_harness::clock::{iso_micros, iso_millis, parse_iso_millis};
+use vibe_core::time::{format_iso_micros, format_iso_millis, parse_iso_millis};
 use vibe_harness::engine::{
     CallbackEvent, Publication, SessionCore, TurnEnd, TurnEnvironment, TurnRequest, run_turn,
 };
@@ -377,8 +377,10 @@ impl UnifiedSession {
         let (notifications, marked_unseen) = host.translator.translate(current);
         if marked_unseen {
             host.marks.is_unseen = true;
-            host.meta
-                .insert("unseen_at".to_owned(), json!(iso_micros(now_micros())));
+            host.meta.insert(
+                "unseen_at".to_owned(),
+                json!(format_iso_micros(now_micros())),
+            );
             host.meta.insert("seen_at".to_owned(), Value::Null);
             if let Some(store) = &host.store {
                 let _ = store.write_meta(&host.meta);
@@ -399,7 +401,7 @@ impl UnifiedSession {
         let millis = micros / 1000;
         host.marks.bumped_at = Some(millis);
         host.meta
-            .insert("bumped_at".to_owned(), json!(iso_micros(micros)));
+            .insert("bumped_at".to_owned(), json!(format_iso_micros(micros)));
         if let Some(store) = &host.store {
             let _ = store.write_meta(&host.meta);
         }
@@ -465,7 +467,7 @@ impl UnifiedSession {
     fn settle(&self) {
         let core = self.core();
         let mut host = self.host();
-        let end = iso_millis(core.projector.state.session.updated_at);
+        let end = format_iso_millis(core.projector.state.session.updated_at);
         host.meta.insert("end_time".to_owned(), json!(end));
         host.meta.extend(title_fields(&core));
         let meta = host.meta.clone();

@@ -299,7 +299,7 @@ pub(in crate::server) fn rewind_params(
     let entry_id = text("entryId", "entry_id");
     let mut flag = |alias: &str, name: &str| match field(alias, name) {
         None => false,
-        Some(value) => vibe_core::tools::python_bool(value).unwrap_or_else(|| {
+        Some(value) => vibe_core::pycompat::pydantic::lax_bool_value(value).unwrap_or_else(|| {
             let message = if matches!(value, Value::String(_) | Value::Number(_)) {
                 "Input should be a valid boolean, unable to interpret input"
             } else {

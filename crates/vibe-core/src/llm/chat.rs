@@ -12,11 +12,12 @@ use serde_json::{Map, Value, json};
 use super::adapter::{
     PreparedRequest, RequestParts, bearer_headers, chat_finish_reason, chat_image, chat_payload,
     chat_usage, finalize_chat, image_parts, optional_index, optional_string, thinking_content,
-    truthy, validate_message,
+    validate_message,
 };
 use super::error::{LocalFailure, LocalKind};
 use super::types::{Chunk, Message, Role, StopInfo, ToolCall};
 use crate::provider::config::ProviderConfig;
+use crate::pycompat::truthy;
 
 pub(super) const ENDPOINT: &str = "/chat/completions";
 

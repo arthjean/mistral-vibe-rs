@@ -47,6 +47,7 @@ use vibe_core::engine::CancellationToken;
 use vibe_core::extensions::{
     ChildContext, SkillDefinition, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
 };
+use vibe_core::parity::replay::{ValuedDifference, valued_differences};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
@@ -1546,67 +1547,16 @@ fn error_type(error: &ToolError) -> &'static str {
 /// every field below it is a consequence of returning where the reference
 /// raised, and reporting them as well would turn one gap into four ledger
 /// entries that all close together.
-fn compare(expected: &Value, actual: &Value) -> Vec<Difference> {
+fn compare(expected: &Value, actual: &Value) -> Vec<ValuedDifference> {
     let outcome = |document: &Value| document.get("outcome").cloned().unwrap_or(Value::Null);
     if outcome(expected) != outcome(actual) {
-        return vec![Difference {
+        return vec![ValuedDifference {
             pointer: "/outcome".to_owned(),
             expected: outcome(expected),
             actual: outcome(actual),
         }];
     }
-    let mut found = Vec::new();
-    differences("", expected, actual, &mut found);
-    found
-}
-
-/// Every difference under `pointer`, as a JSON pointer and both values.
-///
-/// All of them rather than the first, because the ledger is matched per
-/// pointer: reporting only the earliest would leave an entry for a later field
-/// permanently unexercised, and the staleness check would then delete a gap
-/// that is still open.
-fn differences(pointer: &str, expected: &Value, actual: &Value, into: &mut Vec<Difference>) {
-    match (expected, actual) {
-        (Value::Object(left), Value::Object(right)) => {
-            for (key, value) in left {
-                let nested = format!("{pointer}/{key}");
-                match right.get(key) {
-                    Some(other) => differences(&nested, value, other, into),
-                    None => into.push(Difference {
-                        pointer: nested,
-                        expected: value.clone(),
-                        actual: Value::String("absent".to_owned()),
-                    }),
-                }
-            }
-            for key in right.keys().filter(|key| !left.contains_key(*key)) {
-                into.push(Difference {
-                    pointer: format!("{pointer}/{key}"),
-                    expected: Value::String("absent".to_owned()),
-                    actual: right[key].clone(),
-                });
-            }
-        }
-        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
-            for (index, (a, b)) in left.iter().zip(right).enumerate() {
-                differences(&format!("{pointer}/{index}"), a, b, into);
-            }
-        }
-        _ if expected == actual => {}
-        _ => into.push(Difference {
-            pointer: pointer.to_owned(),
-            expected: expected.clone(),
-            actual: actual.clone(),
-        }),
-    }
-}
-
-#[derive(Debug)]
-struct Difference {
-    pointer: String,
-    expected: Value,
-    actual: Value,
+    valued_differences(expected, actual)
 }
 
 /// What this port produces for one case, projected the way the corpus is.

@@ -15,7 +15,7 @@ use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use super::models::RegistrySkillItem;
-use crate::skills::parser::parse_skill_markdown;
+use crate::skills::parser::{implicit_tag, parse_skill_markdown};
 
 /// The frontmatter `source` value every materialized skill carries.
 const REGISTRY_SOURCE: &str = "ai-registry";
@@ -479,54 +479,8 @@ fn is_plain_safe(value: &str) -> bool {
     if value.contains(": ") || value.ends_with(':') || value.contains(" #") {
         return false;
     }
-    !resolves_implicitly(value)
+    implicit_tag(value).is_none()
 }
 
-/// Whether the YAML 1.1 resolver the reference dumps against would read the
-/// plain form as a non-string: a boolean, a null, an integer or a float.
-fn resolves_implicitly(value: &str) -> bool {
-    const BOOLS: [&str; 18] = [
-        "yes", "Yes", "YES", "no", "No", "NO", "true", "True", "TRUE", "false", "False", "FALSE",
-        "on", "On", "ON", "off", "Off", "OFF",
-    ];
-    const NULLS: [&str; 5] = ["~", "null", "Null", "NULL", ""];
-    if BOOLS.contains(&value) || NULLS.contains(&value) {
-        return true;
-    }
-    let unsigned = value
-        .strip_prefix(['-', '+'])
-        .unwrap_or(value)
-        .replace('_', "");
-    if unsigned.is_empty() {
-        return false;
-    }
-    let is_digits = |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
-    if is_digits(&unsigned)
-        || unsigned.strip_prefix("0x").is_some_and(|rest| {
-            !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_hexdigit())
-        })
-        || unsigned.strip_prefix("0b").is_some_and(|rest| {
-            !rest.is_empty() && rest.bytes().all(|byte| byte == b'0' || byte == b'1')
-        })
-        || unsigned.split(':').count() > 1 && unsigned.split(':').all(is_digits)
-    {
-        return true;
-    }
-    // Float shapes, including the 1.1 word forms.
-    if [".inf", ".Inf", ".INF", ".nan", ".NaN", ".NAN"].contains(&unsigned.as_str()) {
-        return true;
-    }
-    if unsigned.matches('.').count() == 1 {
-        let (whole, fraction) = unsigned.split_once('.').unwrap_or_default();
-        let mantissa_ok = (whole.is_empty() || is_digits(whole))
-            && (fraction.is_empty() || is_digits(fraction) || {
-                let (digits, exponent) = fraction.split_once(['e', 'E']).unwrap_or((fraction, "0"));
-                (digits.is_empty() || is_digits(digits))
-                    && is_digits(exponent.strip_prefix(['-', '+']).unwrap_or(exponent))
-            });
-        if mantissa_ok && unsigned != "." {
-            return true;
-        }
-    }
-    false
-}
+#[cfg(test)]
+mod store_tests;

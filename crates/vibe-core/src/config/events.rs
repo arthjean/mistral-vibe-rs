@@ -16,6 +16,8 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::Value as JsonValue;
 
+use crate::sync::lock;
+
 /// What one applied change did to the effective configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigChangeEvent {
@@ -58,13 +60,11 @@ impl ConfigChangeBus {
         callback: impl Fn(&ConfigChangeEvent) + Send + Sync + 'static,
     ) -> ConfigSubscription {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.push(Subscriber {
-                id,
-                keys,
-                callback: Arc::new(callback),
-            });
-        }
+        lock(&self.subscribers).push(Subscriber {
+            id,
+            keys,
+            callback: Arc::new(callback),
+        });
         ConfigSubscription {
             bus: Arc::clone(self),
             id,
@@ -77,9 +77,7 @@ impl ConfigChangeBus {
     /// notified, because one component's failure must not silence the others or
     /// take down the write that produced the event.
     pub fn publish(&self, event: &ConfigChangeEvent) {
-        let Ok(subscribers) = self.subscribers.lock() else {
-            return;
-        };
+        let subscribers = lock(&self.subscribers);
         let matching: Vec<Callback> = subscribers
             .iter()
             .filter(|subscriber| matches_event(subscriber.keys.as_ref(), &event.changed_keys))
@@ -92,9 +90,7 @@ impl ConfigChangeBus {
     }
 
     fn remove(&self, id: u64) {
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.retain(|subscriber| subscriber.id != id);
-        }
+        lock(&self.subscribers).retain(|subscriber| subscriber.id != id);
     }
 }
 

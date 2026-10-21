@@ -187,8 +187,8 @@ fn coerce_declared(
 ) {
     match declared {
         "boolean" => {
-            if let Some(coerced) = coerce_boolean(value) {
-                *value = coerced;
+            if let Some(flag) = pydantic::lax_bool_value(value) {
+                *value = Value::Bool(flag);
             }
         }
         "integer" => {
@@ -263,50 +263,6 @@ fn to_camel(name: &str) -> String {
         }
     }
     camel
-}
-
-/// The boolean a pydantic `bool` field reads `value` as, in its default lax
-/// mode: a boolean itself, or one of the booleanish forms below. [`None`] when
-/// the value cannot become one.
-#[must_use]
-pub fn python_bool(value: &Value) -> Option<bool> {
-    match value {
-        Value::Bool(flag) => Some(*flag),
-        value => coerce_boolean(value).and_then(|value| value.as_bool()),
-    }
-}
-
-/// The booleanish forms the reference accepts, or [`None`] when the value is
-/// already a boolean or cannot become one.
-///
-/// The word set is case-insensitive and tolerates no surrounding whitespace,
-/// both measured against the reference interpreter.
-fn coerce_boolean(value: &Value) -> Option<Value> {
-    match value {
-        Value::String(text) => pydantic::lax_bool(text).map(Value::Bool),
-        // Only the two values that name a truth: `2` and `-1` are rejected
-        // rather than treated as truthy.
-        Value::Number(number) => {
-            let flag = if let Some(integer) = number.as_i64() {
-                match integer {
-                    0 => false,
-                    1 => true,
-                    _ => return None,
-                }
-            } else {
-                let float = number.as_f64()?;
-                if float == 0.0 {
-                    false
-                } else if float == 1.0 {
-                    true
-                } else {
-                    return None;
-                }
-            };
-            Some(Value::Bool(flag))
-        }
-        _ => None,
-    }
 }
 
 /// The integral forms the reference accepts: a boolean, a float whose fraction

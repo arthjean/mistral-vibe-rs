@@ -52,18 +52,20 @@ async fn run(arguments: &Value, context: &ShellContext) -> Result<Value, String>
     let command = match arguments.get("command") {
         Some(Value::String(command)) if !command.is_empty() => command.clone(),
         Some(Value::String(command)) => {
-            return Err(validation_error(
+            return Err(pydantic::single_error(
+                "BashArgs",
                 "command",
-                "String should have at least 1 character",
                 "string_too_short",
+                "String should have at least 1 character",
                 &json!(command),
             ));
         }
         _ => {
-            return Err(validation_error(
+            return Err(pydantic::single_error(
+                "BashArgs",
                 "command",
-                "Field required",
                 "missing",
+                "Field required",
                 arguments,
             ));
         }
@@ -74,10 +76,11 @@ async fn run(arguments: &Value, context: &ShellContext) -> Result<Value, String>
             .as_u64()
             .filter(|seconds| *seconds > 0)
             .ok_or_else(|| {
-                validation_error(
+                pydantic::single_error(
+                    "BashArgs",
                     "timeout_seconds",
-                    "Input should be greater than 0",
                     "greater_than",
+                    "Input should be greater than 0",
                     value,
                 )
             })?,
@@ -207,17 +210,4 @@ pub fn shell_env(extra: &BTreeMap<String, String>) -> BTreeMap<String, String> {
         env.insert(key.to_owned(), value.to_owned());
     }
     env
-}
-
-/// A pydantic validation failure as `str(exc)` renders one.
-fn validation_error(field: &str, message: &str, kind: &str, input: &Value) -> String {
-    pydantic::validation_error(
-        "BashArgs",
-        &[pydantic::LineError {
-            location: field,
-            kind,
-            message,
-            input,
-        }],
-    )
 }

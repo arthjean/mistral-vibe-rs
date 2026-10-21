@@ -14,14 +14,15 @@ use serde_json::{Map, Value};
 
 use super::compatibility::{
     AdaptedHook, AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
-    DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, author_display_name,
-    read_text, resolve_declared_path, typescript_identifier,
+    DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, UnsupportedKind,
+    author_display_name, read_text, resolve_declared_path, typescript_identifier,
 };
 use super::diagnostics::Severity;
 use super::foreign::{
-    AliasedObject, adapt_command_path, adapt_mcp_servers, adapt_skill_file, aliased,
-    declared_paths, diagnostic, hook_matcher, hook_type, mcp_mapping, optional_aliased_string,
-    skill_files_for_declared_path, unsupported_component, unsupported_hook,
+    AliasedObject, CommandRules, adapt_declared_commands, adapt_mcp_servers, adapt_skill_file,
+    aliased, declared_paths, diagnostic, hook_matcher, hook_type, mcp_mapping,
+    optional_aliased_string, skill_files_for_declared_path, unsupported_component,
+    unsupported_hook,
 };
 use super::strict::{self, ValidationErrors, char_len};
 use crate::hooks::{HookConfig, HookProtocol, HookType};
@@ -172,7 +173,19 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
             skill.prompt = format!("{instructions}\n\n{}", skill.prompt);
         }
     }
-    let commands = adapt_commands(root, &manifest, &mut diagnostics);
+    let commands = adapt_declared_commands(
+        root,
+        manifest.object.field("commands"),
+        &CommandRules {
+            format: FORMAT,
+            manifest: root.join("kimi.plugin.json"),
+            conventional_directory: None,
+            vendor: "Kimi",
+            import_failed: "Could not import the Kimi command",
+            severity: Severity::Warning,
+        },
+        &mut diagnostics,
+    );
     let mcp_servers = adapt_mcp(
         root,
         &data_root,
@@ -281,50 +294,6 @@ fn adapt_skills(
         .collect()
 }
 
-fn adapt_commands(
-    root: &Path,
-    manifest: &Manifest,
-    diagnostics: &mut Vec<PluginAdapterDiagnostic>,
-) -> Vec<AdaptedSkill> {
-    let Some(paths) = declared_paths(manifest.object.field("commands")) else {
-        diagnostics.push(diagnostic(
-            FORMAT,
-            "commands_declaration_invalid",
-            root.join("kimi.plugin.json"),
-            "Kimi commands have to be a relative path or a list of relative paths.",
-            "command",
-            Severity::Error,
-        ));
-        return Vec::new();
-    };
-    let mut commands = Vec::new();
-    for value in paths {
-        let Some(relative) = value.strip_prefix("./") else {
-            diagnostics.push(diagnostic(
-                FORMAT,
-                "command_path_invalid",
-                root.join(&value),
-                "A Kimi command path has to start with './'.",
-                "command",
-                Severity::Warning,
-            ));
-            continue;
-        };
-        match adapt_command_path(root, &value, FORMAT, diagnostics) {
-            Ok(found) => commands.extend(found),
-            Err(error) => diagnostics.push(diagnostic(
-                FORMAT,
-                "command_path_invalid",
-                root.join(relative),
-                format!("Could not import the Kimi command: {error}"),
-                "command",
-                Severity::Warning,
-            )),
-        }
-    }
-    commands
-}
-
 fn adapt_mcp(
     root: &Path,
     data_root: &Path,
@@ -366,7 +335,7 @@ fn report_unsupported(
     if manifest.object.field("sessionStart").is_some() {
         diagnostics.push(diagnostic(FORMAT, "session_start_unsupported", manifest_path, "Kimi sessionStart.skill is kept privately; loading a skill at session start is not supported.", "session_start", Severity::Info));
         unsupported.push(unsupported_component(
-            "session_start",
+            UnsupportedKind::SessionStart,
             manifest_path,
             "kimi_session_start_unsupported",
         ));
@@ -388,7 +357,7 @@ fn report_unsupported(
             Severity::Info,
         ));
         unsupported.push(unsupported_component(
-            "manifest_fields",
+            UnsupportedKind::ManifestFields,
             manifest_path,
             "kimi_manifest_fields_unsupported",
         ));
@@ -438,7 +407,7 @@ fn adapt_hooks(
                 Severity::Warning,
             ));
             unsupported.push(unsupported_component(
-                "hooks",
+                UnsupportedKind::Hooks,
                 manifest_path,
                 "kimi_hook_rule_unsupported",
             ));

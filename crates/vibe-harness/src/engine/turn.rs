@@ -12,6 +12,7 @@ use vibe_core::clock::now_millis;
 use vibe_core::events::{ModelMessage, ModelToolCall};
 use vibe_core::provider::{ProviderInput, RequestDialect, ToolDefinition};
 use vibe_core::session_id::uuid_v4;
+use vibe_core::sync::lock;
 
 use super::calls::{CallPlan, PreparedCall, invalid_call_content, model_content, prepare_calls};
 use super::compaction_run::{CompactionEnd, needs_compaction, run_compaction};
@@ -48,9 +49,7 @@ pub async fn run_turn(
     loop {
         let action_id = uuid_v4();
         let prepared = {
-            let Ok(mut core) = core.lock() else {
-                return TurnEnd::Interrupted;
-            };
+            let mut core = lock(&core);
             core.deliver_notifications();
             let message_id = core.latest_input_entry_id().unwrap_or_default();
             match unsupported_image(&core, &environment) {
@@ -93,9 +92,7 @@ pub async fn run_turn(
         };
         let calls = prepare_calls(&completion.tool_calls, &environment);
         let committed = {
-            let Ok(mut core) = core.lock() else {
-                return TurnEnd::Interrupted;
-            };
+            let mut core = lock(&core);
             commit_answer(
                 &mut core,
                 &environment,
@@ -138,9 +135,7 @@ pub async fn run_turn(
         {
             return end;
         }
-        let Ok(mut core) = core.lock() else {
-            return TurnEnd::Interrupted;
-        };
+        let mut core = lock(&core);
         for call in &calls {
             core.conversation.push(ConversationMessage::Tool {
                 call_id: call.call_id.clone(),
@@ -336,9 +331,7 @@ async fn run_calls(
         let Started::Tool(action) = started else {
             continue;
         };
-        let Ok(mut core) = core.lock() else {
-            return Err(TurnEnd::Interrupted);
-        };
+        let mut core = lock(core);
         let input = core.next_input();
         let advance = core.projector.apply(
             input,
@@ -373,9 +366,7 @@ fn interrupt_turn(
     sink: &Sink,
     reason: &str,
 ) -> TurnEnd {
-    let Ok(mut core) = core.lock() else {
-        return TurnEnd::Interrupted;
-    };
+    let mut core = lock(core);
     close_callbacks(&mut core, sink, "Turn interrupted");
     core.keep_pending_steering();
     let input = core.next_input();
@@ -405,9 +396,7 @@ fn fail_turn(
     sink: &Sink,
     error: PublicError,
 ) -> TurnEnd {
-    let Ok(mut core) = core.lock() else {
-        return TurnEnd::Interrupted;
-    };
+    let mut core = lock(core);
     close_callbacks(&mut core, sink, "Turn failed");
     core.keep_pending_steering();
     let input = core.next_input();

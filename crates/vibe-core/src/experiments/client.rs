@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 
 use crate::observability::{self, LogLevel};
+use crate::sync::lock;
 
 use super::EVAL_REQUEST_TIMEOUT;
 use super::models::{EvalResponse, ExperimentAttributes};
@@ -257,10 +258,7 @@ impl RemoteEvalClient {
 
     /// The transport, building the production one on first use.
     fn transport(&self) -> Option<Arc<dyn EvalTransport>> {
-        let mut slot = self
-            .transport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut slot = lock(&self.transport);
         if let Some(transport) = slot.as_ref() {
             return Some(Arc::clone(transport));
         }
@@ -275,11 +273,7 @@ impl RemoteEvalClient {
     /// Releases the transport if one was ever built. Closing a client that
     /// never issued a request does nothing, and closing twice closes once.
     pub async fn close(&self) {
-        let taken = self
-            .transport
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take();
+        let taken = lock(&self.transport).take();
         if let Some(transport) = taken {
             transport.close().await;
         }

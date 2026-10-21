@@ -15,13 +15,14 @@ use super::{
     scope_required_permissions,
 };
 use crate::observability::{self, LogLevel};
+use crate::sync::{read, write};
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 use crate::tools::{ToolApproval, ToolApprovalSource, ToolApprovalType, ToolVerdict};
 
 /// The rationale a rule stored by an approval carries, which is also what tells
 /// the two apart when a session is rebuilt.
 pub(super) const SESSION_APPROVAL: &str = "session approval";
-const PERMANENT_APPROVAL: &str = "permanent approval";
+pub(super) const PERMANENT_APPROVAL: &str = "permanent approval";
 
 /// Where a permanent approval writes the patterns it grants.
 ///
@@ -173,10 +174,7 @@ impl PermissionStore {
     /// What went wrong while persisting an approval, oldest first.
     #[must_use]
     pub fn diagnostics(&self) -> Vec<String> {
-        self.diagnostics
-            .read()
-            .map(|stored| stored.clone())
-            .unwrap_or_default()
+        read(&self.diagnostics).clone()
     }
 
     /// The same store reading its per-tool settings from `resolver`.
@@ -187,12 +185,8 @@ impl PermissionStore {
     #[must_use]
     pub fn with_tool_config(mut self, resolver: ToolConfigResolver) -> Self {
         let permissions = self.tool_permissions.clone();
-        self.tool_config = resolver.with_session_permissions(Arc::new(move |tool| {
-            permissions
-                .read()
-                .ok()
-                .and_then(|stored| stored.get(tool).copied())
-        }));
+        self.tool_config = resolver
+            .with_session_permissions(Arc::new(move |tool| read(&permissions).get(tool).copied()));
         self
     }
 
@@ -208,18 +202,13 @@ impl PermissionStore {
     /// carrying no granular requirement lands: there is no pattern to store a
     /// rule under, so the tool itself is what was approved.
     pub fn set_tool_permission(&self, tool: &str, mode: PermissionMode) {
-        if let Ok(mut stored) = self.tool_permissions.write() {
-            stored.insert(tool.to_owned(), mode);
-        }
+        write(&self.tool_permissions).insert(tool.to_owned(), mode);
     }
 
     /// The session permission granted to `tool`, if any.
     #[must_use]
     pub fn tool_permission(&self, tool: &str) -> Option<PermissionMode> {
-        self.tool_permissions
-            .read()
-            .ok()
-            .and_then(|stored| stored.get(tool).copied())
+        read(&self.tool_permissions).get(tool).copied()
     }
 
     /// The permission settings `tool` resolves right now.
@@ -299,9 +288,7 @@ impl PermissionStore {
         let mut state = self.state.try_write().map_err(|_| PolicyError::Busy)?;
         state.authorized.clone_from(&authorized);
         state.revision = state.revision.saturating_add(1);
-        if let Ok(mut mirror) = self.workspace_roots.write() {
-            *mirror = authorized;
-        }
+        *write(&self.workspace_roots) = authorized;
         Ok(())
     }
 
@@ -309,10 +296,7 @@ impl PermissionStore {
     /// working directory first; empty for a store no session opened.
     #[must_use]
     pub fn workspace_roots(&self) -> Vec<PathBuf> {
-        self.workspace_roots
-            .read()
-            .map(|roots| roots.clone())
-            .unwrap_or_default()
+        read(&self.workspace_roots).clone()
     }
 
     pub fn try_trust_decision(
@@ -544,19 +528,18 @@ impl PermissionStore {
         if granted.is_empty() {
             self.set_tool_permission(tool, PermissionMode::Always);
         }
-        let rationale = match lifetime {
-            GrantLifetime::Session => SESSION_APPROVAL,
-            GrantLifetime::Permanent | GrantLifetime::PermanentWithin(_) => {
-                self.persist_allowlist(tool, &granted, lifetime);
-                PERMANENT_APPROVAL
-            }
-        };
+        if lifetime != GrantLifetime::Session {
+            self.persist_allowlist(tool, &granted, lifetime);
+        }
         let mut state = self.state.write().await;
-        state.rules.extend(
-            granted
-                .iter()
-                .map(|requirement| requirement.approved_rule(tool, rationale)),
-        );
+        state.rules.extend(granted.iter().map(|requirement| {
+            let rationale = if lifetime.outlives_session(requirement) {
+                PERMANENT_APPROVAL
+            } else {
+                SESSION_APPROVAL
+            };
+            requirement.approved_rule(tool, rationale)
+        }));
         state.revision = state.revision.saturating_add(1);
         state.revision
     }
@@ -580,15 +563,9 @@ impl PermissionStore {
         let Some(persist) = &self.persist_allowlist else {
             return;
         };
-        let (kept, dropped): (Vec<_>, Vec<_>) = match lifetime {
-            GrantLifetime::PermanentWithin(scopes) => {
-                requirements.iter().partition(|requirement| {
-                    !requirement.session_pattern.trim().is_empty()
-                        && scopes.contains(&requirement.scope)
-                })
-            }
-            _ => (requirements.iter().collect(), Vec::new()),
-        };
+        let (kept, dropped): (Vec<_>, Vec<_>) = requirements
+            .iter()
+            .partition(|requirement| lifetime.outlives_session(requirement));
         if !dropped.is_empty() {
             observability::log(
                 LogLevel::Warning,
@@ -608,10 +585,8 @@ impl PermissionStore {
             .collect::<Vec<_>>();
         patterns.sort();
         patterns.dedup();
-        if let Err(error) = persist(tool, &patterns)
-            && let Ok(mut diagnostics) = self.diagnostics.write()
-        {
-            diagnostics.push(format!(
+        if let Err(error) = persist(tool, &patterns) {
+            write(&self.diagnostics).push(format!(
                 "the permanent approval for `{tool}` was kept for this session only: {error}"
             ));
         }

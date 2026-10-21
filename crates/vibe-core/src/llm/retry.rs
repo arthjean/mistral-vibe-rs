@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
 
 use super::error::{BackendError, BackendErrorSource, BackendFailure};
+use crate::sync::lock;
 
 pub type SleepFuture = Pin<Box<dyn Future<Output = ()> + Send>>;
 
@@ -418,10 +419,7 @@ impl AdaptivePacer {
     }
 
     fn with_state<R>(&self, action: impl FnOnce(&mut PacerState) -> R) -> R {
-        let mut state = self
-            .state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut state = lock(&self.state);
         action(&mut state)
     }
 

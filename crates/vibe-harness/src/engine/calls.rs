@@ -177,7 +177,7 @@ pub(super) fn compact(value: &Value) -> String {
 
 /// A JSON value with every object's keys in sorted order.
 #[must_use]
-pub fn sorted(value: &Value) -> Value {
+pub(crate) fn sorted(value: &Value) -> Value {
     match value {
         Value::Object(map) => {
             let mut keys: Vec<&String> = map.keys().collect();

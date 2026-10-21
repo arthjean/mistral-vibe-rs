@@ -15,13 +15,13 @@ use serde_json::{Map, Value};
 
 use super::compatibility::{
     AdaptedHook, AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
-    DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, author_display_name,
-    read_text, resolve_declared_path, typescript_identifier,
+    DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, UnsupportedKind,
+    author_display_name, read_text, resolve_declared_path, typescript_identifier,
 };
 use super::diagnostics::Severity;
 use super::foreign::{
-    AliasedObject, adapt_command_path, adapt_mcp_servers, adapt_skill_file, declared_paths,
-    diagnostic, hook_matcher, hook_type, mcp_mapping, optional_aliased_string,
+    AliasedObject, CommandRules, adapt_declared_commands, adapt_mcp_servers, adapt_skill_file,
+    declared_paths, diagnostic, hook_matcher, hook_type, mcp_mapping, optional_aliased_string,
     skill_files_for_declared_path, unsupported_component, unsupported_hook,
 };
 use super::paths::{is_relative_to, resolve_strict};
@@ -161,7 +161,19 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let namespace = typescript_identifier(&manifest.name);
     let data_root = data_root_base.join(&namespace);
     let mut skills = adapt_skills(root, &manifest, &mut diagnostics);
-    let commands = adapt_commands(root, &manifest, &mut diagnostics);
+    let commands = adapt_declared_commands(
+        root,
+        manifest.object.field("commands"),
+        &CommandRules {
+            format: FORMAT,
+            manifest: root.join(".claude-plugin").join("plugin.json"),
+            conventional_directory: Some("./commands/"),
+            vendor: "Claude",
+            import_failed: "Could not import the Claude commands",
+            severity: Severity::Error,
+        },
+        &mut diagnostics,
+    );
     let mcp_servers = adapt_mcp(
         root,
         &data_root,
@@ -268,53 +280,6 @@ fn adapt_skills(
         .collect()
 }
 
-fn adapt_commands(
-    root: &Path,
-    manifest: &Manifest,
-    diagnostics: &mut Vec<PluginAdapterDiagnostic>,
-) -> Vec<AdaptedSkill> {
-    let Some(mut paths) = declared_paths(manifest.object.field("commands")) else {
-        diagnostics.push(diagnostic(
-            FORMAT,
-            "commands_declaration_invalid",
-            root.join(".claude-plugin").join("plugin.json"),
-            "Claude commands have to be a relative path or a list of relative paths.",
-            "command",
-            Severity::Error,
-        ));
-        return Vec::new();
-    };
-    if root.join("commands").is_dir() {
-        paths.push("./commands/".to_owned());
-    }
-    let mut commands = Vec::new();
-    for value in paths {
-        let Some(relative) = value.strip_prefix("./") else {
-            diagnostics.push(diagnostic(
-                FORMAT,
-                "command_path_invalid",
-                root.join(&value),
-                "A Claude command path has to start with './'.",
-                "command",
-                Severity::Error,
-            ));
-            continue;
-        };
-        match adapt_command_path(root, &value, FORMAT, diagnostics) {
-            Ok(found) => commands.extend(found),
-            Err(error) => diagnostics.push(diagnostic(
-                FORMAT,
-                "command_path_invalid",
-                root.join(relative),
-                format!("Could not import the Claude commands: {error}"),
-                "command",
-                Severity::Error,
-            )),
-        }
-    }
-    commands
-}
-
 fn adapt_mcp(
     root: &Path,
     data_root: &Path,
@@ -417,11 +382,23 @@ fn report_unsupported_components(
     unsupported: &mut Vec<AdaptedUnsupportedComponent>,
 ) {
     for (kind, field, conventional) in [
-        ("agents", "agents", root.join("agents")),
-        ("lsp", "lspServers", root.join(".lsp.json")),
-        ("output_styles", "outputStyles", root.join("output-styles")),
-        ("workflows", "workflows", root.join("workflows")),
-        ("settings", "settings", root.join("settings.json")),
+        (UnsupportedKind::Agents, "agents", root.join("agents")),
+        (UnsupportedKind::Lsp, "lspServers", root.join(".lsp.json")),
+        (
+            UnsupportedKind::OutputStyles,
+            "outputStyles",
+            root.join("output-styles"),
+        ),
+        (
+            UnsupportedKind::Workflows,
+            "workflows",
+            root.join("workflows"),
+        ),
+        (
+            UnsupportedKind::Settings,
+            "settings",
+            root.join("settings.json"),
+        ),
     ] {
         let declared = manifest.object.field(field).is_some();
         if !declared && !conventional.exists() {
@@ -437,7 +414,7 @@ fn report_unsupported_components(
             &format!("{kind}_unsupported"),
             path,
             format!("Claude {field} are kept as package data and not converted into a capability."),
-            kind,
+            kind.as_str(),
             Severity::Info,
         ));
         unsupported.push(unsupported_component(
@@ -447,8 +424,8 @@ fn report_unsupported_components(
         ));
     }
     if let Some(Value::Object(experimental)) = manifest.object.field("experimental") {
-        for kind in ["themes", "monitors"] {
-            if !experimental.contains_key(kind) {
+        for kind in [UnsupportedKind::Themes, UnsupportedKind::Monitors] {
+            if !experimental.contains_key(kind.as_str()) {
                 continue;
             }
             diagnostics.push(diagnostic(
@@ -456,7 +433,7 @@ fn report_unsupported_components(
                 &format!("{kind}_unsupported"),
                 manifest_path,
                 format!("Claude {kind} have no portable runtime equivalent."),
-                kind,
+                kind.as_str(),
                 Severity::Info,
             ));
             unsupported.push(unsupported_component(
@@ -483,7 +460,7 @@ fn report_unsupported_components(
                 present_ui.join(", ")
             ), "interface", Severity::Info));
         unsupported.push(unsupported_component(
-            "install_ui",
+            UnsupportedKind::InstallUi,
             manifest_path,
             "claude_install_ui_unsupported",
         ));

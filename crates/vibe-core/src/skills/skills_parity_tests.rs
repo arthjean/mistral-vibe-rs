@@ -30,14 +30,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::{Capture, pinned_reference};
 use crate::skills::builtins::builtin_skills;
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
 use crate::skills::registry::manifest::{ManifestEntry, ManifestVersion, SkillManifest};
@@ -1736,36 +1736,19 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
 /// the pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "skills") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("skills") else {
         return;
-    }
-    let repository = repo_root();
-    let script = repository.join(CAPTURE_SCRIPT);
-    let recaptured = repository.join("target/skills-corpus.json");
-    let output = Command::new("python3")
-        .arg(&script)
-        .args(["--reference".as_ref(), root.as_os_str()])
-        .arg("--output")
-        .arg(&recaptured)
-        .current_dir(&repository)
-        .output()
-        .expect("the skills capture script runs");
-    assert!(
-        output.status.success(),
-        "the skills capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let fresh = fs::read_to_string(&recaptured).expect("the recaptured corpus is readable");
-    let committed =
-        fs::read_to_string(repository.join(CORPUS_RELATIVE)).expect("the corpus is readable");
-    let fresh: Value = serde_json::from_str(&fresh).expect("the recaptured corpus parses");
-    let committed: Value = serde_json::from_str(&committed).expect("the corpus parses");
-    assert_eq!(
-        fresh, committed,
-        "the pinned reference no longer answers what the committed corpus records; regenerate \
-         it with `{CAPTURE_SCRIPT}`"
+    };
+    let recaptured = repo_root().join("target/skills-corpus.json");
+    let capture = Capture {
+        script: CAPTURE_SCRIPT,
+        family: &[],
+        arguments: &[],
+    };
+    capture.recapture(
+        &root,
+        &["--output".as_ref(), recaptured.as_os_str()],
+        &recaptured,
+        &repo_root().join(CORPUS_RELATIVE),
     );
 }

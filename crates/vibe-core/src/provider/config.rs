@@ -140,17 +140,24 @@ pub enum ThinkingLevel {
 }
 
 impl ThinkingLevel {
+    /// Every level, in the reference's declaration order.
+    pub const ALL: [Self; 5] = [Self::Off, Self::Low, Self::Medium, Self::High, Self::Max];
+
+    /// The names of [`Self::ALL`], as a configuration and a session spell them.
+    pub const NAMES: [&'static str; 5] = {
+        let mut names = [""; 5];
+        let mut index = 0;
+        while index < names.len() {
+            names[index] = Self::ALL[index].as_str();
+            index += 1;
+        }
+        names
+    };
+
     /// The level a configuration or a session names.
     #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "off" => Some(Self::Off),
-            "low" => Some(Self::Low),
-            "medium" => Some(Self::Medium),
-            "high" => Some(Self::High),
-            "max" => Some(Self::Max),
-            _ => None,
-        }
+        Self::ALL.into_iter().find(|level| level.as_str() == value)
     }
 
     #[must_use]

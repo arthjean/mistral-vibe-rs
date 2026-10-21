@@ -1,4 +1,5 @@
 use serde_json::{Map, Value, json};
+use vibe_core::provider::config::ThinkingLevel;
 
 use super::super::config_schema::{declared_types, field_is_secret};
 use super::super::state::{EntryStatus, TuiState};
@@ -12,7 +13,7 @@ pub(in crate::tui) fn apply_thinking(
     target: Option<&str>,
     state: &mut TuiState,
 ) {
-    if !matches!(value, "off" | "low" | "medium" | "high" | "max") {
+    if ThinkingLevel::parse(value).is_none() {
         state.push_diagnostic("Thinking must be off, low, medium, high, or max");
         return;
     }

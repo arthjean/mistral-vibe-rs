@@ -16,8 +16,8 @@ use serde_json::{Map, Value};
 
 use super::compatibility::{
     AdaptedMcpServer, AdaptedSkill, AdaptedUnsupportedComponent, DetectedPluginFormat,
-    PluginAdapterDiagnostic, PluginMcpServer, openai_policy, portable_skill_name, read_text,
-    resolve_declared_path, walk_files,
+    PluginAdapterDiagnostic, PluginMcpServer, UnsupportedKind, openai_policy, portable_skill_name,
+    read_text, resolve_declared_path, walk_files,
 };
 use super::diagnostics::Severity;
 use super::paths::{is_relative_to, path_text, resolve_strict};
@@ -69,12 +69,12 @@ pub(super) fn diagnostic(
 
 /// An unsupported component record.
 pub(super) fn unsupported_component(
-    kind: &str,
+    kind: UnsupportedKind,
     path: impl Into<PathBuf>,
     reason: &str,
 ) -> AdaptedUnsupportedComponent {
     AdaptedUnsupportedComponent {
-        kind: kind.to_owned(),
+        kind,
         path: path.into(),
         reason: reason.to_owned(),
     }
@@ -246,7 +246,7 @@ pub(super) fn unsupported_hook(
         "hook",
         Severity::Warning,
     ));
-    unsupported.push(unsupported_component("hooks", path, reason));
+    unsupported.push(unsupported_component(UnsupportedKind::Hooks, path, reason));
 }
 
 /// The paths a declaration names: none for an absent value, one for a string,
@@ -529,7 +529,7 @@ pub(super) fn adapt_static_command(
 /// synthesized skill: the Markdown file itself, or every `.md` file below the
 /// directory, named by its path relative to that directory. Reference the
 /// `_commands` of `ClaudePluginAdapter` and `KimiPluginAdapter`.
-pub(super) fn adapt_command_path(
+fn adapt_command_path(
     root: &Path,
     value: &str,
     source_format: DetectedPluginFormat,
@@ -549,6 +549,72 @@ pub(super) fn adapt_command_path(
             adapt_static_command(path, &source_name, source_format, diagnostics)
         })
         .collect())
+}
+
+/// What tells one vendor's declared commands apart from another's: where an
+/// invalid declaration is reported, how its problems are worded and graded,
+/// and the directory it reads without a declaration.
+pub(super) struct CommandRules {
+    pub(super) format: DetectedPluginFormat,
+    pub(super) manifest: PathBuf,
+    /// Read after the declared paths when it exists.
+    pub(super) conventional_directory: Option<&'static str>,
+    pub(super) vendor: &'static str,
+    pub(super) import_failed: &'static str,
+    pub(super) severity: Severity,
+}
+
+/// The static commands a manifest's `commands` declaration names. Reference
+/// the `_commands` of `ClaudePluginAdapter` and `KimiPluginAdapter`.
+pub(super) fn adapt_declared_commands(
+    root: &Path,
+    declared: Option<&Value>,
+    rules: &CommandRules,
+    diagnostics: &mut Vec<PluginAdapterDiagnostic>,
+) -> Vec<AdaptedSkill> {
+    let vendor = rules.vendor;
+    let Some(mut paths) = declared_paths(declared) else {
+        diagnostics.push(diagnostic(
+            rules.format,
+            "commands_declaration_invalid",
+            &rules.manifest,
+            format!("{vendor} commands have to be a relative path or a list of relative paths."),
+            "command",
+            Severity::Error,
+        ));
+        return Vec::new();
+    };
+    if let Some(directory) = rules.conventional_directory
+        && root.join(directory).is_dir()
+    {
+        paths.push(directory.to_owned());
+    }
+    let mut commands = Vec::new();
+    for value in paths {
+        let Some(relative) = value.strip_prefix("./") else {
+            diagnostics.push(diagnostic(
+                rules.format,
+                "command_path_invalid",
+                root.join(&value),
+                format!("A {vendor} command path has to start with './'."),
+                "command",
+                rules.severity,
+            ));
+            continue;
+        };
+        match adapt_command_path(root, &value, rules.format, diagnostics) {
+            Ok(found) => commands.extend(found),
+            Err(error) => diagnostics.push(diagnostic(
+                rules.format,
+                "command_path_invalid",
+                root.join(relative),
+                format!("{}: {error}", rules.import_failed),
+                "command",
+                rules.severity,
+            )),
+        }
+    }
+    commands
 }
 
 fn command_invalid(

@@ -115,6 +115,66 @@ fn collect_differences(
     }
 }
 
+/// One place two documents disagree, with what each side holds there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValuedDifference {
+    pub pointer: String,
+    pub expected: Value,
+    pub actual: Value,
+}
+
+/// Every place `actual` departs from `expected`, all of them rather than the
+/// first, because a ledger is matched per pointer: reporting only the earliest
+/// would leave an entry for a later field unexercised, and the staleness check
+/// would then delete a gap that is still open.
+///
+/// A key only one side holds is a difference at its own pointer, the other
+/// side reading `"absent"`. Two arrays of different lengths are one difference
+/// at the array, since every element past the shorter one would otherwise be
+/// reported as shifted.
+#[must_use]
+pub fn valued_differences(expected: &Value, actual: &Value) -> Vec<ValuedDifference> {
+    let mut found = Vec::new();
+    collect_valued(expected, actual, "", &mut found);
+    found
+}
+
+fn collect_valued(
+    expected: &Value,
+    actual: &Value,
+    pointer: &str,
+    found: &mut Vec<ValuedDifference>,
+) {
+    let absent = || Value::String("absent".to_owned());
+    match (expected, actual) {
+        (Value::Object(left), Value::Object(right)) => {
+            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
+            for key in keys {
+                let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
+                match (left.get(key), right.get(key)) {
+                    (Some(left), Some(right)) => collect_valued(left, right, &child, found),
+                    (left, right) => found.push(ValuedDifference {
+                        pointer: child,
+                        expected: left.cloned().unwrap_or_else(absent),
+                        actual: right.cloned().unwrap_or_else(absent),
+                    }),
+                }
+            }
+        }
+        (Value::Array(left), Value::Array(right)) if left.len() == right.len() => {
+            for (index, (left, right)) in left.iter().zip(right).enumerate() {
+                collect_valued(left, right, &format!("{pointer}/{index}"), found);
+            }
+        }
+        _ if expected == actual => {}
+        _ => found.push(ValuedDifference {
+            pointer: pointer.to_owned(),
+            expected: expected.clone(),
+            actual: actual.clone(),
+        }),
+    }
+}
+
 fn is_prose(value: &Value) -> bool {
     value.as_object().is_some_and(|object| {
         object.len() == 2 && object.contains_key("prose") && object.contains_key("sha256")
@@ -259,6 +319,37 @@ impl Capture {
              `{}`: {}",
             self.command(),
             String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// Recaptures the pinned reference at `root` with a script that has no
+    /// `--check`: `arguments` name the files it writes, `recaptured` among
+    /// them, and the corpus there has to be the one committed at `committed`.
+    pub fn recapture(
+        &self,
+        root: &Path,
+        arguments: &[&OsStr],
+        recaptured: &Path,
+        committed: &Path,
+    ) {
+        let mut arguments = arguments.to_vec();
+        arguments.extend([OsStr::new("--reference"), root.as_os_str()]);
+        let output = self.run(&arguments);
+        assert!(
+            output.status.success(),
+            "the reference capture failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let read = |path: &Path| -> Value {
+            serde_json::from_str(&std::fs::read_to_string(path).expect("the corpus is readable"))
+                .expect("the corpus parses")
+        };
+        assert_eq!(
+            read(recaptured),
+            read(committed),
+            "the pinned reference no longer answers what the committed corpus records; \
+             regenerate it with `{}`",
+            self.command()
         );
     }
 

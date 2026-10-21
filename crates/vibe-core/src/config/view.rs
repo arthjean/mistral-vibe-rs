@@ -15,6 +15,7 @@ use toml::{Table, Value};
 
 use super::ConfigSnapshot;
 use crate::middleware::{CompactionSettings, DEFAULT_COMPACTION_PROMPT_ID};
+use crate::provider::config::ThinkingLevel;
 
 /// The audio client the wire declares. Only one is served today, and an entry
 /// naming anything else is published under it rather than failing the view.
@@ -32,10 +33,6 @@ const TRANSCRIBE_API_BASE: &str = "wss://api.mistral.ai";
 const SPEECH_VOICE: &str = "gb_jane_neutral";
 const SPEECH_RESPONSE_FORMAT: &str = "wav";
 const SPEECH_API_BASE: &str = "https://api.mistral.ai";
-/// The thinking levels a model entry may declare. An entry outside the set is
-/// published as `off`, which is what a client renders for a model that does not
-/// think.
-const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
 
 impl ConfigSnapshot {
     /// The `ConfigView` the app-server publishes (reference
@@ -468,7 +465,9 @@ fn model_view(entry: &Table, alias: &str) -> JsonValue {
     json!({
         "name": table_str(entry, "name", ""),
         "alias": declared,
-        "thinking": if THINKING_LEVELS.contains(&thinking.as_str()) {
+        // A level outside the set is published as `off`, which is what a
+        // client renders for a model that does not think.
+        "thinking": if ThinkingLevel::parse(&thinking).is_some() {
             thinking
         } else {
             "off".to_owned()
@@ -495,12 +494,12 @@ fn thinking_levels(entry: &Table) -> Vec<String> {
             levels
                 .iter()
                 .filter_map(Value::as_str)
-                .filter(|level| THINKING_LEVELS.contains(level))
+                .filter(|level| ThinkingLevel::parse(level).is_some())
                 .map(ToOwned::to_owned)
                 .collect::<Vec<_>>()
         })
         .filter(|levels| !levels.is_empty())
-        .unwrap_or_else(|| THINKING_LEVELS.map(ToOwned::to_owned).to_vec())
+        .unwrap_or_else(|| ThinkingLevel::NAMES.map(ToOwned::to_owned).to_vec())
 }
 
 /// The view a configuration with no resolvable active model publishes.
@@ -516,7 +515,7 @@ fn empty_model_view() -> JsonValue {
         "supportsImages": false,
         "displayName": "",
         "maxContextLength": null,
-        "thinkingLevels": THINKING_LEVELS,
+        "thinkingLevels": ThinkingLevel::NAMES,
         "imageDelivery": null,
     })
 }

@@ -284,7 +284,7 @@ fn summarize(
         .map(|item| {
             json!([
                 item.plugin_name,
-                item.kind,
+                item.kind.as_str(),
                 item.reason,
                 relative(home, &item.path)
             ])

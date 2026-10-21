@@ -17,9 +17,10 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value, json};
 use vibe_core::atomic_file::{FileMode, write_atomically};
 use vibe_core::clock::now_millis;
+use vibe_core::pycompat::{Dumps, dumps};
 use vibe_core::text::sha256_hex;
+use vibe_core::time::format_iso_millis_z;
 
-use crate::clock::iso_millis_z;
 use crate::engine::{ConversationMessage, SessionCore};
 use crate::state::{HarnessState, Projector};
 
@@ -148,19 +149,25 @@ impl SessionStore {
     ///
     /// The file cannot be written.
     pub fn write_meta(&self, meta: &Map<String, Value>) -> std::io::Result<()> {
-        let mut text = String::new();
-        let mut keys: Vec<&String> = meta.keys().collect();
-        keys.sort_by_key(|key| {
+        let mut fields: Vec<(&String, &Value)> = meta.iter().collect();
+        fields.sort_by_key(|(key, _)| {
             META_ORDER
                 .iter()
                 .position(|known| known == key)
                 .unwrap_or(usize::MAX)
         });
-        let fields: Vec<(&str, &Value)> = keys
+        let ordered = fields
             .into_iter()
-            .map(|key| (key.as_str(), &meta[key]))
+            .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
-        write_pretty_object(&fields, 0, &mut text);
+        let text = dumps(
+            &Value::Object(ordered),
+            Dumps {
+                ensure_ascii: false,
+                indent: Some(2),
+                ..Dumps::DEFAULT
+            },
+        );
         write_atomic(&self.dir.join("meta.json"), text.as_bytes())
     }
 
@@ -287,7 +294,7 @@ impl SessionStore {
         )?;
         let manifest = json!({
             "checkpoint": checkpoint,
-            "created_at": iso_millis_z(now_millis()),
+            "created_at": format_iso_millis_z(now_millis()),
             "execution_state": if running { "running" } else { "quiescent" },
             "generation": name,
             "interop_export": null,
@@ -475,55 +482,6 @@ const META_ORDER: &[&str] = &[
     "import_provenance",
     "created_worktree",
 ];
-
-/// `json.dumps(indent=2, ensure_ascii=False)` of an object whose fields are
-/// already in order.
-fn write_pretty_object(fields: &[(&str, &Value)], depth: usize, out: &mut String) {
-    if fields.is_empty() {
-        out.push_str("{}");
-        return;
-    }
-    out.push_str("{\n");
-    for (index, (key, value)) in fields.iter().enumerate() {
-        out.push_str(&"  ".repeat(depth + 1));
-        out.push_str(&serde_json::to_string(key).unwrap_or_default());
-        out.push_str(": ");
-        write_pretty(value, depth + 1, out);
-        if index + 1 < fields.len() {
-            out.push(',');
-        }
-        out.push('\n');
-    }
-    out.push_str(&"  ".repeat(depth));
-    out.push('}');
-}
-
-fn write_pretty(value: &Value, depth: usize, out: &mut String) {
-    match value {
-        Value::Object(map) => {
-            let fields: Vec<(&str, &Value)> = map
-                .iter()
-                .map(|(key, value)| (key.as_str(), value))
-                .collect();
-            write_pretty_object(&fields, depth, out);
-        }
-        Value::Array(items) if items.is_empty() => out.push_str("[]"),
-        Value::Array(items) => {
-            out.push_str("[\n");
-            for (index, item) in items.iter().enumerate() {
-                out.push_str(&"  ".repeat(depth + 1));
-                write_pretty(item, depth + 1, out);
-                if index + 1 < items.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-            }
-            out.push_str(&"  ".repeat(depth));
-            out.push(']');
-        }
-        other => out.push_str(&serde_json::to_string(other).unwrap_or_default()),
-    }
-}
 
 /// A session directory's `meta.json`.
 #[must_use]

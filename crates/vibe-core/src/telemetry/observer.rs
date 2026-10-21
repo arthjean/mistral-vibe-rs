@@ -16,6 +16,7 @@ use super::*;
 use crate::compaction::CompactionStatus;
 use crate::engine::EventObserver;
 use crate::events::{EngineEvent, EventEnvelope};
+use crate::sync::lock;
 
 /// How the client reaches the configuration on every send. Reference
 /// `TelemetryClient._config_getter`.
@@ -238,18 +239,13 @@ where
         let task = runtime.spawn(async move {
             let _ = client.record(&envelope).await;
         });
-        if let Ok(mut pending) = self.pending.lock() {
-            pending.retain(|task| !task.is_finished());
-            pending.push(task);
-        }
+        let mut pending = lock(&self.pending);
+        pending.retain(|task| !task.is_finished());
+        pending.push(task);
     }
 
     pub async fn flush(&self) {
-        let pending = self
-            .pending
-            .lock()
-            .map(|mut pending| std::mem::take(&mut *pending))
-            .unwrap_or_default();
+        let pending = std::mem::take(&mut *lock(&self.pending));
         for task in pending {
             let _ = task.await;
         }
@@ -261,10 +257,7 @@ where
         if !correlate_last_request {
             return None;
         }
-        self.turn
-            .lock()
-            .ok()
-            .and_then(|turn| turn.last_correlation_id.clone())
+        lock(&self.turn).last_correlation_id.clone()
     }
 
     /// The records one engine event reports, with the turn context updated by
@@ -275,9 +268,7 @@ where
     /// sends the auto-compaction record from the loop and the failure record
     /// from the manager, for the same compaction.
     pub(super) fn project(&self, event: &EventEnvelope) -> Vec<TelemetryRecord> {
-        let Ok(mut turn) = self.turn.lock() else {
-            return Vec::new();
-        };
+        let mut turn = lock(&self.turn);
         match &event.event {
             EngineEvent::RequestSent {
                 model,

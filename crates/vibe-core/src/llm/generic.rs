@@ -241,13 +241,7 @@ impl GenericBackend {
         if dialect == Dialect::VertexAnthropic && prepared.base_url.is_some() {
             prepared.base_url = Some(self.context.vertex.base_url(&self.provider.region));
         }
-        merge_headers(
-            &mut prepared.headers,
-            request
-                .extra_headers
-                .iter()
-                .map(|(name, value)| (name, value)),
-        );
+        merge_headers(&mut prepared.headers, request.extra_headers);
         let base = prepared
             .base_url
             .clone()

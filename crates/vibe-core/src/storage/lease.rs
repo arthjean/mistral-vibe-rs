@@ -122,7 +122,7 @@ impl SessionLease {
         // Compact, sorted, one line: what the reference writes, so a reader of
         // either implementation parses the other's.
         let diagnostic = json!({
-            "acquired_at": crate::storage::time::format_lease_timestamp(crate::clock::now_millis()),
+            "acquired_at": crate::time::format_iso_millis_z(crate::clock::now_millis()),
             "lease_version": LEASE_VERSION,
             "process_id": std::process::id(),
             "session_id": self.session_id,

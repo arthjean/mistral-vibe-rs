@@ -22,6 +22,22 @@ pub fn lax_bool(text: &str) -> Option<bool> {
     }
 }
 
+/// A JSON value read as a `bool`: a boolean as itself, a number only when it
+/// is zero or one, and a string as [`lax_bool`] reads it.
+#[must_use]
+pub fn lax_bool_value(value: &Value) -> Option<bool> {
+    match value {
+        Value::Bool(flag) => Some(*flag),
+        Value::Number(number) => match number.as_f64()? {
+            0.0 => Some(false),
+            1.0 => Some(true),
+            _ => None,
+        },
+        Value::String(text) => lax_bool(text),
+        _ => None,
+    }
+}
+
 /// A string read as an `int`: surrounding `White_Space`, a sign, ASCII digits
 /// a single underscore may separate, and a fraction made only of zeros, so
 /// `"12.0"` reads as twelve and `"12e0"`, `"12."` and `"_1"` read as nothing.

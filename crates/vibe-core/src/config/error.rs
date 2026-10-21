@@ -9,8 +9,6 @@ use crate::atomic_file::AtomicWriteError;
 
 #[derive(Debug, Error)]
 pub enum ConfigError {
-    #[error("configuration state lock is poisoned")]
-    LockPoisoned,
     #[error("secure randomness is unavailable for configuration persistence")]
     RandomUnavailable,
     #[error("configuration path has no parent: `{0}`")]

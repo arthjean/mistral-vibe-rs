@@ -96,12 +96,12 @@ impl VibeTools {
                 ("Updated", items)
             }
             _ => {
-                return Err(pydantic_error(
+                return Err(pydantic::single_error(
                     "TodoArgs",
                     "action",
-                    arguments.get("action"),
-                    "Input should be 'read' or 'write'",
                     "literal_error",
+                    "Input should be 'read' or 'write'",
+                    arguments.get("action").unwrap_or(&Value::Null),
                 ));
             }
         };
@@ -122,12 +122,12 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
         if value.is_null() {
             return Ok(Vec::new());
         }
-        return Err(pydantic_error(
+        return Err(pydantic::single_error(
             "TodoArgs",
             "todos",
-            Some(value),
-            "Input should be a valid list",
             "list_type",
+            "Input should be a valid list",
+            value,
         ));
     };
     items
@@ -138,19 +138,19 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
             let text = |name: &str| -> Result<String, String> {
                 match item.get(name) {
                     Some(Value::String(text)) => Ok(text.clone()),
-                    Some(other) => Err(pydantic_error(
+                    Some(other) => Err(pydantic::single_error(
                         "TodoArgs",
                         &field(name),
-                        Some(other),
-                        "Input should be a valid string",
                         "string_type",
+                        "Input should be a valid string",
+                        other,
                     )),
-                    None => Err(pydantic_error(
+                    None => Err(pydantic::single_error(
                         "TodoArgs",
                         &field(name),
-                        Some(item),
-                        "Field required",
                         "missing",
+                        "Field required",
+                        item,
                     )),
                 }
             };
@@ -160,10 +160,10 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
                     Some(Value::String(text)) if allowed.contains(&text.as_str()) => {
                         Ok(text.clone())
                     }
-                    Some(other) => Err(pydantic_error(
+                    Some(other) => Err(pydantic::single_error(
                         "TodoArgs",
                         &field(name),
-                        Some(other),
+                        "enum",
                         &format!(
                             "Input should be {}",
                             pydantic::expected_literals(
@@ -173,7 +173,7 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
                                     .collect::<Vec<_>>()
                             )
                         ),
-                        "enum",
+                        other,
                     )),
                 }
             };
@@ -185,25 +185,6 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
             }))
         })
         .collect()
-}
-
-/// `str(ValidationError)` for one failing field.
-fn pydantic_error(
-    model: &str,
-    field: &str,
-    input: Option<&Value>,
-    message: &str,
-    kind: &str,
-) -> String {
-    pydantic::validation_error(
-        model,
-        &[pydantic::LineError {
-            location: field,
-            kind,
-            message,
-            input: input.unwrap_or(&Value::Null),
-        }],
-    )
 }
 
 // --------------------------------------------------------------------------
@@ -224,12 +205,12 @@ fn scratchpad(arguments: &Value, directory: &Path) -> Result<ToolResult, String>
         match arguments.get(name) {
             None | Some(Value::Null) => Ok(None),
             Some(Value::String(text)) => Ok(Some(text.clone())),
-            Some(other) => Err(pydantic_error(
+            Some(other) => Err(pydantic::single_error(
                 "ScratchpadArgs",
                 name,
-                Some(other),
-                "Input should be a valid string",
                 "string_type",
+                "Input should be a valid string",
+                other,
             )),
         }
     };
@@ -251,12 +232,12 @@ fn scratchpad(arguments: &Value, directory: &Path) -> Result<ToolResult, String>
     let action = match action {
         Some(action @ ("read" | "write" | "list")) => action,
         _ => {
-            return Err(pydantic_error(
+            return Err(pydantic::single_error(
                 "ScratchpadArgs",
                 "action",
-                arguments.get("action"),
-                "Input should be 'read', 'write' or 'list'",
                 "literal_error",
+                "Input should be 'read', 'write' or 'list'",
+                arguments.get("action").unwrap_or(&Value::Null),
             ));
         }
     };

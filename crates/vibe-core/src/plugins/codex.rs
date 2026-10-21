@@ -15,7 +15,7 @@ use serde_json::{Map, Value};
 use super::compatibility::{
     AdaptedMcpServer, AdaptedPluginPackage, AdaptedUnsupportedComponent, DetectedPluginFormat,
     PluginAdapterDiagnostic, PluginAdapterResult, PluginMcpHttpAuth, PluginMcpServer,
-    author_display_name, check_header_name, read_text, resolve_declared_path,
+    UnsupportedKind, author_display_name, check_header_name, read_text, resolve_declared_path,
     resolve_stdio_command, typescript_identifier,
 };
 use super::diagnostics::{self as codes, Severity};
@@ -651,7 +651,7 @@ fn report_interface(
     }
     diagnostics.push(diagnostic(FORMAT, "interface_metadata_unsupported", manifest_path.to_path_buf(), "The Codex interface and branding metadata is kept as package data and published as no capability.", "interface", Severity::Info));
     unsupported.push(unsupported_component(
-        "interface_metadata",
+        UnsupportedKind::InterfaceMetadata,
         manifest_path.to_path_buf(),
         "codex_interface_metadata_runtime_private",
     ));
@@ -718,7 +718,7 @@ fn report_apps(
         Severity::Warning,
     ));
     unsupported.push(unsupported_component(
-        "openai_app",
+        UnsupportedKind::OpenaiApp,
         path,
         "openai_apps_ui_unsupported",
     ));
@@ -742,7 +742,7 @@ fn report_hooks(
         if inline {
             diagnostics.push(diagnostic(FORMAT, "hooks_unsupported", manifest_path.to_path_buf(), "Inline Codex hooks do not run here; the plugin's other valid skills and MCP servers stay active.", "hook", Severity::Warning));
             unsupported.push(unsupported_component(
-                "codex_hooks",
+                UnsupportedKind::CodexHooks,
                 manifest_path.to_path_buf(),
                 "codex_hook_semantics_unsupported",
             ));
@@ -767,7 +767,7 @@ fn report_hooks(
             Ok(resolved) => {
                 diagnostics.push(diagnostic(FORMAT, "hooks_unsupported", resolved.clone(), "Codex hooks do not run here; the plugin's other valid skills and MCP servers stay active.", "hook", Severity::Warning));
                 unsupported.push(unsupported_component(
-                    "codex_hooks",
+                    UnsupportedKind::CodexHooks,
                     resolved,
                     "codex_hook_semantics_unsupported",
                 ));
@@ -848,7 +848,7 @@ fn report_agent_metadata(
         }
         diagnostics.push(diagnostic(FORMAT, "agent_metadata_unsupported", resolved.clone(), "Codex agent and per-skill presentation metadata is kept as package data and becomes no capability.", "agent_metadata", Severity::Info));
         unsupported.push(unsupported_component(
-            "agent_metadata",
+            UnsupportedKind::AgentMetadata,
             resolved,
             "codex_agent_metadata_unsupported",
         ));

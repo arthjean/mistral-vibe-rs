@@ -31,7 +31,7 @@ use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
 use super::{Backend, BackendContext, MapCredentials, ModelRequest, TokenFuture, VertexAccess};
 use crate::parity::replay::Capture;
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
-use crate::pycompat::{self, Dumps};
+use crate::pycompat::{self, Dumps, truthy};
 
 /// `json.dumps(value, ensure_ascii=False)`, how the stand-in serves a body.
 const UNICODE: Dumps = Dumps {
@@ -188,7 +188,7 @@ async fn serve(
         {
             tokio::time::sleep(Duration::from_secs_f64(delay)).await;
         }
-        if truthy(response.get("drop")) {
+        if response.get("drop").is_some_and(truthy) {
             let _ = socket.shutdown().await;
             return;
         }
@@ -212,7 +212,7 @@ async fn serve(
             (
                 sse_body(
                     events.as_array().map_or(&[][..], Vec::as_slice),
-                    truthy(response.get("crlf")),
+                    response.get("crlf").is_some_and(truthy),
                 ),
                 "text/event-stream",
             )
@@ -241,7 +241,7 @@ async fn serve(
             .and_then(|status| reqwest::StatusCode::from_u16(status).ok())
             .and_then(|status| status.canonical_reason())
             .unwrap_or_default();
-        let truncate = truthy(response.get("truncate"));
+        let truncate = response.get("truncate").is_some_and(truthy);
         let declared = payload.len() + if truncate { 64 } else { 0 };
         let mut head = format!("HTTP/1.1 {status} {phrase}\r\ncontent-type: {content_type}\r\n");
         for (name, value) in &extra {
@@ -258,17 +258,6 @@ async fn serve(
             let _ = socket.shutdown().await;
             return;
         }
-    }
-}
-
-fn truthy(value: Option<&Value>) -> bool {
-    match value {
-        None | Some(Value::Null) => false,
-        Some(Value::Bool(flag)) => *flag,
-        Some(Value::Number(number)) => number.as_f64().is_some_and(|number| number != 0.0),
-        Some(Value::String(text)) => !text.is_empty(),
-        Some(Value::Array(items)) => !items.is_empty(),
-        Some(Value::Object(fields)) => !fields.is_empty(),
     }
 }
 

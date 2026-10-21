@@ -7,11 +7,13 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use vibe_core::clock::now_millis;
 use vibe_core::pycompat::{self, Dumps};
+use vibe_core::sync::lock;
 
 use super::{CallbackEvent, SessionCore, Sink, TurnEnvironment};
 use crate::gate::{
     Approver, AskFuture, CallbackAnswer, GateVerdict, approval_callback, user_input_callback,
 };
+use crate::processes::Operation;
 use crate::state::{Advance, ToolAction, ToolResult};
 
 /// How one call ended for the turn.
@@ -19,6 +21,47 @@ pub(super) enum CallOutcome {
     Done(ToolResult),
     CancelTurn,
     FailTurn(String),
+}
+
+/// The harness tool a call names, read once from its dotted name.
+#[derive(Debug, Clone, Copy)]
+enum HarnessTool<'a> {
+    AskUserQuestion,
+    /// One of the `file_system` tools [`crate::tools::files::execute`] runs
+    /// by this name.
+    File(&'a str),
+    Bash,
+    Process(Operation),
+    Subagent(&'a str),
+    Sleep,
+    SkillRead,
+    Cron,
+    Vibe(&'a str),
+    /// A tool the host provides, or one nothing here runs.
+    Other(&'a str),
+}
+
+impl<'a> HarnessTool<'a> {
+    fn parse(name: &'a str) -> Self {
+        match name {
+            "ui.ask_user_question" => Self::AskUserQuestion,
+            "file_system.read_file" | "file_system.write_file" | "file_system.search_replace" => {
+                Self::File(name)
+            }
+            "file_system.bash" => Self::Bash,
+            "self.sleep" => Self::Sleep,
+            "skill.read" => Self::SkillRead,
+            "vibe.cron" => Self::Cron,
+            _ => match name.split_once('.') {
+                Some(("process", operation)) => {
+                    Operation::parse(operation).map_or(Self::Other(name), Self::Process)
+                }
+                Some(("subagent", operation)) => Self::Subagent(operation),
+                Some(("vibe", tool)) => Self::Vibe(tool),
+                _ => Self::Other(name),
+            },
+        }
+    }
 }
 
 /// Reference `_gate_tool_call` then the tool: the gate decides, the call
@@ -32,16 +75,15 @@ pub(super) async fn gated_execute(
 ) -> CallOutcome {
     // Reference `_process_actions`: process arguments are checked before any
     // approval is asked, and pacing the agent itself asks none.
-    let precheck = crate::processes::precheck(
-        &action.tool_name,
-        &action.arguments,
-        &environment.workspace.cwd,
-    );
-    if let Some(refused) = precheck {
+    let tool = HarnessTool::parse(&action.tool_name);
+    if let HarnessTool::Process(operation) = tool
+        && let Some(refused) =
+            crate::processes::precheck(operation, &action.arguments, &environment.workspace.cwd)
+    {
         return CallOutcome::Done(refused);
     }
-    if action.tool_name == "self.sleep" || action.tool_name.starts_with("subagent.") {
-        return match execute(core, environment, sink, call_id, action).await {
+    if matches!(tool, HarnessTool::Sleep | HarnessTool::Subagent(_)) {
+        return match execute(core, environment, sink, call_id, tool, action).await {
             Ok(result) => CallOutcome::Done(result),
             Err(message) => CallOutcome::FailTurn(message),
         };
@@ -54,7 +96,7 @@ pub(super) async fn gated_execute(
     };
     let (mut result, approval) = match environment.gate.check(action, &approver).await {
         GateVerdict::Run { approval } => {
-            match execute(core, environment, sink, call_id, action).await {
+            match execute(core, environment, sink, call_id, tool, action).await {
                 Ok(result) => (result, approval),
                 Err(message) => return CallOutcome::FailTurn(message),
             }
@@ -91,9 +133,7 @@ impl Approver for EngineApprover<'_> {
     fn ask(&self, required_permissions: Vec<Value>, reason: Option<String>) -> AskFuture<'_> {
         Box::pin(async move {
             let receiver = {
-                let Ok(mut core) = self.core.lock() else {
-                    return CallbackAnswer::Closed("the session is gone".to_owned());
-                };
+                let mut core = lock(self.core);
                 let callback_id = core
                     .callbacks
                     .fresh_id(&format!("approval-{}", self.call_id));
@@ -136,9 +176,7 @@ async fn ask_user(
     action: &ToolAction,
 ) -> Result<ToolResult, String> {
     let receiver = {
-        let Ok(mut core) = core.lock() else {
-            return Err("the session is gone".to_owned());
-        };
+        let mut core = lock(core);
         let callback_id = core.callbacks.fresh_id(&format!("user-input-{call_id}"));
         let entry = user_input_callback(
             &core.projector.state.session.id,
@@ -171,14 +209,13 @@ async fn execute(
     environment: &TurnEnvironment,
     sink: &Sink,
     call_id: &str,
+    tool: HarnessTool<'_>,
     action: &ToolAction,
 ) -> Result<ToolResult, String> {
     let arguments = action.arguments.clone();
-    Ok(match action.tool_name.as_str() {
-        "ui.ask_user_question" => return ask_user(core, sink, call_id, action).await,
-        name @ ("file_system.read_file"
-        | "file_system.write_file"
-        | "file_system.search_replace") => {
+    Ok(match tool {
+        HarnessTool::AskUserQuestion => return ask_user(core, sink, call_id, action).await,
+        HarnessTool::File(name) => {
             let name = name.to_owned();
             let workspace = environment.workspace.clone();
             tokio::task::spawn_blocking(move || {
@@ -187,50 +224,45 @@ async fn execute(
             .await
             .unwrap_or_else(|error| ToolResult::failed("tool_failed", error.to_string()))
         }
-        "file_system.bash" => crate::tools::shell::execute(&arguments, &environment.shell).await,
-        name if name.starts_with("process.") => {
-            let (manager, session_id) = match core.lock() {
-                Ok(core) => (
+        HarnessTool::Bash => crate::tools::shell::execute(&arguments, &environment.shell).await,
+        HarnessTool::Process(operation) => {
+            let (manager, session_id) = {
+                let core = lock(core);
+                (
                     Arc::clone(&core.processes),
                     core.projector.state.session.id.clone(),
-                ),
-                Err(_) => return Ok(ToolResult::failed("tool_failed", "the session is gone")),
+                )
             };
-            let operation = name.trim_start_matches("process.").to_owned();
             let process_id = crate::processes::process_id(&session_id, &action.action_id, call_id);
             let workspace = environment.workspace.cwd.clone();
             let session_dir = environment.session_dir.clone();
             let shell = environment.shell.clone();
-            tokio::task::spawn_blocking(move || match operation.as_str() {
-                "start" => manager.start(
+            tokio::task::spawn_blocking(move || match operation {
+                Operation::Start => manager.start(
                     process_id,
                     &arguments,
                     &workspace,
                     session_dir.as_deref(),
                     &shell,
                 ),
-                "output" => manager.output(&arguments),
-                "write" => manager.write(&arguments),
-                "list" => manager.list(),
-                "stop" => manager.stop(&arguments),
-                other => {
-                    ToolResult::failed("tool_failed", format!("Unsupported tool: process.{other}"))
-                }
+                Operation::Output => manager.output(&arguments),
+                Operation::Write => manager.write(&arguments),
+                Operation::List => manager.list(),
+                Operation::Stop => manager.stop(&arguments),
             })
             .await
             .unwrap_or_else(|error| ToolResult::failed("tool_failed", error.to_string()))
         }
-        name if name.starts_with("subagent.") => {
-            let (manager, session_id, message_id, scratchpad) = match core.lock() {
-                Ok(core) => (
+        HarnessTool::Subagent(operation) => {
+            let (manager, session_id, message_id, scratchpad) = {
+                let core = lock(core);
+                (
                     Arc::clone(&core.subagents),
                     core.projector.state.session.id.clone(),
                     core.latest_input_entry_id(),
                     core.vibe.scratchpad.clone(),
-                ),
-                Err(_) => return Ok(ToolResult::failed("tool_failed", "the session is gone")),
+                )
             };
-            let operation = name.trim_start_matches("subagent.");
             manager
                 .execute(
                     operation,
@@ -243,7 +275,7 @@ async fn execute(
                 )
                 .await
         }
-        "self.sleep" => {
+        HarnessTool::Sleep => {
             let seconds = arguments["seconds"].as_f64().unwrap_or_default();
             tokio::time::sleep(Duration::from_secs_f64(seconds.clamp(0.0, 60.0))).await;
             ToolResult::Success {
@@ -252,7 +284,7 @@ async fn execute(
                 meta: None,
             }
         }
-        "skill.read" => {
+        HarnessTool::SkillRead => {
             let name = arguments["name"].as_str().unwrap_or_default();
             match environment.skills.iter().find(|(known, _)| known == name) {
                 Some((_, body)) => ToolResult::Success {
@@ -281,18 +313,9 @@ async fn execute(
                 }
             }
         }
-        "vibe.cron" => match core.lock() {
-            Ok(core) => core.loops.run_tool(&arguments),
-            Err(_) => ToolResult::failed("tool_failed", "the session is gone"),
-        },
-        name if name.starts_with("vibe.") => {
-            let tool = name.trim_start_matches("vibe.");
-            match core.lock() {
-                Ok(mut core) => core.vibe.execute(tool, &arguments),
-                Err(_) => ToolResult::failed("tool_failed", "the session is gone"),
-            }
-        }
-        other => match &environment.provided {
+        HarnessTool::Cron => lock(core).loops.run_tool(&arguments),
+        HarnessTool::Vibe(tool) => lock(core).vibe.execute(tool, &arguments),
+        HarnessTool::Other(other) => match &environment.provided {
             Some(provided) if provided.routes(other) => provided.call(other, arguments).await,
             _ => ToolResult::failed("tool_failed", format!("Unsupported tool: {other}")),
         },

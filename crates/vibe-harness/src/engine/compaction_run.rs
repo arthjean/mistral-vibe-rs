@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 use serde_json::{Value, json};
 use vibe_core::clock::now_millis;
 use vibe_core::session_id::uuid_v4;
+use vibe_core::sync::lock;
 
 use super::conversation::ConversationMessage;
 use super::provider_errors::turn_error;
@@ -54,12 +55,7 @@ pub(super) async fn run_compaction(
     let mut retried = false;
     loop {
         let input = {
-            let Ok(mut core) = core.lock() else {
-                return CompactionEnd::Failed {
-                    code: "internal_error".to_owned(),
-                    message: "the session lock is poisoned".to_owned(),
-                };
-            };
+            let mut core = lock(core);
             let now = now_millis();
             let input_entry_id = turn_id.and_then(|_| core.latest_input_entry_id());
             let entry = crate::state::running_compaction_entry(
@@ -89,12 +85,7 @@ pub(super) async fn run_compaction(
             input
         };
         let answered = environment.provider.complete(&input).await;
-        let Ok(mut core) = core.lock() else {
-            return CompactionEnd::Failed {
-                code: "internal_error".to_owned(),
-                message: "the session lock is poisoned".to_owned(),
-            };
-        };
+        let mut core = lock(core);
         let failed = |error: PublicError, reason: Option<String>| {
             (
                 Observation::ContextCompactionFailed {

@@ -314,7 +314,7 @@ fn cron_result_text(
             let next = entry.get("next_fire_at")?.as_f64()?;
             lines.push(format!(
                 "Next run: {}",
-                crate::clock::local_timestamp(next)?
+                vibe_core::time::format_local_timestamp(next)?
             ));
         }
         lines.push(format!("ID: {}", entry.get("id")?.as_str()?));

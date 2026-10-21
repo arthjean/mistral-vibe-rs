@@ -24,7 +24,7 @@ mod validate;
 
 pub use registry::{RegistrationOutcome, ToolCondition, ToolRegistry};
 pub(crate) use validate::validate_arguments;
-pub use validate::{SchemaViolation, apply_defaults, coerce_and_validate, python_bool};
+pub use validate::{SchemaViolation, apply_defaults, coerce_and_validate};
 use validate::{
     render_violations, validate_output_schema, validate_schema_object, validate_tool_name,
 };

@@ -8,8 +8,8 @@ use std::time::{Duration, UNIX_EPOCH};
 use serde_json::json;
 
 use super::handoff::HandoffJournal;
-use super::time::format_iso_timestamp;
 use super::*;
+use crate::time::format_iso_millis;
 
 const WORKSPACE: &str = "/workspace";
 /// 2024-01-02T03:04:05.678Z.
@@ -511,7 +511,7 @@ fn persist_bumped_at_is_monotonic() {
             .expect("first bump"),
         5_000
     );
-    let first = format_iso_timestamp(5_000);
+    let first = format_iso_millis(5_000);
     assert_eq!(metadata.bumped_at.as_deref(), Some(first.as_str()));
     assert_eq!(read_meta(&store, &metadata)["bumped_at"], first.as_str());
 
@@ -531,7 +531,7 @@ fn persist_bumped_at_is_monotonic() {
     );
     assert_eq!(
         read_meta(&store, &metadata)["bumped_at"],
-        format_iso_timestamp(9_000).as_str()
+        format_iso_millis(9_000).as_str()
     );
 }
 
@@ -877,7 +877,7 @@ fn lifecycle_operations_are_durable_and_parent_linked() {
             .expect("metadata")
             .end_time
             .as_deref(),
-        Some(format_iso_timestamp(31_000).as_str())
+        Some(format_iso_millis(31_000).as_str())
     );
     store
         .close("never-written", 31_000)

@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 use vibe_core::cache_store::CacheStore;
+use vibe_core::sync::lock;
 
 /// Reference `UPDATE_CACHE_TTL_SECONDS`.
 pub const UPDATE_CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
@@ -92,10 +93,7 @@ impl UpdateCacheStore {
     /// contents do not parse.
     #[must_use]
     pub fn load(&self) -> Option<UpdateCache> {
-        let mut remembered = self
-            .remembered
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut remembered = lock(&self.remembered);
         if let Some(cache) = remembered.as_ref() {
             return cache.clone();
         }
@@ -136,10 +134,7 @@ impl UpdateCacheStore {
             );
         }
         self.cache.write_section(CACHE_SECTION, payload);
-        *self
-            .remembered
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Some(cache.clone()));
+        *lock(&self.remembered) = Some(Some(cache.clone()));
     }
 
     /// Reference `_read_section`'s fallback: the pre-TOML JSON is read once, its

@@ -7,7 +7,6 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::time::format_iso_timestamp;
 use super::{
     HydratedSession, MAX_MESSAGE_RECORD_BYTES, MESSAGES_FILE, SessionMetadata, SessionStore,
     StorageError, create_private_directory, ensure_private_directory, record,
@@ -16,6 +15,7 @@ use crate::atomic_file::{FileMode, create_private_file, write_atomically};
 use crate::events::ModelMessage;
 use crate::pycompat::{self, Dumps};
 use crate::text::sha256_hex;
+use crate::time::format_iso_millis;
 
 impl SessionStore {
     /// Writes the session with an empty log, which is how a subagent's session
@@ -76,7 +76,7 @@ impl SessionStore {
         self.materialize(metadata)?;
         appended.write(&self.session_path(metadata).join(MESSAGES_FILE), metadata)?;
         metadata.updated_at_ms = now_ms;
-        metadata.end_time = Some(format_iso_timestamp(now_ms));
+        metadata.end_time = Some(format_iso_millis(now_ms));
         self.write_metadata(metadata)
     }
 
@@ -144,7 +144,7 @@ impl SessionStore {
         .unwrap_or(u64::MAX);
         metadata.last_message_fingerprint = last.map(message_fingerprint).transpose()?;
         metadata.updated_at_ms = now_ms;
-        metadata.end_time = Some(format_iso_timestamp(now_ms));
+        metadata.end_time = Some(format_iso_millis(now_ms));
         self.write_metadata(metadata)
     }
 

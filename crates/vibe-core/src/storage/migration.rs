@@ -18,7 +18,6 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::log::LogAppend;
-use super::time::format_iso_timestamp;
 use super::{
     FileLock, MESSAGES_FILE, METADATA_FILE, MIGRATION_LOCK_FILE, MIGRATION_SUFFIX, MigrationIssue,
     MigrationReport, SessionMetadata, SessionStore, StorageError, TEMP_SEQUENCE,
@@ -26,6 +25,7 @@ use super::{
 };
 use crate::atomic_file::create_private_file;
 use crate::events::ModelMessage;
+use crate::time::format_iso_millis;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -186,8 +186,8 @@ impl SessionStore {
                 .and_then(|name| name.to_str())
                 .unwrap_or_default()
                 .to_owned(),
-            start_time: format_iso_timestamp(legacy.created_at_ms),
-            end_time: Some(format_iso_timestamp(legacy.updated_at_ms)),
+            start_time: format_iso_millis(legacy.created_at_ms),
+            end_time: Some(format_iso_millis(legacy.updated_at_ms)),
             git_commit: None,
             git_branch: None,
             environment,

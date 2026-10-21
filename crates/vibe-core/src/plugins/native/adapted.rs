@@ -125,7 +125,7 @@ impl Resolve<'_> {
                 .map(|component| PluginUnsupportedComponent {
                     plugin_name: plugin_name.to_owned(),
                     source_format,
-                    kind: component.kind.clone(),
+                    kind: component.kind,
                     path: component.path.clone(),
                     reason: component.reason.clone(),
                 }),

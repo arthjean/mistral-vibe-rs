@@ -12,31 +12,32 @@
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use serde_json::{Value, json};
 use vibe_core::clock::now_millis;
+use vibe_core::sync::lock;
 use vibe_core::text::sha256_hex;
 use vibe_core::tools::shell::CommandEnvironment;
 
+pub use self::precheck::precheck;
+use self::precheck::start_directory;
+use self::process::{Lifecycle, Output, Process};
 use crate::state::ToolResult;
 use crate::tools::shell::ShellContext;
 
+mod precheck;
+mod process;
+
 /// The most a page returns, whatever `maxBytes` asks.
 const MAX_PAGE: usize = 64_000;
-/// Output kept per process; older bytes are dropped from the front.
-const RETAINED: usize = 64 * 1024 * 1024;
-/// How long a stop waits after each signal.
-const TERMINATION_WAIT: Duration = Duration::from_secs(2);
 /// How long the output of an exited process keeps draining.
 const DRAIN_WAIT: Duration = Duration::from_secs(2);
 /// How long a write gives the process to react before it is answered.
 const WRITE_SETTLE: Duration = Duration::from_millis(50);
-/// How often a waiting read looks again.
-const POLL: Duration = Duration::from_millis(250);
 
 /// What every process's environment holds unless the call says otherwise:
 /// reference `_POSIX_ENV_DEFAULTS`, which Git Bash shares.
@@ -84,43 +85,29 @@ impl Status {
     }
 }
 
-/// What a process has written so far.
-#[derive(Default)]
-struct Output {
-    /// The retained bytes, starting at `start`.
-    bytes: Vec<u8>,
-    start: u64,
-    /// Whether the terminal has closed and nothing more will come.
-    finished: bool,
+/// A `process.*` tool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Operation {
+    Start,
+    Output,
+    Write,
+    List,
+    Stop,
 }
 
-impl Output {
-    fn end(&self) -> u64 {
-        self.start + self.bytes.len() as u64
+impl Operation {
+    /// The operation `process.<name>` runs.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "start" => Self::Start,
+            "output" => Self::Output,
+            "write" => Self::Write,
+            "list" => Self::List,
+            "stop" => Self::Stop,
+            _ => return None,
+        })
     }
-}
-
-struct Lifecycle {
-    status: Status,
-    exit_code: Option<i64>,
-    /// A stop is under way: an exit from now on counts as stopped.
-    stopping: bool,
-}
-
-/// One process.
-struct Process {
-    id: String,
-    command: String,
-    created_at: u64,
-    lifecycle: Mutex<Lifecycle>,
-    changed: Condvar,
-    output: Mutex<Output>,
-    writer: Mutex<Option<Box<dyn Write + Send>>>,
-    /// The process group, the root's own ID, which on Windows names the tree
-    /// a stop ends.
-    group: Option<i32>,
-    killer: Mutex<Option<Box<dyn portable_pty::ChildKiller + Send + Sync>>>,
-    directory: Option<PathBuf>,
 }
 
 /// Called whenever a process starts or ends.
@@ -148,7 +135,7 @@ impl std::fmt::Debug for ProcessManager {
 }
 
 /// A tool failure in the reference's words.
-fn failure(code: &str, message: &str, details: Value) -> ToolResult {
+pub(super) fn failure(code: &str, message: &str, details: Value) -> ToolResult {
     ToolResult::Failure {
         content: Vec::new(),
         code: code.to_owned(),
@@ -165,14 +152,6 @@ fn success(value: Value) -> ToolResult {
         structured_content: Some(value),
         meta: None,
     }
-}
-
-fn invalid(tool: &str, location: &str, kind: &str, message: &str) -> ToolResult {
-    failure(
-        "invalid_arguments",
-        &format!("Invalid arguments for {tool}"),
-        json!({"errors": [{"location": location, "message": message, "type": kind}], "tool": tool}),
-    )
 }
 
 fn unknown(process_id: &str) -> ToolResult {
@@ -228,117 +207,6 @@ fn process_environment(
     merged
 }
 
-/// Reference `_process_actions` argument checks, which refuse a call before
-/// it is gated: `None` when `arguments` may run.
-#[must_use]
-pub fn precheck(tool_name: &str, arguments: &Value, workspace: &Path) -> Option<ToolResult> {
-    match tool_name {
-        "process.start" => {
-            let tool = "process.start";
-            if arguments["command"]
-                .as_str()
-                .unwrap_or_default()
-                .trim()
-                .is_empty()
-            {
-                return Some(invalid(
-                    tool,
-                    "command",
-                    "empty_command",
-                    "Command must not be empty",
-                ));
-            }
-            let cwd = start_directory(arguments, workspace);
-            if !cwd.is_dir() {
-                return Some(invalid(
-                    tool,
-                    "cwd",
-                    "invalid_working_directory",
-                    "Working directory must exist and be a directory",
-                ));
-            }
-            for (key, value) in arguments["env"].as_object().into_iter().flatten() {
-                let value = value.as_str().unwrap_or_default();
-                let problem = if key.is_empty() {
-                    Some((
-                        "invalid_environment_name",
-                        "Environment variable name must not be empty",
-                    ))
-                } else if key.contains('=') {
-                    Some((
-                        "invalid_environment_name",
-                        "Environment variable name must not contain '='",
-                    ))
-                } else if key.contains('\0') {
-                    Some((
-                        "invalid_environment_name",
-                        "Environment variable name must not contain a null character",
-                    ))
-                } else if value.contains('\0') {
-                    Some((
-                        "invalid_environment_value",
-                        "Environment variable value must not contain a null character",
-                    ))
-                } else {
-                    None
-                };
-                if let Some((kind, message)) = problem {
-                    return Some(invalid(tool, &format!("env.{key}"), kind, message));
-                }
-            }
-            None
-        }
-        "process.output"
-            if arguments["waitMs"]
-                .as_u64()
-                .is_some_and(|wait| wait > 30_000) =>
-        {
-            Some(invalid(
-                "process.output",
-                "waitMs",
-                "value_too_large",
-                "waitMs must be at most 30000",
-            ))
-        }
-        "process.write" => {
-            if arguments["text"].as_str().is_some_and(str::is_empty) {
-                return Some(invalid(
-                    "process.write",
-                    "text",
-                    "empty_input",
-                    "Process input must not be empty",
-                ));
-            }
-            let encoded = arguments["bytesBase64"].as_str()?;
-            use base64::Engine;
-            base64::engine::general_purpose::STANDARD
-                .decode(encoded)
-                .is_err()
-                .then(|| {
-                    invalid(
-                        "process.write",
-                        "bytesBase64",
-                        "invalid_base64",
-                        "bytesBase64 must be valid base64",
-                    )
-                })
-        }
-        _ => None,
-    }
-}
-
-/// Where a process starts: its `cwd`, relative to the workspace, or the
-/// workspace.
-fn start_directory(arguments: &Value, workspace: &Path) -> PathBuf {
-    match arguments["cwd"]
-        .as_str()
-        .filter(|cwd| !cwd.trim().is_empty())
-    {
-        Some(cwd) => workspace.join(cwd),
-        None => workspace.to_path_buf(),
-    }
-}
-
 impl ProcessManager {
     #[must_use]
     pub fn new() -> Arc<Self> {
@@ -347,9 +215,7 @@ impl ProcessManager {
 
     /// Who hears of every start and end.
     pub fn listen(&self, listener: Listener) {
-        if let Ok(mut slot) = self.listener.lock() {
-            *slot = Some(listener);
-        }
+        *lock(&self.listener) = Some(listener);
     }
 
     /// Lets the end of the process `process_id` be published.
@@ -360,27 +226,21 @@ impl ProcessManager {
     /// is still published after the call that started it. An end held here is
     /// announced now; an unknown or already acknowledged start is a no-op.
     pub fn acknowledge_start(&self, process_id: &str) {
-        let ended = self
-            .unacknowledged
-            .lock()
-            .ok()
-            .and_then(|mut pending| pending.remove(process_id));
+        let ended = lock(&self.unacknowledged).remove(process_id);
         if ended == Some(true) {
             self.announce();
         }
     }
 
     fn announce(&self) {
-        let listener = self.listener.lock().ok().and_then(|slot| slot.clone());
+        let listener = lock(&self.listener).clone();
         if let Some(listener) = listener {
             listener();
         }
     }
 
     fn find(&self, process_id: &str) -> Option<Arc<Process>> {
-        self.processes
-            .lock()
-            .ok()?
+        lock(&self.processes)
             .iter()
             .find(|process| process.id == process_id)
             .cloned()
@@ -389,9 +249,7 @@ impl ProcessManager {
     /// The public `backgroundProcesses` list, oldest first.
     #[must_use]
     pub fn public(&self) -> Vec<Value> {
-        let Ok(processes) = self.processes.lock() else {
-            return Vec::new();
-        };
+        let processes = lock(&self.processes);
         let mut listed: Vec<&Arc<Process>> = processes.iter().collect();
         listed
             .sort_by(|left, right| (left.created_at, &left.id).cmp(&(right.created_at, &right.id)));
@@ -404,7 +262,7 @@ impl ProcessManager {
                     "command": process.command,
                     "status": status.as_str(),
                     "exitCode": exit_code,
-                    "createdAt": crate::clock::iso_millis_z(process.created_at),
+                    "createdAt": vibe_core::time::format_iso_millis_z(process.created_at),
                 })
             })
             .collect()
@@ -413,17 +271,12 @@ impl ProcessManager {
     /// Takes the notifications of processes that ended since the last call.
     #[must_use]
     pub fn take_notifications(&self) -> Vec<Value> {
-        self.notifications
-            .lock()
-            .map(|mut pending| std::mem::take(&mut *pending))
-            .unwrap_or_default()
+        std::mem::take(&mut *lock(&self.notifications))
     }
 
     /// Processes a stored session listed as running belong to no one now.
     pub fn restore(&self, listed: &[Value]) {
-        let Ok(mut processes) = self.processes.lock() else {
-            return;
-        };
+        let mut processes = lock(&self.processes);
         for item in listed {
             let Some(id) = item["processId"].as_str() else {
                 continue;
@@ -439,7 +292,7 @@ impl ProcessManager {
                 command: item["command"].as_str().unwrap_or_default().to_owned(),
                 created_at: item["createdAt"]
                     .as_str()
-                    .and_then(crate::clock::parse_iso_millis)
+                    .and_then(vibe_core::time::parse_iso_millis)
                     .unwrap_or_default(),
                 lifecycle: Mutex::new(Lifecycle {
                     status,
@@ -447,10 +300,7 @@ impl ProcessManager {
                     stopping: false,
                 }),
                 changed: Condvar::new(),
-                output: Mutex::new(Output {
-                    finished: true,
-                    ..Output::default()
-                }),
+                output: Mutex::new(Output::finished()),
                 writer: Mutex::new(None),
                 group: None,
                 killer: Mutex::new(None),
@@ -468,7 +318,7 @@ impl ProcessManager {
         session_dir: Option<&Path>,
         shell: &ShellContext,
     ) -> ToolResult {
-        if let Some(refused) = precheck("process.start", arguments, workspace) {
+        if let Some(refused) = precheck(Operation::Start, arguments, workspace) {
             return refused;
         }
         let command = arguments["command"].as_str().unwrap_or_default();
@@ -567,12 +417,8 @@ impl ProcessManager {
             directory,
         });
         process.persist_output_state();
-        if let Ok(mut processes) = self.processes.lock() {
-            processes.push(Arc::clone(&process));
-        }
-        if let Ok(mut pending) = self.unacknowledged.lock() {
-            pending.insert(process_id.clone(), false);
-        }
+        lock(&self.processes).push(Arc::clone(&process));
+        lock(&self.unacknowledged).insert(process_id.clone(), false);
         // The reader keeps every byte; the waiter settles the process once
         // its root exits and its terminal has drained.
         {
@@ -585,9 +431,7 @@ impl ProcessManager {
                         Ok(read) => process.append(&buffer[..read]),
                     }
                 }
-                if let Ok(mut output) = process.output.lock() {
-                    output.finished = true;
-                }
+                lock(&process.output).finished = true;
                 process.changed.notify_all();
             });
         }
@@ -604,13 +448,7 @@ impl ProcessManager {
                     drop(master.take());
                 }
                 let deadline = Instant::now() + DRAIN_WAIT;
-                while Instant::now() < deadline
-                    && !process
-                        .output
-                        .lock()
-                        .map(|output| output.finished)
-                        .unwrap_or(true)
-                {
+                while Instant::now() < deadline && !lock(&process.output).finished {
                     std::thread::sleep(Duration::from_millis(10));
                 }
                 drop(master);
@@ -631,9 +469,7 @@ impl ProcessManager {
     /// Records how `process` ended and leaves its notification.
     fn finish(&self, process: &Arc<Process>, code: Option<i64>) {
         let status = {
-            let Ok(mut lifecycle) = process.lifecycle.lock() else {
-                return;
-            };
+            let mut lifecycle = lock(&process.lifecycle);
             // A forced end on Windows exits with a plain code rather than a
             // signal, so there the stop under way is what marks it, as
             // reference `_finish` marks any end while stopping.
@@ -649,9 +485,7 @@ impl ProcessManager {
             lifecycle.exit_code = exit_code;
             status
         };
-        if let Ok(mut writer) = process.writer.lock() {
-            *writer = None;
-        }
+        *lock(&process.writer) = None;
         process.persist_output_state();
         process.changed.notify_all();
         let (level, message) = match status {
@@ -679,17 +513,13 @@ impl ProcessManager {
         if let Some(code) = process.state().1 {
             source["exit_code"] = json!(code);
         }
-        if let Ok(mut pending) = self.notifications.lock() {
-            pending.push(json!({
-                "id": format!("background-process:{}:terminal", process.id),
-                "source": source,
-                "level": level,
-                "message": message,
-            }));
-        }
-        if let Ok(mut pending) = self.unacknowledged.lock()
-            && let Some(ended) = pending.get_mut(&process.id)
-        {
+        lock(&self.notifications).push(json!({
+            "id": format!("background-process:{}:terminal", process.id),
+            "source": source,
+            "level": level,
+            "message": message,
+        }));
+        if let Some(ended) = lock(&self.unacknowledged).get_mut(&process.id) {
             *ended = true;
             return;
         }
@@ -700,7 +530,7 @@ impl ProcessManager {
     /// bytes past the cursor.
     pub fn output(&self, arguments: &Value) -> ToolResult {
         let process_id = arguments["processId"].as_str().unwrap_or_default();
-        if let Some(refused) = precheck("process.output", arguments, Path::new(".")) {
+        if let Some(refused) = precheck(Operation::Output, arguments, Path::new(".")) {
             return refused;
         }
         let wait = arguments["waitMs"].as_u64().unwrap_or(0);
@@ -742,7 +572,7 @@ impl ProcessManager {
     /// `process.write`.
     pub fn write(&self, arguments: &Value) -> ToolResult {
         let process_id = arguments["processId"].as_str().unwrap_or_default();
-        if let Some(refused) = precheck("process.write", arguments, Path::new(".")) {
+        if let Some(refused) = precheck(Operation::Write, arguments, Path::new(".")) {
             return refused;
         }
         let bytes: Vec<u8> = if let Some(text) = arguments["text"].as_str() {
@@ -774,9 +604,7 @@ impl ProcessManager {
         if status != Status::Running {
             return not_running();
         }
-        let Ok(mut guard) = process.writer.lock() else {
-            return not_running();
-        };
+        let mut guard = lock(&process.writer);
         let Some(writer) = guard.as_mut() else {
             return not_running();
         };
@@ -838,11 +666,7 @@ impl ProcessManager {
 
     /// Stops every running process, as closing the session does.
     pub fn shut_down(&self) {
-        let processes = self
-            .processes
-            .lock()
-            .map(|processes| processes.clone())
-            .unwrap_or_default();
+        let processes = lock(&self.processes).clone();
         for process in processes {
             process.terminate();
         }
@@ -912,221 +736,6 @@ impl ProcessManager {
             ToolResult::Success { .. } => {
                 Err(("internal_error".to_owned(), "no result".to_owned()))
             }
-        }
-    }
-}
-
-struct Page {
-    bytes: Vec<u8>,
-    start: u64,
-    next: u64,
-    end: u64,
-    has_more: bool,
-    truncated_before: bool,
-}
-
-impl Process {
-    fn state(&self) -> (Status, Option<i64>) {
-        self.lifecycle
-            .lock()
-            .map(|lifecycle| (lifecycle.status, lifecycle.exit_code))
-            .unwrap_or((Status::Orphaned, None))
-    }
-
-    fn append(&self, bytes: &[u8]) {
-        let Ok(mut output) = self.output.lock() else {
-            return;
-        };
-        let first = output.bytes.is_empty() && output.start == 0;
-        output.bytes.extend_from_slice(bytes);
-        if output.bytes.len() > RETAINED {
-            let dropped = output.bytes.len() - RETAINED;
-            output.bytes.drain(..dropped);
-            output.start += dropped as u64;
-        }
-        drop(output);
-        if let Some(directory) = &self.directory {
-            let segments = directory.join("segments");
-            if first {
-                let _ = std::fs::create_dir_all(&segments);
-            }
-            if let Ok(mut file) = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(segments.join(format!("{:020}.bin", 0)))
-            {
-                let _ = file.write_all(bytes);
-            }
-        }
-        self.changed.notify_all();
-    }
-
-    /// Writes `output-state.json` beside the segments.
-    fn persist_output_state(&self) {
-        let Some(directory) = &self.directory else {
-            return;
-        };
-        let (start, end) = self
-            .output
-            .lock()
-            .map(|output| (output.start, output.end()))
-            .unwrap_or_default();
-        let finalized = self.state().0 != Status::Running;
-        let state = json!({
-            "finalized": finalized,
-            "output_available": true,
-            "output_end_cursor": end,
-            "output_start_cursor": start,
-            "output_state_version": 1,
-            "process_id": self.id,
-        });
-        let _ = std::fs::write(
-            directory.join("output-state.json"),
-            format!("{}\n", serde_json::to_string(&state).unwrap_or_default()),
-        );
-    }
-
-    /// Waits until the process ends or `wait` passes.
-    fn settle(&self, wait: Duration) {
-        let deadline = Instant::now() + wait;
-        let Ok(mut lifecycle) = self.lifecycle.lock() else {
-            return;
-        };
-        while lifecycle.status == Status::Running {
-            let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() {
-                return;
-            }
-            lifecycle = match self.changed.wait_timeout(lifecycle, left) {
-                Ok((guard, _)) => guard,
-                Err(_) => return,
-            };
-        }
-    }
-
-    /// Waits until bytes lie past `cursor`, the process ends, or `wait`
-    /// passes.
-    fn wait_past(&self, cursor: u64, wait: Duration) {
-        let deadline = Instant::now() + wait;
-        loop {
-            let past = self
-                .output
-                .lock()
-                .map(|output| output.end() > cursor)
-                .unwrap_or(true);
-            if past || self.state().0 != Status::Running || Instant::now() >= deadline {
-                return;
-            }
-            std::thread::sleep(POLL.min(deadline.saturating_duration_since(Instant::now())));
-        }
-    }
-
-    fn page(&self, from_end: bool, cursor: u64, limit: usize) -> Result<Page, Value> {
-        let Ok(output) = self.output.lock() else {
-            return Err(json!({}));
-        };
-        let (start, end) = (output.start, output.end());
-        let limit = limit as u64;
-        let (read_start, read_end) = if from_end {
-            let read_start = start.max(end.saturating_sub(limit));
-            (read_start, end)
-        } else {
-            if cursor > end {
-                return Err(json!({
-                    "processId": self.id,
-                    "cursor": cursor,
-                    "outputStartCursor": start,
-                    "bytesAvailable": end,
-                }));
-            }
-            let read_start = cursor.max(start);
-            (read_start, end.min(read_start + limit))
-        };
-        let offset = |at: u64| usize::try_from(at - start).unwrap_or_default();
-        let bytes = output.bytes[offset(read_start)..offset(read_end)].to_vec();
-        let next = if from_end {
-            end
-        } else {
-            read_start + bytes.len() as u64
-        };
-        Ok(Page {
-            has_more: if from_end {
-                read_start > start
-            } else {
-                next < end
-            },
-            truncated_before: if from_end { start > 0 } else { cursor < start },
-            bytes,
-            start,
-            next,
-            end,
-        })
-    }
-
-    /// Ends the process group: a polite signal, then a forced one.
-    fn terminate(&self) {
-        {
-            let Ok(mut lifecycle) = self.lifecycle.lock() else {
-                return;
-            };
-            if lifecycle.status != Status::Running {
-                return;
-            }
-            lifecycle.stopping = true;
-        }
-        for force in [false, true] {
-            self.signal(force);
-            let deadline = Instant::now() + TERMINATION_WAIT;
-            let Ok(mut lifecycle) = self.lifecycle.lock() else {
-                return;
-            };
-            while lifecycle.status == Status::Running {
-                let left = deadline.saturating_duration_since(Instant::now());
-                if left.is_zero() {
-                    break;
-                }
-                lifecycle = match self.changed.wait_timeout(lifecycle, left) {
-                    Ok((guard, _)) => guard,
-                    Err(_) => return,
-                };
-            }
-            if lifecycle.status != Status::Running {
-                return;
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    fn signal(&self, force: bool) {
-        use nix::sys::signal::{Signal, killpg};
-        use nix::unistd::Pid;
-        let signal = if force {
-            Signal::SIGKILL
-        } else {
-            Signal::SIGTERM
-        };
-        let sent = self
-            .group
-            .is_some_and(|group| killpg(Pid::from_raw(group), signal).is_ok());
-        if !sent
-            && let Ok(mut killer) = self.killer.lock()
-            && let Some(killer) = killer.as_mut()
-        {
-            let _ = killer.kill();
-        }
-    }
-
-    /// Reference `request_termination` forces on Windows too: the root's whole
-    /// tree, then the root itself should the tree kill miss it.
-    #[cfg(windows)]
-    fn signal(&self, _force: bool) {
-        if let Some(pid) = self.group.and_then(|pid| u32::try_from(pid).ok()) {
-            let _ = vibe_core::pty::kill_tree(pid);
-        }
-        if let Ok(mut killer) = self.killer.lock()
-            && let Some(killer) = killer.as_mut()
-        {
-            let _ = killer.kill();
         }
     }
 }

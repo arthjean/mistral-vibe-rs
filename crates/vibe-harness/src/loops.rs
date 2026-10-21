@@ -13,6 +13,7 @@ use std::sync::Mutex;
 use serde_json::{Map, Value, json};
 use vibe_core::atomic_file::{FileMode, write_atomically};
 use vibe_core::pycompat::{self, Dumps, pydantic};
+use vibe_core::sync::lock;
 
 use crate::state::ToolResult;
 
@@ -238,14 +239,12 @@ pub fn parse_interval(text: &str) -> Result<u64, LoopError> {
 /// A pydantic `value_error` raised by `ScheduledPrompt.validate_prompt`,
 /// which reports the field and the string it was given.
 fn prompt_error(message: &str, prompt: &str) -> LoopError {
-    LoopError(pydantic::validation_error(
+    LoopError(pydantic::single_error(
         "ScheduledPrompt",
-        &[pydantic::LineError {
-            location: "prompt",
-            kind: "value_error",
-            message: &format!("Value error, {message}"),
-            input: &json!(prompt),
-        }],
+        "prompt",
+        "value_error",
+        &format!("Value error, {message}"),
+        &json!(prompt),
     ))
 }
 
@@ -260,14 +259,12 @@ fn model_error(message: &str, candidate: &ScheduledPrompt) -> LoopError {
         "next_fire_at": candidate.next_fire_at,
         "created_at": candidate.created_at,
     });
-    LoopError(pydantic::validation_error(
+    LoopError(pydantic::single_error(
         "ScheduledPrompt",
-        &[pydantic::LineError {
-            location: "",
-            kind: "value_error",
-            message: &format!("Value error, {message}"),
-            input: &input,
-        }],
+        "",
+        "value_error",
+        &format!("Value error, {message}"),
+        &input,
     ))
 }
 
@@ -279,9 +276,7 @@ impl ScheduledLoops {
 
     /// Turns scheduling off, as a headless session has it.
     pub fn disable(&self) {
-        if let Ok(mut state) = self.state.lock() {
-            state.disabled = true;
-        }
+        lock(&self.state).disabled = true;
     }
 
     /// Saves the schedule at `path` from now on, starting with what it
@@ -291,7 +286,7 @@ impl ScheduledLoops {
     ///
     /// The file cannot be written.
     pub fn attach(&self, path: PathBuf) -> Result<(), LoopError> {
-        let mut state = self.lock()?;
+        let mut state = lock(&self.state);
         state.path = Some(path);
         let loops = state.loops.clone();
         persist(&state, &loops)
@@ -304,7 +299,7 @@ impl ScheduledLoops {
     ///
     /// A file that exists but does not parse.
     pub fn restore(&self, path: PathBuf) -> Result<(), LoopError> {
-        let mut state = self.lock()?;
+        let mut state = lock(&self.state);
         if path.exists() {
             let text = std::fs::read_to_string(&path).map_err(|error| {
                 LoopError(format!(
@@ -340,24 +335,15 @@ impl ScheduledLoops {
     ///
     /// The file cannot be written.
     pub fn replace(&self, loops: Vec<ScheduledPrompt>) -> Result<(), LoopError> {
-        let mut state = self.lock()?;
+        let mut state = lock(&self.state);
         persist(&state, &loops)?;
         state.loops = loops;
         Ok(())
     }
 
-    fn lock(&self) -> Result<std::sync::MutexGuard<'_, Schedule>, LoopError> {
-        self.state
-            .lock()
-            .map_err(|_| LoopError("the schedule is unavailable".to_owned()))
-    }
-
     #[must_use]
     pub fn list(&self) -> Vec<ScheduledPrompt> {
-        self.state
-            .lock()
-            .map(|state| state.loops.clone())
-            .unwrap_or_default()
+        lock(&self.state).loops.clone()
     }
 
     /// Reference `create`: an interval in `<number><unit>` form.
@@ -381,7 +367,7 @@ impl ScheduledLoops {
         cron: Option<&str>,
         prompt: &str,
     ) -> Result<ScheduledPrompt, LoopError> {
-        let mut state = self.lock()?;
+        let mut state = lock(&self.state);
         if state.loops.len() >= MAX_LOOPS_PER_SESSION {
             return Err(LoopError(format!(
                 "Loop limit reached ({MAX_LOOPS_PER_SESSION} per session)."
@@ -423,7 +409,7 @@ impl ScheduledLoops {
     ///
     /// No loop has `loop_id`, or the save fails.
     pub fn delete(&self, loop_id: &str) -> Result<ScheduledPrompt, LoopError> {
-        let mut state = self.lock()?;
+        let mut state = lock(&self.state);
         let found = state
             .loops
             .iter()
@@ -447,7 +433,7 @@ impl ScheduledLoops {
     ///
     /// The save fails.
     pub fn clear(&self) -> Result<usize, LoopError> {
-        let mut state = self.lock()?;
+        let mut state = lock(&self.state);
         let count = state.loops.len();
         persist(&state, &[])?;
         state.loops.clear();
@@ -458,8 +444,7 @@ impl ScheduledLoops {
     /// Reference `next_due_in`.
     #[must_use]
     pub fn next_due_in(&self, now: f64) -> Option<f64> {
-        let state = self.state.lock().ok()?;
-        state
+        lock(&self.state)
             .loops
             .iter()
             .map(|item| item.next_fire_at)
@@ -470,8 +455,7 @@ impl ScheduledLoops {
     /// The loop due at `now`, the earliest first. Reference `due`.
     #[must_use]
     pub fn due(&self, now: f64) -> Option<ScheduledPrompt> {
-        let state = self.state.lock().ok()?;
-        state
+        lock(&self.state)
             .loops
             .iter()
             .filter(|item| item.next_fire_at <= now)
@@ -482,9 +466,7 @@ impl ScheduledLoops {
     /// Moves `loop_id` to its next run after `now`, saved when it can be and
     /// in memory otherwise. Reference `mark_fired` then `defer`.
     pub fn mark_fired(&self, loop_id: &str, now: f64) {
-        let Ok(mut state) = self.state.lock() else {
-            return;
-        };
+        let mut state = lock(&self.state);
         let loops: Vec<ScheduledPrompt> = state
             .loops
             .iter()
@@ -505,12 +487,7 @@ impl ScheduledLoops {
     /// Runs one `cron` call. Reference `run_cron` over the session's
     /// `cron_scheduler`.
     pub fn run_tool(&self, arguments: &Value) -> ToolResult {
-        if self
-            .state
-            .lock()
-            .map(|state| state.disabled)
-            .unwrap_or(true)
-        {
+        if lock(&self.state).disabled {
             return ToolResult::failed(
                 "tool_failed",
                 "Scheduled prompts require a live interactive session",

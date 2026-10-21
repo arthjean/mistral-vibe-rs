@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::config::encode::basic_string;
 use crate::platform::resolve_lenient;
 
 /// The registry's reserved alias that always resolves to the newest version,
@@ -163,37 +164,15 @@ fn render(manifest: &SkillManifest) -> String {
     for entry in &manifest.skills {
         let version = match &entry.version {
             ManifestVersion::Frozen(version) => version.to_string(),
-            ManifestVersion::Alias(alias) => toml_string(alias),
+            ManifestVersion::Alias(alias) => basic_string(alias),
         };
         out.push_str(&format!(
             "    {{ name = {}, skill_id = {}, version = {version}, description = {} }},\n",
-            toml_string(&entry.name),
-            toml_string(&entry.skill_id),
-            toml_string(&entry.description),
+            basic_string(&entry.name),
+            basic_string(&entry.skill_id),
+            basic_string(&entry.description),
         ));
     }
     out.push_str("]\n");
     out
-}
-
-/// One TOML basic string.
-fn toml_string(value: &str) -> String {
-    let mut quoted = String::from('"');
-    for character in value.chars() {
-        match character {
-            '"' => quoted.push_str("\\\""),
-            '\\' => quoted.push_str("\\\\"),
-            '\u{8}' => quoted.push_str("\\b"),
-            '\t' => quoted.push_str("\\t"),
-            '\n' => quoted.push_str("\\n"),
-            '\u{c}' => quoted.push_str("\\f"),
-            '\r' => quoted.push_str("\\r"),
-            other if other.is_control() => {
-                quoted.push_str(&format!("\\u{:04X}", other as u32));
-            }
-            other => quoted.push(other),
-        }
-    }
-    quoted.push('"');
-    quoted
 }

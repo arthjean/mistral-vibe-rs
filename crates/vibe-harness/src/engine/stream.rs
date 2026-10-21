@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 use tokio::time::Instant;
 use vibe_core::clock::now_millis;
 use vibe_core::provider::{ProviderChunk, ProviderError, ProviderInput};
+use vibe_core::sync::lock;
 
 use super::{SessionCore, Sink, TurnEnvironment};
 use crate::state::{Advance, CompletionDelta, TokenUsage};
@@ -58,7 +59,8 @@ pub(super) async fn stream_completion(
         if pending.text.is_empty() && pending.reasoning.is_empty() {
             return;
         }
-        if let Ok(mut core) = core.lock() {
+        {
+            let mut core = lock(core);
             let advance = core.projector.apply_completion_delta(pending, now_millis());
             sink(core.publication(advance, None));
         }
@@ -146,9 +148,7 @@ struct TurnRetries<'a> {
 
 impl TurnRetries<'_> {
     fn publish(&self, retrying: Option<Value>) {
-        let Ok(mut core) = self.core.lock() else {
-            return;
-        };
+        let mut core = lock(self.core);
         if core.projector.state.retrying == retrying {
             return;
         }

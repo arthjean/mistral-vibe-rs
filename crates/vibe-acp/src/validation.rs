@@ -550,23 +550,8 @@ fn validate_float(value: &Value, loc: &[Value], errors: &mut Vec<Value>) {
     }
 }
 
-/// The lax boolean conversion the validator applies: the two integers and the
-/// spellings it recognizes.
-pub(crate) fn lax_bool(value: &Value) -> Option<bool> {
-    match value {
-        Value::Bool(flag) => Some(*flag),
-        Value::Number(number) => match number.as_f64() {
-            Some(0.0) => Some(false),
-            Some(1.0) => Some(true),
-            _ => None,
-        },
-        Value::String(text) => pydantic::lax_bool(text),
-        _ => None,
-    }
-}
-
 fn validate_bool(value: &Value, loc: &[Value], errors: &mut Vec<Value>) {
-    if lax_bool(value).is_some() {
+    if pydantic::lax_bool_value(value).is_some() {
         return;
     }
     let (kind, message) = match value {

@@ -20,6 +20,7 @@ use super::{
     TRANSACTION_FILE, encode, events, merge, patch, registry, source_of,
 };
 use crate::redaction::redact_table;
+use crate::sync::lock;
 use crate::text::sha256_hex;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,10 +59,7 @@ impl LayeredConfig {
         if writes.is_empty() {
             return self.load();
         }
-        let _guard = self
-            .transaction_lock
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?;
+        let _guard = lock(&self.transaction_lock);
         ensure_private_directory(&self.paths.vibe_home)?;
         let _file_guard = ConfigFileLock::acquire(&self.paths.vibe_home)?;
         recover_transaction(&self.paths)?;
@@ -86,7 +84,7 @@ impl LayeredConfig {
                 return Err(ConfigError::PersistenceDisabled(write.target));
             }
             let Some(path) = self.target_path(write.target) else {
-                let persisted = self.ephemeral_document()?;
+                let persisted = self.ephemeral_document();
                 if Some(sha256_hex(persisted.to_string().as_bytes())) != write.expected_fingerprint
                 {
                     return Err(ConfigError::ConcurrentEdit {
@@ -115,10 +113,7 @@ impl LayeredConfig {
         if prepared.is_empty() {
             // Nothing to journal: the write never leaves memory.
             if let Some(table) = ephemeral {
-                *self
-                    .ephemeral
-                    .lock()
-                    .map_err(|_| ConfigError::LockPoisoned)? = table;
+                *lock(&self.ephemeral) = table;
             }
             drop(_file_guard);
             drop(_guard);
@@ -157,10 +152,7 @@ impl LayeredConfig {
         })?;
         sync_directory(&self.paths.vibe_home)?;
         if let Some(table) = ephemeral {
-            *self
-                .ephemeral
-                .lock()
-                .map_err(|_| ConfigError::LockPoisoned)? = table;
+            *lock(&self.ephemeral) = table;
         }
         drop(_file_guard);
         drop(_guard);
@@ -180,22 +172,12 @@ impl LayeredConfig {
     /// unmigrated document. A write that fails is reported as a warning, left
     /// on every later snapshot, and leaves the original file intact.
     pub fn migrate_sources(&self) -> Result<Vec<String>, ConfigError> {
-        let mut migrated = self
-            .migrated
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?;
+        let mut migrated = lock(&self.migrated);
         if *migrated {
-            return Ok(self
-                .migration_warnings
-                .lock()
-                .map_err(|_| ConfigError::LockPoisoned)?
-                .clone());
+            return Ok(lock(&self.migration_warnings).clone());
         }
         *migrated = true;
-        let _guard = self
-            .transaction_lock
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?;
+        let _guard = lock(&self.transaction_lock);
         ensure_private_directory(&self.paths.vibe_home)?;
         let _file_guard = ConfigFileLock::acquire(&self.paths.vibe_home)?;
 
@@ -211,10 +193,7 @@ impl LayeredConfig {
         for path in files {
             warnings.extend(migrate_file(&path)?);
         }
-        self.migration_warnings
-            .lock()
-            .map_err(|_| ConfigError::LockPoisoned)?
-            .clone_from(&warnings);
+        lock(&self.migration_warnings).clone_from(&warnings);
         Ok(warnings)
     }
 

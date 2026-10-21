@@ -8,6 +8,7 @@
 //! names it, because that name is the detail a retry notice carries and the
 //! class decides whether the failure is retried.
 
+use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::time::Duration;
@@ -134,14 +135,19 @@ impl HttpClient {
 /// already there whatever its case, so a request carries each header once.
 /// The reference merges plain dictionaries, which keep two spellings of one
 /// name apart and send both.
-pub(super) fn merge_headers<N, V>(
+///
+/// `extra` yields pairs or borrows of them, so a header list and a header map
+/// are both passed as they are.
+pub(super) fn merge_headers<P, N, V>(
     headers: &mut Vec<(String, String)>,
-    extra: impl IntoIterator<Item = (N, V)>,
+    extra: impl IntoIterator<Item = P>,
 ) where
+    P: Borrow<(N, V)>,
     N: AsRef<str>,
     V: AsRef<str>,
 {
-    for (name, value) in extra {
+    for pair in extra {
+        let (name, value) = pair.borrow();
         let (name, value) = (name.as_ref(), value.as_ref());
         match headers
             .iter_mut()
@@ -204,3 +210,6 @@ impl WithoutUrl for reqwest::Error {
         }
     }
 }
+
+#[cfg(test)]
+mod transport_tests;

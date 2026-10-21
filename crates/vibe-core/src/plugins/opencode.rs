@@ -14,8 +14,9 @@ use serde_json::{Map, Value};
 
 use super::compatibility::{
     AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
-    DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, author_display_name,
-    portable_skill_name, read_text, resolve_declared_path, typescript_identifier, walk_files,
+    DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, UnsupportedKind,
+    author_display_name, portable_skill_name, read_text, resolve_declared_path,
+    typescript_identifier, walk_files,
 };
 use super::diagnostics::Severity;
 use super::foreign::{
@@ -106,7 +107,7 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         &mut diagnostics,
         &mut unsupported,
         (
-            "executable_plugin",
+            UnsupportedKind::ExecutablePlugin,
             "foreign_code_execution_unsupported",
             "executable_format_unsupported",
         ),
@@ -118,7 +119,7 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         &mut diagnostics,
         &mut unsupported,
         (
-            "custom_tool",
+            UnsupportedKind::CustomTool,
             "opencode_executable_tool_unsupported",
             "custom_tools_unsupported",
         ),
@@ -334,7 +335,7 @@ fn report_opencode_code(
     portable: bool,
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
     unsupported: &mut Vec<AdaptedUnsupportedComponent>,
-    (kind, reason, suffix): (&str, &str, &str),
+    (kind, reason, suffix): (UnsupportedKind, &str, &str),
     message: &str,
 ) {
     unsupported.extend(
@@ -352,7 +353,7 @@ fn report_opencode_code(
             suffix,
             first,
             message,
-            kind,
+            kind.as_str(),
             if portable {
                 Severity::Warning
             } else {
@@ -635,20 +636,24 @@ fn report_opencode_config_extensions(
     unsupported: &mut Vec<AdaptedUnsupportedComponent>,
 ) {
     for (field, kind, reason) in [
-        ("agent", "agent", "opencode_agent_translation_unsupported"),
+        (
+            "agent",
+            UnsupportedKind::Agent,
+            "opencode_agent_translation_unsupported",
+        ),
         (
             "command",
-            "command",
+            UnsupportedKind::Command,
             "opencode_command_translation_unsupported",
         ),
         (
             "plugin",
-            "plugin_dependency",
+            UnsupportedKind::PluginDependency,
             "opencode_plugin_dependency_unsupported",
         ),
         (
             "provider",
-            "provider_extension",
+            UnsupportedKind::ProviderExtension,
             "opencode_provider_extension_unsupported",
         ),
     ] {
@@ -673,7 +678,7 @@ fn report_opencode_config_extensions(
                 "The OpenCode config field {} has no safe declarative translation and was skipped.",
                 pycompat::repr_str(field)
             ),
-            kind,
+            kind.as_str(),
             Severity::Warning,
         ));
     }
@@ -841,7 +846,7 @@ fn opencode_translate_remote_mcp(
             Severity::Warning,
         ));
         unsupported.push(unsupported_component(
-            "mcp_oauth",
+            UnsupportedKind::McpOauth,
             path,
             "opencode_oauth_translation_unsupported",
         ));
@@ -896,7 +901,7 @@ fn opencode_unsupported_env_reference(
             pycompat::repr_str(name)
         ), "mcp_server", Severity::Warning));
     unsupported.push(unsupported_component(
-        "mcp_environment_reference",
+        UnsupportedKind::McpEnvironmentReference,
         path,
         "opencode_environment_interpolation_unsupported",
     ));
