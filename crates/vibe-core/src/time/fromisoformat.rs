@@ -6,6 +6,11 @@
 //! the hour or the minute, and one stray character may stand between the time
 //! and its offset. It walks a NUL-terminated buffer, so a read past the end of
 //! the stamp sees NUL here too ([`byte_at`]).
+//!
+//! This module is original code: it reproduces the behavior observed from
+//! that parser and copies none of CPython's source. `NOTICE` binds only
+//! the Mistral Vibe upstream, so modeling a third-party interpreter this
+//! way stays inside the licensing boundary.
 
 use super::{
     Clock, FRACTION_SCALE, UtcTimestamp, byte_at, civil_from_days, civil_instant, days_from_civil,
