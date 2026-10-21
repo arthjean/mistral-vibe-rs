@@ -45,14 +45,11 @@ from __future__ import annotations
 import argparse
 import ast
 import asyncio
-import contextlib
-import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import platform
-import socket
 import sys
 import tempfile
 from datetime import UTC, datetime
@@ -63,6 +60,8 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from inprocess import SocketGuard, digest, patched, patched_environ
+from onboarding_cases import domain_cases, split_api_bases
 
 SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path(".parity/onboarding-corpus.json")
@@ -86,66 +85,7 @@ WAIT_TIMEOUT = 20.0
 # --------------------------------------------------------------------------
 
 
-class _SocketGuard:
-    """Fails the capture the moment anything tries to reach a network."""
-
-    def __init__(self) -> None:
-        self.attempts: list[str] = []
-
-    def install(self) -> None:
-        guard = self
-
-        def refuse(name: str) -> Any:
-            def raiser(*arguments: Any, **keywords: Any) -> Any:
-                guard.attempts.append(name)
-                raise OracleError(
-                    f"the capture attempted network access through {name}"
-                )
-
-            return raiser
-
-        socket.socket.connect = refuse("socket.connect")  # type: ignore[method-assign]
-        socket.socket.connect_ex = refuse("socket.connect_ex")  # type: ignore[method-assign]
-        socket.create_connection = refuse("socket.create_connection")  # type: ignore[assignment]
-        socket.getaddrinfo = refuse("socket.getaddrinfo")  # type: ignore[assignment]
-
-
-GUARD = _SocketGuard()
-
-
-@contextlib.contextmanager
-def patched_environ(name: str, value: str | None):
-    original = os.environ.get(name)
-    if value is None:
-        os.environ.pop(name, None)
-    else:
-        os.environ[name] = value
-    try:
-        yield
-    finally:
-        if original is None:
-            os.environ.pop(name, None)
-        else:
-            os.environ[name] = original
-
-
-@contextlib.contextmanager
-def patched(target: Any, name: str, value: Any):
-    original = getattr(target, name)
-    setattr(target, name, value)
-    try:
-        yield
-    finally:
-        setattr(target, name, original)
-
-
-def digest(value: str) -> dict[str, Any]:
-    """A string recorded by its length and its SHA-256, never by its content."""
-
-    return {
-        "length": len(value),
-        "digest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
-    }
+GUARD = SocketGuard()
 
 
 # --------------------------------------------------------------------------
@@ -1410,7 +1350,7 @@ def capture_terminating() -> list[dict[str, Any]]:
 
         raised: int | None = None
         with (
-            patched_environ("VIBE_HOME", ORACLE_VIBE_HOME),
+            patched_environ({"VIBE_HOME": ORACLE_VIBE_HOME}),
             patched(onboarding_module, "rprint", record_print),
             patched(
                 onboarding_module,
@@ -1440,37 +1380,6 @@ def capture_terminating() -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 # domainValidation
 # --------------------------------------------------------------------------
-
-
-def domain_cases() -> list[str]:
-    return [
-        "console.mistral.ai",
-        "https://console.mistral.ai",
-        "https://console.mistral.ai/",
-        "console.internal.example",
-        "https://console.internal.example",
-        "http://localhost:8080",
-        "localhost:8080",
-        "console.oracle.mistral.ai",
-        "https://console.oracle.mistral.ai",
-        "console.mistral.ai.evil.example",
-        "foo.mistral.ai",
-        "console.example.com",
-        "example.com/console",
-        "example.com:8443",
-        "192.168.1.10",
-        "192.168.1.10:8080",
-        "https://user:pass@example.com",
-        "",
-        "   ",
-        "http:/broken",
-        "not a domain",
-        "ftp://example.com",
-        "https://",
-        "https://.",
-        "console..mistral.ai",
-        "münchen.example",
-    ]
 
 
 def capture_domain_validation() -> list[dict[str, Any]]:
@@ -1520,21 +1429,6 @@ def capture_domain_validation() -> list[dict[str, Any]]:
             record["splitPairs"] = pairs
         records.append(record)
     return records
-
-
-def split_api_bases(domain: str) -> list[str]:
-    """The API bases each valid domain is paired with: none, a foreign host, the
-    domain's own host spelled differently, and the domain itself."""
-
-    return [
-        "",
-        "connector.internal.example/api",
-        "https://connector.internal.example:8443/api/",
-        "HTTPS://CONSOLE.MISTRAL.AI:443/api",
-        "http://console.mistral.ai/api",
-        "localhost:8080/api",
-        domain,
-    ]
 
 
 # --------------------------------------------------------------------------

@@ -19,9 +19,7 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
-import tempfile
 import time
 from typing import Any
 
@@ -329,69 +327,68 @@ def run_scenario(
     """
 
     backend = stand_in.Backend(utility=True, probe=True, scripted_usage=True)
-    root = Path(tempfile.mkdtemp(prefix="vibe-loop-oracle-")).resolve()
-    session = session_class(root)
-    world = session.world
-    try:
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        backend.utility = session.substitute(copy.deepcopy(scenario.get("utility", [])))
-        # The scenario's keys lead, so none of them lands inside the provider
-        # table the base configuration ends on.
-        (world.vibe_home / "config.toml").write_text(
-            session.substitute(scenario.get("config", "")) + blackbox.base_config(backend)
-            + session.substitute(scenario.get("tables", "")),
-            encoding="utf-8",
-            newline="",
-        )
-        if scenario.get("trusted", True):
-            (world.vibe_home / "trusted_folders.toml").write_text(
-                f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
+    with host_env.scratch_root("vibe-loop-oracle-") as root:
+        session = session_class(root)
+        world = session.world
+        try:
+            backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
+            backend.utility = session.substitute(copy.deepcopy(scenario.get("utility", [])))
+            # The scenario's keys lead, so none of them lands inside the provider
+            # table the base configuration ends on.
+            (world.vibe_home / "config.toml").write_text(
+                session.substitute(scenario.get("config", "")) + blackbox.base_config(backend)
+                + session.substitute(scenario.get("tables", "")),
                 encoding="utf-8",
                 newline="",
             )
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        (root / "hook.py").write_text(hook_recorder.host_recorder(), encoding="utf-8", newline="")
-        hook_recorder.write_responses(root, scenario.get("responses", {}))
-        hook_recorder.write_hooks(session, scenario.get("hooks", {}))
-        env = {
-            **host_env.isolated(
-                world.home,
-                world.vibe_home,
-                MISTRAL_API_KEY="oracle-key",
-                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-            ),
-            **({} if scenario.get("titles") else {"VIBE_TEST_DISABLE_AUTO_TITLE": "1"}),
-        }
-        steps: list[dict[str, Any]] = []
-        holder: dict[str, Server] = {}
-        try:
-            holder["server"] = connect(scenario, command, env, world, quiet)
-            run_steps(scenario, holder, command, env, session, steps, quiet, persisted)
-        except OracleError as error:
-            steps.append({"failure": str(error)})
+            if scenario.get("trusted", True):
+                (world.vibe_home / "trusted_folders.toml").write_text(
+                    f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
+                    encoding="utf-8",
+                    newline="",
+                )
+            blackbox.write_tree(world.workspace, scenario.get("files", {}))
+            (root / "hook.py").write_text(hook_recorder.host_recorder(), encoding="utf-8", newline="")
+            hook_recorder.write_responses(root, scenario.get("responses", {}))
+            hook_recorder.write_hooks(session, scenario.get("hooks", {}))
+            env = {
+                **host_env.isolated(
+                    world.home,
+                    world.vibe_home,
+                    MISTRAL_API_KEY="oracle-key",
+                    VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+                ),
+                **({} if scenario.get("titles") else {"VIBE_TEST_DISABLE_AUTO_TITLE": "1"}),
+            }
+            steps: list[dict[str, Any]] = []
+            holder: dict[str, Server] = {}
+            try:
+                holder["server"] = connect(scenario, command, env, world, quiet)
+                run_steps(scenario, holder, command, env, session, steps, quiet, persisted)
+            except OracleError as error:
+                steps.append({"failure": str(error)})
+            finally:
+                if "server" in holder:
+                    holder["server"].stop()
+            return {
+                "steps": steps,
+                "sessions": session.sessions,
+                "callbacks": holder["server"].callback_log if "server" in holder else [],
+                "requests": [
+                    {"utility": stand_in.is_utility(body), **request_view(body, stand_in.is_utility(body))}
+                    for body in backend.bodies
+                ],
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
-            if "server" in holder:
-                holder["server"].stop()
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "callbacks": holder["server"].callback_log if "server" in holder else [],
-            "requests": [
-                {"utility": stand_in.is_utility(body), **request_view(body, stand_in.is_utility(body))}
-                for body in backend.bodies
-            ],
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 # --------------------------------------------------------------------------

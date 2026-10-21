@@ -62,6 +62,7 @@ from pin import (  # noqa: E402  the path insert above enables it
     EXPECTED_VERSION,
 )
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
+import host_env  # noqa: E402
 
 SCHEMA_VERSION = 1
 
@@ -1138,7 +1139,6 @@ def main() -> int:
     os.environ["TERM"] = "dumb"
     os.environ["NO_COLOR"] = "1"
     os.environ.pop("FORCE_COLOR", None)
-    temporary = None
     try:
         commit, _ = reexecute_pinned(
             arguments.reference,
@@ -1152,13 +1152,13 @@ def main() -> int:
             "version": EXPECTED_VERSION,
             "sourceFiles": list(SOURCE_FILES),
         }
-        temporary = Path(tempfile.mkdtemp(prefix="vibe-cli-surface-"))
-        session_home = temporary / "vibe-home"
-        # Set before the first reference import: the session home is resolved
-        # from the environment when a command asks for it, and the user's own
-        # `~/.vibe` must never be the answer.
-        os.environ["VIBE_HOME"] = str(session_home)
-        corpus = build_corpus(reference, session_home)
+        with host_env.scratch_root("vibe-cli-surface-") as temporary:
+            session_home = temporary / "vibe-home"
+            # Set before the first reference import: the session home is
+            # resolved from the environment when a command asks for it, and the
+            # user's own `~/.vibe` must never be the answer.
+            os.environ["VIBE_HOME"] = str(session_home)
+            corpus = build_corpus(reference, session_home)
         if arguments.check:
             if not arguments.corpus.is_file():
                 raise OracleError(f"no committed corpus at {arguments.corpus} to check against")
@@ -1178,9 +1178,6 @@ def main() -> int:
     except OracleError as error:
         print(f"cli-surface capture failed: {error}", file=sys.stderr)
         return 1
-    finally:
-        if temporary is not None:
-            shutil.rmtree(temporary, ignore_errors=True)
     actions = sum(len(record["actions"]) for record in corpus["parsers"])
     print(
         f"captured {len(corpus['parsers'])} parsers, {actions} actions and "

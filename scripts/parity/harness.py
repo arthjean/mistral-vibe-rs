@@ -9,7 +9,6 @@ source tree.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,6 +27,8 @@ from vibe.cli.voice_manager.voice_manager_port import (
     TranscribeState,
     VoiceManagerListener,
 )
+
+from inprocess import digest
 
 SETTLE_ROUNDS = 6
 WORKSPACE_PLACEHOLDER = "__WORKSPACE__"
@@ -516,6 +517,8 @@ def capture_state(
     completion: dict[str, Any] = {"open": False, "kind": None, "selected": 0, "items": []}
     if active is not None and getattr(active, "_suggestions", None):
         kind = "slash" if type(active).__name__.startswith("SlashCommand") else "path"
+        # Completion descriptions are prose the reference authors (command help
+        # lines in vibe/cli/commands.py), so the corpus keeps only a digest.
         completion = {
             "open": True,
             "kind": kind,
@@ -538,19 +541,6 @@ def capture_state(
         },
         "feedbackActive": widget.feedback_active,
         "switching": container.switching_mode,
-    }
-
-
-def digest(value: str) -> dict[str, Any]:
-    """A string recorded by its length and its SHA-256, never by its content.
-
-    Completion descriptions are prose the reference authors (command help lines
-    in vibe/cli/commands.py), so the corpus keeps only this fingerprint of them.
-    """
-
-    return {
-        "length": len(value),
-        "digest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
     }
 
 

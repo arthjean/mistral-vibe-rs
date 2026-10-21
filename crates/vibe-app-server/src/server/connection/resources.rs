@@ -81,29 +81,7 @@ impl ServerConnection {
         if request.method.starts_with("feedback/") {
             return Ok(self.feedback_request(request, &session_id));
         }
-        let session_active = {
-            let sessions = self.server.lock_sessions();
-            sessions
-                .get(&session_id)
-                .is_some_and(|session| session.active_turn.is_some())
-        };
-        if BACKEND_RESOURCE_METHODS.contains(&request.method.as_str())
-            && self.server.resource_backend.is_some()
-        {
-            let command =
-                ResourceBackendCommand::parse(&request.method, &request.params, session_active)?;
-            return Ok(DispatchBatch {
-                outbound: Vec::new(),
-                deferred: vec![DeferredWork::ResourceRequest {
-                    request_id: request.id,
-                    session_id,
-                    command,
-                }],
-                close_after_flush: false,
-            });
-        }
-        let mut result =
-            lock(&self.server.resources).dispatch(&request.method, &request.params, session_active);
+        let mut result = lock(&self.server.resources).dispatch(&request.method, &request.params);
         // Reference `project_diagnostics`: the hooks the session loaded, and
         // why the rest did not load, ahead of every other issue.
         if request.method == "diagnostics/list"

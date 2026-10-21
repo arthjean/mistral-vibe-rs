@@ -4,7 +4,7 @@ use vibe_app_server::vocabulary::McpSourceStatus;
 
 use super::super::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, IntegrationTarget, Overlay, OverlayAction,
-    OverlayItem, OverlayKind,
+    OverlayItem, OverlayKind, QueryFilter,
 };
 
 /// One source of the published MCP state, servers and connectors in one list
@@ -190,7 +190,9 @@ pub fn mcp_overlay(sources: &[McpSource]) -> Overlay {
     } else {
         "MCP Servers"
     };
-    Overlay::new(OverlayKind::Mcp, title, items)
+    let mut overlay = Overlay::new(OverlayKind::Mcp, title, items);
+    overlay.filter = QueryFilter::FuzzyGroups;
+    overlay
 }
 
 /// Reference `MCPApp._show_detail_view`: a source's tools, or the one
@@ -365,6 +367,7 @@ fn integration_item(
             enabled,
             requires_auth: source.awaits_auth(),
             requires_setup: source.status == McpSourceStatus::NeedsSetup,
+            plugin_name: source.plugin_name.clone(),
         },
     ))
 }

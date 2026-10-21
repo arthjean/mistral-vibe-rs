@@ -322,12 +322,14 @@ impl AppServer {
             &intent.add_directories,
             &configured_mcp,
         );
+        let scratchpad = self.open_scratchpad(&attachment.id);
         let review = self.register_workspace_tools(
             &attachment.id,
             &attachment.working_directory,
             &policy,
             &tools,
             &intent,
+            scratchpad.as_deref(),
             review_override,
         )?;
         self.session_tool_factory
@@ -342,6 +344,7 @@ impl AppServer {
             review,
             now_millis(),
         );
+        session.scratchpad = scratchpad;
         session.persisted = Some(attachment.hydrated.clone());
         session.agent_summary = attachment
             .agent_profile
@@ -376,6 +379,17 @@ impl AppServer {
         Ok(())
     }
 
+    /// Opens the scratchpad `session_id`'s runtime holds. A unified session
+    /// opens none: reference `init_scratchpad` runs where an agent loop is
+    /// built, and the unified host keeps its notes in its own store
+    /// (`vibe/app_server/_unified_scratchpad.py`).
+    pub(super) fn open_scratchpad(&self, session_id: &str) -> Option<Arc<Scratchpad>> {
+        if self.harness_selection().use_unified {
+            return None;
+        }
+        Scratchpad::open(session_id).map(Arc::new)
+    }
+
     /// Registers the builtin tool surface for a session root.
     ///
     /// The universal tools need nothing from the filesystem root and register
@@ -383,6 +397,7 @@ impl AppServer {
     ///
     /// Returns the review manager that owns the session's file checkpoints, or
     /// `None` when the root is not a usable workspace.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn register_workspace_tools(
         &self,
         session_id: &str,
@@ -390,6 +405,7 @@ impl AppServer {
         policy: &PermissionStore,
         tools: &ToolRegistry,
         intent: &SessionIntent,
+        scratchpad: Option<&Scratchpad>,
         review: Option<Arc<ReviewManager>>,
     ) -> Result<Option<Arc<ReviewManager>>, ServerError> {
         let approval =
@@ -405,8 +421,8 @@ impl AppServer {
         // again. The store narrows it with this session's permission
         // overrides, which is the one per-session part of the composition.
         //
-        // The scratchpad opens with the session and is the one directory the
-        // file tools reach without consulting a list, which is the capability
+        // The scratchpad the runtime opened is the one directory the file
+        // tools reach without consulting a list, which is the capability
         // reference `init_scratchpad` gives the agent-loop runtime.
         // Reference `Workspace.for_session`: the working directory is always
         // inside the write boundary, trusted or not, and every `--add-dir`
@@ -419,8 +435,8 @@ impl AppServer {
         policy
             .try_authorize_workspace(Path::new(working_directory), &listed_roots)
             .map_err(|error| ServerError::Resource(error.to_string()))?;
-        let guard =
-            ToolGuard::new(policy.clone(), approval).with_scratchpad(init_scratchpad(session_id));
+        let guard = ToolGuard::new(policy.clone(), approval)
+            .with_scratchpad(scratchpad.map(|scratchpad| scratchpad.path().to_owned()));
         // The registry carries the composition so a family published later than
         // this one reads it: `task` registers when its turn resolves a subagent
         // runner, and it must be guarded by this session's store and approval
@@ -668,7 +684,7 @@ impl AppServer {
         &self,
         session_id: &str,
     ) -> Result<(), ServerError> {
-        let (working_directory, policy, tools, intent, previous_review) = {
+        let (working_directory, policy, tools, intent, previous_review, scratchpad, canonical_id) = {
             let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
@@ -680,8 +696,14 @@ impl AppServer {
                 session.tools.clone(),
                 session.intent.clone(),
                 session.review.clone(),
+                session.scratchpad.clone(),
+                session.id.clone(),
             )
         };
+        // A runtime keeps its scratchpad across reloads; one attached again
+        // after it was retired opens a new one, as a resumed reference
+        // session does.
+        let scratchpad = scratchpad.or_else(|| self.open_scratchpad(&canonical_id));
         policy
             .try_replace_rules_with_rationale_prefix(
                 "agent-profile:",
@@ -695,11 +717,13 @@ impl AppServer {
                 &policy,
                 &tools,
                 &intent,
+                scratchpad.as_deref(),
                 previous_review.clone(),
             )?
             .or(previous_review);
         if let Some(session) = self.lock_sessions().get_mut(session_id) {
             session.review = review;
+            session.scratchpad = scratchpad;
         }
         Ok(())
     }

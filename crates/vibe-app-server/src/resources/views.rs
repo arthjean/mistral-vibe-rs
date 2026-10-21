@@ -24,30 +24,6 @@ pub(super) fn read_only<const N: usize>(entries: [(&str, Value); N]) -> Resource
 /// is filled in by the server, which is the only owner able to compose it, and
 /// each diagnostic is published as its own `warning`, which is how the reference
 /// splits an answer from what a client must be told about.
-/// A mutation whose answer carries the state it produced under one key.
-///
-/// `shell/*` is a local extension, so its shape is this port's to choose and the
-/// state travels on the answer rather than through the runtime snapshot.
-pub(super) fn canonical_mutation(
-    key: &str,
-    state: Value,
-    diagnostics: Vec<String>,
-) -> ResourceDispatch {
-    let mut result = BTreeMap::from([(key.to_owned(), state)]);
-    if !diagnostics.is_empty() {
-        result.insert("diagnostics".to_owned(), json!(diagnostics));
-    }
-    ResourceDispatch {
-        result,
-        signals: ResourceSignals {
-            runtime_updated: true,
-            warnings: diagnostics,
-            auth_required: Vec::new(),
-            integrations: None,
-        },
-    }
-}
-
 pub(super) fn runtime_mutation<const N: usize>(
     entries: [(&str, Value); N],
     diagnostics: Vec<String>,

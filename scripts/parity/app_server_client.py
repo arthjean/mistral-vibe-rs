@@ -17,8 +17,6 @@ import copy
 from pathlib import Path
 import queue
 import re
-import shutil
-import tempfile
 import time
 from typing import Any
 
@@ -200,49 +198,48 @@ def run_scenario(
     than rewinds need, such as the review oracle's owners and regions.
     """
     backend = stand_in.Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-rewind-oracle-")).resolve()
-    session = (session_factory or Session)(root)
-    world = session.world
-    try:
-        # A tool call may name a scenario directory, which only exists now.
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        (world.vibe_home / "config.toml").write_text(
-            base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
-        )
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        env = host_env.isolated(
-            world.home,
-            world.vibe_home,
-            MISTRAL_API_KEY="oracle-key",
-            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-        )
-        server = Server(command, env, world.workspace, {}, world)
-        steps: list[dict[str, Any]] = []
+    with host_env.scratch_root("vibe-rewind-oracle-") as root:
+        session = (session_factory or Session)(root)
+        world = session.world
         try:
-            run_steps(scenario, server, session, backend, steps, dialect, quiet)
-        except OracleError as error:
-            # A step that never settles is an observation too: the rest of the
-            # scenario cannot run, but the others still can.
-            steps.append({"failure": str(error)})
+            # A tool call may name a scenario directory, which only exists now.
+            backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
+            (world.vibe_home / "config.toml").write_text(
+                base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
+            )
+            blackbox.write_tree(world.workspace, scenario.get("files", {}))
+            env = host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            )
+            server = Server(command, env, world.workspace, {}, world)
+            steps: list[dict[str, Any]] = []
+            try:
+                run_steps(scenario, server, session, backend, steps, dialect, quiet)
+            except OracleError as error:
+                # A step that never settles is an observation too: the rest of the
+                # scenario cannot run, but the others still can.
+                steps.append({"failure": str(error)})
+            finally:
+                server.stop()
+            return {
+                "steps": steps,
+                "sessions": session.sessions,
+                "conversations": [conversation(body.get("messages", [])) for body in backend.bodies],
+                "bodies": backend.bodies,
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
-            server.stop()
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "conversations": [conversation(body.get("messages", [])) for body in backend.bodies],
-            "bodies": backend.bodies,
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 def watched_file(path: Path) -> Any:

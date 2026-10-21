@@ -420,7 +420,7 @@ fn status_message(dispatched: &Dispatch) -> &str {
 /// backend declines that read, shows the statistics alone.
 #[tokio::test(flavor = "multi_thread")]
 async fn status_appends_the_provider_section_on_the_unified_mode_only() {
-    let temporary = tempfile::tempdir().expect("a temporary vibe home");
+    let temporary = crate::test_root::tempdir().expect("a temporary vibe home");
 
     let mut unified = Some(status_runtime(&temporary.path().join("unified"), true));
     let shown = dispatch("/status", &mut unified).await;

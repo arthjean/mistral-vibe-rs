@@ -5,10 +5,7 @@ use vibe_protocol::decode_frame;
 
 use super::*;
 use crate::client::EchoTurnDriver;
-use crate::resources::{
-    ResourceBackend, ResourceBackendRequest, ResourceDispatch, ResourceError, ResourceFuture,
-    ResourceSession,
-};
+use crate::resources::{ResourceBackend, ResourceError, ResourceFuture, ResourceSession};
 use crate::server::AppServer;
 
 #[derive(Default)]
@@ -21,13 +18,6 @@ impl ResourceBackend for CleanupResourceBackend {
     fn open_session(&self, _session: ResourceSession) -> Result<(), ResourceError> {
         self.opened.store(true, Ordering::Release);
         Ok(())
-    }
-
-    fn dispatch<'a>(
-        &'a self,
-        _request: ResourceBackendRequest,
-    ) -> ResourceFuture<'a, ResourceDispatch> {
-        Box::pin(async move { Err(ResourceError::MethodNotFound("test".to_owned())) })
     }
 
     fn close_session<'a>(

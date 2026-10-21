@@ -10,8 +10,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use vibe_app_server::client::{
-    PublicCallbackState, PublicContentBlock, PublicEffectState, PublicHistoryEntry,
-    PublicMessageRole,
+    HistoryPage, OpeningHistory, PublicCallbackState, PublicContentBlock, PublicEffectState,
+    PublicHistoryEntry, PublicMessageRole, StoredHistory, StoredPage,
 };
 use vibe_core::storage::short_session_id;
 use vibe_core::sync::lock;
@@ -91,16 +91,6 @@ pub(super) fn adopt_hydrated_session(
     true
 }
 
-/// The session a hydrated `internal/session/*` result opened, which its
-/// stored metadata names under `session_id`.
-pub(super) fn metadata_session_id(result: &BTreeMap<String, Value>) -> Option<String> {
-    result
-        .get("metadata")
-        .and_then(|metadata| metadata.get("session_id"))
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
-}
-
 pub(super) fn hydrate_initial_state(
     runtime: &mut InteractiveRuntime,
     arguments: &Arguments,
@@ -139,19 +129,22 @@ pub(super) fn canonical_session_projection(
     include_saved_history: bool,
 ) -> Result<TuiState, CliError> {
     let mut state = tui_state_from_snapshot(canonical_snapshot(runtime, session_id)?)?;
-    // A unified session's saved history is its canonical state already; the
-    // legacy transcript beside it is not its own.
-    if runtime.service.is_unified(session_id) {
-        // Reference `_reset_todo_presentation`: a session the terminal opens
-        // starts with an empty list, which only its next todo write fills.
-        state.todos = Some(super::todos::TodoTracker::default());
-        if include_saved_history {
-            state.window_history_tail();
+    let tail = include_saved_history.then_some(INITIAL_HISTORY_LIMIT);
+    match runtime.service.opening_history(session_id, tail)? {
+        // A unified session's saved history is its canonical state already;
+        // the legacy transcript beside it is not its own.
+        OpeningHistory::Published => {
+            // Reference `_reset_todo_presentation`: a session the terminal
+            // opens starts with an empty list, which only its next todo
+            // write fills.
+            state.todos = Some(super::todos::TodoTracker::default());
         }
-        return Ok(state);
+        OpeningHistory::Stored(Some(stored)) => {
+            overlay_latest_saved_history(runtime, &mut state, stored)?;
+        }
+        OpeningHistory::Stored(None) => {}
     }
     if include_saved_history {
-        overlay_latest_saved_history(runtime, &mut state)?;
         state.window_history_tail();
     }
     Ok(state)
@@ -171,57 +164,22 @@ fn canonical_snapshot(
         ));
     };
     let mut snapshot = snapshot_from_public_session(session_id, public_state)?;
-    // A unified session's state is its whole saved history, the latest page
-    // of it, and the entry that page stops at (reference
-    // `history_before_cursor`).
-    if runtime.service.is_unified(session_id) {
-        snapshot.cursor_before = public_state
-            .get("historyBeforeCursor")
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned);
-    }
+    snapshot.cursor_before = runtime.service.history_cursor(session_id, public_state);
     Ok(snapshot)
 }
 
+/// Lays the tail of a legacy session's stored transcript over the projection,
+/// keeping what is still streaming or waiting on an answer.
 fn overlay_latest_saved_history(
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
+    stored: StoredHistory,
 ) -> Result<(), CliError> {
-    // How long the stored transcript is decides which page of it to ask for,
-    // and the session record is what carries both that length and the context
-    // accounting. `session/rewind/read` used to answer them, which it no longer
-    // does: it answers what a rewind to one entry would restore.
-    let count = match runtime.service.public_call(
-        "internal/session/log/read",
-        json!({"sessionId": state.session_id}),
-    ) {
-        Ok(result) => {
-            runtime.context_tokens = result
-                .get("metadata")
-                .and_then(|metadata| metadata.get("statistics"))
-                .and_then(|statistics| statistics.get("context_tokens"))
-                .and_then(Value::as_u64)
-                .unwrap_or_default();
-            result
-                .get("messages")
-                .and_then(Value::as_array)
-                .and_then(|messages| u64::try_from(messages.len()).ok())
-        }
-        Err(_) => None,
-    };
-    let Some(message_count) = count.and_then(|count| usize::try_from(count).ok()) else {
+    runtime.context_tokens = stored.context_tokens;
+    let Some(StoredPage { offset, page }) = stored.tail else {
         return Ok(());
     };
-    let offset = message_count.saturating_sub(INITIAL_HISTORY_LIMIT);
-    let result = runtime.service.public_call(
-        "internal/history/list",
-        json!({
-            "sessionId": state.session_id,
-            "offset": offset,
-            "limit": INITIAL_HISTORY_LIMIT,
-        }),
-    )?;
-    let history = decode_public_result::<PublicHistoryList>(result)?;
+    let history = decode_public_result::<PublicHistoryList>(page)?;
     let mut entries = transcript_entries_from_history(&state.session_id, offset, &history.history);
     for entry in state
         .entries
@@ -270,29 +228,34 @@ pub(super) fn load_more_history(runtime: Option<&mut InteractiveRuntime>, state:
     let Some(before) = state.cursor_before.clone() else {
         return;
     };
-    if runtime.service.is_unified(&state.session_id) {
-        load_more_unified_history(runtime, state, before);
-        return;
+    let page =
+        match runtime
+            .service
+            .history_before(&state.session_id, &before, LOAD_MORE_BATCH_SIZE)
+        {
+            Ok(Some(page)) => page,
+            Ok(None) => {
+                state.cursor_before = None;
+                state.push_diagnostic("Saved-history cursor is invalid");
+                return;
+            }
+            Err(error) => {
+                state.push_diagnostic(format!("Older history is unavailable: {error}"));
+                return;
+            }
+        };
+    match page {
+        HistoryPage::Entries(page) => prepend_unified_history(state, page),
+        HistoryPage::Stored(StoredPage { offset, page }) => {
+            prepend_stored_history(state, offset, page);
+        }
     }
-    let Ok(before) = before.parse::<usize>() else {
-        state.cursor_before = None;
-        state.push_diagnostic("Saved-history cursor is invalid");
-        return;
-    };
-    let limit = before.min(LOAD_MORE_BATCH_SIZE);
-    let offset = before.saturating_sub(limit);
-    let result = runtime.service.public_call(
-        "internal/history/list",
-        json!({
-            "sessionId": state.session_id,
-            "offset": offset,
-            "limit": limit,
-        }),
-    );
-    let history = match result
-        .map_err(CliError::from)
-        .and_then(decode_public_result::<PublicHistoryList>)
-    {
+}
+
+/// The page of a legacy session's stored transcript that starts at `offset`,
+/// shown above the oldest entry.
+fn prepend_stored_history(state: &mut TuiState, offset: usize, page: BTreeMap<String, Value>) {
+    let history = match decode_public_result::<PublicHistoryList>(page) {
         Ok(history) => history,
         Err(error) => {
             state.push_diagnostic(format!("Older history is unavailable: {error}"));
@@ -307,27 +270,9 @@ pub(super) fn load_more_history(runtime: Option<&mut InteractiveRuntime>, state:
     state.scroll_to_oldest();
 }
 
-/// Reference `SessionResources.load_more_history`: the page of a unified
-/// session's history that ends at `before`.
-fn load_more_unified_history(
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-    before: String,
-) {
-    let result = runtime.service.public_call(
-        "session/history/list",
-        json!({
-            "sessionId": state.session_id,
-            "page": {"cursor": before, "limit": LOAD_MORE_BATCH_SIZE},
-        }),
-    );
-    let page = match result {
-        Ok(page) => page,
-        Err(error) => {
-            state.push_diagnostic(format!("Older history is unavailable: {error}"));
-            return;
-        }
-    };
+/// Reference `SessionResources.load_more_history`: a unified session's page
+/// of history above the oldest entry shown.
+fn prepend_unified_history(state: &mut TuiState, page: BTreeMap<String, Value>) {
     let entries = match serde_json::from_value::<Vec<PublicHistoryEntry>>(
         page.get("items").cloned().unwrap_or_else(|| json!([])),
     ) {

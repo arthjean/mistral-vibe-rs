@@ -28,15 +28,11 @@ pub(super) async fn shut_down(
         prompt_history,
         mut clipboard_images,
         mut path_normalization,
-        mut terminal_guard,
-        terminal,
+        screen,
         mounted_startup,
         ..
     } = session;
-    drop(terminal);
-    let restoration = terminal_guard
-        .restore()
-        .map_err(|error| CliError::Terminal(error.to_string()));
+    let restoration = screen.restore().map_err(CliError::Terminal);
     for diagnostic in prompt_history.finish().await {
         eprintln!("{diagnostic}");
     }

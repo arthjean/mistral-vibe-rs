@@ -1,4 +1,5 @@
-//! The fuzzy matcher slash and path completion rank by.
+//! The fuzzy matcher slash and path completion, and the MCP panel's filter,
+//! rank by.
 //!
 //! Reference `fuzzy_match` (`vibe/cli/autocompletion/fuzzy.py`, rewritten at
 //! v2.24.5) works in two passes: an alignment pass picks which text positions
@@ -81,7 +82,7 @@ impl Folded {
 
 /// Scores `pattern` against `text` in hundredths, or [`None`] when the pattern
 /// is no subsequence of the text. An empty pattern matches with no score.
-pub(super) fn fuzzy_match_score(pattern: &str, text: &str) -> Option<i64> {
+pub(in crate::tui) fn fuzzy_match_score(pattern: &str, text: &str) -> Option<i64> {
     if pattern.is_empty() {
         return Some(0);
     }

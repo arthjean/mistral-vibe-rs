@@ -5,10 +5,11 @@
 //! keeps what outlives it: where a key is read from and written to, and how
 //! a theme preference resolves against the terminal.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use vibe_core::config::DotenvValues;
 use vibe_core::sync::lock;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -83,6 +84,19 @@ impl PersistedCredentialStore {
             &self.store,
         )
     }
+}
+
+/// Reference `resolve_api_key`: the environment first, then the stored
+/// credential. The vibe home's dotenv stands in for the environment the
+/// reference loads it into at startup.
+pub(crate) fn persisted_credential(vibe_home: &Path, name: &str) -> Option<String> {
+    DotenvValues::global(vibe_home)
+        .variable(name)
+        .filter(|credential| !credential.is_empty())
+        .or_else(|| {
+            PersistedCredentialStore::new(vibe_core::config::global_env_file(vibe_home))
+                .resolve(name)
+        })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

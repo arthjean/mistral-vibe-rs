@@ -782,8 +782,9 @@ let old = 2;
 #[tokio::test]
 async fn a_registered_file_tool_reaches_the_scratchpad_without_asking() {
     let root = tempdir().expect("workspace");
-    let scratchpad =
-        crate::scratchpad::init_scratchpad("workspace-scratchpad-probe").expect("scratchpad");
+    let held =
+        crate::scratchpad::Scratchpad::open("workspace-scratchpad-probe").expect("scratchpad");
+    let scratchpad = held.path().to_owned();
     std::fs::write(scratchpad.join(".env"), "SECRET=1\n").expect("scratchpad file");
     std::fs::write(root.path().join(".env"), "SECRET=2\n").expect("workspace file");
 
@@ -837,8 +838,7 @@ async fn a_registered_file_tool_reaches_the_scratchpad_without_asking() {
         Some(crate::tools::ToolSkip { cancelled: true }),
         "the same name inside the workspace reaches the operator: {asked:?}"
     );
-
-    crate::scratchpad::cleanup_scratchpad(Some(&scratchpad));
+    drop(held);
 }
 
 /// US-011 (Windows support): through the published `read_file`, a

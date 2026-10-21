@@ -466,8 +466,9 @@ impl SubagentRunner for ProviderSubagentRunner {
                 engine = engine.with_hooks(hooks);
             }
             // Reference `prepare_subagent_prompt` names the parent's
-            // scratchpad before the task, so the child can hand files back.
-            let scratchpad = vibe_core::scratchpad::init_scratchpad(&context.parent_session_id);
+            // scratchpad before the task, so the child can hand files back:
+            // the one the parent's guard grants.
+            let scratchpad = self.tools.guard().and_then(|guard| guard.scratchpad);
             let prompt = subagent_prompt(&context.prompt, scratchpad.as_deref());
             let outcome = engine
                 .run_turn(

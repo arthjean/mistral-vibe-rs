@@ -715,6 +715,9 @@ impl AppServer {
 
 /// What the session's system message is composed for, with the plugin skills
 /// a unified session lists in place of the builtins.
+///
+/// It reads what the session already holds and touches no file: the
+/// scratchpad it names is the one the runtime opened with its tools.
 pub(crate) fn prompt_scope(
     session: &SessionRuntime,
     skill_seed: Option<
@@ -729,7 +732,10 @@ pub(crate) fn prompt_scope(
         agent: session.intent.agent.clone(),
         model: session.intent.model.clone(),
         headless: session.intent.headless,
-        scratchpad: vibe_core::scratchpad::init_scratchpad(&session.id),
+        scratchpad: session
+            .scratchpad
+            .as_ref()
+            .map(|scratchpad| scratchpad.path().to_owned()),
         tool_names: session
             .tools
             .list()

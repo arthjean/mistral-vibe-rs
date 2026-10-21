@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 from pathlib import Path
@@ -10,11 +11,17 @@ import tempfile
 # the checkout has moved, rather than from whatever its working tree holds.
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
-from pin import DEFAULT_REFERENCE  # noqa: E402  the path insert above enables it
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
 from reference import reexecute_pinned  # noqa: E402
 
 if __name__ == "__main__":
-    reexecute_pinned(DEFAULT_REFERENCE)
+    # Parsed before the reference imports below, which only the re-executed
+    # process can resolve.
+    _parser = argparse.ArgumentParser(description=__doc__)
+    _parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
+    _parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    _arguments = _parser.parse_args()
+    reexecute_pinned(_arguments.reference, _arguments.expected_commit)
 
 from dotenv import set_key, unset_key
 from rich.text import Text

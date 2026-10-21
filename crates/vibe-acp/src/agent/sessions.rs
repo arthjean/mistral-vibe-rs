@@ -133,39 +133,13 @@ where
         request: AcpForkSession,
     ) -> Result<Value, AcpError> {
         let source = self.session_harness(&request.session_id)?;
-        let fork_id = if source.is_unified() {
-            // Reference `sessions.fork(message_id, attach=False)`.
-            let fork = self
-                .call_unscoped(
-                    &source,
-                    "session/fork",
-                    json!({
-                        "sourceSessionId": source.session_id,
-                        "entryId": request.message_id,
-                        "attach": false,
-                    }),
-                )
-                .await
-                .map_err(invalid_request)?;
-            fork.get("state")
-                .and_then(|state| state.pointer("/session/id"))
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-        } else {
-            let mut params = json!({});
-            if let Some(message_id) = &request.message_id {
-                params["messageId"] = json!(message_id);
-            }
-            let fork = self
-                .call(&source, "internal/session/fork", params)
-                .await
-                .map_err(invalid_request)?;
-            fork.get("metadata")
-                .and_then(|metadata| metadata.get("session_id").or_else(|| metadata.get("id")))
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-        }
-        .ok_or_else(|| AcpError::InvalidResponse("the fork named no session".to_owned()))?;
+        let fork_id = source
+            .service
+            .lock()
+            .await
+            .fork_session(&source.session_id, request.message_id.as_deref())
+            .map_err(|error| invalid_request(error.into()))?
+            .ok_or_else(|| AcpError::InvalidResponse("the fork named no session".to_owned()))?;
         let child = self
             .create_session(
                 &request.cwd,
@@ -315,7 +289,7 @@ where
                     .get("id")
                     .and_then(Value::as_str)
                     .and_then(|id| self.find_live_session(id))
-                    .filter(|harness| harness.is_unified())
+                    .filter(|_| self.harness.use_unified)
                     .map(|harness| harness.names());
                 let title = match live {
                     Some((title, preview)) => title.or(preview),

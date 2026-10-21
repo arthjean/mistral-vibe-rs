@@ -3,20 +3,20 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
 use serde::{Deserialize, Serialize};
-use vibe_core::sync::lock;
 
 use super::commands::{CommandContext, command_aliases_in, command_description};
 use super::input::{InputError, PromptEditor, grapheme_byte, grapheme_count};
+use super::job_slot::LatestJobSlot;
 
 mod fuzzy;
 mod inline_skill;
 mod path;
 
-use fuzzy::fuzzy_match_score;
+pub(super) use fuzzy::fuzzy_match_score;
 use inline_skill::InlineSkillGhost;
 pub(crate) use path::PathIndex;
 
@@ -77,14 +77,8 @@ struct ActiveCompletion {
 
 #[derive(Debug)]
 struct CompletionWorker {
-    state: Arc<(Mutex<CompletionWorkerState>, Condvar)>,
+    slot: Arc<LatestJobSlot<CompletionJob>>,
     results: Receiver<CompletionResolution>,
-}
-
-#[derive(Debug, Default)]
-struct CompletionWorkerState {
-    pending: Option<CompletionJob>,
-    shutdown: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,59 +148,37 @@ pub enum CompletionApplyOutcome {
 
 impl CompletionWorker {
     fn spawn(index: PathIndex) -> Result<Self, InputError> {
-        let state = Arc::new((Mutex::new(CompletionWorkerState::default()), Condvar::new()));
-        let thread_state = Arc::clone(&state);
+        let slot = Arc::new(LatestJobSlot::new());
+        let thread_slot = Arc::clone(&slot);
         let (results_tx, results) = mpsc::channel();
         std::thread::Builder::new()
             .name("vibe-path-completion".to_owned())
-            .spawn(move || completion_worker_loop(&thread_state, &results_tx, &index))
+            .spawn(move || completion_worker_loop(&thread_slot, &results_tx, &index))
             .map_err(|error| InputError::CompletionWorker(error.to_string()))?;
-        Ok(Self { state, results })
+        Ok(Self { slot, results })
     }
 
     fn submit(&self, request: CompletionJob) {
-        let (state, ready) = self.state.as_ref();
-        lock(state).pending = Some(request);
-        ready.notify_one();
+        self.slot.submit(request);
     }
 
     fn cancel_pending(&self) {
-        let (state, _) = self.state.as_ref();
-        lock(state).pending = None;
+        self.slot.cancel();
     }
 }
 
 impl Drop for CompletionWorker {
     fn drop(&mut self) {
-        let (state, ready) = self.state.as_ref();
-        let mut state = lock(state);
-        state.shutdown = true;
-        state.pending = None;
-        ready.notify_one();
+        self.slot.shutdown();
     }
 }
 
 fn completion_worker_loop(
-    shared: &Arc<(Mutex<CompletionWorkerState>, Condvar)>,
+    slot: &LatestJobSlot<CompletionJob>,
     results: &mpsc::Sender<CompletionResolution>,
     index: &PathIndex,
 ) {
-    loop {
-        let job = {
-            let (state, ready) = shared.as_ref();
-            let mut state = ready
-                .wait_while(lock(state), |state| {
-                    state.pending.is_none() && !state.shutdown
-                })
-                .unwrap_or_else(PoisonError::into_inner);
-            if state.shutdown {
-                return;
-            }
-            state.pending.take()
-        };
-        let Some(job) = job else {
-            continue;
-        };
+    while let Some(job) = slot.wait() {
         let request = job.request;
         let resolution = match request.query.strip_prefix('@') {
             Some(query) => match index.completer_candidates(&job.workspace, query) {

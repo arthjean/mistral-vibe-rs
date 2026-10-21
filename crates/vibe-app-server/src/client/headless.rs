@@ -25,6 +25,8 @@ use super::interactive::*;
 use super::*;
 
 mod legacy;
+mod saved;
+pub use saved::{HistoryPage, OpeningHistory, SavedSessions, StoredHistory, StoredPage};
 mod teleport;
 pub use teleport::TeleportEvents;
 mod unified;
@@ -148,11 +150,12 @@ trait SessionBackend {
     fn close<'a>(&'a mut self, session_id: &'a str) -> ClientFuture<'a, ()>;
 }
 
-/// Runs a reserved turn to its end, off the service: the driver runs a turn
-/// of a legacy session, and a unified session runs its own, which is waited
-/// on.
+/// Runs a reserved turn of one session to its end, off the service: the
+/// driver runs a turn of a legacy session, and a unified session runs its
+/// own, which is waited on.
 pub struct TurnRunner<D> {
     driver: Arc<D>,
+    /// The mirrors of the unified session the runner is for.
     unified: Option<Arc<super::unified::Shared>>,
 }
 
@@ -179,11 +182,7 @@ where
         reservation: &TurnReservation,
         observer: Arc<dyn EventObserver>,
     ) -> Result<TurnOutcome, DriverError> {
-        if let Some(shared) = self
-            .unified
-            .as_ref()
-            .filter(|shared| shared.serves(&reservation.session_id))
-        {
+        if let Some(shared) = &self.unified {
             return super::unified::settled_turn(
                 Arc::clone(shared),
                 reservation.session_id.clone(),
@@ -309,23 +308,38 @@ where
         })
     }
 
+    /// The link that serves `session_id`, when it is a session this service
+    /// opened on the Unified Harness.
+    fn unified_link(&self, session_id: &str) -> Option<&super::unified::UnifiedLink> {
+        self.unified.as_ref().filter(|link| link.holds(session_id))
+    }
+
+    /// Whether the Unified Harness serves `session_id`, which answers the
+    /// reference's session methods where a legacy session answers this
+    /// port's `internal/` ones.
+    pub(super) fn is_unified(&self, session_id: &str) -> bool {
+        self.unified_link(session_id).is_some()
+    }
+
     /// The backend that runs `session_id`: the Unified Harness for a session
     /// this service opened on it, the driver for any other.
     fn backend(&mut self, session_id: &str) -> Box<dyn SessionBackend + Send + '_> {
-        match self.unified.as_mut().filter(|link| link.holds(session_id)) {
-            Some(link) => Box::new(UnifiedSessions {
+        if self.is_unified(session_id)
+            && let Some(link) = self.unified.as_mut()
+        {
+            return Box::new(UnifiedSessions {
                 link,
                 server: &self.client.server,
-            }),
-            // Not `self.legacy_sessions()`: the link the other arm returns
-            // stays borrowed here, so this arm borrows the other fields only.
-            None => Box::new(LegacySessions {
-                client: &mut self.client,
-                driver: &self.driver,
-                callbacks: &mut self.callbacks,
-                requests: &mut self.callback_requests,
-            }),
+            });
         }
+        // Not `self.legacy_sessions()`: the link the other branch returns
+        // stays borrowed here, so this one borrows the other fields only.
+        Box::new(LegacySessions {
+            client: &mut self.client,
+            driver: &self.driver,
+            callbacks: &mut self.callbacks,
+            requests: &mut self.callback_requests,
+        })
     }
 
     fn legacy_sessions(&mut self) -> LegacySessions<'_, D> {
@@ -348,7 +362,7 @@ where
     fn unified_target(&self, method: &str, params: &Value) -> Option<String> {
         let link = self.unified.as_ref()?;
         match params.get("sessionId").and_then(Value::as_str) {
-            Some(session_id) => link.holds(session_id).then(|| session_id.to_owned()),
+            Some(session_id) => self.is_unified(session_id).then(|| session_id.to_owned()),
             // A session-optional read reaches the connection of the session
             // this client opened, as the reference's single host answers it.
             None if !matches!(method, "session/resume" | "session/continue") => link.any_session(),
@@ -397,23 +411,16 @@ where
         self.driver.clone()
     }
 
-    /// What runs a reserved turn to its end, off this service.
+    /// What runs a reserved turn of `session_id` to its end, off this
+    /// service.
     #[must_use]
-    pub fn turn_runner(&self) -> TurnRunner<D> {
+    pub fn turn_runner(&self, session_id: &str) -> TurnRunner<D> {
         TurnRunner {
             driver: Arc::clone(&self.driver),
-            unified: self.unified.as_ref().map(|link| Arc::clone(&link.shared)),
+            unified: self
+                .unified_link(session_id)
+                .map(|link| Arc::clone(&link.shared)),
         }
-    }
-
-    /// Whether the Unified Harness serves `session_id`, which answers the
-    /// reference's session methods (`session/fork`, `session/history/list`,
-    /// ...) where a legacy session answers this port's `internal/` ones.
-    #[must_use]
-    pub fn is_unified(&self, session_id: &str) -> bool {
-        self.unified
-            .as_ref()
-            .is_some_and(|link| link.holds(session_id))
     }
 
     pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
@@ -513,7 +520,7 @@ where
         session_id: &str,
         turn_id: &str,
     ) -> Result<TurnUpdates, ClientError> {
-        match self.unified.as_ref().filter(|link| link.holds(session_id)) {
+        match self.unified_link(session_id) {
             Some(link) => unified::turn_updates(link, turn_id),
             None => legacy::turn_updates(&self.client.server, session_id, turn_id),
         }
@@ -704,7 +711,8 @@ where
         let reservation = self
             .reserve_prompt(session_id, &TurnRequest::text(prompt))
             .await?;
-        match self.turn_runner().run(&reservation, observer).await {
+        let runner = self.turn_runner(&reservation.session_id);
+        match runner.run(&reservation, observer).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
                 self.fail_reserved_with(&reservation, public_driver_error(&error))?;

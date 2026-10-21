@@ -9,7 +9,7 @@
 
 use super::store::{PERMANENT_APPROVAL, SESSION_APPROVAL};
 use super::*;
-use crate::scratchpad::init_scratchpad;
+use crate::scratchpad::Scratchpad;
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver};
 use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler, ToolInvocation,
@@ -658,7 +658,8 @@ fn settings_for(tool: &str) -> SharedToolConfig {
 /// before any list is read.
 #[test]
 fn a_scratchpad_path_is_granted_before_any_list_is_consulted() {
-    let scratchpad = init_scratchpad("policy-scratchpad-probe").expect("scratchpad");
+    let held = Scratchpad::open("policy-scratchpad-probe").expect("scratchpad");
+    let scratchpad = held.path().to_owned();
     let mut settings = settings_for("read_file");
     // Even a denylisted name is granted inside the scratchpad, which is what
     // "without consulting any list" means.
@@ -677,7 +678,6 @@ fn a_scratchpad_path_is_granted_before_any_list_is_consulted() {
         context.paths.is_empty(),
         "no boundary check follows a grant"
     );
-    crate::scratchpad::cleanup_scratchpad(Some(&scratchpad));
 }
 
 /// The denylist is consulted first, and the allowlist grants what it does not

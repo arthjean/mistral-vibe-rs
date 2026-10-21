@@ -40,10 +40,8 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -51,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -597,39 +595,38 @@ def learned_session(stdout: str) -> str | None:
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="vibe-programmatic-oracle-")).resolve()
-    world = World(root)
-    backend = Backend([])
-    try:
-        (world.vibe_home / "config.toml").write_text(compose_config(scenario, backend), encoding="utf-8", newline="")
-        backend.whoami = scenario.get("whoami")
-        write_tree(world.workspace, scenario.get("files", {}))
-        write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
-        env = host_env.isolated(world.home, world.vibe_home, MISTRAL_API_KEY="oracle-key")
-        for key, value in scenario.get("env", {}).items():
-            if value is None:
-                env.pop(key, None)
-            else:
-                env[key] = value
-        runs = []
-        session: str | None = None
-        for step in scenario["runs"]:
-            observed = run_once(command, step, env, world, backend, session)
-            session = learned_session(observed["stdout"]) or session
-            runs.append(observed)
-        return {
-            "runs": runs,
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+    with host_env.scratch_root("vibe-programmatic-oracle-") as root:
+        world = World(root)
+        backend = Backend([])
+        try:
+            (world.vibe_home / "config.toml").write_text(compose_config(scenario, backend), encoding="utf-8", newline="")
+            backend.whoami = scenario.get("whoami")
+            write_tree(world.workspace, scenario.get("files", {}))
+            write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
+            env = host_env.isolated(world.home, world.vibe_home, MISTRAL_API_KEY="oracle-key")
+            for key, value in scenario.get("env", {}).items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
+            runs = []
+            session: str | None = None
+            for step in scenario["runs"]:
+                observed = run_once(command, step, env, world, backend, session)
+                session = learned_session(observed["stdout"]) or session
+                runs.append(observed)
+            return {
+                "runs": runs,
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "backend": backend.base,
+                },
+            }
+        finally:
+            backend.close()
 
 
 # --------------------------------------------------------------------------
@@ -862,11 +859,11 @@ def main() -> int:
             reference = {"commit": "binary-override"}
             dialect = "port"
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *flags]
+            commit, binary = reference_command(
+                arguments.reference, "vibe", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *flags]
             dialect = "reference"
         selected = [
             s for s in scenarios() if not arguments.only or any(name in s["name"] for name in arguments.only)

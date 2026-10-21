@@ -74,6 +74,7 @@ fn the_detail_title_uses_the_display_name() {
         enabled: true,
         requires_auth: false,
         requires_setup: false,
+        plugin_name: None,
     };
     assert_eq!(
         mcp_detail_overlay(&published(), &target).title,
@@ -89,6 +90,7 @@ fn server_target(source: &str) -> IntegrationTarget {
         enabled: true,
         requires_auth: false,
         requires_setup: false,
+        plugin_name: None,
     }
 }
 
@@ -230,5 +232,37 @@ fn the_connector_catalog_replaces_the_published_connectors() {
     assert_eq!(
         rows(sessionless),
         [("local".to_owned(), "local".to_owned(), 0)]
+    );
+}
+
+/// Reference `_filter_sources`: the query fuzzy-matches the display name only,
+/// each group orders by score, and a group with no match drops its heading
+/// and the gap before it. The list lands on its best match.
+#[test]
+fn the_query_fuzzy_matches_the_display_name_best_score_first() {
+    let sources = McpSource::published(&json!({"mcp": {"sources": [
+        {"name": "inbox", "displayName": "Gmail", "kind": "connector",
+         "transport": "connector", "status": "connected", "tools": []},
+        {"name": "archive", "displayName": "Mail Archive", "kind": "connector",
+         "transport": "connector", "status": "connected", "tools": []},
+        {"name": "mailer", "displayName": "Local", "kind": "server",
+         "transport": "stdio", "status": "connected", "tools": []},
+    ]}}))
+    .expect("the sources decode");
+    let mut overlay = mcp_overlay(&sources);
+    overlay.move_selection(2);
+    overlay.set_query("mail");
+    let visible = overlay
+        .visible_items()
+        .into_iter()
+        .map(|(selected, item)| (selected, item.id.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        visible,
+        [
+            (false, "heading:connectors"),
+            (true, "integration:connector:archive"),
+            (false, "integration:connector:inbox"),
+        ]
     );
 }

@@ -50,7 +50,7 @@ fn preparation_narrates_on_standard_error_in_the_reference_order() {
 /// the one place the reference leaves standard error.
 #[test]
 fn a_preparation_failure_is_reported_on_standard_output_and_exits_one() {
-    let root = tempfile::tempdir().expect("fixture root");
+    let root = support::test_root::tempdir().expect("fixture root");
     let workspace = root.path().join("not-a-repository");
     fs::create_dir_all(&workspace).expect("workspace directory");
 
@@ -122,8 +122,8 @@ fn launch(home_root: &Path, workspace: &Path) -> Output {
 }
 
 /// A single-commit repository, or `None` when git cannot build one here.
-fn scripted_repository() -> Option<tempfile::TempDir> {
-    let root = tempfile::tempdir().expect("fixture root");
+fn scripted_repository() -> Option<support::test_root::TestRoot> {
+    let root = support::test_root::tempdir().expect("fixture root");
     let repository = root.path().join("repository");
     fs::create_dir_all(&repository).expect("repository directory");
     fs::write(repository.join("README.md"), "fixture\n").expect("tracked file");

@@ -13,8 +13,6 @@ use std::time::{Duration, Instant};
 use crate::update_notifier::UpdateCacheStore;
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures_util::StreamExt;
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
 use serde_json::Value;
 use vibe_core::cache_store::CacheStore;
 
@@ -46,7 +44,7 @@ use super::setup::{EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetecto
 use super::shell::{finish_shell, interrupt_shell};
 use super::state::{EntryStatus, ServerEvent, TuiState};
 use super::telemetry::{refresh_account_when_ready, report_session_opened, report_startup};
-use super::terminal::{CrosstermOps, TerminalGuard};
+use super::terminal::FullScreen;
 use super::turn::{
     ActiveTurn, CancellationPhase, drain_updates, finish_active, request_active_turn_interrupt,
     settle_unstarted_reservation, start_active_turn,
@@ -107,8 +105,7 @@ struct Session {
     path_normalization: PathNormalizationManager,
     plan_review_monitor: PlanReviewMonitor,
     mounted_startup: startup::MountedStartup,
-    terminal_guard: TerminalGuard<CrosstermOps<std::io::Stdout>>,
-    terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
+    screen: FullScreen,
     /// A submission held back until path normalization settles.
     deferred_enter: Option<KeyEvent>,
     /// Reference `_pending_new_session_telemetry` and `_startup_telemetry_sent`:
@@ -133,8 +130,8 @@ impl Session {
             prompt_history: &mut self.prompt_history,
             input: &mut self.input,
             theme: &mut self.theme,
-            terminal_guard: &mut self.terminal_guard,
-            terminal: &mut self.terminal,
+            terminal_guard: &mut self.screen.guard,
+            terminal: &mut self.screen.terminal,
             clipboard_images: &mut self.clipboard_images,
             path_normalization: &mut self.path_normalization,
             deferred_enter: &mut self.deferred_enter,
@@ -316,7 +313,8 @@ impl Session {
         let state = &mut self.state;
         let input = &self.input;
         let theme = self.theme;
-        self.terminal
+        self.screen
+            .terminal
             .draw(|frame| {
                 draw(
                     frame,
@@ -560,10 +558,7 @@ pub async fn run_interactive(
         EnvironmentThemeDetector.detect(),
         std::env::var_os("NO_COLOR").is_some(),
     );
-    let terminal_guard = TerminalGuard::enter(CrosstermOps::stdout())
-        .map_err(|error| CliError::Terminal(error.to_string()))?;
-    let terminal = Terminal::new(CrosstermBackend::new(std::io::stdout()))
-        .map_err(|error| CliError::Terminal(error.to_string()))?;
+    let screen = FullScreen::enter().map_err(CliError::Terminal)?;
     state.waiting |= runtime.is_some();
     let mut session = Session {
         arguments,
@@ -580,8 +575,7 @@ pub async fn run_interactive(
         path_normalization: PathNormalizationManager::new().map_err(CliError::Terminal)?,
         plan_review_monitor: PlanReviewMonitor::default(),
         mounted_startup: startup::MountedStartup::new(post_mount_action),
-        terminal_guard,
-        terminal,
+        screen,
         deferred_enter: None,
         session_reported: false,
         startup_reported: false,

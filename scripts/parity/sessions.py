@@ -50,10 +50,8 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -62,7 +60,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -183,47 +181,46 @@ def run_scenario(scenario: dict[str, Any], command: list[str], dialect: str, qui
     # fast model, which would otherwise take the reply a turn was scripted
     # with. This corpus records no requests, so the probe leaves no trace in it.
     backend = stand_in.Backend(probe=True)
-    root = Path(tempfile.mkdtemp(prefix="vibe-session-oracle-")).resolve()
-    session = Sessions(root)
-    world = session.world
-    connections: dict[int, Connection] = {}
-    try:
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", TURN_BACKEND)))
-        config = scenario.get("config", "")
-        if os.name == "nt":
-            # A TOML basic string reads a Windows separator as an escape.
-            for token, path in (("$ROOT", world.root), ("$WS", world.workspace)):
-                config = config.replace(token, json.dumps(str(path))[1:-1])
-        config = session.substitute(config)
-        (world.vibe_home / "config.toml").write_text(
-            app_server_client.base_config(backend, config), encoding="utf-8", newline=""
-        )
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        env = environment(world, backend)
-        steps: list[dict[str, Any]] = []
+    with host_env.scratch_root("vibe-session-oracle-") as root:
+        session = Sessions(root)
+        world = session.world
+        connections: dict[int, Connection] = {}
         try:
-            connections[1] = Connection(command, env, world, quiet, scenario.get("client"))
-            run_steps(scenario, connections, command, env, session, steps, dialect, quiet)
-        except OracleError as error:
-            steps.append({"failure": str(error)})
+            backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", TURN_BACKEND)))
+            config = scenario.get("config", "")
+            if os.name == "nt":
+                # A TOML basic string reads a Windows separator as an escape.
+                for token, path in (("$ROOT", world.root), ("$WS", world.workspace)):
+                    config = config.replace(token, json.dumps(str(path))[1:-1])
+            config = session.substitute(config)
+            (world.vibe_home / "config.toml").write_text(
+                app_server_client.base_config(backend, config), encoding="utf-8", newline=""
+            )
+            blackbox.write_tree(world.workspace, scenario.get("files", {}))
+            env = environment(world, backend)
+            steps: list[dict[str, Any]] = []
+            try:
+                connections[1] = Connection(command, env, world, quiet, scenario.get("client"))
+                run_steps(scenario, connections, command, env, session, steps, dialect, quiet)
+            except OracleError as error:
+                steps.append({"failure": str(error)})
+            finally:
+                for connection in connections.values():
+                    connection.stop()
+            return {
+                "steps": steps,
+                "sessions": session.sessions,
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
-            for connection in connections.values():
-                connection.stop()
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 def run_steps(
@@ -915,11 +912,11 @@ def main() -> int:
             reference = {"commit": "server-override"}
             dialect = arguments.dialect or "port"
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            commit, binary = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *HARNESS_FLAGS]
             dialect = arguments.dialect or "reference"
         selected = [
             scenario

@@ -96,6 +96,10 @@ pub(crate) struct SessionRuntime {
     pub(crate) compaction: CompactionSettings,
     pub(crate) policy: PermissionStore,
     pub(crate) tools: ToolRegistry,
+    /// The scratchpad the session's runtime opened with its tools, which the
+    /// guard grants and the prompt names, and which goes when the runtime is
+    /// retired. A session whose scratchpad could not be opened has none.
+    pub(crate) scratchpad: Option<Arc<Scratchpad>>,
     /// The hooks the session loaded when it opened or last reloaded its
     /// runtime.
     pub(crate) hooks: crate::session_hooks::SessionHooks,
@@ -197,6 +201,7 @@ impl SessionRuntime {
             compaction: CompactionSettings::default(),
             policy,
             tools,
+            scratchpad: None,
             hooks: crate::session_hooks::SessionHooks::default(),
             system_prompt: None,
             persisted: None,

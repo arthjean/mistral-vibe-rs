@@ -29,6 +29,7 @@ use crate::tui::completion::CompletionRequest;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
+use vibe_core::parity::replay::valued_differences;
 
 /// Version 2 records completion descriptions as `{length, digest}`: they are
 /// prose the reference authors, so the corpus never carries their text.
@@ -51,12 +52,11 @@ const UNMODELED_STATE_PATHS: &[(&str, &str)] = &[];
 /// trace whose dimension `expectations.json` declares `gap`, and the events
 /// that diverge there.
 ///
-/// `path` is the first differing field of an observation as the runner reports
-/// it after the dimension name (`completion.items`, `[0].mode`), and `$` when
-/// the whole observation differs, as an effect list of another length. A `gap`
-/// dimension must diverge at exactly the ledgered events and pointers: an
-/// unledgered one fails as a regression and a ledgered one that stopped
-/// reproducing fails as stale.
+/// `path` is the JSON pointer of one differing field of an observation
+/// (`/completion/items`, `/0/mode`), and `$` when the whole observation
+/// differs, as an effect list of another length. A `gap` dimension must
+/// diverge at exactly the ledgered events and pointers: an unledgered one fails
+/// as a regression and a ledgered one that stopped reproducing fails as stale.
 struct LedgeredDivergence {
     trace: &'static str,
     dimension: &'static str,
@@ -407,11 +407,12 @@ struct Divergence {
 }
 
 impl Divergence {
-    /// The differing field without its leading separator, `$` for the root.
+    /// The differing field's JSON pointer, `$` for the root.
     fn pointer(&self) -> &str {
-        match self.path.strip_prefix('.').unwrap_or(&self.path) {
-            "" => "$",
-            pointer => pointer,
+        if self.path.is_empty() {
+            "$"
+        } else {
+            &self.path
         }
     }
 
@@ -843,61 +844,24 @@ fn workspace_adjusted_offset(text: &str, offset: u64, workspace: &str) -> u64 {
 // Comparison
 // ---------------------------------------------------------------------------
 
-fn first_difference(
-    expected: &Value,
-    actual: &Value,
-    path: &str,
-) -> Option<(String, Value, Value)> {
-    match (expected, actual) {
-        (Value::Object(expected_map), Value::Object(actual_map)) => {
-            let keys = expected_map
-                .keys()
-                .chain(actual_map.keys())
-                .collect::<BTreeSet<_>>();
-            for key in keys {
-                let expected_value = expected_map.get(key).unwrap_or(&Value::Null);
-                let actual_value = actual_map.get(key).unwrap_or(&Value::Null);
-                if let Some(difference) =
-                    first_difference(expected_value, actual_value, &format!("{path}.{key}"))
-                {
-                    return Some(difference);
-                }
-            }
-            None
-        }
-        (Value::Array(expected_items), Value::Array(actual_items)) => {
-            if expected_items.len() != actual_items.len() {
-                return Some((path.to_owned(), expected.clone(), actual.clone()));
-            }
-            for (index, (expected_item, actual_item)) in
-                expected_items.iter().zip(actual_items).enumerate()
-            {
-                if let Some(difference) =
-                    first_difference(expected_item, actual_item, &format!("{path}[{index}]"))
-                {
-                    return Some(difference);
-                }
-            }
-            None
-        }
-        _ if expected == actual => None,
-        _ => Some((path.to_owned(), expected.clone(), actual.clone())),
-    }
-}
-
+/// Every place an observation departs from the reference, so a `gap`
+/// dimension is held to each ledgered pointer rather than to its first.
 fn compare(
     dimension: &'static str,
     event_index: Option<usize>,
     expected: &Value,
     actual: &Value,
-) -> Option<Divergence> {
-    first_difference(expected, actual, "").map(|(path, expected, actual)| Divergence {
-        dimension,
-        event_index,
-        path,
-        expected,
-        actual,
-    })
+) -> Vec<Divergence> {
+    valued_differences(expected, actual)
+        .into_iter()
+        .map(|difference| Divergence {
+            dimension,
+            event_index,
+            path: difference.pointer,
+            expected: difference.expected,
+            actual: difference.actual,
+        })
+        .collect()
 }
 
 /// Reports every divergent event and pointer of a `gap` dimension that
@@ -1083,45 +1047,41 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
 
             let mut expected_state = observation.get("state").cloned().unwrap_or(Value::Null);
             strip_unmodeled_state(&mut expected_state);
-            if let Some(divergence) = compare("state", Some(index), &expected_state, &state) {
-                observed.entry("state").or_default().push(divergence);
+            let divergences = compare("state", Some(index), &expected_state, &state);
+            if !divergences.is_empty() {
+                observed.entry("state").or_default().extend(divergences);
             }
 
             let expected_effects = observation
                 .get("effects")
                 .cloned()
                 .unwrap_or_else(|| json!([]));
-            if let Some(divergence) = compare(
+            let divergences = compare(
                 "effects",
                 Some(index),
                 &expected_effects,
                 &Value::Array(step.effects),
-            ) {
-                observed.entry("effects").or_default().push(divergence);
+            );
+            if !divergences.is_empty() {
+                observed.entry("effects").or_default().extend(divergences);
             }
 
             if let Some(expected_history) = observation.get("history") {
-                let recorded = observed.entry("history").or_default();
-                if let Some(divergence) = compare(
+                observed.entry("history").or_default().extend(compare(
                     "history",
                     Some(index),
                     expected_history,
                     &json!(replay.state.history_entries()),
-                ) {
-                    recorded.push(divergence);
-                }
+                ));
             }
 
             if let Some(expected_submission) = observation.get("submission") {
-                let recorded = observed.entry("submission").or_default();
-                if let Some(divergence) = compare(
+                observed.entry("submission").or_default().extend(compare(
                     "submission",
                     Some(index),
                     expected_submission,
                     step.submission.as_ref().unwrap_or(&Value::Null),
-                ) {
-                    recorded.push(divergence);
-                }
+                ));
             }
 
             if let Some(expected_render) = observation.get("render") {
@@ -1135,12 +1095,12 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 };
                 normalize_workspace_render(&mut expected_render, &replay.workspace);
                 normalize_workspace_render(&mut actual_render, &replay.workspace);
-                let recorded = observed.entry("render").or_default();
-                if let Some(divergence) =
-                    compare("render", Some(index), &expected_render, &actual_render)
-                {
-                    recorded.push(divergence);
-                }
+                observed.entry("render").or_default().extend(compare(
+                    "render",
+                    Some(index),
+                    &expected_render,
+                    &actual_render,
+                ));
             }
         }
 
@@ -1279,14 +1239,21 @@ fn unsupported_events_fail_instead_of_being_skipped() {
 }
 
 #[test]
-fn differences_report_the_first_divergent_field() {
-    let expected = json!({"completion": {"items": [{"label": "/config"}]}});
-    let actual = json!({"completion": {"items": [{"label": "/clear"}]}});
-    let divergence = compare("state", Some(3), &expected, &actual).expect("a divergence");
-    let report = divergence.describe("sample", "abc123");
+fn differences_report_every_divergent_field() {
+    let expected = json!({"completion": {"items": [{"label": "/config"}]}, "cursor": 1});
+    let actual = json!({"completion": {"items": [{"label": "/clear"}]}, "cursor": 2});
+    let divergences = compare("state", Some(3), &expected, &actual);
+    assert_eq!(
+        divergences
+            .iter()
+            .map(Divergence::pointer)
+            .collect::<Vec<_>>(),
+        ["/completion/items/0/label", "/cursor"]
+    );
+    let report = divergences[0].describe("sample", "abc123");
     assert!(report.contains("event 3"), "{report}");
     assert!(
-        report.contains("state.completion.items[0].label"),
+        report.contains("state/completion/items/0/label"),
         "{report}"
     );
     assert!(report.contains("/config"), "{report}");
@@ -1350,45 +1317,37 @@ fn every_compared_state_field_is_modeled() {
 
 #[test]
 fn gap_divergences_are_held_to_their_ledgered_events_and_pointers() {
-    let divergence = compare(
+    let divergences = compare(
         "state",
         Some(2),
         &json!({"cursor": 1}),
         &json!({"cursor": 2}),
-    )
-    .expect("a divergence");
-    let unledgered = unledgered_divergences(
-        "unledgered-trace",
-        "state",
-        std::slice::from_ref(&divergence),
-        "abc123",
     );
+    assert_eq!(divergences.len(), 1);
+    let unledgered = unledgered_divergences("unledgered-trace", "state", &divergences, "abc123");
     assert_eq!(unledgered.len(), 1, "{unledgered:?}");
     assert!(unledgered[0].contains("not ledgered"), "{unledgered:?}");
-    assert!(unledgered[0].contains("`cursor`"), "{unledgered:?}");
+    assert!(unledgered[0].contains("`/cursor`"), "{unledgered:?}");
 
     let ledger = [LedgeredDivergence {
         trace: "ledgered-trace",
         dimension: "state",
-        path: "cursor",
+        path: "/cursor",
         events: &[2],
         reason: "a fixture entry",
     }];
-    let held = unledgered_divergences_in(
-        &ledger,
-        "ledgered-trace",
-        "state",
-        std::slice::from_ref(&divergence),
-        "abc123",
-    );
+    let held =
+        unledgered_divergences_in(&ledger, "ledgered-trace", "state", &divergences, "abc123");
     assert!(held.is_empty(), "{held:?}");
     let stale = unledgered_divergences_in(&ledger, "ledgered-trace", "state", &[], "abc123");
     assert_eq!(stale.len(), 1, "{stale:?}");
     assert!(stale[0].contains("no longer diverges"), "{stale:?}");
 
-    let root = compare("effects", Some(0), &json!([{"type": "submit"}]), &json!([]))
-        .expect("a divergence");
-    assert_eq!(root.pointer(), "$");
+    let root = compare("effects", Some(0), &json!([{"type": "submit"}]), &json!([]));
+    assert_eq!(
+        root.iter().map(Divergence::pointer).collect::<Vec<_>>(),
+        ["$"]
+    );
 }
 
 #[test]

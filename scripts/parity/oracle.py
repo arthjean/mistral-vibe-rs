@@ -33,6 +33,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import OracleError, reexecute_pinned
+import host_env
 
 #: Version 2 records completion descriptions as ``{length, digest}`` instead of
 #: their text.
@@ -153,7 +154,7 @@ def write_corpus(
             json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline=""
         )
         previous = output.with_name(f"{output.name}.previous")
-        shutil.rmtree(previous, ignore_errors=True)
+        host_env.remove_tree(previous, missing_ok=True)
         if output.exists():
             # Preserve hand-owned files (expectations) across regeneration.
             for keep in output.iterdir():
@@ -162,9 +163,9 @@ def write_corpus(
                 shutil.copy2(keep, staging / keep.name)
             output.rename(previous)
         staging.rename(output)
-        shutil.rmtree(previous, ignore_errors=True)
+        host_env.remove_tree(previous, missing_ok=True)
     finally:
-        shutil.rmtree(staging, ignore_errors=True)
+        host_env.remove_tree(staging, missing_ok=True)
 
 
 # --------------------------------------------------------------------------

@@ -127,10 +127,13 @@ pub(super) async fn run_program(
         // The calls this round started are published, which is the step the
         // reference's engine takes together with applying the last results.
         barriers.open_applied();
+        let file_lane = tokio::sync::Semaphore::new(1);
+        let file_lane = &file_lane;
         let mut running: FuturesUnordered<_> = started
             .into_iter()
             .map(|(slot, operation, action)| async move {
-                let outcome = gated_execute(core, environment, sink, &operation, &action).await;
+                let outcome =
+                    gated_execute(core, environment, sink, &operation, &action, file_lane).await;
                 (slot, action, outcome)
             })
             .collect();

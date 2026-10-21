@@ -3,7 +3,6 @@ use vibe_core::sync::lock;
 
 mod mcp_backend;
 pub(crate) use mcp_backend::overlay_plugin_sources;
-mod shell_backend;
 
 struct BackendDenyApproval;
 
@@ -26,8 +25,6 @@ pub(super) struct CoreResourceSession {
     plugin_mcp: StdMutex<Vec<crate::resources::PluginMcpSource>>,
     config: Option<LayeredConfig>,
     mcp_mutation: Mutex<()>,
-    terminals: TerminalManager,
-    shell_operations: Mutex<BTreeMap<String, String>>,
 }
 
 impl CoreResourceSession {
@@ -151,8 +148,6 @@ impl ResourceBackend for CoreResourceBackend {
                     plugin_mcp: StdMutex::new(Vec::new()),
                     config: scoped_config,
                     mcp_mutation: Mutex::new(()),
-                    terminals: TerminalManager::default(),
-                    shell_operations: Mutex::new(BTreeMap::new()),
                 }),
             },
         );
@@ -204,20 +199,6 @@ impl ResourceBackend for CoreResourceBackend {
         Box::pin(self.run_mcp_catalog(call, target, notify))
     }
 
-    fn dispatch<'a>(
-        &'a self,
-        request: ResourceBackendRequest,
-    ) -> ResourceFuture<'a, ResourceDispatch> {
-        Box::pin(async move {
-            let session = self.session(&request.session_id)?;
-            match &request.command {
-                ResourceBackendCommand::Shell(command) => {
-                    self.dispatch_shell(&session, command).await
-                }
-            }
-        })
-    }
-
     fn close_session<'a>(&'a self, session_id: &'a str, generation: u64) -> ResourceFuture<'a, ()> {
         Box::pin(async move {
             let session = {
@@ -233,7 +214,6 @@ impl ResourceBackend for CoreResourceBackend {
             let Some(session) = session else {
                 return Ok(());
             };
-            let mut failures = Vec::new();
             // Reference files a session's catalog under a weak key, which goes
             // with the session.
             self.mcp_authentication
@@ -241,10 +221,7 @@ impl ResourceBackend for CoreResourceBackend {
                 .await;
             self.forget_auth_required(session_id);
             lock(&self.mcp_auth_required).retain(|event| event.session_id() != session_id);
-            failures.extend(session.mcp.close().await);
-            if let Err(error) = session.terminals.cleanup_all().await {
-                failures.push(redact(&error.to_string()));
-            }
+            let failures = session.mcp.close().await;
             if failures.is_empty() {
                 Ok(())
             } else {

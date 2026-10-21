@@ -497,7 +497,7 @@ impl<D: TurnDriver> Run<'_, D> {
                 return Err(CliError::Client(error));
             }
         };
-        let runner = self.service.turn_runner();
+        let runner = self.service.turn_runner(&reservation.session_id);
         let run = runner.run(&reservation, observer);
         tokio::pin!(run);
         let mut poll = tokio::time::interval(CALLBACK_POLL);

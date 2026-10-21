@@ -198,6 +198,7 @@ fn apply(event: Event) -> String {
                 enabled: true,
                 requires_auth: status == Some(McpSourceStatus::NeedsAuth),
                 requires_setup: status == Some(McpSourceStatus::NeedsSetup),
+                plugin_name: None,
             };
             overlay_observation(
                 "mcp-detail",
@@ -546,6 +547,8 @@ fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec
         .join(&probe.script);
     let output = Command::new(interpreter)
         .arg(script)
+        .arg("--reference")
+        .arg(&oracle_root)
         .current_dir(&oracle_root)
         .output()
         .expect("execute the pinned Python configuration-integrations oracle");

@@ -10,10 +10,15 @@ base set.
 
 On every other platform :func:`windows_base` adds nothing, so a Linux capture
 builds byte-for-byte the environment it built before.
+
+The directories a scenario runs in come from :func:`scratch_root`, which
+removes them whatever the run left behind (:func:`remove_tree`).
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -23,6 +28,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 
 #: Carried over from the driver's own environment on Windows.
 WINDOWS_BASE = ("SystemRoot", "SystemDrive", "windir", "COMSPEC", "PATHEXT", "TEMP", "TMP")
@@ -79,21 +85,62 @@ def isolated(
     }
 
 
-def remove_tree(path: str | os.PathLike[str]) -> None:
-    """``shutil.rmtree`` that also removes read-only files.
+def remove_tree(path: str | os.PathLike[str], missing_ok: bool = False) -> None:
+    """``shutil.rmtree`` that also removes read-only entries, and with
+    ``missing_ok`` accepts a ``path`` that does not exist.
 
-    Git writes its objects read-only; POSIX deletes them through the writable
-    directory, while Windows refuses until the file itself is writable.
+    POSIX removes an entry through its directory, so a directory left without
+    write permission keeps what it holds: the plugin package store a server
+    hardens under ``<vibe-home>/logs/session/plugins/packages`` is one. Windows
+    instead refuses a read-only file itself, as Git writes its objects. A
+    refused removal makes both the parent and the entry writable, then retries;
+    a symbolic link is left as it is, since its mode would be its target's.
     """
 
+    if missing_ok and not os.path.lexists(path):
+        return
+
     def retry(function, target, _error) -> None:
-        os.chmod(target, stat.S_IWRITE)
+        os.chmod(os.path.dirname(target), stat.S_IRWXU)
+        if not os.path.islink(target):
+            os.chmod(target, stat.S_IRWXU)
         function(target)
 
     if sys.version_info >= (3, 12):
         shutil.rmtree(Path(path), onexc=retry)
     else:
         shutil.rmtree(Path(path), onerror=retry)
+
+
+@contextlib.contextmanager
+def scratch_root(prefix: str) -> Iterator[Path]:
+    """A new directory under the temporary root, named from ``prefix`` and
+    resolved, removed with :func:`remove_tree` when the block ends.
+
+    A failed removal raises rather than leaving the directory behind
+    unnoticed.
+    """
+
+    root = Path(tempfile.mkdtemp(prefix=prefix)).resolve()
+    try:
+        yield root
+    finally:
+        remove_tree(root)
+
+
+def git_isolated(global_config: str | None = os.devnull, **variables: str) -> dict[str, str]:
+    """The variables that keep the host's git configuration out of a fixture
+    repository, then ``variables``.
+
+    No system file is read, and ``global_config`` is the global one: the null
+    device by default, or ``None`` for a scenario whose fixture ``HOME``
+    carries the ``.gitconfig`` git should read.
+    """
+
+    isolated = {"GIT_CONFIG_NOSYSTEM": "1"}
+    if global_config is not None:
+        isolated["GIT_CONFIG_GLOBAL"] = global_config
+    return {**isolated, **variables}
 
 
 def path_spellings(path: str) -> list[str]:

@@ -6,6 +6,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vibe_app_server::client::{EffectDetail, EffectResultDisplay};
+use vibe_core::events::detail::project_output;
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::diagnostics::{
@@ -332,7 +333,8 @@ fn effect_state(detail: &EffectDetail, outcome: &Outcome) -> Value {
                     &output,
                     &emitted,
                 ),
-                "output": output,
+                // Reference `project_effect_output_value`, as the oracle reads it.
+                "output": project_output(detail.kind, &output),
                 "outputText": output_text,
                 "durationMs": 0,
             })
@@ -448,6 +450,8 @@ fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec
         .join(&probe.script);
     let output = Command::new(interpreter)
         .arg(script)
+        .arg("--reference")
+        .arg(&oracle_root)
         .current_dir(&oracle_root)
         .output()
         .expect("execute the pinned Python semantic-transcript oracle");

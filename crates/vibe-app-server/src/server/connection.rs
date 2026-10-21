@@ -178,19 +178,20 @@ impl ServerConnection {
             }
         }
         // A connection that goes away lets go of what it held, as the
-        // reference's backend shutdown does: the lease, the worktree it stood
-        // in, and the terminal's pointer to the session it leaves.
+        // reference's backend shutdown does: the lease, the scratchpad, the
+        // worktree it stood in, and the terminal's pointer to the session it
+        // leaves.
         for retired in released {
-            let session_id = &retired.session_id;
+            let session_id = retired.session_id.clone();
             // Reference `VibeCodeController.close`: a push still waiting is
             // answered no and every run stops, so nothing ships after the
             // session is gone.
-            self.server.spawn_vibe_code_reset(session_id);
-            self.release_retired(&retired);
+            self.server.spawn_vibe_code_reset(&session_id);
+            self.release_retired(retired);
             let _ = self
                 .server
                 .workspace
-                .close_saved_session(session_id, now_millis());
+                .close_saved_session(&session_id, now_millis());
         }
         self.root = None;
         self.attached_sessions.clear();

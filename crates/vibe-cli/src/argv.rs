@@ -3,18 +3,17 @@
 //! Both parsers exit 2 on a refusal and write it to standard error, and there
 //! the agreement stops: argparse prints its usage block and one line reading
 //! `prog: error: message`, while clap prints a paragraph, a tip and a pointer
-//! at `--help`. This module decides which argparse refusal a clap failure is,
-//! and [`crate::argparse`] renders it (`vibe/cli/entrypoint.py:27` builds the
+//! at `--help`. [`crate::argparse`] reads a clap failure as the argparse
+//! refusal it is and renders it (`vibe/cli/entrypoint.py:27` builds the
 //! parser on the default handler).
 
 use std::ffi::OsString;
 
-use clap::error::{ContextKind, ErrorKind};
-use clap::{Arg, Command, CommandFactory, Error, FromArgMatches};
+use clap::{Arg, CommandFactory, Error, FromArgMatches};
 use vibe_core::pycompat;
 
 use crate::Arguments;
-use crate::argparse::{Refusal, context, error_block, values};
+use crate::argparse::{self, Refusal, error_block};
 
 pub(crate) mod reading;
 
@@ -125,106 +124,10 @@ fn failure(error: &Error) -> ParseFailure {
 /// unrecognized refusal that says something the user can act on is worth more
 /// than one shaped like the reference and empty.
 fn render(error: &Error) -> String {
-    let Some(refusal) = argparse_refusal(error) else {
+    let Some(refusal) = argparse::refusal(error, &Arguments::command(), argparse_type) else {
         return error.render().to_string();
     };
     error_block(&usage(), "vibe", &refusal.to_string())
-}
-
-/// The argparse refusal this clap failure is, where this port can rebuild it
-/// from what clap reports.
-fn argparse_refusal(error: &Error) -> Option<Refusal> {
-    let command = Arguments::command();
-    match error.kind() {
-        ErrorKind::UnknownArgument => Some(Refusal::Unrecognized(context(
-            error,
-            ContextKind::InvalidArg,
-        )?)),
-        ErrorKind::InvalidValue => {
-            let argument = option_name(&command, &context(error, ContextKind::InvalidArg)?);
-            // clap reports an absent value and a rejected one under the same
-            // kind, and tells them apart only by the value it carries.
-            let value = context(error, ContextKind::InvalidValue)?;
-            if value.is_empty() {
-                return Some(Refusal::ExpectedOne { argument });
-            }
-            Some(Refusal::InvalidChoice {
-                argument,
-                value,
-                choices: values(error, ContextKind::ValidValue)?,
-            })
-        }
-        ErrorKind::ValueValidation => {
-            let raw = context(error, ContextKind::InvalidArg)?;
-            Some(Refusal::InvalidValue {
-                argument: option_name(&command, &raw),
-                kind: argparse_type(&command, &raw)?,
-                value: context(error, ContextKind::InvalidValue)?,
-            })
-        }
-        ErrorKind::ArgumentConflict => {
-            // argparse reports the pair from the argument it was reading when
-            // it found the conflict, which is the later of the two; clap names
-            // the earlier one first, so the two halves are read the other way
-            // round here.
-            Some(Refusal::NotAllowed {
-                argument: option_name(&command, &context(error, ContextKind::PriorArg)?),
-                prior: spellings(&command, &context(error, ContextKind::InvalidArg)?),
-            })
-        }
-        _ => None,
-    }
-}
-
-/// The argument clap names in `--output <{text,json,streaming}>`, without the
-/// value name argparse leaves out of its error lines.
-fn declared<'a>(command: &'a Command, reported: &str) -> Option<&'a Arg> {
-    let spelling = reported.split_whitespace().next()?;
-    command.get_arguments().find(|argument| {
-        argument
-            .get_long()
-            .is_some_and(|long| format!("--{long}") == spelling)
-            || argument
-                .get_short()
-                .is_some_and(|short| format!("-{short}") == spelling)
-    })
-}
-
-/// The name argparse prints for one argument: the long spelling where there is
-/// one, which is what `_get_action_name` returns for every flag this parser
-/// declares.
-fn option_name(command: &Command, reported: &str) -> String {
-    declared(command, reported)
-        .and_then(Arg::get_long)
-        .map_or_else(
-            || {
-                reported
-                    .split_whitespace()
-                    .next()
-                    .unwrap_or(reported)
-                    .to_owned()
-            },
-            |long| format!("--{long}"),
-        )
-}
-
-/// Every spelling of one argument, joined the way argparse joins
-/// `option_strings` when it names the argument a conflict was found against.
-fn spellings(command: &Command, reported: &str) -> String {
-    let Some(argument) = declared(command, reported) else {
-        return reported.to_owned();
-    };
-    let mut names = Vec::new();
-    if let Some(short) = argument.get_short() {
-        names.push(format!("-{short}"));
-    }
-    if let Some(long) = argument.get_long() {
-        names.push(format!("--{long}"));
-    }
-    if names.is_empty() {
-        return reported.to_owned();
-    }
-    names.join("/")
 }
 
 /// The name of the Python callable the reference passes as `type=`, which is
@@ -233,8 +136,8 @@ fn spellings(command: &Command, reported: &str) -> String {
 /// Rust spells the same two conversions `u32`, `u64` and `f64`, and a message
 /// naming those would not be the reference's, so the pairing is declared here
 /// beside the flags it covers (`vibe/cli/entrypoint.py:60-100`).
-fn argparse_type(command: &Command, reported: &str) -> Option<&'static str> {
-    match declared(command, reported)?.get_id().as_str() {
+fn argparse_type(argument: &Arg) -> Option<&'static str> {
+    match argument.get_id().as_str() {
         "max_turns" | "max_tokens" => Some("int"),
         "max_price" | "input_price" | "output_price" => Some("float"),
         _ => None,

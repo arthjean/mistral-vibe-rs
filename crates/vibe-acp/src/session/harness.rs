@@ -56,9 +56,6 @@ where
     title: Mutex<DisplayTitle>,
     /// What orders a delegated tool request behind the updates before it.
     pub(crate) barrier: UpdateBarrier,
-    /// Whether the session runs on the Unified Harness, which publishes its
-    /// own accounting and names.
-    unified: bool,
 }
 
 #[derive(Debug, Default)]
@@ -77,9 +74,7 @@ where
         session_id: &str,
     ) -> Result<Self, AcpError> {
         let view = service.session(session_id)?;
-        let unified = service.is_unified(session_id);
         Ok(Self {
-            unified,
             service: tokio::sync::Mutex::new(service),
             session_id: session_id.to_owned(),
             cwd: view.working_directory,
@@ -91,11 +86,6 @@ where
             title: Mutex::new(DisplayTitle::default()),
             experiments: None,
         })
-    }
-
-    /// Whether the session runs on the Unified Harness.
-    pub(crate) fn is_unified(&self) -> bool {
-        self.unified
     }
 
     /// Records `entry` as the version the client now holds, and returns the

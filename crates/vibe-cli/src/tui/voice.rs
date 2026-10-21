@@ -16,7 +16,6 @@ use std::time::Duration;
 use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use vibe_core::config::DotenvValues;
 use vibe_core::sync::lock;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_voice::capture::{AudioRecorder, CpalRecorder};
@@ -26,7 +25,7 @@ use vibe_voice::transcribe::{TranscribeClient, client_from_view};
 use vibe_voice::{StartRequest, TranscribeState, VoiceEvent};
 
 use super::chat_input::{InputEffect, InputEvent};
-use super::setup::PersistedCredentialStore;
+use super::setup::persisted_credential;
 
 mod state;
 
@@ -44,20 +43,10 @@ const PEAK_LEVELS: f32 = 8.0;
 pub(super) type ClientFactory =
     Arc<dyn Fn(&Value) -> Option<Arc<dyn TranscribeClient>> + Send + Sync>;
 
-/// Reference `resolve_api_key`: the environment first, then the stored
-/// credential. The vibe home's dotenv stands in for the environment the
-/// reference loads it into at startup.
+/// The credential lookup the audio clients resolve their keys through.
 pub(super) fn audio_credentials(vibe_home: &Path) -> CredentialLookup {
     let vibe_home = vibe_home.to_path_buf();
-    Arc::new(move |name: &str| {
-        DotenvValues::global(&vibe_home)
-            .variable(name)
-            .filter(|credential| !credential.is_empty())
-            .or_else(|| {
-                PersistedCredentialStore::new(vibe_core::config::global_env_file(&vibe_home))
-                    .resolve(name)
-            })
-    })
+    Arc::new(move |name: &str| persisted_credential(&vibe_home, name))
 }
 
 /// Reference `build_audio_request_metadata` for the session `session_id`

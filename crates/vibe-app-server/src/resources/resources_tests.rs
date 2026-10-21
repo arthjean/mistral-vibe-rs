@@ -1,5 +1,4 @@
 use super::*;
-use vibe_core::policy::TrustRootKind;
 
 /// Reads a session's MCP state through the catalog, as `mcp_catalog/read`.
 async fn read_mcp(
@@ -26,15 +25,6 @@ fn params(value: Value) -> BTreeMap<String, Value> {
         .collect()
 }
 
-fn backend_request(
-    session_id: &str,
-    method: &str,
-    params: BTreeMap<String, Value>,
-) -> ResourceBackendRequest {
-    ResourceBackendRequest::parse(session_id.to_owned(), method, &params, false)
-        .expect("valid backend request")
-}
-
 /// The stub this service used to answer the review surface from is gone,
 /// and with it the only reason the service knew what a review was. The
 /// methods are routed at the server against the session's engine now, so
@@ -51,7 +41,7 @@ fn the_resource_service_no_longer_answers_the_review_surface() {
         "review/turnDiff",
     ] {
         let error = resources
-            .dispatch(method, &params(json!({"sessionId": "s1"})), false)
+            .dispatch(method, &params(json!({"sessionId": "s1"})))
             .expect_err("the service holds no review state");
         assert!(
             matches!(error, ResourceError::MethodNotFound(_)),
@@ -76,7 +66,6 @@ fn read_logs(service: &mut ResourceService, limit: u64, offset: u64) -> Value {
         .dispatch(
             "diagnostics/logs/read",
             &params(json!({"limit": limit, "offset": offset})),
-            false,
         )
         .expect("logs")
         .result["logs"]
@@ -89,7 +78,7 @@ fn diagnostics_and_logs_redact_sensitive_text() {
     resources.record_diagnostic("config.toml", "Authorization: Bearer secret");
     resources.record_log(LogLevel::Error, "token=secret");
     let diagnostics = resources
-        .dispatch("diagnostics/list", &BTreeMap::new(), false)
+        .dispatch("diagnostics/list", &BTreeMap::new())
         .expect("diagnostics");
     let logs = read_logs(&mut resources, 10, 0);
     assert_eq!(
@@ -183,7 +172,7 @@ fn an_absent_file_is_empty_and_an_impossible_page_is_refused() {
     assert_eq!(logs["cursor"], Value::Null);
     for page in [json!({"limit": 0}), json!({"limit": 501})] {
         let error = resources
-            .dispatch("diagnostics/logs/read", &params(page.clone()), false)
+            .dispatch("diagnostics/logs/read", &params(page.clone()))
             .expect_err("the page is refused");
         assert!(
             matches!(error, ResourceError::InvalidParams(_)),
@@ -249,7 +238,7 @@ async fn a_permanent_approval_that_could_not_be_written_is_reported() {
             .collect::<Vec<_>>()
     };
     let diagnostics = resources
-        .dispatch("diagnostics/list", &BTreeMap::new(), true)
+        .dispatch("diagnostics/list", &BTreeMap::new())
         .expect("diagnostics");
     let listed = reported(&diagnostics);
     assert!(
@@ -338,108 +327,6 @@ fn session_scoped_resource_state_is_bounded_and_released() {
             ToolRegistry::default(),
         )
         .expect("released capacity");
-}
-
-/// A command the host's default allowlist grants outright: a Windows host
-/// analyzes the manual shell as PowerShell, whose list holds no `pwd`.
-const ALLOWED_COMMAND: &str = if cfg!(windows) { "echo vibe" } else { "pwd" };
-
-#[tokio::test]
-async fn core_backend_runs_trusted_shell_and_cleans_the_owned_process() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let policy = PermissionStore::default();
-    policy
-        .try_set_trust(
-            workspace.path(),
-            TrustDecision::SessionTrusted,
-            TrustRootKind::Workspace,
-        )
-        .expect("trust");
-    let backend = CoreResourceBackend::default();
-    backend
-        .open_session(ResourceSession {
-            session_id: "s1".to_owned(),
-            generation: 1,
-            working_directory: workspace.path().to_string_lossy().into_owned(),
-            project_trusted: true,
-            policy,
-            tools: ToolRegistry::default(),
-        })
-        .expect("open session");
-    let dispatch = backend
-        .dispatch(backend_request(
-            "s1",
-            "shell/run",
-            params(json!({
-                "sessionId": "s1",
-                "operationId": "shell-1",
-                "command": ALLOWED_COMMAND
-            })),
-        ))
-        .await
-        .expect("run shell");
-    assert!(dispatch.signals.runtime_updated);
-    let (completed, saw_output) = tokio::time::timeout(std::time::Duration::from_secs(10), async {
-        let mut saw_output = false;
-        loop {
-            let dispatch = backend
-                .dispatch(backend_request(
-                    "s1",
-                    "shell/run",
-                    params(json!({
-                        "sessionId": "s1",
-                        "operationId": "shell-1",
-                        "command": ALLOWED_COMMAND
-                    })),
-                ))
-                .await
-                .expect("poll shell");
-            saw_output |= dispatch
-                .result
-                .get("shell")
-                .and_then(|shell| shell.pointer("/output/chunks"))
-                .and_then(Value::as_array)
-                .is_some_and(|chunks| !chunks.is_empty());
-            if dispatch
-                .result
-                .get("shell")
-                .and_then(|shell| shell.pointer("/output/state/status"))
-                .and_then(Value::as_str)
-                != Some("running")
-            {
-                break (dispatch, saw_output);
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .expect("shell completes within the test deadline");
-    assert_eq!(
-        completed
-            .result
-            .get("shell")
-            .and_then(|shell| shell.pointer("/output/state/status"))
-            .and_then(Value::as_str),
-        Some("exited")
-    );
-    assert!(
-        saw_output,
-        "shell output must be drained before process release"
-    );
-    let denied = backend
-        .dispatch(backend_request(
-            "s1",
-            "shell/run",
-            params(json!({
-                "sessionId": "s1",
-                "operationId": "shell-2",
-                "command": "rm forbidden"
-            })),
-        ))
-        .await
-        .expect_err("destructive shell command must be denied before spawn");
-    assert!(matches!(denied, ResourceError::Conflict(_)));
-    backend.close_session("s1", 1).await.expect("cleanup");
 }
 
 #[tokio::test]

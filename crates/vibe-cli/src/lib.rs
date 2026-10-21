@@ -801,4 +801,8 @@ impl CliError {
 mod lib_tests;
 
 #[cfg(test)]
+#[path = "../tests/support/test_root.rs"]
+mod test_root;
+
+#[cfg(test)]
 mod cli_surface_parity_tests;

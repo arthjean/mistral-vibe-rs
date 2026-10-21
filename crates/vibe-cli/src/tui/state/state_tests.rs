@@ -339,6 +339,29 @@ fn a_rejected_resync_leaves_the_state_as_it_was() {
 }
 
 #[test]
+fn a_rejected_resync_keeps_the_local_copy_it_would_have_replaced() {
+    let mut state = TuiState::new("session");
+    state.append_local(crate::tui::hydration::published_fixture(
+        "published",
+        serde_json::json!({"type": "message", "role": "assistant", "content": [{"type": "text", "text": "copy"}]}),
+    ));
+    let before = state.clone();
+
+    assert_eq!(
+        state.resync(TuiSnapshot {
+            session_id: "other".to_owned(),
+            event_id: 4,
+            entries: vec![entry("published", 1, "canonical", EntryStatus::Completed)],
+            cursor_before: None,
+            cursor_after: None,
+            waiting: false,
+        }),
+        Err(StateError::ForeignSession("other".to_owned()))
+    );
+    assert_eq!(state, before);
+}
+
+#[test]
 fn canonical_replacement_restores_local_entries_at_their_explicit_anchors() {
     let mut state = TuiState::new("session");
     state

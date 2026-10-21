@@ -15,6 +15,7 @@ use vibe_core::tools::{
 mod callback_tests;
 mod profile_tests;
 mod resource_tests;
+mod scratchpad_tests;
 mod session_tests;
 mod startup_tests;
 mod turn_tests;
@@ -72,18 +73,6 @@ impl ResourceBackend for RecordingResourceBackend {
             .lock()
             .map_err(|_| ResourceError::Unavailable("test backend lock".to_owned()))? = Some(count);
         Ok(())
-    }
-
-    fn dispatch<'a>(
-        &'a self,
-        request: ResourceBackendRequest,
-    ) -> crate::resources::ResourceFuture<'a, ResourceDispatch> {
-        Box::pin(async move {
-            Err(ResourceError::MethodNotFound(format!(
-                "{:?}",
-                request.command
-            )))
-        })
     }
 
     fn mcp_catalog<'a>(

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use futures_util::StreamExt;
 use futures_util::stream::FuturesUnordered;
 use serde_json::json;
-use tokio::sync::watch;
+use tokio::sync::{Semaphore, watch};
 use vibe_core::clock::now_millis;
 use vibe_core::events::{ModelMessage, ModelToolCall};
 use vibe_core::provider::{ProviderInput, RequestDialect, ToolDefinition};
@@ -306,12 +306,14 @@ async fn run_calls(
     interrupt: &mut watch::Receiver<Option<String>>,
     answers: &mut BTreeMap<String, String>,
 ) -> Result<(), TurnEnd> {
+    let file_lane = Semaphore::new(1);
+    let file_lane = &file_lane;
     let mut running: FuturesUnordered<_> = started
         .into_iter()
         .map(|(call_id, started)| async move {
             let outcome = match &started {
                 Started::Tool(action) => {
-                    gated_execute(core, environment, sink, &call_id, action).await
+                    gated_execute(core, environment, sink, &call_id, action, file_lane).await
                 }
                 Started::Program(code) => {
                     run_program(core, environment, sink, turn_id, &call_id, code).await

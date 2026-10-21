@@ -768,7 +768,6 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             | DeferredWork::SteerTurn { .. }
             | DeferredWork::InjectContext { .. }
             | DeferredWork::ResolveCallback { .. }
-            | DeferredWork::ResourceRequest { .. }
             | DeferredWork::McpCatalog { .. }
             | DeferredWork::VibeCode { .. }
             | DeferredWork::CloudRequest { .. }

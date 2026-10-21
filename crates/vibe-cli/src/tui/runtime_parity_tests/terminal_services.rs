@@ -972,6 +972,8 @@ fn run_python_oracle(probe: &OracleProbe) -> Option<(Value, BTreeMap<String, Vec
         .join(&probe.script);
     let output = Command::new(interpreter)
         .arg(script)
+        .arg("--reference")
+        .arg(&oracle_root)
         .current_dir(&oracle_root)
         .output()
         .expect("execute the pinned Python terminal-services oracle");

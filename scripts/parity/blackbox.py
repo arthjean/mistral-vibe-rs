@@ -13,6 +13,8 @@ client sends over ACP. Nothing here imports the reference.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+import contextlib
 import errno
 import hashlib
 import json
@@ -86,6 +88,23 @@ APPROX_CHARS = re.compile(r'("approx_chars":)\d+')
 # --------------------------------------------------------------------------
 
 
+@contextlib.contextmanager
+def _unless_exited() -> Iterator[None]:
+    """Ignores the error a pipe to an exited child raises.
+
+    Windows reports a write to an exited child as ``EINVAL`` where POSIX raises
+    ``BrokenPipeError``: the same event.
+    """
+
+    try:
+        yield
+    except (BrokenPipeError, ValueError):
+        pass
+    except OSError as error:
+        if error.errno != errno.EINVAL:
+            raise
+
+
 class Agent:
     """One ``vibe-acp`` process and the client side of its connection."""
 
@@ -140,18 +159,16 @@ class Agent:
         self.send(reply)
 
     def send(self, message: dict[str, Any]) -> None:
-        with self.write_lock:
+        self.write_line(json.dumps(message).encode() + b"\n")
+
+    def write_line(self, line: bytes) -> None:
+        """Writes ``line``, its newline included, to the agent's input; an
+        agent that already exited reads nothing, which is not a failure."""
+
+        with self.write_lock, _unless_exited():
             assert self.process.stdin is not None
-            try:
-                self.process.stdin.write(json.dumps(message).encode() + b"\n")
-                self.process.stdin.flush()
-            except (BrokenPipeError, ValueError):
-                pass
-            except OSError as error:
-                # Windows reports a write to an exited child as `EINVAL`
-                # where POSIX raises `BrokenPipeError`: the same event.
-                if error.errno != errno.EINVAL:
-                    raise
+            self.process.stdin.write(line)
+            self.process.stdin.flush()
 
     def collect(self, request_id: Any, quiet: float) -> list[dict[str, Any]]:
         """Everything the agent writes until the response and then silence."""
@@ -182,17 +199,9 @@ class Agent:
                 answered = True
 
     def stop(self) -> int | None:
-        with self.write_lock:
-            try:
-                assert self.process.stdin is not None
-                self.process.stdin.close()
-            except (BrokenPipeError, ValueError):
-                pass
-            except OSError as error:
-                # Windows reports a write to an exited child as `EINVAL`
-                # where POSIX raises `BrokenPipeError`: the same event.
-                if error.errno != errno.EINVAL:
-                    raise
+        with self.write_lock, _unless_exited():
+            assert self.process.stdin is not None
+            self.process.stdin.close()
         try:
             return self.process.wait(timeout=15)
         except subprocess.TimeoutExpired:

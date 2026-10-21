@@ -64,7 +64,6 @@ import os
 from pathlib import Path
 import queue
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -76,7 +75,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, reexecute_pinned, require_pin  # noqa: E402
+from reference import OracleError, reexecute_pinned, reference_command, require_pin  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -602,30 +601,25 @@ class Server:
         return answer, notes
 
     def stop(self) -> None:
-        self.process.terminate()
+        # End of input lets both servers run their shutdown, which removes the
+        # session scratchpads a signal would leave behind.
+        assert self.process.stdin is not None
+        self.process.stdin.close()
+        try:
+            self.process.wait(timeout=5)
+            return
+        except subprocess.TimeoutExpired:
+            self.process.terminate()
         try:
             self.process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             self.process.kill()
 
 
-def relax(root: Path) -> None:
-    """Makes a hardened package store removable again."""
-    for directory, names, files in os.walk(root):
-        os.chmod(directory, 0o700)
-        for name in names:
-            os.chmod(os.path.join(directory, name), 0o700)
-        for name in files:
-            path = os.path.join(directory, name)
-            if not os.path.islink(path):
-                os.chmod(path, 0o600)
-
-
 def write_tree(root: Path, files: dict[str, str | None]) -> None:
     for relative, content in files.items():
         target = root / relative
         if content is None:
-            relax(target)
             host_env.remove_tree(target)
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -635,69 +629,68 @@ def write_tree(root: Path, files: dict[str, str | None]) -> None:
 def run_scenario(
     scenario: dict[str, Any], command: list[str], fixture_dir: Path
 ) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="vibe-plugins-oracle-")).resolve()
-    home = root / "home"
-    vibe_home = home / ".vibe"
-    workspace = root / "workspace"
-    for directory in (vibe_home, workspace):
-        directory.mkdir(parents=True)
-    write_tree(vibe_home, {"config.toml": PROVIDERS_CONFIG, **scenario.get("home", {})})
-    write_tree(workspace, scenario.get("workspace", {}))
-    for relative in scenario.get("executable", []):
-        os.chmod(vibe_home / relative, 0o755)
-    trusted = [json.dumps(str(workspace))] if scenario.get("trusted") else []
-    (vibe_home / "trusted_folders.toml").write_text(
-        f"trusted = [{', '.join(trusted)}]\nuntrusted = []\n", encoding="utf-8", newline=""
-    )
-    env = {
-        **host_env.isolated(
-            home,
-            vibe_home,
-            MISTRAL_API_KEY="oracle-key",
-            VIBE_API_BASE="http://127.0.0.1:9/v1/chat/completions",
-        ),
-        "PATH": f"{fixture_dir}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}",
-    }
-    server = Server([*command, *scenario["flags"]], env, workspace)
-    steps: list[Any] = []
-    session_id = None
-    try:
-        server.call("initialize", {"clientInfo": {"name": "plugins-oracle", "version": "0"}})
-        server.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
-        if scenario.get("start", True):
-            answer, _ = server.call("session/start", {"agentConfig": {"cwd": str(workspace)}})
-            session_id = answer["result"]["state"]["session"]["id"]
-        for step in scenario["steps"]:
-            if "edit" in step:
-                write_tree(vibe_home, step["edit"])
-                steps.append({"edit": sorted(step["edit"])})
-                continue
-            params = {
-                key: session_id if value == "$S" else value for key, value in step["params"].items()
-            }
-            answer, notes = server.call(step["call"], params)
-            steps.append(
-                {
-                    "call": step["call"],
-                    "answer": answer.get("result", answer.get("error")),
-                    "ok": "result" in answer,
-                    "warnings": [
-                        note["params"]["warning"]
-                        for note in notes
-                        if note.get("method") == "warning"
-                    ],
+    with host_env.scratch_root("vibe-plugins-oracle-") as root:
+        home = root / "home"
+        vibe_home = home / ".vibe"
+        workspace = root / "workspace"
+        for directory in (vibe_home, workspace):
+            directory.mkdir(parents=True)
+        write_tree(vibe_home, {"config.toml": PROVIDERS_CONFIG, **scenario.get("home", {})})
+        write_tree(workspace, scenario.get("workspace", {}))
+        for relative in scenario.get("executable", []):
+            os.chmod(vibe_home / relative, 0o755)
+        trusted = [json.dumps(str(workspace))] if scenario.get("trusted") else []
+        (vibe_home / "trusted_folders.toml").write_text(
+            f"trusted = [{', '.join(trusted)}]\nuntrusted = []\n", encoding="utf-8", newline=""
+        )
+        env = {
+            **host_env.isolated(
+                home,
+                vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE="http://127.0.0.1:9/v1/chat/completions",
+            ),
+            "PATH": f"{fixture_dir}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}",
+        }
+        server = Server([*command, *scenario["flags"]], env, workspace)
+        steps: list[Any] = []
+        session_id = None
+        try:
+            server.call("initialize", {"clientInfo": {"name": "plugins-oracle", "version": "0"}})
+            server.send({"jsonrpc": "2.0", "method": "initialized", "params": {}})
+            if scenario.get("start", True):
+                answer, _ = server.call("session/start", {"agentConfig": {"cwd": str(workspace)}})
+                session_id = answer["result"]["state"]["session"]["id"]
+            for step in scenario["steps"]:
+                if "edit" in step:
+                    write_tree(vibe_home, step["edit"])
+                    steps.append({"edit": sorted(step["edit"])})
+                    continue
+                params = {
+                    key: session_id if value == "$S" else value
+                    for key, value in step["params"].items()
                 }
-            )
-    finally:
-        server.stop()
-    paths = {
-        "<workspace>": str(workspace),
-        "<vibe-home>": str(vibe_home),
-        "<home>": str(home),
-        "<fixtures>": str(fixture_dir),
-    }
-    relax(root)
-    shutil.rmtree(root, ignore_errors=True)
+                answer, notes = server.call(step["call"], params)
+                steps.append(
+                    {
+                        "call": step["call"],
+                        "answer": answer.get("result", answer.get("error")),
+                        "ok": "result" in answer,
+                        "warnings": [
+                            note["params"]["warning"]
+                            for note in notes
+                            if note.get("method") == "warning"
+                        ],
+                    }
+                )
+        finally:
+            server.stop()
+        paths = {
+            "<workspace>": str(workspace),
+            "<vibe-home>": str(vibe_home),
+            "<home>": str(home),
+            "<fixtures>": str(fixture_dir),
+        }
     return {"steps": steps, "paths": paths}
 
 
@@ -880,10 +873,9 @@ def main() -> int:
                 command = [str(arguments.server.resolve())]
                 reference_root = None
             else:
-                binary = arguments.reference / ".venv/bin/vibe-app-server"
-                if not binary.is_file():
-                    raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-                command = [str(binary)]
+                _, command = reference_command(
+                    arguments.reference, "vibe-app-server", arguments.expected_commit
+                )
                 reference_root = str(arguments.reference.resolve())
             emit(
                 arguments.output or SERVER_OUTPUT,

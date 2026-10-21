@@ -1,7 +1,8 @@
 use std::fs;
 
 use super::*;
-use crate::update_notifier::{UPDATE_CACHE_TTL_SECONDS, UpdateFetch, UpdateGatewayCause};
+use crate::update_notifier::cache::UPDATE_CACHE_TTL_SECONDS;
+use crate::update_notifier::{UpdateFetch, UpdateGatewayCause};
 
 #[test]
 fn fresh_cache_answers_without_contacting_the_gateway() {

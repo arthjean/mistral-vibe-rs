@@ -4,14 +4,15 @@
 //! The reference builds its parsers on argparse's default handler, which
 //! prints a usage block, one `{prog}: error: {message}` line and exits 2. The
 //! sentences are CPython's own templates rather than anything the reference
-//! wrote, so they are reproduced exactly, once, here: the interactive parser
-//! ([`crate::argv`]) and `vibe mcp` ([`crate::mcp_command`]) each decide which
-//! refusal a clap failure is, and this module says it.
+//! wrote, so they are reproduced exactly, once, here, together with the one
+//! reading of a clap failure as the refusal it is ([`refusal`]) that the
+//! interactive parser ([`crate::argv`]) and `vibe mcp` ([`crate::mcp_command`])
+//! share.
 
 use std::fmt;
 use std::io::Write;
 
-use clap::error::{ContextKind, ContextValue};
+use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Arg, ArgAction, Command};
 use vibe_core::pycompat;
 
@@ -114,20 +115,123 @@ pub(crate) fn error_block(usage: &str, prog: &str, message: &str) -> String {
     format!("{usage}\n{prog}: error: {message}\n")
 }
 
-/// One string a clap failure carries under `kind`.
-pub(crate) fn context(error: &clap::Error, kind: ContextKind) -> Option<String> {
-    match error.get(kind)? {
-        ContextValue::String(value) => Some(value.clone()),
+/// The argparse refusal one clap failure is, where clap reports enough to
+/// rebuild it. `command` is the parser that failed, and `type_name` names the
+/// Python callable an argument's `type=` converts with, the word an
+/// `invalid <type> value` line prints.
+pub(crate) fn refusal(
+    error: &clap::Error,
+    command: &Command,
+    type_name: impl Fn(&Arg) -> Option<&'static str>,
+) -> Option<Refusal> {
+    let reported = |kind| strings(error, kind).into_iter().next();
+    match error.kind() {
+        ErrorKind::UnknownArgument => Some(Refusal::Unrecognized(
+            strings(error, ContextKind::InvalidArg).join(" "),
+        )),
+        ErrorKind::MissingRequiredArgument => Some(Refusal::Required(
+            strings(error, ContextKind::InvalidArg)
+                .iter()
+                .map(|argument| argument_name(command, argument))
+                .collect(),
+        )),
+        ErrorKind::InvalidValue => {
+            let argument = argument_name(command, &reported(ContextKind::InvalidArg)?);
+            // clap reports an absent value and a rejected one under the same
+            // kind, and tells them apart only by the value it carries.
+            let value = strings(error, ContextKind::InvalidValue).join(", ");
+            if value.is_empty() {
+                return Some(Refusal::ExpectedOne { argument });
+            }
+            Some(Refusal::InvalidChoice {
+                argument,
+                value,
+                choices: strings(error, ContextKind::ValidValue),
+            })
+        }
+        ErrorKind::ValueValidation => {
+            let raw = reported(ContextKind::InvalidArg)?;
+            Some(Refusal::InvalidValue {
+                argument: argument_name(command, &raw),
+                kind: type_name(declared(command, &raw)?)?,
+                value: strings(error, ContextKind::InvalidValue).join(", "),
+            })
+        }
+        ErrorKind::ArgumentConflict => {
+            // argparse reports the pair from the argument it was reading when
+            // it found the conflict, which is the later of the two; clap names
+            // the earlier one first, so the two halves are read the other way
+            // round here.
+            Some(Refusal::NotAllowed {
+                argument: argument_name(command, &reported(ContextKind::PriorArg)?),
+                prior: spellings(command, &reported(ContextKind::InvalidArg)?),
+            })
+        }
         _ => None,
     }
 }
 
-/// The list of strings a clap failure carries under `kind`.
-pub(crate) fn values(error: &clap::Error, kind: ContextKind) -> Option<Vec<String>> {
-    match error.get(kind)? {
-        ContextValue::Strings(values) => Some(values.clone()),
-        _ => None,
+/// The strings a clap failure carries under `kind`.
+fn strings(error: &clap::Error, kind: ContextKind) -> Vec<String> {
+    match error.get(kind) {
+        Some(ContextValue::String(value)) => vec![value.clone()],
+        Some(ContextValue::Strings(values)) => values.clone(),
+        Some(ContextValue::Number(value)) => vec![value.to_string()],
+        _ => Vec::new(),
     }
+}
+
+/// The argument clap names in `--output <{text,json,streaming}>`, without the
+/// value name argparse leaves out of its error lines.
+fn declared<'a>(command: &'a Command, reported: &str) -> Option<&'a Arg> {
+    let spelling = reported.split_whitespace().next()?;
+    command.get_arguments().find(|argument| {
+        argument
+            .get_long()
+            .is_some_and(|long| format!("--{long}") == spelling)
+            || argument
+                .get_short()
+                .is_some_and(|short| format!("-{short}") == spelling)
+    })
+}
+
+/// The name argparse prints for one argument: the long spelling where there is
+/// one, which is what `_get_action_name` returns for every flag these parsers
+/// declare, and otherwise the positional's name, which clap wraps in angle
+/// brackets and argparse does not.
+fn argument_name(command: &Command, reported: &str) -> String {
+    declared(command, reported)
+        .and_then(Arg::get_long)
+        .map_or_else(
+            || {
+                reported
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or(reported)
+                    .trim_matches(|c| c == '<' || c == '>')
+                    .to_owned()
+            },
+            |long| format!("--{long}"),
+        )
+}
+
+/// Every spelling of one argument, joined the way argparse joins
+/// `option_strings` when it names the argument a conflict was found against.
+fn spellings(command: &Command, reported: &str) -> String {
+    let Some(argument) = declared(command, reported) else {
+        return reported.to_owned();
+    };
+    let mut names = Vec::new();
+    if let Some(short) = argument.get_short() {
+        names.push(format!("-{short}"));
+    }
+    if let Some(long) = argument.get_long() {
+        names.push(format!("--{long}"));
+    }
+    if names.is_empty() {
+        return reported.to_owned();
+    }
+    names.join("/")
 }
 
 // --------------------------------------------------------------------------

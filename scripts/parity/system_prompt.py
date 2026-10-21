@@ -50,16 +50,19 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, reexecute_pinned, reference_interpreter, require_pin  # noqa: E402
+from reference import (  # noqa: E402
+    OracleError,
+    reexecute_pinned,
+    reference_command,
+    reference_interpreter,
+)
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -382,12 +385,10 @@ def git_environment() -> dict[str, str]:
         key: value for key, value in os.environ.items() if not key.startswith("GIT_")
     }
     environment.update(
-        {
-            "GIT_CONFIG_GLOBAL": os.devnull,
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
-            "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
-        }
+        host_env.git_isolated(
+            GIT_AUTHOR_DATE="2026-01-01T00:00:00Z",
+            GIT_COMMITTER_DATE="2026-01-01T00:00:00Z",
+        )
     )
     return environment
 
@@ -431,8 +432,7 @@ def environment_for(scenario: dict[str, Any], root: Path) -> dict[str, str]:
     environment = {
         **host_env.isolated(root / "home", root / "home/.vibe"),
         "MISTRAL_API_KEY": "oracle-key",
-        "GIT_CONFIG_GLOBAL": os.devnull,
-        "GIT_CONFIG_NOSYSTEM": "1",
+        **host_env.git_isolated(),
     }
     if scenario.get("shell"):
         environment["SHELL"] = scenario["shell"]
@@ -791,8 +791,7 @@ def child_os(scenario: dict[str, Any]) -> dict[str, Any]:
 
 
 def run_child(scenario: dict[str, Any], child: list[str]) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="vibe-system-prompt-oracle-")).resolve()
-    try:
+    with host_env.scratch_root("vibe-system-prompt-oracle-") as root:
         if scenario["family"] == "compose":
             materialize(scenario, root)
             cwd = root / scenario["cwd"]
@@ -811,8 +810,6 @@ def run_child(scenario: dict[str, Any], child: list[str]) -> dict[str, Any]:
         if process.returncode != 0:
             raise OracleError(f"{scenario['name']}: the reference child failed:\n{process.stderr}")
         return json.loads(process.stdout.strip().splitlines()[-1])
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
 
 
 # --------------------------------------------------------------------------
@@ -845,45 +842,44 @@ def live_tokens(root: Path) -> list[tuple[str, str]]:
 
 
 def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="vibe-system-prompt-live-")).resolve()
-    backend = stand_in.Backend(copy.deepcopy(scenario["backend"]), stream=stand_in.always)
-    try:
-        materialize(scenario, root, backend.base)
-        environment = environment_for(scenario, root)
-        process = subprocess.run(
-            [*command, *scenario["args"]],
-            cwd=root / scenario["cwd"],
-            env=environment,
-            capture_output=True,
-            text=True,
-            timeout=RUN_TIMEOUT,
-            stdin=subprocess.DEVNULL,
-        )
-        requests = []
-        tokens = live_tokens(root)
-        for body in backend.bodies:
-            systems = [
-                message.get("content") or ""
-                for message in body.get("messages") or []
-                if message.get("role") == "system"
-            ]
-            joined = "\n\n".join(content if isinstance(content, str) else json.dumps(content) for content in systems)
-            found = sorted(
-                (joined.find(text), label, joined.count(text))
-                for label, text in tokens
-                if text in joined
+    with host_env.scratch_root("vibe-system-prompt-live-") as root:
+        backend = stand_in.Backend(copy.deepcopy(scenario["backend"]), stream=stand_in.always)
+        try:
+            materialize(scenario, root, backend.base)
+            environment = environment_for(scenario, root)
+            process = subprocess.run(
+                [*command, *scenario["args"]],
+                cwd=root / scenario["cwd"],
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=RUN_TIMEOUT,
+                stdin=subprocess.DEVNULL,
             )
-            requests.append(
-                {
-                    "systemMessages": len(systems),
-                    "leadingSystem": bool(body.get("messages")) and body["messages"][0].get("role") == "system",
-                    "carries": [{"data": label, "occurrences": count} for _, label, count in found],
-                }
-            )
-        return {"exit": process.returncode, "requests": requests}
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            requests = []
+            tokens = live_tokens(root)
+            for body in backend.bodies:
+                systems = [
+                    message.get("content") or ""
+                    for message in body.get("messages") or []
+                    if message.get("role") == "system"
+                ]
+                joined = "\n\n".join(content if isinstance(content, str) else json.dumps(content) for content in systems)
+                found = sorted(
+                    (joined.find(text), label, joined.count(text))
+                    for label, text in tokens
+                    if text in joined
+                )
+                requests.append(
+                    {
+                        "systemMessages": len(systems),
+                        "leadingSystem": bool(body.get("messages")) and body["messages"][0].get("role") == "system",
+                        "carries": [{"data": label, "occurrences": count} for _, label, count in found],
+                    }
+                )
+            return {"exit": process.returncode, "requests": requests}
+        finally:
+            backend.close()
 
 
 # --------------------------------------------------------------------------
@@ -944,7 +940,8 @@ def main() -> int:
             arguments.output.write_text(rendered({"scenarios": captured}), encoding="utf-8", newline="")
             print(f"captured {len(captured)} live scenarios into {arguments.output}")
             return 0
-        reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
+        commit, vibe = reference_command(arguments.reference, "vibe", arguments.expected_commit)
+        reference = {"commit": commit}
         # A child re-executes itself on the pinned tree, so it is told the
         # checkout and the pin.
         child = [
@@ -955,7 +952,7 @@ def main() -> int:
             "--expected-commit",
             arguments.expected_commit,
         ]
-        command = [str(arguments.reference / ".venv/bin/vibe"), *HARNESS_FLAGS]
+        command = [*vibe, *HARNESS_FLAGS]
         selected = [s for s in scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
         captured = []
         for chosen in selected:

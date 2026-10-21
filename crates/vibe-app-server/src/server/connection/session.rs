@@ -14,6 +14,7 @@ pub(super) struct Retired {
     pub(super) session_id: String,
     working_directory: PathBuf,
     unstarted_worktree: bool,
+    scratchpad: Option<Arc<Scratchpad>>,
 }
 
 impl Retired {
@@ -21,7 +22,9 @@ impl Retired {
     /// created and never ran a turn in is taken back, so a start the client
     /// abandoned leaves nothing behind; any other worktree only loses this
     /// session as a holder
-    /// (`vibe/app_server/_legacy_session_backend.py:923-941`).
+    /// (`vibe/app_server/_legacy_session_backend.py:923-941`). The runtime's
+    /// scratchpad goes with it, which reference `AgentLoop.aclose` removes on
+    /// every shutdown.
     pub(super) fn of(session: &mut SessionRuntime) -> Self {
         let unstarted_worktree =
             session.created_worktree.is_some() && session.latest_turn.is_none();
@@ -32,6 +35,7 @@ impl Retired {
             session_id: session.id.clone(),
             working_directory: PathBuf::from(&session.working_directory),
             unstarted_worktree,
+            scratchpad: session.scratchpad.take(),
         }
     }
 }
@@ -268,12 +272,16 @@ impl ServerConnection {
             &intent.add_directories,
             &mcp_configs,
         );
+        // Opened before anything can refuse the start, and dropped, which
+        // removes it, by every refusal until the session is registered.
+        let scratchpad = self.server.open_scratchpad(&session_id);
         let review = self.server.register_workspace_tools(
             &session_id,
             &working_directory,
             &permission_store,
             &tools,
             &intent,
+            scratchpad.as_deref(),
             None,
         )?;
         self.server
@@ -319,6 +327,7 @@ impl ServerConnection {
             review,
             created_at,
         );
+        session.scratchpad = scratchpad;
         session.updated_at = updated_at;
         session.snapshot = snapshot;
         session.aliases = aliases;
@@ -631,26 +640,28 @@ impl ServerConnection {
     }
 
     /// Lets go of what a retired session held once the registry lock is
-    /// released: its lease, and the worktree it stood in, removed when this
-    /// session created it and never used it. Best effort: the close has
-    /// already happened, and a worktree kept here is one retention reclaims
-    /// later.
-    pub(super) fn release_retired(&self, retired: &Retired) {
+    /// released: its lease, its scratchpad, and the worktree it stood in,
+    /// removed when this session created it and never used it. Best effort:
+    /// the close has already happened, and a worktree kept here is one
+    /// retention reclaims later.
+    pub(super) fn release_retired(&self, retired: Retired) {
         let Retired {
             session_id,
             working_directory,
             unstarted_worktree,
+            scratchpad,
         } = retired;
-        self.server.release_lease(session_id);
+        self.server.release_lease(&session_id);
+        drop(scratchpad);
         let lifecycle = self.session_worktrees();
         if !unstarted_worktree {
-            lifecycle.release(working_directory, session_id);
+            lifecycle.release(&working_directory, &session_id);
             return;
         }
-        let Some(held) = ManagedWorktree::at(lifecycle.managed(), working_directory) else {
+        let Some(held) = ManagedWorktree::at(lifecycle.managed(), &working_directory) else {
             return;
         };
-        if let Err(error) = held.release(Some(session_id)) {
+        if let Err(error) = held.release(Some(&session_id)) {
             observability::log(
                 LogLevel::Warning,
                 &format!("Failed to roll back the worktree of an unstarted session: {error}"),
@@ -700,12 +711,8 @@ impl ServerConnection {
         if self.root.as_deref() == Some(key.as_str()) {
             self.root = None;
         }
-        self.release_retired(&retired);
+        self.release_retired(retired);
         lock(&self.server.resources).close_session(&session_id);
-        // The scratchpad is a capability of the runtime, not of the workspace,
-        // so it goes with the session that opened it. Reference
-        // `cleanup_scratchpad` on the agent-loop shutdown path.
-        cleanup_scratchpad(scratchpad_path(&session_id).as_path().into());
         self.state = ConnectionState::Closed;
         let mut deferred = active_turn
             .map(|turn_id| DeferredWork::InterruptTurn {

@@ -2,6 +2,7 @@
 //! `ExternalEditor`: `$VISUAL`, then `$EDITOR`, then `nano`.
 
 use std::fs;
+use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
 
 pub trait ExternalEditorPort {
@@ -78,21 +79,28 @@ impl ExternalEditorPort for SystemExternalEditor {
         ));
         let mut file = vibe_core::atomic_file::create_private_file(&path)
             .map_err(|error| error.to_string())?;
+        let path = PromptFile(path);
         std::io::Write::write_all(&mut file, initial.as_bytes())
             .map_err(|error| error.to_string())?;
         file.sync_all().map_err(|error| error.to_string())?;
         drop(file);
-        let result = run_editor(&command, &path);
         // Reference `ExternalEditor.edit`: an editor that exits with a failure
         // leaves the prompt as it was.
-        let edited = match result {
-            Ok(status) if status.success() => fs::read_to_string(&path)
+        match run_editor(&command, &path.0) {
+            Ok(status) if status.success() => fs::read_to_string(&path.0)
                 .map(|content| Some(content.trim_end().to_owned()))
                 .map_err(|error| error.to_string()),
             Ok(_) => Ok(None),
             Err(error) => Err(unstartable(&command[0], &error)),
-        };
-        let _ = fs::remove_file(&path);
-        edited
+        }
+    }
+}
+
+/// The temporary file a prompt is edited in, removed however the edit ends.
+struct PromptFile(PathBuf);
+
+impl Drop for PromptFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
     }
 }

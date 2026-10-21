@@ -44,11 +44,9 @@ import json
 import os
 from pathlib import Path
 import platform
-import shutil
 import socket
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from typing import Any
@@ -58,6 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
+import host_env  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_CORPUS = Path("crates/vibe-app-server/tests/mcp-oauth/corpus.json")
@@ -588,73 +587,72 @@ def authorization_url(url: str) -> dict[str, Any]:
 async def run_scenario(spec: dict[str, Any], fixture: Path) -> dict[str, Any]:
     from vibe.app_server._mcp_auth import MCPAuthenticationService
 
-    root = Path(tempfile.mkdtemp(prefix="vibe-oauth-parity-")).resolve()
-    scenario = Scenario(spec, fixture, root)
-    busy: socket.socket | None = None
-    try:
-        backend = install_keyring(spec["keyring"] == "headless")
-        server = scenario.server()
-        scenario.seed(backend, server)
-        service = MCPAuthenticationService()
-        await service.bind_catalog([server])
-        browser = Browser(spec["browser"], scenario.redirect)
-        if spec["browser"] == "busy":
-            busy = socket.socket()
-            busy.bind(("127.0.0.1", scenario.redirect))
-            busy.listen()
-        urls: list[str] = []
-        all_urls: list[str] = []
-        steps = []
-        last_snapshot: Any = None
+    with host_env.scratch_root("vibe-oauth-parity-") as root:
+        scenario = Scenario(spec, fixture, root)
+        busy: socket.socket | None = None
+        try:
+            backend = install_keyring(spec["keyring"] == "headless")
+            server = scenario.server()
+            scenario.seed(backend, server)
+            service = MCPAuthenticationService()
+            await service.bind_catalog([server])
+            browser = Browser(spec["browser"], scenario.redirect)
+            if spec["browser"] == "busy":
+                busy = socket.socket()
+                busy.bind(("127.0.0.1", scenario.redirect))
+                busy.listen()
+            urls: list[str] = []
+            all_urls: list[str] = []
+            steps = []
+            last_snapshot: Any = None
 
-        async def on_url(url: str) -> None:
-            urls.append(url)
-            all_urls.append(url)
-            browser.visit(url)
+            async def on_url(url: str) -> None:
+                urls.append(url)
+                all_urls.append(url)
+                browser.visit(url)
 
-        for step in spec["steps"]:
-            observed: dict[str, Any] = {"do": step["do"]}
-            try:
-                if step["do"] == "login":
-                    revision = await asyncio.wait_for(service.login("demo", on_url=on_url), STEP_TIMEOUT)
-                    observed["outcome"] = "ok"
-                    observed["descriptor"] = revision_generation(revision)
-                elif step["do"] == "logout":
-                    revision = await service.logout("demo")
-                    observed["outcome"] = "ok"
-                    observed["descriptor"] = revision_generation(revision)
-                elif step["do"] == "resolve":
-                    result = await asyncio.wait_for(service.resolve(service.reference_for(server)), STEP_TIMEOUT)
-                    observed["result"] = describe(result)
-                    if hasattr(result, "headers"):
-                        last_snapshot = result
-                elif step["do"] == "reject":
-                    result = await service.reject(
-                        service.reference_for(server),
-                        observed_connection_revision=last_snapshot.connection_revision if last_snapshot else "none",
-                        reason="http_unauthorized",
-                    )
-                    observed["result"] = describe(result)
-            except TimeoutError:
-                observed["outcome"] = {"error": "timeout"}
-            except Exception as error:  # noqa: BLE001 - the class is the observation
-                observed["outcome"] = {"error": error_kind(error)}
-            observed["urls"] = [authorization_url(url) for url in urls]
-            urls.clear()
-            observed["browser"] = browser.settle()
-            observed["keyring"] = scenario.keyring_state(backend)
-            steps.append(scenario.normalize(observed))
-        raw = [json.loads(line) for line in scenario.log.read_text(encoding="utf-8").splitlines() if line] if scenario.log.exists() else []
-        return {
-            "steps": steps,
-            "pkce": pkce_pairs(all_urls, raw),
-            "wire": scenario.wire(),
-        }
-    finally:
-        if busy is not None:
-            busy.close()
-        scenario.close()
-        shutil.rmtree(root, ignore_errors=True)
+            for step in spec["steps"]:
+                observed: dict[str, Any] = {"do": step["do"]}
+                try:
+                    if step["do"] == "login":
+                        revision = await asyncio.wait_for(service.login("demo", on_url=on_url), STEP_TIMEOUT)
+                        observed["outcome"] = "ok"
+                        observed["descriptor"] = revision_generation(revision)
+                    elif step["do"] == "logout":
+                        revision = await service.logout("demo")
+                        observed["outcome"] = "ok"
+                        observed["descriptor"] = revision_generation(revision)
+                    elif step["do"] == "resolve":
+                        result = await asyncio.wait_for(service.resolve(service.reference_for(server)), STEP_TIMEOUT)
+                        observed["result"] = describe(result)
+                        if hasattr(result, "headers"):
+                            last_snapshot = result
+                    elif step["do"] == "reject":
+                        result = await service.reject(
+                            service.reference_for(server),
+                            observed_connection_revision=last_snapshot.connection_revision if last_snapshot else "none",
+                            reason="http_unauthorized",
+                        )
+                        observed["result"] = describe(result)
+                except TimeoutError:
+                    observed["outcome"] = {"error": "timeout"}
+                except Exception as error:  # noqa: BLE001 - the class is the observation
+                    observed["outcome"] = {"error": error_kind(error)}
+                observed["urls"] = [authorization_url(url) for url in urls]
+                urls.clear()
+                observed["browser"] = browser.settle()
+                observed["keyring"] = scenario.keyring_state(backend)
+                steps.append(scenario.normalize(observed))
+            raw = [json.loads(line) for line in scenario.log.read_text(encoding="utf-8").splitlines() if line] if scenario.log.exists() else []
+            return {
+                "steps": steps,
+                "pkce": pkce_pairs(all_urls, raw),
+                "wire": scenario.wire(),
+            }
+        finally:
+            if busy is not None:
+                busy.close()
+            scenario.close()
 
 
 def describe(result: Any) -> dict[str, Any]:

@@ -28,6 +28,7 @@ mod hydration;
 pub mod input;
 pub mod interaction;
 mod interactive;
+mod job_slot;
 pub mod loading;
 pub mod narration;
 pub use vibe_voice::narrator;
@@ -85,8 +86,7 @@ use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
 use self::chat_input::{ChatInputState, InputEvent, Safety};
 use self::composer::apply_event as apply_composer_event;
 use self::hydration::{
-    adopt_hydrated_session, history_entry, metadata_session_id, page_older_history,
-    resync_current_projection,
+    adopt_hydrated_session, history_entry, page_older_history, resync_current_projection,
 };
 use self::narration::apply_narrator_effect;
 use self::path_normalization::PathNormalizationManager;

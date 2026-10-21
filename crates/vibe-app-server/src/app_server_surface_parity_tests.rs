@@ -2268,13 +2268,6 @@ fn run_deferred(server: &AppServer, batch: DispatchBatch) -> Option<DispatchBatc
         .build()
         .ok()?;
     match batch.deferred.into_iter().next()? {
-        DeferredWork::ResourceRequest {
-            request_id,
-            session_id,
-            command,
-        } => {
-            Some(runtime.block_on(server.execute_resource_request(request_id, session_id, command)))
-        }
         DeferredWork::CloudRequest {
             request_id,
             method,

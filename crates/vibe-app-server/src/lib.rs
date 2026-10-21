@@ -20,6 +20,9 @@ pub mod session_hooks;
 mod session_lifecycle;
 pub mod startup;
 #[cfg(test)]
+#[path = "../../vibe-cli/tests/support/test_root.rs"]
+mod test_root;
+#[cfg(test)]
 mod tool_execution_parity_tests;
 #[cfg(test)]
 mod tool_surface_parity_tests;

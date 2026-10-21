@@ -24,7 +24,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use clap::error::{ContextKind, ContextValue, ErrorKind};
+use clap::error::ErrorKind;
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use toml::Table;
 use url::Url;
@@ -435,7 +435,7 @@ async fn dispatch(
             return print_help(sub, stdout);
         }
         Err(error) => {
-            let (scope, message) = translate(&error);
+            let (scope, message) = translate(&error, sub);
             return match scope {
                 Scope::Root => fail(root, PROG, &message, stderr),
                 Scope::Sub => fail(sub, &prog, &message, stderr),
@@ -868,73 +868,32 @@ enum Scope {
     Sub,
 }
 
-/// Reads one clap failure as the argparse message the reference prints.
-fn translate(error: &clap::Error) -> (Scope, String) {
-    let refusal = match error.kind() {
-        ErrorKind::MissingRequiredArgument => {
-            Refusal::Required(context(error, ContextKind::InvalidArg))
-        }
-        ErrorKind::InvalidValue => {
-            let argument = flag(error);
-            let value = context(error, ContextKind::InvalidValue).join(", ");
-            if value.is_empty() {
-                Refusal::ExpectedOne { argument }
-            } else {
-                Refusal::InvalidChoice {
-                    argument,
-                    value,
-                    choices: context(error, ContextKind::ValidValue),
-                }
-            }
-        }
-        // Only the two timeout options parse a value, so a value this port
-        // accepted the shape of but could not read is always a float.
-        ErrorKind::ValueValidation => Refusal::InvalidValue {
-            argument: flag(error),
-            kind: "float",
-            value: context(error, ContextKind::InvalidValue).join(", "),
-        },
-        // argparse places what no parser could consume on the root parser,
-        // which is why an extra positional names `vibe mcp` and not the
-        // sub-command that was actually running.
-        ErrorKind::UnknownArgument | ErrorKind::TooManyValues => {
-            let extras = context(error, ContextKind::InvalidArg).join(" ");
-            return (Scope::Root, Refusal::Unrecognized(extras).to_string());
-        }
-        _ => {
-            return (
-                Scope::Sub,
-                error
-                    .to_string()
-                    .lines()
-                    .next()
-                    .unwrap_or("invalid arguments")
-                    .trim_start_matches("error: ")
-                    .to_owned(),
-            );
-        }
+/// Reads one clap failure of the `sub` parser as the argparse message the
+/// reference prints.
+fn translate(error: &clap::Error, sub: &Command) -> (Scope, String) {
+    // argparse places what no parser could consume on the root parser, which
+    // is why an extra positional names `vibe mcp` and not the sub-command that
+    // was actually running.
+    let scope = if error.kind() == ErrorKind::UnknownArgument {
+        Scope::Root
+    } else {
+        Scope::Sub
     };
-    (Scope::Sub, refusal.to_string())
-}
-
-/// The flag a failure names, without the value name clap appends to it.
-fn flag(error: &clap::Error) -> String {
-    context(error, ContextKind::InvalidArg)
-        .first()
-        .and_then(|argument| argument.split_whitespace().next().map(str::to_owned))
-        .unwrap_or_default()
-}
-
-/// One context entry, as the plain strings argparse would print: clap wraps a
-/// positional's name in angle brackets, and argparse does not.
-fn context(error: &clap::Error, kind: ContextKind) -> Vec<String> {
-    let strip = |value: &str| value.trim_matches(|c| c == '<' || c == '>').to_owned();
-    match error.get(kind) {
-        Some(ContextValue::String(value)) => vec![strip(value)],
-        Some(ContextValue::Strings(values)) => values.iter().map(|value| strip(value)).collect(),
-        Some(ContextValue::Number(value)) => vec![value.to_string()],
-        _ => Vec::new(),
-    }
+    // Only the two timeout options parse a value, so a value this port
+    // accepted the shape of but could not read is always a float.
+    let message = argparse::refusal(error, sub, |_| Some("float")).map_or_else(
+        || {
+            error
+                .to_string()
+                .lines()
+                .next()
+                .unwrap_or("invalid arguments")
+                .trim_start_matches("error: ")
+                .to_owned()
+        },
+        |refusal| refusal.to_string(),
+    );
+    (scope, message)
 }
 
 /// argparse's `parser.error`: the usage line, one message line, exit 2.

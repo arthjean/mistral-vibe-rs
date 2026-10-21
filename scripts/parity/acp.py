@@ -31,10 +31,8 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -52,7 +50,7 @@ from blackbox import (  # noqa: E402
     write_tree,
 )
 from acp_scenarios import scenarios  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -77,87 +75,86 @@ def run_scenario(
     scenario: dict[str, Any], command: list[str], quiet: float
 ) -> dict[str, Any]:
     backend = stand_in.Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-acp-oracle-")).resolve()
-    world = World(root)
-    try:
-        backend.responses = world.substitute(copy.deepcopy(scenario.get("backend", [])))
-        config = base_config(backend) + scenario.get("config", "")
-        (world.vibe_home / "config.toml").write_text(config, encoding="utf-8", newline="")
-        write_tree(world.workspace, scenario.get("files", {}))
-        write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
-        write_tree(world.home, scenario.get("homeFiles", {}))
-        env = host_env.isolated(
-            world.home,
-            world.vibe_home,
-            MISTRAL_API_KEY="oracle-key",
-            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-        )
-        for key, value in scenario.get("env", {}).items():
-            if value is None:
-                env.pop(key, None)
-            else:
-                env[key] = world.substitute(value)
-        policy = copy.deepcopy(scenario.get("client", {}))
-        agent = Agent(command, env, world.workspace, policy, world)
-        steps: list[dict[str, Any]] = []
+    with host_env.scratch_root("vibe-acp-oracle-") as root:
+        world = World(root)
         try:
-            for step in scenario["steps"]:
-                if "restart" in step:
-                    agent.stop()
-                    agent = Agent(command, env, world.workspace, policy, world)
-                    steps.append({"restart": True})
-                    continue
-                if "backend" in step:
-                    backend.responses.extend(world.substitute(copy.deepcopy(step["backend"])))
-                    continue
-                if "write" in step:
-                    write_tree(world.workspace, world.substitute(step["write"]))
-                    continue
-                if "sleep" in step:
-                    time.sleep(step["sleep"])
-                    continue
-                if "awaitId" in step:
+            backend.responses = world.substitute(copy.deepcopy(scenario.get("backend", [])))
+            config = base_config(backend) + scenario.get("config", "")
+            (world.vibe_home / "config.toml").write_text(config, encoding="utf-8", newline="")
+            write_tree(world.workspace, scenario.get("files", {}))
+            write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
+            write_tree(world.home, scenario.get("homeFiles", {}))
+            env = host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            )
+            for key, value in scenario.get("env", {}).items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = world.substitute(value)
+            policy = copy.deepcopy(scenario.get("client", {}))
+            agent = Agent(command, env, world.workspace, policy, world)
+            steps: list[dict[str, Any]] = []
+            try:
+                for step in scenario["steps"]:
+                    if "restart" in step:
+                        agent.stop()
+                        agent = Agent(command, env, world.workspace, policy, world)
+                        steps.append({"restart": True})
+                        continue
+                    if "backend" in step:
+                        backend.responses.extend(world.substitute(copy.deepcopy(step["backend"])))
+                        continue
+                    if "write" in step:
+                        write_tree(world.workspace, world.substitute(step["write"]))
+                        continue
+                    if "sleep" in step:
+                        time.sleep(step["sleep"])
+                        continue
+                    if "awaitId" in step:
+                        try:
+                            observed = agent.collect(step["awaitId"], step.get("quiet", quiet))
+                        except OracleError as error:
+                            steps.append({"failure": str(error)})
+                            break
+                        for item in observed:
+                            world.learn(item)
+                        steps.append({"messages": observed})
+                        continue
+                    message = world.substitute(step["send"], native=True)
+                    message.setdefault("jsonrpc", "2.0")
+                    agent.send(message)
+                    awaited = None if step.get("defer") else message.get("id")
                     try:
-                        observed = agent.collect(step["awaitId"], step.get("quiet", quiet))
+                        observed = agent.collect(awaited, step.get("quiet", quiet))
                     except OracleError as error:
+                        # A request left unanswered is an observation too: the rest
+                        # of the scenario cannot run, but the others still can.
                         steps.append({"failure": str(error)})
                         break
                     for item in observed:
                         world.learn(item)
                     steps.append({"messages": observed})
-                    continue
-                message = world.substitute(step["send"], native=True)
-                message.setdefault("jsonrpc", "2.0")
-                agent.send(message)
-                awaited = None if step.get("defer") else message.get("id")
-                try:
-                    observed = agent.collect(awaited, step.get("quiet", quiet))
-                except OracleError as error:
-                    # A request left unanswered is an observation too: the rest
-                    # of the scenario cannot run, but the others still can.
-                    steps.append({"failure": str(error)})
-                    break
-                for item in observed:
-                    world.learn(item)
-                steps.append({"messages": observed})
+            finally:
+                exit_code = agent.stop()
+            return {
+                "steps": steps,
+                "exit": exit_code,
+                "backendRequests": len(backend.bodies),
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
-            exit_code = agent.stop()
-        return {
-            "steps": steps,
-            "exit": exit_code,
-            "backendRequests": len(backend.bodies),
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 # --------------------------------------------------------------------------
@@ -292,8 +289,7 @@ def normalize_stream(text: str) -> Any:
 
 
 def run_argv(command: list[str], args: list[str]) -> dict[str, Any]:
-    root = Path(tempfile.mkdtemp(prefix="vibe-acp-argv-")).resolve()
-    try:
+    with host_env.scratch_root("vibe-acp-argv-") as root:
         env = host_env.isolated(root / "home", root / "vibe-home")
         completed = subprocess.run(
             [*command, *args],
@@ -311,8 +307,6 @@ def run_argv(command: list[str], args: list[str]) -> dict[str, Any]:
             "stdout": normalize_stream(completed.stdout),
             "stderr": normalize_stream(completed.stderr),
         }
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
 
 
 # --------------------------------------------------------------------------
@@ -351,11 +345,10 @@ def main() -> int:
             command = [str(arguments.agent.resolve())]
             reference = {"commit": "agent-override"}
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-acp"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary)]
+            commit, command = reference_command(
+                arguments.reference, "vibe-acp", arguments.expected_commit
+            )
+            reference = {"commit": commit}
         selected = [
             scenario
             for scenario in scenarios()

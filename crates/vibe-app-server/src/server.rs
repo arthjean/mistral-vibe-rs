@@ -64,9 +64,8 @@ use crate::projects::{
     LoopFire, PROJECTS_METHODS, ProjectsDispatch, ProjectsService, ProjectsServiceError,
 };
 use crate::resources::{
-    BACKEND_RESOURCE_METHODS, CoreResourceBackend, McpCatalogCall, McpCatalogError,
-    McpCatalogNotify, McpCatalogOutcome, McpCatalogTarget, RESOURCE_METHODS, ResourceBackend,
-    ResourceBackendCommand, ResourceBackendRequest, ResourceDispatch, ResourceError,
+    CoreResourceBackend, McpCatalogCall, McpCatalogError, McpCatalogNotify, McpCatalogOutcome,
+    McpCatalogTarget, RESOURCE_METHODS, ResourceBackend, ResourceDispatch, ResourceError,
     ResourceService, ResourceSession, ResourceSignals,
 };
 use crate::workspace::{
@@ -96,7 +95,7 @@ use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
-use vibe_core::scratchpad::{cleanup_scratchpad, init_scratchpad, scratchpad_path};
+use vibe_core::scratchpad::Scratchpad;
 use vibe_core::storage::HydratedSession;
 use vibe_core::sync::lock;
 use vibe_core::telemetry::{ClientTelemetry, NoClientTelemetry};
@@ -234,11 +233,6 @@ pub enum DeferredWork {
         callback_id: String,
         accepted: bool,
         value: Option<String>,
-    },
-    ResourceRequest {
-        request_id: RequestId,
-        session_id: String,
-        command: ResourceBackendCommand,
     },
     CloudRequest {
         request_id: RequestId,

@@ -46,9 +46,7 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import sys
-import tempfile
 import time
 import tomllib
 from typing import Any
@@ -58,7 +56,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
@@ -90,66 +88,65 @@ def write_agents(world: blackbox.World, root: Path, agents: dict[str, dict[str, 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = stand_in.Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-agents-oracle-")).resolve()
-    session = subagent_client.Session(root)
-    world = session.world
-    try:
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        # The scenario's keys lead, so none of them lands inside the provider
-        # table the base configuration ends on.
-        config = scenario.get("config", "")
-        if os.name == "nt":
-            # A TOML basic string reads a backslash as an escape, so a fixture
-            # path enters the configuration with forward slashes.
-            config = config.replace("$ROOT", world.root.as_posix()).replace(
-                "$WS", world.workspace.as_posix()
-            )
-        (world.vibe_home / "config.toml").write_text(
-            session.substitute(config) + blackbox.base_config(backend),
-            encoding="utf-8",
-            newline="",
-        )
-        if scenario.get("trusted", True):
-            (world.vibe_home / "trusted_folders.toml").write_text(
-                f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
+    with host_env.scratch_root("vibe-agents-oracle-") as root:
+        session = subagent_client.Session(root)
+        world = session.world
+        try:
+            backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
+            # The scenario's keys lead, so none of them lands inside the provider
+            # table the base configuration ends on.
+            config = scenario.get("config", "")
+            if os.name == "nt":
+                # A TOML basic string reads a backslash as an escape, so a fixture
+                # path enters the configuration with forward slashes.
+                config = config.replace("$ROOT", world.root.as_posix()).replace(
+                    "$WS", world.workspace.as_posix()
+                )
+            (world.vibe_home / "config.toml").write_text(
+                session.substitute(config) + blackbox.base_config(backend),
                 encoding="utf-8",
                 newline="",
             )
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        write_agents(world, root, scenario.get("agents", {}))
-        env = host_env.isolated(
-            world.home,
-            world.vibe_home,
-            MISTRAL_API_KEY="oracle-key",
-            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-        )
-        server = subagent_client.Server(command, env, world.workspace, {}, world,
-                        callbacks=copy.deepcopy(scenario.get("callbacks", [])))
-        steps: list[dict[str, Any]] = []
-        try:
-            run_steps(scenario, server, session, steps, quiet)
-        except OracleError as error:
-            steps.append({"failure": str(error)})
+            if scenario.get("trusted", True):
+                (world.vibe_home / "trusted_folders.toml").write_text(
+                    f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
+                    encoding="utf-8",
+                    newline="",
+                )
+            blackbox.write_tree(world.workspace, scenario.get("files", {}))
+            write_agents(world, root, scenario.get("agents", {}))
+            env = host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            )
+            server = subagent_client.Server(command, env, world.workspace, {}, world,
+                            callbacks=copy.deepcopy(scenario.get("callbacks", [])))
+            steps: list[dict[str, Any]] = []
+            try:
+                run_steps(scenario, server, session, steps, quiet)
+            except OracleError as error:
+                steps.append({"failure": str(error)})
+            finally:
+                server.stop()
+            return {
+                "steps": steps,
+                "sessions": session.sessions,
+                "children": session.children,
+                "callbacks": server.callback_log,
+                "requests": [request_view(body) for body in backend.bodies],
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
-            server.stop()
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "children": session.children,
-            "callbacks": server.callback_log,
-            "requests": [request_view(body) for body in backend.bodies],
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 def request_view(body: dict[str, Any]) -> dict[str, Any]:
@@ -935,11 +932,11 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            commit, binary = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *HARNESS_FLAGS]
         selected = [
             scenario
             for scenario in scenarios()

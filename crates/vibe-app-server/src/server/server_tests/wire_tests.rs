@@ -573,7 +573,7 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
 /// it got the legacy one and why (`vibe/app_server/_runtime.py:1155-1167`).
 #[test]
 fn config_read_reports_the_harness_a_launch_resolved() {
-    let temporary = tempfile::tempdir().expect("temporary home");
+    let temporary = crate::test_root::tempdir().expect("temporary home");
     let workspace_service = WorkspaceService::new(
         crate::workspace::WorkspacePaths {
             vibe_home: temporary.path().join("home"),

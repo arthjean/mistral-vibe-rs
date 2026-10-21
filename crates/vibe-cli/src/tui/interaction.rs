@@ -1,9 +1,11 @@
+use std::cmp::Reverse;
 use std::collections::{HashSet, VecDeque};
 use std::path::PathBuf;
 
 use serde_json::Value;
 
 use super::attachments::{PreparedSubmission, PromptDraft};
+use super::completion::fuzzy_match_score;
 
 /// Reference `QUIT_CONFIRM_DELAY`.
 pub const QUIT_CONFIRMATION_WINDOW_MS: u64 = 1_000;
@@ -101,6 +103,9 @@ pub struct IntegrationTarget {
     pub enabled: bool,
     pub requires_auth: bool,
     pub requires_setup: bool,
+    /// The plugin that ships the source, whose configuration no toggle can
+    /// write (reference `MCPApp._reject_plugin_toggle`).
+    pub plugin_name: Option<String>,
 }
 
 /// What a row or key of the authentication panel does. Reference
@@ -239,17 +244,40 @@ impl OverlayItem {
     }
 }
 
+/// How an overlay's typed query picks and orders its rows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum QueryFilter {
+    /// The rows whose label or description contains the query, in place.
+    #[default]
+    Substring,
+    /// Reference `mcp_app._filter_sources`: in each group a heading row
+    /// opens, the selectable rows whose label fuzzy-matches the query, best
+    /// score first. A group left empty drops its heading and the gap row
+    /// before it.
+    FuzzyGroups,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Overlay {
     pub kind: OverlayKind,
     pub title: String,
     pub items: Vec<OverlayItem>,
     pub query: String,
+    pub filter: QueryFilter,
     pub notice: Option<String>,
     /// The help line, for a panel whose keys change with its view; `None`
     /// shows the one its kind declares.
     pub help: Option<&'static str>,
     selected: Option<usize>,
+}
+
+/// One group of a [`QueryFilter::FuzzyGroups`] overlay: the gap row and the
+/// heading that open it, and its matching rows by descending score.
+#[derive(Default)]
+struct MatchGroup {
+    gap: Option<usize>,
+    heading: Option<usize>,
+    matches: Vec<(Reverse<i64>, usize)>,
 }
 
 impl Overlay {
@@ -261,6 +289,7 @@ impl Overlay {
             title: title.into(),
             items,
             query: String::new(),
+            filter: QueryFilter::default(),
             notice: None,
             help: None,
             selected,
@@ -268,7 +297,11 @@ impl Overlay {
     }
 
     pub fn set_query(&mut self, query: impl Into<String>) {
-        let selected_id = self.selected_item().map(|item| item.id.clone());
+        // Reference `MCPApp.on_input_changed` rebuilds the list, which lands
+        // on its first row, best match first.
+        let selected_id = (self.filter == QueryFilter::Substring)
+            .then(|| self.selected_item().map(|item| item.id.clone()))
+            .flatten();
         self.query = query.into();
         let visible = self.visible_indexes();
         self.selected = selected_id
@@ -335,9 +368,10 @@ impl Overlay {
 
     #[must_use]
     pub fn selected_item(&self) -> Option<&OverlayItem> {
-        self.selected
-            .and_then(|selected| self.items.get(selected))
-            .filter(|item| !item.disabled && self.matches_query(item))
+        let selected = self.selected?;
+        self.items
+            .get(selected)
+            .filter(|item| !item.disabled && self.visible_indexes().contains(&selected))
     }
 
     #[must_use]
@@ -348,19 +382,65 @@ impl Overlay {
             .collect()
     }
 
+    /// The rows the query shows, in the order they show.
     fn visible_indexes(&self) -> Vec<usize> {
-        self.items
-            .iter()
-            .enumerate()
-            .filter_map(|(index, item)| self.matches_query(item).then_some(index))
-            .collect()
+        let query = self.query.trim();
+        if query.is_empty() {
+            return (0..self.items.len()).collect();
+        }
+        match self.filter {
+            QueryFilter::Substring => {
+                let query = query.to_lowercase();
+                self.items
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(index, item)| {
+                        (item.label.to_lowercase().contains(&query)
+                            || item.description.to_lowercase().contains(&query))
+                        .then_some(index)
+                    })
+                    .collect()
+            }
+            QueryFilter::FuzzyGroups => self.fuzzy_groups(query),
+        }
     }
 
-    fn matches_query(&self, item: &OverlayItem) -> bool {
-        let query = self.query.trim().to_lowercase();
-        query.is_empty()
-            || item.label.to_lowercase().contains(&query)
-            || item.description.to_lowercase().contains(&query)
+    /// [`QueryFilter::FuzzyGroups`]: a disabled row with a label is a heading,
+    /// one without is the gap before the next heading.
+    fn fuzzy_groups(&self, query: &str) -> Vec<usize> {
+        let mut groups = Vec::<MatchGroup>::new();
+        let mut gap = None;
+        for (index, item) in self.items.iter().enumerate() {
+            if !item.disabled {
+                if groups.is_empty() {
+                    groups.push(MatchGroup::default());
+                }
+                if let (Some(group), Some(score)) =
+                    (groups.last_mut(), fuzzy_match_score(query, &item.label))
+                {
+                    group.matches.push((Reverse(score), index));
+                }
+            } else if item.label.is_empty() {
+                gap = Some(index);
+            } else {
+                groups.push(MatchGroup {
+                    gap: gap.take(),
+                    heading: Some(index),
+                    matches: Vec::new(),
+                });
+            }
+        }
+        let mut visible = Vec::new();
+        for mut group in groups.into_iter().filter(|group| !group.matches.is_empty()) {
+            if !visible.is_empty() {
+                visible.extend(group.gap);
+            }
+            visible.extend(group.heading);
+            // Equal scores keep the menu's order, as Python's stable sort does.
+            group.matches.sort_unstable();
+            visible.extend(group.matches.into_iter().map(|(_, index)| index));
+        }
+        visible
     }
 }
 

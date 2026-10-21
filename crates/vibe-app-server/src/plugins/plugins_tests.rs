@@ -12,47 +12,6 @@ const DEMO_MANIFEST: &str = "{\"$schema\": \"https://agent-plugins.org/schemas/1
 const DEMO_SKILL: &str =
     "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n";
 
-/// A temporary vibe home whose hardened package checkouts are made writable
-/// again before it is removed.
-pub(crate) struct HardenedHome(tempfile::TempDir);
-
-impl HardenedHome {
-    pub(crate) fn new() -> Self {
-        Self(tempfile::tempdir().unwrap())
-    }
-
-    pub(crate) fn path(&self) -> &Path {
-        self.0.path()
-    }
-}
-
-impl Drop for HardenedHome {
-    fn drop(&mut self) {
-        relax(self.0.path());
-    }
-}
-
-#[cfg(unix)]
-fn relax(root: &Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(root, fs::Permissions::from_mode(0o700));
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        match entry.file_type() {
-            Ok(kind) if kind.is_dir() => relax(&entry.path()),
-            Ok(kind) if kind.is_file() => {
-                let _ = fs::set_permissions(entry.path(), fs::Permissions::from_mode(0o600));
-            }
-            _ => {}
-        }
-    }
-}
-
-#[cfg(not(unix))]
-fn relax(_root: &Path) {}
-
 fn sources(home: &Path) -> PluginSources {
     let plugin = home.join("plugins").join("demo");
     fs::create_dir_all(plugin.join("skills").join("hello")).unwrap();
@@ -74,7 +33,7 @@ fn sources(home: &Path) -> PluginSources {
 
 #[tokio::test]
 async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
-    let home = HardenedHome::new();
+    let home = crate::test_root::tempdir().unwrap();
     let home = vibe_core::platform::canonicalize(home.path()).unwrap();
     let sources = sources(&home);
     let plugins = bind(&sources, "session-1", None, PluginPorts::default()).await;
@@ -140,7 +99,7 @@ async fn a_session_pins_its_plugins_and_publishes_the_reference_catalog() {
 
 #[tokio::test]
 async fn a_reload_picks_up_a_new_plugin() {
-    let home = HardenedHome::new();
+    let home = crate::test_root::tempdir().unwrap();
     let sources = sources(home.path());
     let first = bind(&sources, "s", None, PluginPorts::default()).await;
     let second = home.path().join("plugins").join("other");
@@ -168,7 +127,7 @@ async fn a_reload_picks_up_a_new_plugin() {
 #[test]
 fn a_checkout_keeps_runnable_only_what_its_own_mcp_json_launches() {
     use std::os::unix::fs::PermissionsExt;
-    let home = HardenedHome::new();
+    let home = crate::test_root::tempdir().unwrap();
     let tree = home.path().join("tree");
     let configuration = json!({"mcpServers": {
         "plain": {"type": "stdio", "command": "./bin/serve"},

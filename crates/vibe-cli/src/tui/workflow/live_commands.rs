@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use vibe_app_server::client::PublicDispatch;
+use vibe_app_server::client::{PublicDispatch, SavedSessions};
 use vibe_core::engine::session_token_cost;
 use vibe_core::identity::{HttpIdentityGateway, IdentityCache};
 use vibe_core::telemetry::TelemetryRecord;
@@ -33,10 +33,9 @@ use super::super::remote_project_workflow::{handle_teleport_command, open_projec
 use super::super::setup::ResolvedTheme;
 use super::super::state::{EntryStatus, TranscriptKind, TuiState};
 use super::super::{
-    Arguments, InteractiveRuntime, adopt_hydrated_session, map_value, metadata_session_id,
-    parse_runtime_skills, push_command_echo, push_local_document, push_local_error,
-    push_local_notice, push_local_warning, refresh_server_banner_metrics, sync_runtime_intent,
-    unix_seconds,
+    Arguments, InteractiveRuntime, adopt_hydrated_session, map_value, parse_runtime_skills,
+    push_command_echo, push_local_document, push_local_error, push_local_notice,
+    push_local_warning, refresh_server_banner_metrics, sync_runtime_intent, unix_seconds,
 };
 use super::config::{apply_render_preferences, persisted_theme};
 use super::log_level::open_log_level_picker;
@@ -107,15 +106,6 @@ impl<'a> LiveBackend<'a> {
         }
     }
 
-    /// Whether the session runs on the Unified Harness, which answers the
-    /// reference's own session methods rather than this port's `internal/`
-    /// ones over the legacy store.
-    fn unified(&self) -> bool {
-        self.runtime
-            .as_ref()
-            .is_some_and(|runtime| runtime.service.is_unified(&runtime.session_id))
-    }
-
     fn runtime(&mut self) -> Result<&mut InteractiveRuntime, String> {
         self.runtime
             .as_mut()
@@ -132,15 +122,6 @@ impl<'a> LiveBackend<'a> {
                 .or_insert_with(|| json!(runtime.session_id));
         }
         runtime
-            .service
-            .public_call(method, params)
-            .map(map_value)
-            .map_err(|error| error.to_string())
-    }
-
-    /// [`Self::call`] for a method that names no session of its own.
-    fn call_unscoped(&mut self, method: &str, params: Value) -> Result<Value, String> {
-        self.runtime()?
             .service
             .public_call(method, params)
             .map(map_value)
@@ -360,21 +341,12 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn clear_history(&mut self) -> Result<(), String> {
-        let session_id = if self.unified() {
-            let result = self.call("session/history/clear", json!({}))?;
-            result
-                .pointer("/state/session/id")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-        } else {
-            let result = self.call("internal/session/history/clear", json!({}))?;
-            let result = result
-                .as_object()
-                .map(|fields| fields.clone().into_iter().collect())
-                .unwrap_or_default();
-            metadata_session_id(&result)
-        }
-        .ok_or_else(|| "the cleared session published no identifier".to_owned())?;
+        let runtime = self.runtime()?;
+        let session_id = runtime
+            .service
+            .clear_history(&runtime.session_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "the cleared session published no identifier".to_owned())?;
         let Some(runtime) = self.runtime.as_mut() else {
             return Err(SETUP_REQUIRED.to_owned());
         };
@@ -569,23 +541,21 @@ impl CommandBackend for LiveBackend<'_> {
 
     async fn saved_sessions(&mut self) -> usize {
         let cwd = self.working_directory.to_string_lossy().into_owned();
-        let unified = self.unified();
-        let result = if unified {
-            self.call_unscoped("session/list", json!({"cwd": cwd, "limit": 100}))
-        } else {
-            self.call(
-                "internal/session/list",
-                json!({"cwd": cwd, "offset": 0, "limit": 100}),
-            )
+        let Ok(runtime) = self.runtime() else {
+            return 0;
         };
-        let Ok(result) = result else {
+        let Ok(sessions) = runtime
+            .service
+            .list_sessions(&runtime.session_id, &cwd, 100)
+        else {
             return 0;
         };
         let current = self.session_id();
-        let overlay = if unified {
-            unified_sessions_overlay(&result, &current, unix_seconds())
-        } else {
-            sessions_overlay(&result, &current)
+        let overlay = match sessions {
+            SavedSessions::Listed(result) => {
+                unified_sessions_overlay(&map_value(result), &current, unix_seconds())
+            }
+            SavedSessions::Stored(result) => sessions_overlay(&map_value(result), &current),
         };
         let count = overlay.items.len();
         self.sessions = Some(overlay);
@@ -593,16 +563,11 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn rename(&mut self, title: &str) -> Result<String, String> {
-        if self.unified() {
-            let result = self.call("session/rename", json!({"title": title}))?;
-            return Ok(result
-                .get("title")
-                .and_then(Value::as_str)
-                .unwrap_or(title)
-                .to_owned());
-        }
-        self.call("internal/session/title/update", json!({"title": title}))?;
-        Ok(title.to_owned())
+        let runtime = self.runtime()?;
+        runtime
+            .service
+            .rename_session(&runtime.session_id, title)
+            .map_err(|error| error.to_string())
     }
 
     async fn mcp_state(&mut self) -> McpState {
@@ -757,29 +722,14 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn fork(&mut self) -> Result<String, String> {
-        let source = self.session_id();
-        if self.unified() {
-            // Reference `_branch_session`: a detached copy the operator
-            // resumes later.
-            let result = self.call_unscoped(
-                "session/fork",
-                json!({"sourceSessionId": source, "attach": false}),
-            )?;
-            return result
-                .pointer("/state/session/id")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-                .ok_or_else(|| "the copy published no identifier".to_owned());
-        }
-        let result = self.call(
-            "internal/session/fork",
-            json!({"newSessionId": vibe_core::session_id::rotate_session_id(&source)}),
-        )?;
-        let result = result
-            .as_object()
-            .map(|fields| fields.clone().into_iter().collect())
-            .unwrap_or_default();
-        metadata_session_id(&result).ok_or_else(|| "the copy published no identifier".to_owned())
+        // Reference `_branch_session`: a detached copy the operator resumes
+        // later.
+        let runtime = self.runtime()?;
+        runtime
+            .service
+            .fork_session(&runtime.session_id, None)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "the copy published no identifier".to_owned())
     }
 
     fn retry_offered(&self) -> bool {

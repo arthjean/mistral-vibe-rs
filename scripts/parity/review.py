@@ -56,7 +56,7 @@ import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import host_env  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/review-parity/corpus.json"
@@ -724,11 +724,11 @@ def main() -> int:
             reference = {"commit": "server-override"}
             dialect = arguments.dialect or "port"
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            commit, binary = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *HARNESS_FLAGS]
             dialect = arguments.dialect or "reference"
         selected = [
             scenario

@@ -41,9 +41,7 @@ import copy
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -60,7 +58,7 @@ from hook_recorder import (  # noqa: E402
     write_responses,
 )
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 from subagent_client import Normalizer, transcript  # noqa: E402
@@ -82,66 +80,65 @@ ID_KEYS = app_server_client.ID_KEYS | {"tool_call_id", "session_id", "parent_ses
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = stand_in.Backend()
-    root = Path(tempfile.mkdtemp(prefix="vibe-hooks-oracle-")).resolve()
-    session = app_server_client.Session(root)
-    world = session.world
-    try:
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        (world.vibe_home / "config.toml").write_text(
-            app_server_client.base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
-        )
-        if scenario.get("trusted", True):
-            (world.vibe_home / "trusted_folders.toml").write_text(
-                f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
-                encoding="utf-8",
-                newline="",
-            )
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        for relative, text in scenario.get("rootFiles", {}).items():
-            blackbox.write_tree(root, {relative: host_commands(session.substitute(text))})
-        (root / "hook.py").write_text(host_recorder(), encoding="utf-8", newline="")
-        write_responses(root, scenario.get("responses", {}))
-        write_hooks(session, scenario.get("hooks", {}))
-        env = host_env.isolated(
-            world.home,
-            world.vibe_home,
-            MISTRAL_API_KEY="oracle-key",
-            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-        )
-        server = app_server_client.Server(command, env, world.workspace, {}, world)
-        steps: list[dict[str, Any]] = []
+    with host_env.scratch_root("vibe-hooks-oracle-") as root:
+        session = app_server_client.Session(root)
+        world = session.world
         try:
-            run_steps(scenario, server, session, backend, steps, quiet)
-            # Long enough for a hook nobody killed to finish its wait.
-            time.sleep(scenario.get("linger", 0))
-        except OracleError as error:
-            steps.append({"failure": str(error)})
+            backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
+            (world.vibe_home / "config.toml").write_text(
+                app_server_client.base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
+            )
+            if scenario.get("trusted", True):
+                (world.vibe_home / "trusted_folders.toml").write_text(
+                    f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n",
+                    encoding="utf-8",
+                    newline="",
+                )
+            blackbox.write_tree(world.workspace, scenario.get("files", {}))
+            for relative, text in scenario.get("rootFiles", {}).items():
+                blackbox.write_tree(root, {relative: host_commands(session.substitute(text))})
+            (root / "hook.py").write_text(host_recorder(), encoding="utf-8", newline="")
+            write_responses(root, scenario.get("responses", {}))
+            write_hooks(session, scenario.get("hooks", {}))
+            env = host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            )
+            server = app_server_client.Server(command, env, world.workspace, {}, world)
+            steps: list[dict[str, Any]] = []
+            try:
+                run_steps(scenario, server, session, backend, steps, quiet)
+                # Long enough for a hook nobody killed to finish its wait.
+                time.sleep(scenario.get("linger", 0))
+            except OracleError as error:
+                steps.append({"failure": str(error)})
+            finally:
+                server.stop()
+            return {
+                "steps": steps,
+                "sessions": session.sessions,
+                "stdin": recorded_stdin(root),
+                "finished": sorted(
+                    (root / "finished.log").read_text(encoding="utf-8").split()
+                    if (root / "finished.log").is_file()
+                    else []
+                ),
+                "conversations": [
+                    transcript(body.get("messages", [])) for body in backend.bodies
+                ],
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
-            server.stop()
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "stdin": recorded_stdin(root),
-            "finished": sorted(
-                (root / "finished.log").read_text(encoding="utf-8").split()
-                if (root / "finished.log").is_file()
-                else []
-            ),
-            "conversations": [
-                transcript(body.get("messages", [])) for body in backend.bodies
-            ],
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 def recorded_stdin(root: Path) -> dict[str, list[Any]]:
@@ -896,11 +893,11 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            commit, binary = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *HARNESS_FLAGS]
         selected = [
             scenario
             for scenario in scenarios()

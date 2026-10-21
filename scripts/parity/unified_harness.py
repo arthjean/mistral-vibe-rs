@@ -50,7 +50,7 @@ import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import loop_capture  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 from unified_harness_scenarios import scenarios  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -527,11 +527,10 @@ def main() -> int:
             command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary)]
+            commit, command = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
         selected = [
             scenario
             for scenario in scenarios()

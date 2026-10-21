@@ -220,19 +220,12 @@ pub(crate) fn programmatic_credential(
     }
     let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let vibe_home = crate::tui::startup::vibe_home_directory(arguments, &working_directory);
-    DotenvValues::global(&vibe_home)
-        .variable(variable)
-        .filter(|credential| !credential.is_empty())
-        .or_else(|| {
-            crate::tui::setup::PersistedCredentialStore::new(vibe_core::config::global_env_file(
-                &vibe_home,
-            ))
-            .resolve(variable)
-        })
-        .ok_or_else(|| CliError::MissingApiKey {
+    crate::tui::setup::persisted_credential(&vibe_home, variable).ok_or_else(|| {
+        CliError::MissingApiKey {
             variable: variable.clone(),
             provider: provider.name.clone(),
-        })
+        }
+    })
 }
 
 /// The driver a programmatic route runs turns through.

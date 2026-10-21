@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- The MCP panel's search fuzzy-matches server and connector names and lists
+  the best match first, as the reference does. Toggling a plugin-provided MCP
+  server or one of its tools warns that the plugin manages it instead of
+  sending the toggle to the server.
+
+- The external editor's temporary prompt file is removed even when writing it
+  fails.
+
+- A session's scratchpad is removed whenever its runtime ends, including when
+  the client or the app server exits, not only on `session/close`. Each
+  runtime opens one owner-only scratchpad named like the reference's
+  (`vibe-scratchpad-<id>-<random>`) and keeps it across `/clear`. Unified
+  Harness sessions no longer create a scratchpad under the temporary
+  directory.
+
 - Unified Harness approvals decide a shell or `process.*` call across every
   available shell, as the reference does: the first shell that refuses wins,
   and one prompt carries the scopes every shell still needs. Sessions whose

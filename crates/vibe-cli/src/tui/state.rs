@@ -681,19 +681,24 @@ impl TuiState {
             .filter(|id| snapshot.entries.iter().any(|entry| &entry.id == id));
         // A local copy of an entry the session published, a manual command's,
         // gives way to the canonical one the snapshot now holds.
-        self.local_entries.retain(|position| {
-            !self
-                .entry_indexes
-                .get(&position.entry_id)
-                .and_then(|index| self.entries.get(*index)?.source.server())
-                .is_some_and(|published| {
-                    let id = &published.metadata().id;
-                    snapshot.entries.iter().any(|entry| &entry.id == id)
-                })
-        });
+        let retained = self
+            .local_entries
+            .iter()
+            .filter(|position| {
+                !self
+                    .entry_indexes
+                    .get(&position.entry_id)
+                    .and_then(|index| self.entries.get(*index)?.source.server())
+                    .is_some_and(|published| {
+                        let id = &published.metadata().id;
+                        snapshot.entries.iter().any(|entry| &entry.id == id)
+                    })
+            })
+            .cloned()
+            .collect::<Vec<_>>();
         // Entries written before any server entry keep their place at the top.
         let mut leading = 0;
-        for position in &self.local_entries {
+        for position in &retained {
             let Some(entry) = self
                 .entry_indexes
                 .get(&position.entry_id)
@@ -715,6 +720,7 @@ impl TuiState {
             snapshot.entries.insert(insertion_index, entry.clone());
         }
         self.apply(ServerEvent::Snapshot(snapshot))?;
+        self.local_entries = retained;
         self.history_first_visible = first_visible;
         self.effect_streams.clear();
         self.scroll_offset = 0;

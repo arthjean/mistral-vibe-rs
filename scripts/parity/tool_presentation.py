@@ -65,7 +65,6 @@ import os
 from pathlib import Path
 import platform
 import re
-import socket
 import sys
 import tempfile
 from typing import Any
@@ -74,6 +73,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from inprocess import SocketGuard
 
 SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/tool-presentation-corpus.json")
@@ -98,62 +98,6 @@ _POINTER = re.compile(r"/[A-Za-z0-9._~/-]{0,95}")
 # --------------------------------------------------------------------------
 # The network boundary
 # --------------------------------------------------------------------------
-
-
-class SocketGuard:
-    """Refuses every destination, and remembers what was attempted.
-
-    Nothing this capture drives should reach for a socket: every presentation
-    entry point is a classmethod over authored arguments, and the two remote
-    stubs are built from a descriptor written below rather than discovered from
-    a server. A capture that connected anyway would be recording an answer
-    nobody can reproduce, so every attempt is remembered and fails the run by
-    name before anything is written.
-    """
-
-    def __init__(self) -> None:
-        self.attempts: list[str] = []
-        self._installed = False
-
-    @staticmethod
-    def _host(address: Any) -> str | None:
-        if not isinstance(address, (tuple, list)) or not address:
-            return None
-        host = address[0]
-        if isinstance(host, bytes):
-            return host.decode("ascii", "replace")
-        return None if host is None else str(host)
-
-    def _record(self, address: Any, name: str) -> None:
-        host = self._host(address)
-        self.attempts.append(f"{name} to {host if host is not None else address!r}")
-
-    def install(self) -> None:
-        if self._installed:
-            return
-        self._installed = True
-        guard = self
-
-        def guarded_connect(self: socket.socket, address: Any) -> Any:
-            guard._record(address, "socket.connect")
-            raise OracleError(f"the capture attempted to reach {address!r}")
-
-        def guarded_connect_ex(self: socket.socket, address: Any) -> Any:
-            guard._record(address, "socket.connect_ex")
-            raise OracleError(f"the capture attempted to reach {address!r}")
-
-        def guarded_create_connection(address: Any, *arguments: Any, **keywords: Any) -> Any:
-            guard._record(address, "socket.create_connection")
-            raise OracleError(f"the capture attempted to reach {address!r}")
-
-        def guarded_getaddrinfo(host: Any, *arguments: Any, **keywords: Any) -> Any:
-            guard._record((host,), "socket.getaddrinfo")
-            raise OracleError(f"the capture attempted to resolve {host!r}")
-
-        socket.socket.connect = guarded_connect  # type: ignore[method-assign]
-        socket.socket.connect_ex = guarded_connect_ex  # type: ignore[method-assign]
-        socket.create_connection = guarded_create_connection  # type: ignore[assignment]
-        socket.getaddrinfo = guarded_getaddrinfo  # type: ignore[assignment]
 
 
 #: One guard for the process, consulted by ``main`` after the capture.

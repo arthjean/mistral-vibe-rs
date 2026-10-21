@@ -53,7 +53,9 @@ documentation use the Linux form; read them relative to the local checkout.
   `crates/vibe-cli/tests/runtime-parity/`. `scripts/parity/reference.py` is
   the one place that checks the pin and re-executes a driver; a driver never
   imports another driver, only shared modules and its own `<driver>_cases.py`
-  or `<driver>_scenarios.py` data table.
+  or `<driver>_scenarios.py` data table. A table holds pure data and imports
+  neither the driver nor `vibe`; a scenario written as a closure that drives
+  the reference stays in its driver, however long that makes the driver.
 - Rust parity tests replay committed corpora unconditionally and gate only the
   live probe on `vibe_core::parity::off_pin_reason`, so a missing or off-pin
   checkout skips instead of failing `cargo test`. A new parity test builds on
@@ -85,7 +87,9 @@ Run the CI sequence from the workspace root before proposing a commit:
 cargo fmt --all -- --check
 cargo check --workspace --all-targets --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-env -u FORCE_COLOR VIBE_HOME="$(mktemp -d)" cargo test --workspace --all-features --no-fail-fast
+home="$(mktemp -d)"
+env -u FORCE_COLOR VIBE_HOME="$home" cargo test --workspace --all-features --no-fail-fast
+chmod -R u+w "$home" && rm -rf "$home"
 ```
 
 `--all-features` is load-bearing: `vibe-app-server`'s `test-fixtures` feature
@@ -93,7 +97,7 @@ gates the fixture binary that `tests/mcp_stdio_e2e.rs` drives, so the file
 compiles to nothing without it. Building needs the ALSA headers that `cpal`
 links against (`libasound2-dev` on Debian and Ubuntu).
 
-The test line removes two workstation inputs CI never has. The in-process
+The test lines remove two workstation inputs CI never has. The in-process
 app-server tests read the ambient vibe home, so a real `~/.vibe/config.toml`
 fails them. The live parity probes spawn the reference with the inherited
 environment, so an exported `FORCE_COLOR` makes it emit ANSI that no corpus
@@ -101,7 +105,9 @@ holds. The opposite leak hides failures: credentials resolve from
 `MISTRAL_API_KEY`, then the OS keyring. To reproduce a failure seen only on the
 runner, add `env -u MISTRAL_API_KEY DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent
 CI=true VIBE_REFERENCE=/nonexistent`, which removes the key, the keyring, and
-the reference checkout as the runner lacks them.
+the reference checkout as the runner lacks them. The tests write logs and
+trust state into that throwaway home and harden some of its directories, so the
+last line restores write access before removing it.
 
 CI runs the same four gates on `windows-2022` from Git Bash, with `python3` on
 `PATH` for the parity drivers. Its test gate runs through

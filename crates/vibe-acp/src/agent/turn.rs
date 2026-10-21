@@ -183,7 +183,7 @@ where
             *usage_pending = false;
             return;
         }
-        if matches!(update, ProgrammaticUpdate::Stats { .. }) && harness.is_unified() {
+        if matches!(update, ProgrammaticUpdate::Stats { .. }) && self.harness.use_unified {
             return;
         }
         if matches!(update, ProgrammaticUpdate::Stats { .. }) {
@@ -251,7 +251,7 @@ where
         // Reference `_announce_turn_started` publishes the statistics as the
         // turn opens, before the turn counts as a step; a Unified Harness
         // session publishes its own once the turn has started.
-        let opening_usage = if harness.is_unified() {
+        let opening_usage = if self.harness.use_unified {
             None
         } else {
             Some(self.usage_update(harness).await)
@@ -277,7 +277,8 @@ where
                     return Err(TurnFailure::Other(error.into()));
                 }
             };
-            (reservation, service.turn_runner(), observer, updates)
+            let runner = service.turn_runner(&reservation.session_id);
+            (reservation, runner, observer, updates)
         };
         harness.set_phase(ActivePhase::Running(reservation.turn_id.clone()));
         if harness.is_cancelled() {

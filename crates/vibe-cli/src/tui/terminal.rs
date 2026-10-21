@@ -141,12 +141,14 @@ where
 }
 
 /// A full-screen surface on standard output: the modes [`TerminalGuard`]
-/// enters and the ratatui terminal drawing into them, which is what each
-/// screen run before the session (the startup dialogs, onboarding) holds.
+/// enters and the ratatui terminal drawing into them, which the startup
+/// dialogs, onboarding and the session each hold.
 pub(in crate::tui) struct FullScreen {
     // Declared first so it drops before the modes are left.
     pub terminal: Terminal<CrosstermBackend<Stdout>>,
-    guard: TerminalGuard<CrosstermOps<Stdout>>,
+    /// The modes, which the session leaves and re-enters around a suspend or
+    /// an external editor.
+    pub guard: TerminalGuard<CrosstermOps<Stdout>>,
 }
 
 impl FullScreen {

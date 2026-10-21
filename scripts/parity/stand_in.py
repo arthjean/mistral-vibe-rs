@@ -144,9 +144,10 @@ class Backend(Loopback):
     ``probe``, a fast-model probe takes :data:`PROBE_ANSWER` and consumes no
     entry at all.
 
-    :meth:`get` answers a GET and :meth:`post` a POST to any other path, both
-    with a 404, and :meth:`keep` records a chat-completions request; a stand-in
-    that plays more endpoints overrides them.
+    :meth:`get` answers a GET, :meth:`post` a POST to any other path and
+    :meth:`delete` a DELETE, all with a 404, and :meth:`keep` records a
+    chat-completions request; a stand-in that plays more endpoints overrides
+    them.
     """
 
     def __init__(
@@ -180,12 +181,18 @@ class Backend(Loopback):
                 else:
                     backend.post(self, path, body)
 
+            def do_DELETE(self) -> None:  # noqa: N802
+                backend.delete(self, self.path.split("?", 1)[0].rstrip("/"))
+
         super().__init__(ChatHandler)
 
     def get(self, handler: Handler, path: str) -> None:
         handler.reply(404, {"error": "not found"})
 
     def post(self, handler: Handler, path: str, body: Any) -> None:
+        handler.reply(404, {"error": "not found"})
+
+    def delete(self, handler: Handler, path: str) -> None:
         handler.reply(404, {"error": "not found"})
 
     def keep(self, body: Any) -> None:

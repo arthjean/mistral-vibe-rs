@@ -155,8 +155,6 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "session/turn/queue/replace",
     "session/turn/queue/resume",
     "session/turns/list",
-    "shell/interrupt",
-    "shell/run",
     "skills/catalog",
     "skills/convertLocal",
     "skills/detail",

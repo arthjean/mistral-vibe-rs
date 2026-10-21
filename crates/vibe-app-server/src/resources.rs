@@ -16,24 +16,18 @@ use vibe_core::mcp::{
     McpServerStatus, McpServerView, SamplingHandler,
 };
 use vibe_core::observability::{FileLog, LOG_DEFAULT_PAGE_LIMIT, LogLevel, entry_identity};
-use vibe_core::platform::{Platform, parse_policy_path};
 use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode,
-    PermissionStore, TrustDecision,
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
+    TrustDecision,
 };
-use vibe_core::process::{ProcessSpec, TerminalManager};
-use vibe_core::shell::{ShellCommandLists, ShellConfig, ShellPolicyContext, analyze_shell};
 use vibe_core::tools::ToolRegistry;
-use vibe_core::tools::config::ShellCommandConfig;
 
-mod backend_command;
 mod core_backend;
 pub mod mcp_catalog;
 mod views;
 
 use views::*;
 
-pub use backend_command::{ResourceBackendCommand, ShellCommand};
 pub use mcp_catalog::{
     McpCatalogCall, McpCatalogError, McpCatalogNotify, McpCatalogOutcome, McpCatalogTarget,
 };
@@ -79,14 +73,10 @@ pub const RESOURCE_METHODS: &[&str] = &[
     "runtime/read",
     "session/ready/read",
     "session/ready/wait",
-    "shell/interrupt",
-    "shell/run",
     "stats/read",
     "telemetry/record",
     "tools/list",
 ];
-
-pub const BACKEND_RESOURCE_METHODS: &[&str] = &["shell/interrupt", "shell/run"];
 
 const MAX_RESOURCE_RECORDS: usize = 1_024;
 const MAX_RESOURCE_SESSIONS: usize = 256;
@@ -139,26 +129,6 @@ pub struct ResourceSession {
     pub project_trusted: bool,
     pub policy: PermissionStore,
     pub tools: ToolRegistry,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ResourceBackendRequest {
-    pub session_id: String,
-    pub command: ResourceBackendCommand,
-}
-
-impl ResourceBackendRequest {
-    pub fn parse(
-        session_id: String,
-        method: &str,
-        params: &BTreeMap<String, Value>,
-        session_active: bool,
-    ) -> Result<Self, ResourceError> {
-        Ok(Self {
-            session_id,
-            command: ResourceBackendCommand::parse(method, params, session_active)?,
-        })
-    }
 }
 
 pub type ResourceFuture<'a, T> =
@@ -219,11 +189,6 @@ pub trait ResourceBackend: Send + Sync {
             ))
         })
     }
-
-    fn dispatch<'a>(
-        &'a self,
-        request: ResourceBackendRequest,
-    ) -> ResourceFuture<'a, ResourceDispatch>;
 
     /// Runs one MCP catalog call, publishing what it announces mid-flight
     /// through `notify`.
@@ -304,12 +269,7 @@ impl ResourceService {
         &mut self,
         method: &str,
         params: &BTreeMap<String, Value>,
-        session_active: bool,
     ) -> Result<ResourceDispatch, ResourceError> {
-        if BACKEND_RESOURCE_METHODS.contains(&method) {
-            let command = ResourceBackendCommand::parse(method, params, session_active)?;
-            return self.dispatch_backend_fallback(command);
-        }
         match method {
             "diagnostics/list" => Ok(read_only([
                 ("issues", Value::Array(self.reported_issues(None))),
@@ -337,24 +297,6 @@ impl ResourceService {
                 self.tool_list(required_string(params, "sessionId")?)?,
             )])),
             _ => Err(ResourceError::MethodNotFound(method.to_owned())),
-        }
-    }
-
-    fn dispatch_backend_fallback(
-        &mut self,
-        command: ResourceBackendCommand,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        match command {
-            ResourceBackendCommand::Shell(ShellCommand::Run { operation_id, .. }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "shell operation `{operation_id}` cannot run because no shell backend is attached"
-                )))
-            }
-            ResourceBackendCommand::Shell(ShellCommand::Interrupt { operation_id }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "shell operation `{operation_id}` cannot be interrupted because no shell backend is attached"
-                )))
-            }
         }
     }
 
@@ -606,14 +548,6 @@ fn empty_mcp_state() -> Value {
     })
 }
 
-fn host_platform() -> Platform {
-    if cfg!(windows) {
-        Platform::Windows
-    } else {
-        Platform::Posix
-    }
-}
-
 impl From<params::ParamError> for ResourceError {
     fn from(error: params::ParamError) -> Self {
         Self::InvalidParams(error.message())
@@ -636,15 +570,6 @@ pub enum ResourceError {
 
 fn bounded(value: &str) -> String {
     value.chars().take(2_048).collect()
-}
-
-fn policy_error(error: vibe_core::policy::PolicyError) -> ResourceError {
-    match error {
-        vibe_core::policy::PolicyError::Busy => {
-            ResourceError::Conflict("permission state is busy; retry the decision".to_owned())
-        }
-        error => ResourceError::InvalidParams(error.to_string()),
-    }
 }
 
 fn push_bounded<T>(values: &mut Vec<T>, limit: usize, value: T) {

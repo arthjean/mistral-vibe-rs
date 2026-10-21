@@ -616,6 +616,7 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
             enabled: true,
             requires_auth: false,
             requires_setup: false,
+            plugin_name: None,
         },
     );
     assert_eq!(detail.kind, OverlayKind::McpDetail);
@@ -641,6 +642,7 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
             enabled: true,
             requires_auth: false,
             requires_setup: true,
+            plugin_name: None,
         },
     );
     assert!(

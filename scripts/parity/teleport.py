@@ -59,10 +59,8 @@ import json
 import os
 from pathlib import Path
 import queue
-import shutil
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -72,7 +70,7 @@ import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import host_env  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import subagent_client  # noqa: E402
 from vibe_code import (  # noqa: E402
     API_KEY,
@@ -188,65 +186,64 @@ def prepare_git(world: blackbox.World, spec: dict[str, Any] | None) -> None:
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend(scenario.get("code", {}))
-    root = Path(tempfile.mkdtemp(prefix="vibe-teleport-oracle-")).resolve()
-    session = app_server_client.Session(root)
-    world = session.world
-    try:
-        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        prepare_git(world, scenario.get("git", {}))
-        (world.vibe_home / "config.toml").write_text(base_config(backend, scenario), encoding="utf-8", newline="")
-        (world.vibe_home / "trusted_folders.toml").write_text(
-            f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8", newline=""
-        )
-        env = {
-            **git_env(world),
-            **host_env.isolated(
-                world.home,
-                world.vibe_home,
-                MISTRAL_API_KEY=API_KEY,
-                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
-            ),
-            # The port's fixture delivers the events its server raises only
-            # when asked; the reference ignores the variable.
-            "VIBE_ORACLE_TELEMETRY": "1",
-        }
-        for key, value in scenario.get("env", {}).items():
-            if value is None:
-                env.pop(key, None)
-            else:
-                env[key] = value
-        server = subagent_client.Server(command, env, world.workspace, {}, world, callbacks=[])
-        steps: list[dict[str, Any]] = []
-        state: dict[str, Any] = {"picker": None}
+    with host_env.scratch_root("vibe-teleport-oracle-") as root:
+        session = app_server_client.Session(root)
+        world = session.world
         try:
-            run_steps(scenario, server, session, backend, steps, quiet, state)
-        except OracleError as error:
-            steps.append({"failure": str(error)})
+            backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
+            prepare_git(world, scenario.get("git", {}))
+            (world.vibe_home / "config.toml").write_text(base_config(backend, scenario), encoding="utf-8", newline="")
+            (world.vibe_home / "trusted_folders.toml").write_text(
+                f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8", newline=""
+            )
+            env = {
+                **git_env(world),
+                **host_env.isolated(
+                    world.home,
+                    world.vibe_home,
+                    MISTRAL_API_KEY=API_KEY,
+                    VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+                ),
+                # The port's fixture delivers the events its server raises only
+                # when asked; the reference ignores the variable.
+                "VIBE_ORACLE_TELEMETRY": "1",
+            }
+            for key, value in scenario.get("env", {}).items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
+            server = subagent_client.Server(command, env, world.workspace, {}, world, callbacks=[])
+            steps: list[dict[str, Any]] = []
+            state: dict[str, Any] = {"picker": None}
+            try:
+                run_steps(scenario, server, session, backend, steps, quiet, state)
+            except OracleError as error:
+                steps.append({"failure": str(error)})
+            finally:
+                backend.release.set()
+                server.stop()
+            # Telemetry is sent in the background; give the last of it a moment.
+            if scenario.get("telemetry"):
+                time.sleep(quiet)
+            return {
+                "steps": steps,
+                "sessions": session.sessions,
+                "requests": list(backend.bodies),
+                "code": list(backend.code_log),
+                "telemetry": list(backend.telemetry),
+                "paths": {
+                    "workspace": str(world.workspace),
+                    "vibeHome": str(world.vibe_home),
+                    "home": str(world.home),
+                    "root": str(root),
+                    "bin": str(Path(command[0]).parent),
+                    "backend": backend.base,
+                },
+            }
         finally:
             backend.release.set()
-            server.stop()
-        # Telemetry is sent in the background; give the last of it a moment.
-        if scenario.get("telemetry"):
-            time.sleep(quiet)
-        return {
-            "steps": steps,
-            "sessions": session.sessions,
-            "requests": list(backend.bodies),
-            "code": list(backend.code_log),
-            "telemetry": list(backend.telemetry),
-            "paths": {
-                "workspace": str(world.workspace),
-                "vibeHome": str(world.vibe_home),
-                "home": str(world.home),
-                "root": str(root),
-                "bin": str(Path(command[0]).parent),
-                "backend": backend.base,
-            },
-        }
-    finally:
-        backend.release.set()
-        backend.close()
-        shutil.rmtree(root, ignore_errors=True)
+            backend.close()
 
 
 def substitute(value: Any, session: app_server_client.Session, state: dict[str, Any]) -> Any:
@@ -918,11 +915,11 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            commit, binary = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *HARNESS_FLAGS]
         selected = [
             scenario
             for scenario in scenarios()

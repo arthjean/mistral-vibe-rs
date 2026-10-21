@@ -53,11 +53,6 @@ pub(super) struct Shared {
 }
 
 impl Shared {
-    /// Whether `session_id` is a session these mirrors follow.
-    pub(super) fn serves(&self, session_id: &str) -> bool {
-        lock(&self.hub).sessions.contains_key(session_id)
-    }
-
     /// Folds one frame a unified session published into the mirrors.
     fn receive(&self, server: &AppServer, frame: Vec<u8>) {
         let Ok(envelope) = decode_frame(&frame) else {

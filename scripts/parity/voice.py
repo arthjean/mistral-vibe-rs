@@ -69,6 +69,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from inprocess import SocketGuard
 from voice_cases import CREDENTIAL_VARIABLES, DOCUMENTS
 
 SCHEMA_VERSION = 3
@@ -92,7 +93,7 @@ SPEECH_INPUT = "fixture summary"
 # --------------------------------------------------------------------------
 
 
-class _Guard:
+class _Guard(SocketGuard):
     """Fails the capture the moment it reaches a network or an audio device.
 
     Every value this script records is resolved before a connection is opened
@@ -102,26 +103,11 @@ class _Guard:
     is not a corpus of the pinned reference.
     """
 
-    def __init__(self) -> None:
-        self.attempts: list[str] = []
-
     def install(self) -> None:
-        guard = self
+        super().install()
+        self._guard_audio()
 
-        def refuse(name: str) -> Any:
-            def raiser(*arguments: Any, **keywords: Any) -> Any:
-                guard.attempts.append(name)
-                raise OracleError(f"the capture reached {name}")
-
-            return raiser
-
-        socket.socket.connect = refuse("socket.connect")  # type: ignore[method-assign]
-        socket.socket.connect_ex = refuse("socket.connect_ex")  # type: ignore[method-assign]
-        socket.create_connection = refuse("socket.create_connection")  # type: ignore[assignment]
-        socket.getaddrinfo = refuse("socket.getaddrinfo")  # type: ignore[assignment]
-        self._guard_audio(refuse)
-
-    def _guard_audio(self, refuse: Any) -> None:
+    def _guard_audio(self) -> None:
         """Refuses every device call the audio surface can make.
 
         The module is optional on the reference's own terms: it imports
@@ -138,7 +124,7 @@ class _Guard:
             return
         for name in ("Devices", "PlaybackDevice", "CaptureDevice"):
             if hasattr(miniaudio, name):
-                setattr(miniaudio, name, refuse(f"miniaudio.{name}"))
+                setattr(miniaudio, name, self.refuse(f"miniaudio.{name}"))
 
     def verify(self) -> None:
         """Proves the guard is armed, on every run rather than once.

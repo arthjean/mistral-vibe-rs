@@ -27,11 +27,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tarfile
 
+import host_env
 from pin import EXPECTED_COMMIT, RESTORE_COMMAND
 
 #: Where extracted trees are kept between runs: gitignored, at the repository
@@ -112,6 +112,28 @@ def reference_interpreter(reference: Path, override: Path | None = None) -> Path
     return found
 
 
+def reference_command(
+    reference: Path, script: str, expected: str | None = EXPECTED_COMMIT
+) -> tuple[str, list[str]]:
+    """The commit the checkout at ``reference`` sits at, refused as
+    :func:`require_pin` refuses it, and the command that runs its console
+    script ``script``.
+
+    A console script sits beside :func:`reference_interpreter`'s interpreter,
+    so it is found wherever that interpreter is: in either virtual environment
+    layout, or beside :data:`INTERPRETER_VARIABLE`'s.
+    """
+
+    commit = require_pin(reference, expected)
+    directory = reference_interpreter(reference).parent
+    for name in (script, f"{script}.exe"):
+        if (directory / name).is_file():
+            return commit, [str(directory / name)]
+    raise OracleError(
+        f"no reference entry point `{script}` in {directory}; run `uv sync --frozen`"
+    )
+
+
 def pinned_tree(reference: Path, commit: str, cache: Path = DEFAULT_CACHE) -> Path:
     """The source tree of ``commit``, extracted once and reused across runs.
 
@@ -140,7 +162,7 @@ def pinned_tree(reference: Path, commit: str, cache: Path = DEFAULT_CACHE) -> Pa
     except OSError:
         # Another run finished first, which is the only way the destination
         # exists by now. Its tree is the same commit, so theirs wins.
-        shutil.rmtree(staged, ignore_errors=True)
+        host_env.remove_tree(staged)
     if not (tree / marker).is_file():
         raise OracleError(f"the extracted tree at {tree} carries no `vibe` package")
     return tree

@@ -1,37 +1,31 @@
-use std::sync::{Arc, Condvar, Mutex, PoisonError};
+use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use tokio::sync::mpsc::{self, Receiver};
-use vibe_core::sync::lock;
 
 use super::attachments::{normalize_pasted_text, normalize_typed_text};
 use super::chat_input::{EditorSnapshot, InputEffect, InputEvent};
+use super::job_slot::LatestJobSlot;
 
 pub(super) struct PathNormalizationManager {
-    state: Arc<(Mutex<WorkerState>, Condvar)>,
+    slot: Arc<LatestJobSlot<NormalizationWork>>,
     results: Receiver<NormalizationResult>,
     worker: Option<JoinHandle<()>>,
     generation: u64,
     settled_generation: u64,
 }
 
-#[derive(Default)]
-struct WorkerState {
-    pending: Option<NormalizationWork>,
-    shutdown: bool,
-}
-
 impl PathNormalizationManager {
     pub fn new() -> Result<Self, String> {
-        let state = Arc::new((Mutex::new(WorkerState::default()), Condvar::new()));
-        let thread_state = Arc::clone(&state);
+        let slot = Arc::new(LatestJobSlot::new());
+        let thread_slot = Arc::clone(&slot);
         let (results_tx, results) = mpsc::channel(1);
         let worker = std::thread::Builder::new()
             .name("vibe-path-normalization".to_owned())
-            .spawn(move || worker_loop(&thread_state, &results_tx))
+            .spawn(move || worker_loop(&thread_slot, &results_tx))
             .map_err(|error| format!("path normalization worker failed to start: {error}"))?;
         Ok(Self {
-            state,
+            slot,
             results,
             worker: Some(worker),
             generation: 0,
@@ -63,9 +57,7 @@ impl PathNormalizationManager {
             generation: self.generation,
             request,
         };
-        let (state, ready) = self.state.as_ref();
-        lock(state).pending = Some(work);
-        ready.notify_one();
+        self.slot.submit(work);
         Ok(())
     }
 
@@ -93,13 +85,7 @@ impl PathNormalizationManager {
 
     pub fn shutdown(&mut self) {
         self.results.close();
-        let (state, ready) = self.state.as_ref();
-        {
-            let mut state = lock(state);
-            state.shutdown = true;
-            state.pending = None;
-            ready.notify_one();
-        }
+        self.slot.shutdown();
         // Filesystem metadata calls can block indefinitely on remote or FUSE
         // mounts. Dropping the handle detaches the worker so TUI shutdown stays
         // bounded; the shared shutdown flag lets it exit if the call returns.
@@ -149,25 +135,10 @@ impl NormalizationRequest {
 }
 
 fn worker_loop(
-    shared: &Arc<(Mutex<WorkerState>, Condvar)>,
+    slot: &LatestJobSlot<NormalizationWork>,
     results: &mpsc::Sender<NormalizationResult>,
 ) {
-    loop {
-        let work = {
-            let (state, ready) = shared.as_ref();
-            let mut state = ready
-                .wait_while(lock(state), |state| {
-                    state.pending.is_none() && !state.shutdown
-                })
-                .unwrap_or_else(PoisonError::into_inner);
-            if state.shutdown {
-                return;
-            }
-            state.pending.take()
-        };
-        let Some(work) = work else {
-            continue;
-        };
+    while let Some(work) = slot.wait() {
         let result = NormalizationResult {
             generation: work.generation,
             event: work.request.resolve(),
@@ -194,7 +165,7 @@ mod tests {
     fn only_the_current_generation_can_settle_normalization() {
         let (_sender, results) = mpsc::channel(1);
         let mut manager = PathNormalizationManager {
-            state: Arc::new((Mutex::new(WorkerState::default()), Condvar::new())),
+            slot: Arc::new(LatestJobSlot::new()),
             results,
             worker: None,
             generation: 2,

@@ -46,14 +46,10 @@ import copy
 import json
 import os
 from pathlib import Path
-import queue
-import re
 import select
-import shutil
 import struct
 import subprocess
 import sys
-import tempfile
 import time
 from typing import Any
 
@@ -61,9 +57,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
+from telemetry_session_scenarios import MISTRAL_PROVIDER, scenarios  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/telemetry-session/corpus.json"
@@ -201,30 +198,6 @@ class Stand(stand_in.Backend):
 # Configuration
 # --------------------------------------------------------------------------
 
-MISTRAL_PROVIDER = (
-    "\n[[providers]]\n"
-    'name = "mistral"\n'
-    'api_base = "$BASE/v1"\n'
-    'api_key_env_var = "MISTRAL_API_KEY"\n'
-    'backend = "mistral"\n'
-)
-#: A third-party provider and a model on it, for the scenarios that run off
-#: Mistral.
-GENERIC_PROVIDER = (
-    "\n[[providers]]\n"
-    'name = "oracle-provider"\n'
-    'api_base = "$BASE/v1"\n'
-    'api_key_env_var = "ORACLE_PROVIDER_KEY"\n'
-    'api_style = "openai"\n'
-    'backend = "generic"\n'
-    "\n[[models]]\n"
-    'name = "oracle-model-v1"\n'
-    'provider = "oracle-provider"\n'
-    'alias = "oracle-model"\n'
-    "input_price = 0.0\n"
-    "output_price = 0.0\n"
-)
-
 
 def compose_config(scenario: dict[str, Any], base: str) -> str:
     top = {
@@ -244,343 +217,6 @@ def compose_config(scenario: dict[str, Any], base: str) -> str:
     text = "\n".join(lines) + "\n" + scenario.get("providers", MISTRAL_PROVIDER)
     text += scenario.get("tables", "")
     return text.replace("$BASE", base)
-
-
-# --------------------------------------------------------------------------
-# Scenario vocabulary
-# --------------------------------------------------------------------------
-
-
-def text(value: str) -> dict[str, Any]:
-    return {"text": value}
-
-
-def call(identifier: str, name: str, **arguments: Any) -> dict[str, Any]:
-    return {"toolCalls": [{"id": identifier, "name": name, "arguments": arguments}]}
-
-
-def run(*args: str, **extra: Any) -> dict[str, Any]:
-    return {"args": list(args), **extra}
-
-
-READ_ME = {"notes.txt": "remember the milk\n"}
-READ = call("call_read", "read_file", file_path="notes.txt")
-#: The summary a compaction asks for, in the shape both sides extract.
-SUMMARY = text("<summary>The notes say milk.</summary>")
-#: The active model with a threshold the next answer's usage crosses.
-COMPACT_AT = (
-    "\n[[models]]\n"
-    'name = "mistral-vibe-cli-latest"\n'
-    'provider = "mistral"\n'
-    'alias = "mistral-medium-3.5"\n'
-    "auto_compact_threshold = 1000\n"
-)
-
-
-def crossing(response: dict[str, Any]) -> dict[str, Any]:
-    return {**response, "promptTokens": 5000}
-
-
-def programmatic_scenarios() -> list[dict[str, Any]]:
-    return [
-        {
-            "name": "programmatic/tool-turn",
-            "files": READ_ME,
-            "runs": [run("-p", "read it", "--output", "json", backend=[READ, text("It says milk.")])],
-        },
-        {
-            "name": "programmatic/text-turn",
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/continue",
-            "files": READ_ME,
-            "runs": [
-                run("-p", "read it", backend=[READ, text("Milk.")]),
-                run("-p", "again", "-c", backend=[text("Still milk.")]),
-            ],
-        },
-        {
-            "name": "programmatic/resume-by-id",
-            "runs": [
-                run("-p", "first", "--output", "json", backend=[text("One.")]),
-                run("-p", "second", "--resume", "$SESSION", backend=[text("Two.")]),
-            ],
-        },
-        {
-            "name": "programmatic/experiments-disabled",
-            "experiments": {"enable": "false"},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/evaluation-fails",
-            "stand": {"evaluation": {"status": 500, "body": {}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/evaluation-without-exposure",
-            "stand": {"evaluation": {"status": 200, "body": {"features": {}}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/account-unavailable",
-            "stand": {"whoami": {"status": 500, "body": {}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/account-refused",
-            "stand": {"whoami": {"status": 401, "body": {}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/chat-plan",
-            "stand": {"whoami": {"status": 200, "body": {"plan_type": "chat", "plan_name": "individual"}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/identity-unavailable",
-            "stand": {"identity": {"status": 500, "body": {}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/identity-without-organization",
-            "stand": {"identity": {"status": 200, "body": {"id": "oracle-user"}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/telemetry-disabled",
-            "top": {"enable_telemetry": "false"},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/third-party-model-beside-mistral",
-            "top": {"active_model": '"oracle-model"'},
-            "providers": MISTRAL_PROVIDER + GENERIC_PROVIDER,
-            "env": {"ORACLE_PROVIDER_KEY": "oracle-provider-key"},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            # The shipped Mistral provider is always configured, so the key is
-            # what goes missing: nothing is looked up and nothing is reported.
-            "name": "programmatic/mistral-key-missing",
-            "top": {"active_model": '"oracle-model"'},
-            "providers": MISTRAL_PROVIDER + GENERIC_PROVIDER,
-            "env": {"ORACLE_PROVIDER_KEY": "oracle-provider-key", "MISTRAL_API_KEY": None},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/admin-config-applied",
-            "stand": {
-                "managed": {
-                    "status": 200,
-                    "body": {
-                        "state": "enabled",
-                        "toml": 'enable_update_checks = false\nauto_compact_threshold = 150000\n',
-                    },
-                }
-            },
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/admin-config-disabled",
-            "stand": {"managed": {"status": 200, "body": {"state": "disabled"}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/admin-config-unparsable",
-            "stand": {"managed": {"status": 200, "body": {"state": "enabled", "toml": "= nope"}}},
-            "runs": [run("-p", "hello", backend=[text("Hi.")])],
-        },
-        {
-            "name": "programmatic/approval-refused",
-            "runs": [
-                run(
-                    "-p", "write it", "--agent", "ask",
-                    backend=[call("call_write", "write_file", file_path="a.txt", content="x"), text("No.")],
-                )
-            ],
-        },
-        {
-            "name": "programmatic/approval-bypassed",
-            "runs": [
-                run(
-                    "-p", "run it", "--auto-approve",
-                    backend=[call("call_shell", "bash", command="true"), text("Ran.")],
-                )
-            ],
-        },
-        {
-            "name": "programmatic/permission-never",
-            "files": READ_ME,
-            "tables": '\n[tools.read_file]\npermission = "never"\n',
-            "runs": [run("-p", "read it", backend=[READ, text("Refused.")])],
-        },
-        {
-            "name": "programmatic/failed-tool",
-            "runs": [
-                run(
-                    "-p", "read it",
-                    backend=[call("call_read", "read_file", file_path="missing.txt"), text("Gone.")],
-                )
-            ],
-        },
-        {
-            "name": "programmatic/written-file",
-            "runs": [
-                run(
-                    "-p", "write it",
-                    backend=[call("call_write", "write_file", file_path="made.rs", content="x"), text("Done.")],
-                )
-            ],
-        },
-        {
-            "name": "programmatic/mention",
-            "files": READ_ME,
-            "runs": [run("-p", "read @notes.txt", backend=[text("Milk.")])],
-        },
-        {
-            "name": "programmatic/auto-compaction",
-            "tables": COMPACT_AT,
-            "files": READ_ME,
-            "runs": [run("-p", "read it", backend=[crossing(READ), SUMMARY, text("Milk.")])],
-        },
-        {
-            "name": "programmatic/failed-request",
-            # The stand-in the corpus was captured with served no scripted
-            # status, so this request was answered with an empty completion and
-            # the run succeeds. Serving it a 400 changes the corpus, which
-            # waits for a re-pin.
-            "runs": [run("-p", "hello", backend=[{}])],
-        },
-    ]
-
-
-def acp_prompt(identifier: int, value: str, session: str = "$S1") -> dict[str, Any]:
-    return blackbox.prompt(identifier, value, session)
-
-
-ACP_OPEN = [blackbox.INITIALIZE, blackbox.NEW_SESSION]
-BASH = call("call_shell", "bash", command="true")
-
-
-def acp_scenarios() -> list[dict[str, Any]]:
-    return [
-        {
-            "name": "acp/tool-turn",
-            "files": READ_ME,
-            "steps": [*ACP_OPEN, {"backend": [READ, text("It says milk.")]}, acp_prompt(2, "read it")],
-        },
-        {
-            "name": "acp/two-prompts",
-            "steps": [
-                *ACP_OPEN,
-                {"backend": [text("One.")]},
-                acp_prompt(2, "first"),
-                {"backend": [text("Two.")]},
-                acp_prompt(3, "second"),
-            ],
-        },
-        {
-            "name": "acp/approval-approved",
-            "client": {"session/request_permission": blackbox.APPROVE_ONCE},
-            "steps": [*ACP_OPEN, {"backend": [BASH, text("Ran.")]}, acp_prompt(2, "run it")],
-        },
-        {
-            "name": "acp/approval-rejected",
-            "client": {"session/request_permission": blackbox.REJECT},
-            "steps": [*ACP_OPEN, {"backend": [BASH, text("No.")]}, acp_prompt(2, "run it")],
-        },
-        {
-            "name": "acp/second-session",
-            "steps": [
-                *ACP_OPEN,
-                blackbox.new_session(2),
-                {"backend": [text("Hi.")]},
-                acp_prompt(3, "hello", "$S2"),
-            ],
-        },
-        {
-            "name": "acp/load-session",
-            "steps": [
-                *ACP_OPEN,
-                {"backend": [text("One.")]},
-                acp_prompt(2, "first"),
-                {"restart": True},
-                blackbox.INITIALIZE,
-                blackbox.request(
-                    1, "session/load", {"sessionId": "$S1", "cwd": "$WS", "mcpServers": []}
-                ),
-                {"backend": [text("Two.")]},
-                acp_prompt(2, "second"),
-            ],
-        },
-        {
-            "name": "acp/auto-compaction",
-            "tables": COMPACT_AT,
-            "steps": [
-                *ACP_OPEN,
-                {"backend": [crossing(text("One."))]},
-                acp_prompt(2, "first"),
-                {"backend": [SUMMARY, text("Two.")]},
-                acp_prompt(3, "second"),
-            ],
-        },
-        {
-            "name": "acp/manual-compaction",
-            "steps": [
-                *ACP_OPEN,
-                {"backend": [text("One.")]},
-                acp_prompt(2, "first"),
-                {"backend": [SUMMARY]},
-                acp_prompt(3, "/compact"),
-            ],
-        },
-        {
-            "name": "acp/telemetry-disabled",
-            "top": {"enable_telemetry": "false"},
-            "steps": [*ACP_OPEN, {"backend": [text("Hi.")]}, acp_prompt(2, "hello")],
-        },
-        {
-            "name": "acp/experiments-disabled",
-            "experiments": {"enable": "false"},
-            "steps": [*ACP_OPEN, {"backend": [text("Hi.")]}, acp_prompt(2, "hello")],
-        },
-    ]
-
-
-def tui_scenarios() -> list[dict[str, Any]]:
-    """Lines typed into the interactive client once it reported its startup;
-    every scenario ends with ``/exit``."""
-
-    return [
-        {"name": "tui/startup", "lines": []},
-        {"name": "tui/clear", "lines": [{"type": "/clear"}]},
-        {
-            "name": "tui/prompt",
-            "lines": [{"backend": [text("Hi.")]}, {"type": "hello"}],
-        },
-        {
-            # The answer is held while Ctrl+C interrupts the turn.
-            "name": "tui/interrupt",
-            "lines": [
-                {"backend": [{"text": "Late.", "delay": 6}]},
-                {"type": "hello", "hold": True},
-                {"press": "\x03", "after": 2.0},
-            ],
-        },
-        {
-            "name": "tui/prompt-then-clear",
-            "lines": [{"backend": [text("Hi.")]}, {"type": "hello"}, {"type": "/clear"}],
-        },
-    ]
-
-
-def scenarios() -> list[dict[str, Any]]:
-    return [
-        *({"surface": "programmatic", **scenario} for scenario in programmatic_scenarios()),
-        *({"surface": "acp", **scenario} for scenario in acp_scenarios()),
-        *({"surface": "tui", **scenario} for scenario in tui_scenarios()),
-    ]
 
 
 # --------------------------------------------------------------------------
@@ -786,31 +422,30 @@ def run_tui(
 
 def run_scenario(scenario: dict[str, Any], commands: dict[str, list[str]]) -> dict[str, Any]:
     stand = Stand()
-    root = Path(tempfile.mkdtemp(prefix="vibe-telemetry-session-oracle-")).resolve()
-    world = blackbox.World(root) if scenario["surface"] == "acp" else World(root)
-    try:
-        for name, value in scenario.get("stand", {}).items():
-            setattr(stand, name, copy.deepcopy(value))
-        (world.vibe_home / "config.toml").write_text(compose_config(scenario, stand.base), encoding="utf-8", newline="")
-        blackbox.write_tree(world.workspace, scenario.get("files", {}))
-        env = environment(world, scenario, stand)
-        surface = scenario["surface"]
-        if surface == "programmatic":
-            runs = run_programmatic(scenario, commands["programmatic"], env, world, stand)
-        elif surface == "acp":
-            runs = run_acp(scenario, commands["acp"], env, world, stand)
-        elif surface == "tui":
-            runs = run_tui(scenario, commands["tui"], env, world, stand)
-        else:
-            raise OracleError(f"unknown surface {surface}")
-        return {
-            "runs": runs,
-            "sessions": list(getattr(world, "sessions", [])),
-            "paths": {"root": str(root), "base": stand.base},
-        }
-    finally:
-        stand.close()
-        shutil.rmtree(root, ignore_errors=True)
+    with host_env.scratch_root("vibe-telemetry-session-oracle-") as root:
+        world = blackbox.World(root) if scenario["surface"] == "acp" else World(root)
+        try:
+            for name, value in scenario.get("stand", {}).items():
+                setattr(stand, name, copy.deepcopy(value))
+            (world.vibe_home / "config.toml").write_text(compose_config(scenario, stand.base), encoding="utf-8", newline="")
+            blackbox.write_tree(world.workspace, scenario.get("files", {}))
+            env = environment(world, scenario, stand)
+            surface = scenario["surface"]
+            if surface == "programmatic":
+                runs = run_programmatic(scenario, commands["programmatic"], env, world, stand)
+            elif surface == "acp":
+                runs = run_acp(scenario, commands["acp"], env, world, stand)
+            elif surface == "tui":
+                runs = run_tui(scenario, commands["tui"], env, world, stand)
+            else:
+                raise OracleError(f"unknown surface {surface}")
+            return {
+                "runs": runs,
+                "sessions": list(getattr(world, "sessions", [])),
+                "paths": {"root": str(root), "base": stand.base},
+            }
+        finally:
+            stand.close()
 
 
 # --------------------------------------------------------------------------
@@ -1000,16 +635,10 @@ def main() -> int:
             }
             reference = {"commit": "binary-override"}
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            bin_dir = arguments.reference / ".venv/bin"
-            commands = {
-                "programmatic": [str(bin_dir / "vibe")],
-                "acp": [str(bin_dir / "vibe-acp")],
-                "tui": [str(bin_dir / "vibe")],
-            }
-            for command in commands.values():
-                if not Path(command[0]).is_file():
-                    raise OracleError(f"no reference entry point at {command[0]}; run `uv sync --frozen`")
+            commit, vibe = reference_command(arguments.reference, "vibe", arguments.expected_commit)
+            _, vibe_acp = reference_command(arguments.reference, "vibe-acp", arguments.expected_commit)
+            reference = {"commit": commit}
+            commands = {"programmatic": vibe, "acp": vibe_acp, "tui": vibe}
         commands = {name: [*command, *HARNESS_FLAGS] if command else [] for name, command in commands.items()}
         surfaces = arguments.surface or [name for name, command in commands.items() if command]
         selected = [

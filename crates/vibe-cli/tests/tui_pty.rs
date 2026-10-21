@@ -12,15 +12,10 @@
     reason = "PTY integration failures must terminate with their captured terminal transcript"
 )]
 
-use std::fs::File;
-use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use nix::pty::{Winsize, openpty};
-use nix::sys::termios::{LocalFlags, tcgetattr};
+use nix::sys::termios::LocalFlags;
 use vibe_core::storage::SessionStore;
 
 #[path = "support/pty.rs"]
@@ -28,171 +23,50 @@ mod pty;
 use pty::{PtyProcess, STEP, composer_carries, seed_session, tui_workspace, visible_text};
 
 #[test]
-#[allow(clippy::unwrap_in_result)]
-fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<(), String> {
+fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() {
     let (_temporary, workspace, home) = tui_workspace();
-    let pty = openpty(
-        Some(&Winsize {
-            ws_row: 30,
-            ws_col: 100,
-            ws_xpixel: 0,
-            ws_ypixel: 0,
-        }),
-        None,
-    )
-    .expect("PTY opens");
-    let mut master = File::from(pty.master);
-    let mut reader = master.try_clone().expect("PTY reader clones");
-    let slave = File::from(pty.slave);
-    let terminal_probe = slave.try_clone().expect("PTY probe clones");
-    let baseline_termios = tcgetattr(&terminal_probe).expect("PTY attributes read");
-    let mut child = Command::new(env!("CARGO_BIN_EXE_vibe"))
-        .current_dir(&workspace)
-        .arg("--trust")
-        .env("HOME", &home)
-        .env("VIBE_HOME", home.join(".vibe"))
-        .env("MISTRAL_API_KEY", "fixture")
-        // Update discovery must never leave the machine during tests.
-        .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9/v1")
-        .env("NO_COLOR", "1")
-        .env("TERM", "xterm-256color")
-        .stdin(Stdio::from(slave.try_clone().expect("PTY stdin clones")))
-        .stdout(Stdio::from(slave.try_clone().expect("PTY stdout clones")))
-        .stderr(Stdio::from(slave))
-        .spawn()
-        .expect("interactive TUI starts");
-    let (transcript_sender, transcript_receiver) = mpsc::channel();
-    let reader = std::thread::spawn(move || {
-        let mut transcript = Vec::new();
-        let mut buffer = [0_u8; 4096];
-        loop {
-            match reader.read(&mut buffer) {
-                Ok(0) | Err(_) => break,
-                Ok(count) => {
-                    transcript.extend_from_slice(&buffer[..count]);
-                    let _ = transcript_sender.send(buffer[..count].to_vec());
-                }
-            }
-        }
-        transcript
-    });
-
-    let startup_deadline = Instant::now() + STEP;
-    let mut startup = Vec::new();
-    while !startup
-        .windows(b"\x1b[?1049h".len())
-        .any(|window| window == b"\x1b[?1049h")
-    {
-        let remaining = startup_deadline.saturating_duration_since(Instant::now());
-        assert!(
-            !remaining.is_zero(),
-            "interactive TUI did not enter the alternate screen"
-        );
-        let chunk = transcript_receiver
-            .recv_timeout(remaining)
-            .expect("TUI startup transcript arrives");
-        startup.extend_from_slice(&chunk);
-    }
-    master.write_all(b"/help\r").expect("help command writes");
-    master.flush().expect("edited prompt flushes");
+    let mut tui = PtyProcess::spawn(&workspace, &home, &["--trust"]);
+    let baseline_termios = tui.initial_termios().clone();
+    tui.wait_for(b"\x1b[?1049h", STEP);
+    tui.write(b"/help\r");
     // The help is a Markdown message in the transcript, not a modal, so the
     // proof is a line of the document itself being painted. The command section
     // is last and this line sits four commands from its end, so a 30-row
-    // terminal shows it. The match runs on the replayed screen for the reason
-    // `TuiSession::wait_for_visible` documents: a phrase ratatui paints is
-    // routinely split by cursor moves in the raw byte stream.
-    const HELP_MARKER: &str = "Uninstall the Lean 4 agent";
-    let help_deadline = Instant::now() + STEP;
-    let mut help_output = Vec::new();
-    while !visible_text(&help_output).contains(HELP_MARKER) {
-        let remaining = help_deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            child.kill().expect("timed-out help TUI stops");
-            let _ = child.wait();
-            return Err(format!(
-                "help document did not render: {}",
-                String::from_utf8_lossy(&help_output)
-            ));
-        }
-        let chunk = match transcript_receiver.recv_timeout(remaining) {
-            Ok(chunk) => chunk,
-            Err(error) => {
-                child.kill().expect("timed-out help TUI stops");
-                let _ = child.wait();
-                return Err(format!(
-                    "help document transcript stopped ({error}): {}",
-                    String::from_utf8_lossy(&help_output)
-                ));
-            }
-        };
-        help_output.extend_from_slice(&chunk);
-    }
+    // terminal shows it.
+    tui.wait_for_visible("Uninstall the Lean 4 agent", STEP);
     std::thread::sleep(Duration::from_millis(150));
-    master.write_all(b"!pwd\r").expect("shell command writes");
-    master.flush().expect("shell command flushes");
-    let shell_deadline = Instant::now() + STEP;
-    let mut shell_output = Vec::new();
-    // A `!` command shows as a call whose output follows it.
+    tui.write(b"!pwd\r");
+    // A `!` command shows as a call whose output follows it, in the same frame
+    // or a later one.
     let workspace_path = workspace.to_string_lossy().into_owned();
-    while !{
-        let screen = visible_text(&shell_output);
-        screen.contains("Ran pwd") && screen.contains(&workspace_path)
-    } {
-        let remaining = shell_deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            child.kill().expect("timed-out shell TUI stops");
-            let _ = child.wait();
-            return Err(format!(
-                "shell result did not render: {}",
-                String::from_utf8_lossy(&shell_output)
-            ));
-        }
-        let chunk = match transcript_receiver.recv_timeout(remaining) {
-            Ok(chunk) => chunk,
-            Err(error) => {
-                child.kill().expect("failed shell TUI stops");
-                let _ = child.wait();
-                return Err(format!(
-                    "shell transcript stopped ({error}): {}",
-                    String::from_utf8_lossy(&shell_output)
-                ));
-            }
-        };
-        shell_output.extend_from_slice(&chunk);
+    if !visible_text(&tui.wait_for_visible("Ran pwd", STEP)).contains(&workspace_path) {
+        tui.wait_for_visible(&workspace_path, STEP);
     }
-    master
-        .write_all(b"/exitt\x7f\r")
-        .expect("edited exit command writes");
-    master.flush().expect("edited prompt flushes");
+    tui.write(b"/exitt\x7f\r");
     let deadline = Instant::now() + STEP;
     // The shell output streams into the transcript before the shell is
     // reaped, so a submission racing the final poll is rejected as busy and
     // restored into the composer as a draft; a later Enter resubmits it.
     let mut resubmit_at = Instant::now() + Duration::from_millis(500);
     let status = loop {
-        if let Some(status) = child.try_wait().expect("TUI status is readable") {
+        if let Some(status) = tui.try_wait() {
             break status;
         }
         if Instant::now() >= resubmit_at {
-            master.write_all(b"\r").expect("exit resubmission writes");
-            master.flush().expect("exit resubmission flushes");
+            tui.write(b"\r");
             resubmit_at = Instant::now() + Duration::from_millis(500);
         }
-        let timed_out = Instant::now() >= deadline;
-        if timed_out {
-            child.kill().expect("timed-out TUI stops");
-            let _ = child.wait();
+        if Instant::now() >= deadline {
+            let transcript = tui.kill();
+            panic!(
+                "interactive TUI did not exit within one step: {}",
+                String::from_utf8_lossy(&transcript)
+            );
         }
-        assert!(
-            !timed_out,
-            "interactive TUI did not exit within five seconds"
-        );
         std::thread::sleep(Duration::from_millis(10));
     };
-    let restored_termios = tcgetattr(&terminal_probe).expect("restored PTY attributes read");
-    drop(terminal_probe);
-    drop(master);
-    let transcript = reader.join().expect("PTY reader joins");
+    let restored_termios = tui.termios();
+    let (_, transcript) = tui.wait(STEP);
 
     assert!(
         status.success(),
@@ -236,7 +110,6 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
             "TUI did not restore terminal flag {flag:?}"
         );
     }
-    Ok(())
 }
 
 /// Every line of the help's shortcut section, performed in the running client.
@@ -449,6 +322,10 @@ fn a_bracketed_paste_keeps_its_lines_and_submits_nothing() {
         std::thread::sleep(Duration::from_millis(10));
     };
     assert_eq!(composer, "first\nsecond\nthird");
+    // The editor writes the file before it exits; keys sent before the TUI
+    // takes the terminal back meet the cooked line discipline and are lost.
+    process.wait_for(b"\x1b[?1049h", STEP);
+    process.wait_for_visible("Type /help for more information", STEP);
 
     process.write(b"\x03");
     process.write(b"\x04");

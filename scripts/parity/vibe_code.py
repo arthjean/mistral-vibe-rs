@@ -190,10 +190,13 @@ def git_env(world: blackbox.World) -> dict[str, str]:
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "HOME": str(world.home),
         **host_env.windows_base(str(world.home)),
-        "GIT_CONFIG_NOSYSTEM": "1",
+        # The fixture home carries the `.gitconfig` the scenario lays out.
+        **host_env.git_isolated(
+            None,
+            GIT_AUTHOR_DATE="2026-01-01T00:00:00Z",
+            GIT_COMMITTER_DATE="2026-01-01T00:00:00Z",
+        ),
         "LANG": "C.UTF-8",
-        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
-        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
     }
 
 

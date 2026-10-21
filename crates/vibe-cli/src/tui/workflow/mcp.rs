@@ -465,6 +465,7 @@ pub(in crate::tui) fn apply_pending_operation(
                         enabled: true,
                         requires_auth: false,
                         requires_setup: false,
+                        plugin_name: None,
                     };
                     if enable_on_complete {
                         schedule_ui_call(
@@ -576,6 +577,7 @@ pub(in crate::tui) fn apply_pending_operation(
                     enabled: true,
                     requires_auth: false,
                     requires_setup: false,
+                    plugin_name: None,
                 };
                 schedule_read_integrations(runtime, None, Some(target), state);
             } else {
@@ -664,6 +666,15 @@ pub(super) fn set_selected_mcp(state: &mut TuiState, enabled: bool) -> Option<Mc
     if detail && target.tool.is_none() {
         return None;
     }
+    // Reference `MCPApp._reject_plugin_toggle`, for the server row and its
+    // tool rows alike: a plugin server has no `[[mcp_servers]]` entry to write.
+    if let Some(plugin) = &target.plugin_name {
+        state.push_diagnostic(format!(
+            "{} is managed by the {plugin} plugin and cannot be toggled here.",
+            target.source
+        ));
+        return None;
+    }
     Some(McpEffect::SetEnabled {
         target,
         detail,
@@ -682,8 +693,29 @@ fn selected_integration(state: &TuiState) -> Option<(IntegrationTarget, bool)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{McpEffect, openable_auth_url, reduce_auth_action};
+    use super::{McpEffect, openable_auth_url, reduce_auth_action, set_selected_mcp};
     use crate::tui::interaction::{AuthAction, AuthActionKind, IntegrationKind};
+    use crate::tui::pickers::{McpSource, mcp_overlay};
+    use crate::tui::state::TuiState;
+
+    /// Reference `MCPApp._reject_plugin_toggle`: a plugin's server is never
+    /// sent to the catalog, and the operator is told why.
+    #[test]
+    fn a_plugin_server_is_not_toggled() {
+        let sources = McpSource::published(&serde_json::json!({"mcp": {"sources": [
+            {"name": "linter", "kind": "server", "transport": "stdio",
+             "status": "connected", "pluginName": "lint-kit", "tools": []},
+        ]}}))
+        .expect("the sources decode");
+        let mut state = TuiState::new("session");
+        state.overlay = Some(mcp_overlay(&sources));
+
+        assert_eq!(set_selected_mcp(&mut state, false), None);
+        assert_eq!(
+            state.diagnostics().collect::<Vec<_>>(),
+            ["linter is managed by the lint-kit plugin and cannot be toggled here."]
+        );
+    }
 
     #[test]
     fn only_a_web_page_is_handed_to_the_system_opener() {

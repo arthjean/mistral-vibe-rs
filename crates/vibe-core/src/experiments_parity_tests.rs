@@ -385,7 +385,7 @@ fn settle(report: &Report, family: &str) -> usize {
 // --------------------------------------------------------------------------
 
 /// The eval host and key every request scenario is built from, spelled the way
-/// `scripts/parity/experiments.py` spells them. Neither is a credential: both
+/// `scripts/parity/experiments_cases.py` spells them. Neither is a credential: both
 /// are authored values, and the GrowthBook client key is publishable by the
 /// vendor's own security documentation in any case.
 const ORACLE_API_HOST: &str = "https://experiments.example.test";
@@ -1159,7 +1159,7 @@ fn config_mapping_answer(case: &Case<'_>) -> Map<String, Value> {
 }
 
 /// The providers and models every precedence case is loaded over, spelled the
-/// way `PRECEDENCE_CASES` in `scripts/parity/experiments.py` spells them. A
+/// way `PRECEDENCE_CASES` in `scripts/parity/experiments_cases.py` spells them. A
 /// case's own lines are prepended, because a bare key written after a table
 /// would land inside it.
 const ORACLE_USER_DOCUMENT: &str = r#"
@@ -1273,7 +1273,7 @@ fn layer_precedence_answer(case: &Case<'_>) -> Map<String, Value> {
 // -- sessionGates ---------------------------------------------------------
 
 /// The documents every session scenario is composed over, spelled the way
-/// `GATE_CONFIGURATIONS` in `scripts/parity/experiments.py` spells them. The
+/// `GATE_CONFIGURATIONS` in `scripts/parity/experiments_cases.py` spells them. The
 /// script authored them, so reproducing them here copies nothing the licensing
 /// boundary protects.
 const GATE_CONFIGURATIONS: [(&str, &str); 7] = [

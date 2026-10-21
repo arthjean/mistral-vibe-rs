@@ -938,7 +938,10 @@ pub(crate) mod live;
 pub(crate) mod unified;
 
 pub use echo::EchoTurnDriver;
-pub use headless::{HeadlessService, PublishedField, TeleportEvents};
+pub use headless::{
+    HeadlessService, HistoryPage, OpeningHistory, PublishedField, SavedSessions, StoredHistory,
+    StoredPage, TeleportEvents,
+};
 pub use in_process::{InProcessClient, LiveNotificationListener, PendingPublicCall};
 
 use in_process::ProgrammaticEventObserver;

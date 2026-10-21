@@ -105,11 +105,18 @@ impl ServerConnection {
             return;
         };
         let current = self.root_id_of(&root);
+        let mut scratchpad = None;
         if let Some(session) = self.server.lock_sessions().get_mut(&root)
             && self.attached_sessions.remove(&root)
         {
             session.attachments = session.attachments.saturating_sub(1);
+            // The runtime nobody holds any longer ends here, its scratchpad
+            // with it, as the reference's rebind removes the previous one.
+            if session.attachments == 0 {
+                scratchpad = session.scratchpad.take();
+            }
         }
+        drop(scratchpad);
         self.server
             .release_lease(current.as_deref().unwrap_or(&root));
     }

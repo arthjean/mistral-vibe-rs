@@ -313,7 +313,7 @@ fn every_audited_effect_kind_keeps_its_reference_header_body_and_collapse() {
         json!({"path": "src/lib.rs"}),
         json!({
             "status": "completed",
-            "output": {"file": "src/lib.rs", "old_string": "old", "new_string": "new"},
+            "output": {"file": "src/lib.rs", "oldString": "old", "newString": "new"},
         }),
     ));
     assert_eq!(
@@ -338,11 +338,11 @@ fn every_audited_effect_kind_keeps_its_reference_header_body_and_collapse() {
             "status": "completed",
             "output": {
                 "file": "src/lib.rs",
-                "old_string": "old",
-                "new_string": "new",
+                "oldString": "old",
+                "newString": "new",
                 "occurrences": [
-                    {"start_line": 3, "old_text": "let old = 1;", "new_text": "let new = 1;"},
-                    {"start_line": 7, "old_text": "drop(old)", "new_text": "drop(new)"},
+                    {"startLine": 3, "oldText": "let old = 1;", "newText": "let new = 1;"},
+                    {"startLine": 7, "oldText": "drop(old)", "newText": "drop(new)"},
                 ],
             },
         }),
@@ -372,8 +372,8 @@ fn every_audited_effect_kind_keeps_its_reference_header_body_and_collapse() {
             "outputText": "nothing to replace",
             "output": {
                 "file": "src/lib.rs",
-                "old_string": "old",
-                "new_string": "new",
+                "oldString": "old",
+                "newString": "new",
                 "occurrences": [],
             },
         }),

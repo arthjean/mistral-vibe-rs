@@ -54,20 +54,23 @@ fn settle_copy(text: &str, verified: bool) -> Result<bool, ClipboardError> {
     }
 }
 
-/// Reference `_is_ssh_session`, where no platform command is tried: the
-/// clipboard it reaches is the remote host's, not the operator's.
-fn is_ssh_session() -> bool {
-    ["SSH_CONNECTION", "SSH_TTY"]
+/// The platform commands a copy tries in turn, which are none in an SSH
+/// session (reference `_is_ssh_session`): the clipboard they reach there is
+/// the remote host's, not the operator's.
+fn native_copy_commands<'a>(
+    commands: &'a [(&'a str, &'a [&'a str])],
+) -> &'a [(&'a str, &'a [&'a str])] {
+    let ssh = ["SSH_CONNECTION", "SSH_TTY"]
         .into_iter()
-        .any(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()))
+        .any(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()));
+    if ssh { &[] } else { commands }
 }
 
 /// Whether one of `commands`, tried in turn, took `text`.
 fn copy_natively(commands: &[(&str, &[&str])], text: &str) -> bool {
-    !is_ssh_session()
-        && commands
-            .iter()
-            .any(|(program, arguments)| write_command(program, arguments, text.as_bytes()).is_ok())
+    native_copy_commands(commands)
+        .iter()
+        .any(|(program, arguments)| write_command(program, arguments, text.as_bytes()).is_ok())
 }
 
 #[cfg(test)]
@@ -129,19 +132,13 @@ pub(crate) async fn copy_text_bounded(text: String) -> Result<(), ClipboardError
         return Err(ClipboardError::Unavailable);
     }
     let mut verified = false;
-    if !is_ssh_session() {
-        for (program, arguments) in copy_commands() {
-            if super::external_action::run_command(
-                program,
-                arguments,
-                Some(text.as_bytes().to_vec()),
-            )
+    for (program, arguments) in native_copy_commands(copy_commands()) {
+        if super::external_action::run_command(program, arguments, Some(text.as_bytes().to_vec()))
             .await
             .is_ok()
-            {
-                verified = true;
-                break;
-            }
+        {
+            verified = true;
+            break;
         }
     }
     settle_copy(&text, verified).map(drop)

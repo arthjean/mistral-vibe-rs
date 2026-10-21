@@ -229,10 +229,10 @@ fn every_semantic_region_renders_at_the_reference_widths() {
                     "status": "completed",
                     "output": {
                         "file": "src/lib.rs",
-                        "old_string": "old",
-                        "new_string": "new",
+                        "oldString": "old",
+                        "newString": "new",
                         "occurrences": [
-                            {"start_line": 3, "old_text": "old", "new_text": "new"},
+                            {"startLine": 3, "oldText": "old", "newText": "new"},
                         ],
                     },
                     "display": {"success": true, "verb": "Edited", "message": "lib.rs"},

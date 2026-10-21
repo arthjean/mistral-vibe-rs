@@ -1,5 +1,5 @@
 //! The work a dispatch deferred, run off the request loop: tool calls,
-//! resource and catalog commands, the requests answered over the network,
+//! catalog commands, the requests answered over the network,
 //! and the MCP servers a session still has to connect.
 
 use std::pin::Pin;
@@ -51,15 +51,6 @@ impl AppServer {
             DeferredWork::RunUnifiedTurn(work) => pending(async move {
                 drive_unified_turn(work, sink).await;
                 DispatchBatch::default()
-            }),
-            DeferredWork::ResourceRequest {
-                request_id,
-                session_id,
-                command,
-            } => pending(async move {
-                server
-                    .execute_resource_request(request_id, session_id, command)
-                    .await
             }),
             DeferredWork::McpCatalog {
                 request_id,
@@ -156,32 +147,6 @@ impl AppServer {
             .invoke(name, invocation)
             .await
             .map_err(|error| ServerError::Tool(error.to_string()))
-    }
-
-    pub async fn execute_resource_request(
-        &self,
-        request_id: RequestId,
-        session_id: String,
-        command: ResourceBackendCommand,
-    ) -> DispatchBatch {
-        let Some(backend) = &self.resource_backend else {
-            return error_batch(
-                request_id,
-                ProtocolErrorCode::Conflict,
-                "Operational resource backend is not attached",
-            );
-        };
-        let request = ResourceBackendRequest {
-            session_id,
-            command,
-        };
-        let session_id = request.session_id.clone();
-        resource_result_batch(
-            request_id,
-            self,
-            &session_id,
-            backend.dispatch(request).await,
-        )
     }
 
     /// Runs one MCP catalog call and answers it: the requirements its

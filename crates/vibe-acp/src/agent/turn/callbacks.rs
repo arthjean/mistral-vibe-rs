@@ -132,7 +132,7 @@ where
         callback: Option<&str>,
     ) {
         // A Unified Harness session publishes its effects' states itself.
-        if harness.is_unified() {
+        if self.harness.use_unified {
             return;
         }
         let Some(previous) = harness.remembered_entry(turn, related) else {

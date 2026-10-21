@@ -459,10 +459,7 @@ pub fn sessions_overlay(result: &Value, current_session_id: &str) -> Overlay {
         .into_iter()
         .flatten()
         .filter_map(|session| {
-            let id = session
-                .get("id")
-                .or_else(|| session.get("sessionId"))
-                .and_then(Value::as_str)?;
+            let id = session.get("id").and_then(Value::as_str)?;
             let title = session
                 .get("title")
                 .and_then(Value::as_str)

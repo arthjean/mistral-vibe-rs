@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Map, Value, json};
+use tokio::sync::Semaphore;
 use vibe_core::clock::now_millis;
 use vibe_core::pycompat::{self, Dumps};
 use vibe_core::sync::lock;
@@ -73,6 +74,7 @@ pub(super) async fn gated_execute(
     sink: &Sink,
     call_id: &str,
     action: &ToolAction,
+    file_lane: &Semaphore,
 ) -> CallOutcome {
     // Reference `_process_actions`: process arguments are checked before any
     // approval is asked, and pacing the agent itself asks none.
@@ -84,7 +86,7 @@ pub(super) async fn gated_execute(
         return CallOutcome::Done(refused);
     }
     if matches!(tool, HarnessTool::Sleep | HarnessTool::Subagent(_)) {
-        return match execute(core, environment, sink, call_id, tool, action).await {
+        return match execute(core, environment, sink, call_id, tool, action, file_lane).await {
             Ok(result) => CallOutcome::Done(result),
             Err(message) => CallOutcome::FailTurn(message),
         };
@@ -97,7 +99,7 @@ pub(super) async fn gated_execute(
     };
     let (mut result, approval) = match environment.gate.check(action, &approver).await {
         GateVerdict::Run { approval } => {
-            match execute(core, environment, sink, call_id, tool, action).await {
+            match execute(core, environment, sink, call_id, tool, action, file_lane).await {
                 Ok(result) => (result, approval),
                 Err(message) => return CallOutcome::FailTurn(message),
             }
@@ -212,11 +214,18 @@ async fn execute(
     call_id: &str,
     tool: HarnessTool<'_>,
     action: &ToolAction,
+    file_lane: &Semaphore,
 ) -> Result<ToolResult, String> {
     let arguments = action.arguments.clone();
     Ok(match tool {
         HarnessTool::AskUserQuestion => return ask_user(core, sink, call_id, action).await,
         HarnessTool::File(file_tool) => {
+            // The file calls of one batch run one at a time, in the order they
+            // reach this point. The reference's single event loop hands them
+            // to its thread pool in call order and they commit in it; parallel
+            // blocking threads here would commit them in whichever order the
+            // reads happened to finish.
+            let _lane = file_lane.acquire().await.ok();
             let workspace = environment.workspace.clone();
             tokio::task::spawn_blocking(move || {
                 crate::tools::files::execute(file_tool, &arguments, &workspace)

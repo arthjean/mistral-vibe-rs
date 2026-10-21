@@ -6,10 +6,10 @@
 //! before any list and before the working-directory boundary, because it is the
 //! runtime's own capability rather than the operator's workspace.
 //!
-//! This port derives the name from the session identifier alone rather than
-//! from a random suffix, so a resumed session finds the directory the previous
-//! process left and the two halves of one conversation share a scratchpad. The
-//! prefix and the parent directory are the reference's.
+//! A [`Scratchpad`] is that directory as its runtime owns it: opened once,
+//! and removed with everything in it when the runtime lets go of it, as
+//! reference `cleanup_scratchpad` does on every agent-loop shutdown. A session
+//! resumed by another runtime opens a new one.
 
 use std::path::{Path, PathBuf};
 
@@ -18,32 +18,54 @@ use crate::storage::short_session_id;
 /// The prefix the reference names every scratchpad with.
 pub const SCRATCHPAD_PREFIX: &str = "vibe-scratchpad-";
 
-/// Where `session_id`'s scratchpad lives, whether or not it exists yet.
-#[must_use]
-pub fn scratchpad_path(session_id: &str) -> PathBuf {
-    let short = short_session_id(session_id);
-    std::env::temp_dir().join(format!("{SCRATCHPAD_PREFIX}{short}"))
+/// How many random names an opening tries, each one found taken, before it
+/// gives up.
+const NAME_ATTEMPTS: usize = 16;
+
+/// One runtime's scratchpad, removed with everything in it when dropped.
+#[derive(Debug)]
+pub struct Scratchpad {
+    path: PathBuf,
 }
 
-/// Opens `session_id`'s scratchpad, or [`None`] when the filesystem refuses.
-///
-/// Reference `init_scratchpad` answers `None` on an `OSError` rather than
-/// failing the runtime: a session without a scratchpad still runs, it just has
-/// no directory that skips the permission chain.
-#[must_use]
-pub fn init_scratchpad(session_id: &str) -> Option<PathBuf> {
-    let path = scratchpad_path(session_id);
-    std::fs::create_dir_all(&path).ok()?;
-    Some(path)
+impl Scratchpad {
+    /// Opens a new scratchpad for `session_id`, or [`None`] when the
+    /// filesystem refuses.
+    ///
+    /// Reference `init_scratchpad`: a `tempfile.mkdtemp` under the system
+    /// temporary directory, private to its owner and named after the short
+    /// session identifier plus a random part, so two runtimes of one session
+    /// never share it. It answers `None` on an `OSError` rather than failing
+    /// the runtime: a session without a scratchpad still runs, it just has no
+    /// directory that skips the permission chain.
+    #[must_use]
+    pub fn open(session_id: &str) -> Option<Self> {
+        let parent = std::env::temp_dir();
+        let short = short_session_id(session_id);
+        for _ in 0..NAME_ATTEMPTS {
+            let random = crate::session_id::random_hex::<4>();
+            let path = parent.join(format!("{SCRATCHPAD_PREFIX}{short}-{random}"));
+            match crate::atomic_file::create_private_directory(&path) {
+                Ok(()) => return Some(Self { path }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(_) => return None,
+            }
+        }
+        None
+    }
+
+    /// The directory itself.
+    #[must_use]
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
-/// Removes `scratchpad` and everything in it, ignoring an absent directory.
-///
-/// Reference `cleanup_scratchpad`, which swallows both a missing directory and
-/// a failure to remove one.
-pub fn cleanup_scratchpad(scratchpad: Option<&Path>) {
-    if let Some(path) = scratchpad {
-        let _ = std::fs::remove_dir_all(path);
+impl Drop for Scratchpad {
+    /// Reference `cleanup_scratchpad`, which swallows both a missing directory
+    /// and a failure to remove one.
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
     }
 }
 

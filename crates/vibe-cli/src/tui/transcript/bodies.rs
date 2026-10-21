@@ -349,7 +349,8 @@ fn is_safe_link(url: &str) -> bool {
 /// Reference `EditResultWidget` over `render_edit_diff`
 /// (`vibe/cli/textual_ui/widgets/diff_rendering.py`): each occurrence is its
 /// own unified diff with two lines of context, numbered from the line it starts
-/// on, with a gap row between occurrences and between hunks.
+/// on, with a gap row between occurrences and between hunks. The output is
+/// keyed by its model's aliases (`vibe_core::events::detail::project_output`).
 fn occurrence_diff_lines(output: &Value) -> Vec<BodyLine> {
     let mut occurrences = output
         .get("occurrences")
@@ -360,11 +361,11 @@ fn occurrence_diff_lines(output: &Value) -> Vec<BodyLine> {
     // replacement is the one occurrence, anchored nowhere.
     if occurrences.is_empty()
         && let (Some(old), Some(new)) = (
-            output.get("old_string").and_then(Value::as_str),
-            output.get("new_string").and_then(Value::as_str),
+            output.get("oldString").and_then(Value::as_str),
+            output.get("newString").and_then(Value::as_str),
         )
     {
-        occurrences.push(serde_json::json!({"old_text": old, "new_text": new}));
+        occurrences.push(serde_json::json!({"oldText": old, "newText": new}));
     }
     let mut lines = Vec::new();
     for (index, occurrence) in occurrences.iter().enumerate() {
@@ -372,12 +373,16 @@ fn occurrence_diff_lines(output: &Value) -> Vec<BodyLine> {
             lines.push(diff_gap());
         }
         let start_line = occurrence
-            .get("start_line")
-            .or_else(|| occurrence.get("startLine"))
+            .get("startLine")
             .and_then(Value::as_u64)
             .filter(|line| *line > 0);
-        let old = string_argument(occurrence, &["old_text", "oldText"]);
-        let new = string_argument(occurrence, &["new_text", "newText"]);
+        let text = |key: &str| {
+            occurrence
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        };
+        let (old, new) = (text("oldText"), text("newText"));
         let old = old.trim_end_matches('\n').split('\n').collect::<Vec<_>>();
         let new = new.trim_end_matches('\n').split('\n').collect::<Vec<_>>();
         occurrence_rows(
@@ -518,11 +523,4 @@ fn scalar_text(value: &Value) -> String {
         Value::String(text) => text.clone(),
         value => value.to_string(),
     }
-}
-
-fn string_argument(arguments: &Value, keys: &[&str]) -> String {
-    keys.iter()
-        .find_map(|key| arguments.get(*key).and_then(Value::as_str))
-        .unwrap_or_default()
-        .to_owned()
 }

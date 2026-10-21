@@ -43,7 +43,6 @@ import json
 import os
 from pathlib import Path
 import queue
-import shutil
 import stat
 import sys
 import tempfile
@@ -54,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-from reference import OracleError, require_pin  # noqa: E402
+from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -580,7 +579,7 @@ class Run:
         if server is not None:
             server.stop()
         self.backend.close()
-        shutil.rmtree(self.root, ignore_errors=True)
+        host_env.remove_tree(self.root)
 
 
 # --------------------------------------------------------------------------
@@ -679,11 +678,11 @@ def main() -> int:
             reference = {"commit": "server-override"}
             dialect = "port"
         else:
-            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
-            binary = arguments.reference / ".venv/bin/vibe-app-server"
-            if not binary.is_file():
-                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary), *HARNESS_FLAGS]
+            commit, binary = reference_command(
+                arguments.reference, "vibe-app-server", arguments.expected_commit
+            )
+            reference = {"commit": commit}
+            command = [*binary, *HARNESS_FLAGS]
             dialect = "reference"
         selected = [s for s in scenarios() if not arguments.only or any(name in s["name"] for name in arguments.only)]
         captured = []

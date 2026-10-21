@@ -108,7 +108,7 @@ pub(super) fn start_active_turn(
         observer,
         service.title_scheduler(),
     ));
-    let runner = service.turn_runner();
+    let runner = service.turn_runner(&reservation.session_id);
     let turn_id = reservation.turn_id.clone();
     let task = tokio::spawn(async move {
         let outcome = runner.run(&reservation, observer).await;

@@ -340,21 +340,13 @@ where
     }
 
     /// The skills the session's runtime holds, as reference
-    /// `resources.runtime.skills` reads them: a Unified Harness session
-    /// answers them from `runtime/read`, a legacy one lists them.
+    /// `resources.runtime.skills` reads them.
     async fn session_skills(&self, harness: &AcpHarness<D>) -> Vec<Value> {
-        let (method, pointer) = if harness.is_unified() {
-            ("runtime/read", "/runtime/skills")
-        } else {
-            ("skills/list", "/skills")
-        };
-        let answer = self
-            .call(harness, method, json!({}))
+        harness
+            .service
+            .lock()
             .await
-            .unwrap_or_default();
-        serde_json::to_value(answer)
-            .ok()
-            .and_then(|answer| answer.pointer(pointer).and_then(Value::as_array).cloned())
+            .session_skills(&harness.session_id)
             .unwrap_or_default()
     }
 

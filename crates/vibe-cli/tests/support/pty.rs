@@ -20,10 +20,14 @@ use std::time::{Duration, Instant};
 
 use nix::pty::{Winsize, openpty};
 use nix::sys::signal::{Signal, kill};
+use nix::sys::termios::{Termios, tcgetattr};
 use nix::sys::wait::{WaitPidFlag, WaitStatus, waitpid};
 use nix::unistd::Pid;
 use vibe_core::events::ModelMessage;
 use vibe_core::storage::SessionStore;
+
+#[path = "test_root.rs"]
+mod test_root;
 
 /// Replays a terminal transcript onto a sparse screen so assertions read what
 /// the operator sees. Only cursor positioning and erasure move content; every
@@ -133,6 +137,11 @@ pub fn composer_carries(screen: &str, word: &str) -> bool {
 pub struct PtyProcess {
     child: Child,
     master: File,
+    /// A slave descriptor kept to read the terminal's attributes. It holds the
+    /// reader off its end of file, so it is closed before the reader joins.
+    terminal: File,
+    /// The attributes the terminal had before the client started.
+    initial_termios: Termios,
     receiver: Receiver<Vec<u8>>,
     reader: JoinHandle<Vec<u8>>,
     /// Every byte read so far, which replays to the whole current screen.
@@ -208,6 +217,8 @@ impl PtyProcess {
         let master = File::from(pty.master);
         let mut reader = master.try_clone().expect("PTY reader clones");
         let slave = File::from(pty.slave);
+        let terminal = slave.try_clone().expect("PTY probe clones");
+        let initial_termios = tcgetattr(&terminal).expect("PTY attributes read");
         let child = command
             .current_dir(working_directory)
             .env("HOME", vibe_home)
@@ -255,6 +266,8 @@ impl PtyProcess {
         Self {
             child,
             master,
+            terminal,
+            initial_termios,
             receiver,
             reader,
             screen: Vec::new(),
@@ -345,6 +358,21 @@ impl PtyProcess {
         output
     }
 
+    /// The terminal's attributes before the client started.
+    pub fn initial_termios(&self) -> &Termios {
+        &self.initial_termios
+    }
+
+    /// The terminal's attributes as the client last left them.
+    pub fn termios(&self) -> Termios {
+        tcgetattr(&self.terminal).expect("PTY attributes read")
+    }
+
+    /// The child's exit status, once it has exited.
+    pub fn try_wait(&mut self) -> Option<ExitStatus> {
+        self.child.try_wait().expect("child status")
+    }
+
     pub fn write(&mut self, bytes: &[u8]) {
         self.master.write_all(bytes).expect("PTY input writes");
         self.master.flush().expect("PTY input flushes");
@@ -377,7 +405,7 @@ impl PtyProcess {
     pub fn wait(mut self, timeout: Duration) -> (ExitStatus, Vec<u8>) {
         let deadline = Instant::now() + timeout;
         let status = loop {
-            if let Some(status) = self.child.try_wait().expect("child status") {
+            if let Some(status) = self.try_wait() {
                 break status;
             }
             if Instant::now() >= deadline {
@@ -388,6 +416,7 @@ impl PtyProcess {
             std::thread::sleep(Duration::from_millis(10));
         };
         drop(self.master);
+        drop(self.terminal);
         let transcript = self.reader.join().expect("PTY reader joins");
         (status, transcript)
     }
@@ -396,6 +425,7 @@ impl PtyProcess {
         self.child.kill().expect("TUI stops");
         let _ = self.child.wait();
         drop(self.master);
+        drop(self.terminal);
         self.reader.join().expect("PTY reader joins")
     }
 }
@@ -430,9 +460,10 @@ pub fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, 
 }
 
 /// A temporary root holding the workspace a TUI starts in and the home it
-/// keeps its state under. The root lives as long as the returned guard.
-pub fn tui_workspace() -> (tempfile::TempDir, PathBuf, PathBuf) {
-    let temporary = tempfile::tempdir().expect("temporary TUI home");
+/// keeps its state under. The root lives as long as the returned guard, which
+/// removes the hardened plugin checkouts a session start leaves in the home.
+pub fn tui_workspace() -> (test_root::TestRoot, PathBuf, PathBuf) {
+    let temporary = test_root::tempdir().expect("temporary TUI home");
     let workspace = temporary.path().join("workspace");
     let home = temporary.path().join("home");
     std::fs::create_dir_all(&workspace).expect("workspace");
