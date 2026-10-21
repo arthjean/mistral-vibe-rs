@@ -343,8 +343,7 @@ where
     /// `resources.runtime.skills` reads them: a Unified Harness session
     /// answers them from `runtime/read`, a legacy one lists them.
     async fn session_skills(&self, harness: &AcpHarness<D>) -> Vec<Value> {
-        let unified = harness.service.lock().await.is_unified(&harness.session_id);
-        let (method, pointer) = if unified {
+        let (method, pointer) = if harness.is_unified() {
             ("runtime/read", "/runtime/skills")
         } else {
             ("skills/list", "/skills")

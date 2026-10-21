@@ -27,7 +27,7 @@ use vibe_core::process::{
 };
 use vibe_protocol::{Envelope, JsonRpcVersion, RequestId, ServerRequest, encode_frame};
 
-use crate::sync::lock;
+use vibe_core::sync::lock;
 
 /// What one connection lets its server delegate, and where the delegation goes.
 #[derive(Default)]

@@ -17,6 +17,7 @@ use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::provider::{ProviderError, Usage};
 use vibe_core::storage::HydratedSession;
+use vibe_core::sync::lock;
 use vibe_core::telemetry::ClientTelemetry;
 use vibe_core::tools::ToolRegistry;
 pub use vibe_protocol::{
@@ -182,6 +183,45 @@ pub trait TurnDriver: Send + Sync {
     ) -> Result<(), DriverError> {
         Err(DriverError::UnsupportedControl("agent switch"))
     }
+}
+
+/// Reference `_schedule_title_generation_events`: starts the background
+/// title a completed model step of `session_id` makes due, which runs beside
+/// the rest of the turn and lands whenever the utility model answers.
+/// `publish` hears the snapshot that announces the work and the frames that
+/// land it; a process with no runtime to run it on makes the next step due
+/// instead.
+pub(crate) fn schedule_title<D>(
+    server: &AppServer,
+    driver: &D,
+    session_id: &str,
+    turn_completing: bool,
+    publish: impl Fn(Vec<u8>) + Send + 'static,
+) where
+    D: TurnDriver,
+{
+    let Some(periodic) = driver.title_model_is_fast() else {
+        return;
+    };
+    let Some((job, started)) = server.title_job(session_id, periodic, turn_completing) else {
+        return;
+    };
+    publish(started);
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+        server.land_title(job, None).into_iter().for_each(publish);
+        return;
+    };
+    let title = driver.generate_title(
+        job.session_id.clone(),
+        job.messages.clone(),
+        job.previous_title.clone(),
+        server.client_telemetry(),
+    );
+    let server = server.clone();
+    runtime.spawn(async move {
+        let title = title.await;
+        server.land_title(job, title).into_iter().for_each(publish);
+    });
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -607,8 +647,6 @@ pub enum DriverError {
     MissingCredentialEnvironment(String),
     #[error("turn `{0}` is stale")]
     StaleTurn(String),
-    #[error("driver state lock is poisoned")]
-    StatePoisoned,
     #[error("turn driver does not support `{0}`")]
     UnsupportedControl(&'static str),
     #[error("image attachment is invalid: {0}")]
@@ -745,7 +783,6 @@ pub fn turn_error_code(error: &DriverError) -> TurnErrorCode {
             .and_then(|code| serde_json::from_value(Value::String(code.to_owned())).ok())
             .unwrap_or(TurnErrorCode::InternalError),
         DriverError::StaleTurn(_)
-        | DriverError::StatePoisoned
         | DriverError::UnsupportedControl(_)
         | DriverError::Observation(_)
         | DriverError::Tool(_)
@@ -897,7 +934,7 @@ pub(crate) mod live;
 pub(crate) mod unified;
 
 pub use echo::EchoTurnDriver;
-pub use headless::HeadlessService;
+pub use headless::{HeadlessService, TeleportEvents};
 pub use in_process::{InProcessClient, LiveNotificationListener, PendingPublicCall};
 
 use in_process::ProgrammaticEventObserver;

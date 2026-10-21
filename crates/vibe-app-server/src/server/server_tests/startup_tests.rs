@@ -314,7 +314,6 @@ fn a_tool_whose_prerequisite_is_missing_is_withheld_and_named() {
         .map(|session| session.tools.clone())
         .expect("the session started")
         .available(None, &NameFilter::default())
-        .expect("available")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<Vec<_>>();
@@ -508,7 +507,6 @@ fn session_start_publishes_the_descriptions_an_operator_wrote() {
     let published = |registry: &ToolRegistry| -> BTreeMap<String, String> {
         registry
             .available(None, &NameFilter::default())
-            .expect("the surface publishes")
             .into_iter()
             .map(|spec| (spec.name, spec.description))
             .collect()

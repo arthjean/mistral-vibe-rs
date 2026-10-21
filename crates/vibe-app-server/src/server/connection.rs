@@ -116,7 +116,7 @@ impl ServerConnection {
         if self.state != ConnectionState::Ready {
             return Err(ServerError::NotInitialized);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let key = sessions
             .key(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
@@ -151,7 +151,7 @@ impl ServerConnection {
     }
 
     pub fn detach_session(&mut self, session_id: &str) -> Result<(), ServerError> {
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let key = sessions
             .key(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
@@ -166,7 +166,8 @@ impl ServerConnection {
 
     pub fn close(&mut self) {
         let mut released = Vec::new();
-        if let Ok(mut sessions) = self.server.lock_sessions() {
+        {
+            let mut sessions = self.server.lock_sessions();
             for session_id in &self.attached_sessions {
                 if let Some(session) = sessions.get_mut(session_id) {
                     session.attachments = session.attachments.saturating_sub(1);
@@ -479,7 +480,7 @@ impl ServerConnection {
             if let Some(batch) = self.attachment_error(request.id.clone(), session_id) {
                 return Ok(batch);
             }
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| session_missing("Session was not found"))?;
@@ -534,10 +535,7 @@ impl ServerConnection {
     }
 
     fn attachment_error(&self, request_id: RequestId, session_id: &str) -> Option<DispatchBatch> {
-        let sessions = match self.server.lock_sessions() {
-            Ok(sessions) => sessions,
-            Err(error) => return Some(internal_error_batch(request_id, &error)),
-        };
+        let sessions = self.server.lock_sessions();
         let attached = sessions
             .key(session_id)
             .is_some_and(|key| self.attached_sessions.contains(key));

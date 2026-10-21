@@ -233,7 +233,6 @@ async fn a_published_description_names_its_server_and_carries_the_hint() {
 
     let described = tools
         .list()
-        .expect("the registry lists what it registered")
         .into_iter()
         .map(|spec| (spec.name, spec.description))
         .collect::<BTreeMap<_, _>>();
@@ -434,7 +433,6 @@ async fn a_per_source_denylist_only_withholds_that_server_tools() {
 
     let published = tools
         .available(None, &crate::matching::NameFilter::default())
-        .expect("available")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<Vec<_>>();

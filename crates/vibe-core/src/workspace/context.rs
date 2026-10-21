@@ -8,6 +8,7 @@ use std::pin::Pin;
 use serde::{Deserialize, Serialize};
 
 use super::{FileRead, Workspace, WorkspaceError};
+use crate::sync::lock;
 
 /// The per-directory instruction file both implementations read.
 pub(super) const INSTRUCTION_FILE: &str = "AGENTS.md";
@@ -88,12 +89,7 @@ impl Workspace {
         }
         let instruction_files = {
             let mut instruction_files = Vec::new();
-            let mut injected =
-                self.injected_instructions
-                    .lock()
-                    .map_err(|_| WorkspaceError::LockPoisoned {
-                        surface: "instruction injection",
-                    })?;
+            let mut injected = lock(&self.injected_instructions);
             for candidate in candidates {
                 if injected.contains(&candidate) || self.directory.metadata(&candidate).is_err() {
                     continue;
@@ -138,12 +134,7 @@ impl Workspace {
         } else {
             relative.parent().unwrap_or(Path::new("")).to_path_buf()
         };
-        let mut injected =
-            self.injected_instructions
-                .lock()
-                .map_err(|_| WorkspaceError::LockPoisoned {
-                    surface: "instruction injection",
-                })?;
+        let mut injected = lock(&self.injected_instructions);
         let mut discovered = Vec::new();
         let mut current = start;
         while !current.as_os_str().is_empty() && current != Path::new(".") {

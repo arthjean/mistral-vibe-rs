@@ -626,7 +626,7 @@ impl OperandWorkspace {
             ("<outside>", canonical(&self.outside)),
             ("<workdir>", canonical(&self.workdir)),
         ];
-        if let Some(home) = crate::config::user_home_directory() {
+        if let Some(home) = crate::platform::user_home() {
             pairs.push(("<home>", canonical(&home)));
         }
         if cfg!(windows) {
@@ -1211,7 +1211,7 @@ fn every_windows_grammar_answer_matches_the_reference() {
         .iter()
         .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
         .collect::<Vec<_>>();
-    let home = crate::config::user_home_directory()
+    let home = crate::platform::user_home()
         .map(|home| home.display().to_string())
         .unwrap_or_default();
     for case in &grammar.expansions {

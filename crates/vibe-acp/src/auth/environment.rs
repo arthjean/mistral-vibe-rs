@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::io;
 use std::path::PathBuf;
-use std::sync::{Mutex, PoisonError};
+use std::sync::Mutex;
 
 use serde_json::Value;
 use toml::Table;
@@ -16,6 +16,7 @@ use vibe_core::auth::{
     SignInAttempt, SignInError, SignInErrorCode, SignInService, SystemSignInRuntime,
     resolve_active_provider,
 };
+use vibe_core::sync::lock;
 use vibe_core::whoami::{HttpWhoAmIGateway, resolve_tenant_domains};
 
 use crate::auth::{
@@ -87,16 +88,10 @@ impl ProductionAuthEnvironment {
 
     fn environ(&self) -> BTreeMap<String, String> {
         let mut environ: BTreeMap<String, String> = vibe_core::platform::unicode_vars().collect();
-        if let Ok(overlay) = self.overlay.lock() {
-            for (key, value) in overlay.iter() {
-                environ.insert(key.clone(), value.clone());
-            }
+        for (key, value) in lock(&self.overlay).iter() {
+            environ.insert(key.clone(), value.clone());
         }
         environ
-    }
-
-    fn overlay(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, String>> {
-        self.overlay.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn gateway(
@@ -143,7 +138,7 @@ impl AcpAuthEnvironment for ProductionAuthEnvironment {
         api_key: &str,
         custom_domain: bool,
     ) -> PersistOutcome {
-        let mut overlay = self.overlay();
+        let mut overlay = lock(&self.overlay);
         vibe_core::auth::persist_api_key(
             env_key,
             backend_is_mistral,
@@ -157,7 +152,7 @@ impl AcpAuthEnvironment for ProductionAuthEnvironment {
     }
 
     fn remove_api_key(&self, env_key: &str) -> Result<(), RemoveError> {
-        let mut overlay = self.overlay();
+        let mut overlay = lock(&self.overlay);
         vibe_core::auth::remove_api_key(env_key, &mut overlay, &self.env_file, &self.store)
     }
 

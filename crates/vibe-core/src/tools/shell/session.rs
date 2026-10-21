@@ -23,6 +23,7 @@ use tokio::sync::Mutex;
 use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
 use crate::process::{ProcessChunk, TerminalManager, TerminalState};
 use crate::shell::ShellConfig;
+use crate::sync;
 use crate::time::UtcTimestamp;
 use crate::tools::config::{
     ShellCommandConfig, ShellInlineConfig, ShellOutputConfig, ToolConfigResolver,
@@ -34,11 +35,11 @@ use crate::tools::{
 
 use super::decode::read_file_window;
 use super::host::{ShellFamily, resolve_session_shell};
-use super::policy::{environment_overrides, is_hard_timeout, render_seconds, timeout_argument};
+use super::policy::{ShellCallArguments, render_seconds};
 use super::session_info::{SessionHandle, SessionInfo, SessionWindow};
 use super::{
-    PUMP_INTERVAL, SESSIONS_DIRECTORY, command_argument, exit_status, is_family_session_id,
-    process_error, process_spec, string_argument,
+    PUMP_INTERVAL, SESSIONS_DIRECTORY, exit_status, is_family_session_id, process_error,
+    process_spec,
 };
 
 /// One Vibe session's shell state: the terminals it opened and the managed
@@ -111,36 +112,24 @@ impl SessionShell {
             }
             orphaned.insert(id, metadata);
         }
-        if let Ok(mut store) = self.orphaned.lock() {
-            *store = orphaned;
-        }
+        *sync::lock(&self.orphaned) = orphaned;
     }
 
     /// The manifest recorded for `session_id`, if it names an orphan.
     pub(super) fn orphan(&self, session_id: &str) -> Option<Value> {
-        self.orphaned
-            .lock()
-            .ok()
-            .and_then(|store| store.get(session_id).cloned())
+        sync::lock(&self.orphaned).get(session_id).cloned()
     }
 
     /// Every orphan's manifest, by session id.
     pub(super) fn orphans(&self) -> Vec<(String, Value)> {
-        self.orphaned
-            .lock()
-            .map(|store| {
-                store
-                    .iter()
-                    .map(|(id, manifest)| (id.clone(), manifest.clone()))
-                    .collect()
-            })
-            .unwrap_or_default()
+        sync::lock(&self.orphaned)
+            .iter()
+            .map(|(id, manifest)| (id.clone(), manifest.clone()))
+            .collect()
     }
 
     pub(super) fn forget_orphan(&self, session_id: &str) {
-        if let Ok(mut store) = self.orphaned.lock() {
-            store.remove(session_id);
-        }
+        sync::lock(&self.orphaned).remove(session_id);
     }
 }
 
@@ -208,20 +197,21 @@ pub(super) struct ManagedSession {
 
 impl ManagedSession {
     pub(super) fn snapshot(&self) -> (SessionStatus, Option<i32>, bool) {
-        self.state
-            .lock()
-            .map_or((SessionStatus::Running, None, false), |state| {
-                (state.status, state.exit_code, state.backpressure_dropped)
-            })
+        let state = sync::lock(&self.state);
+        (state.status, state.exit_code, state.backpressure_dropped)
     }
 
     /// Reference `_session_info_locked`.
     pub(super) fn info(&self) -> SessionInfo {
-        let (status, exit_code, dropped) = self.snapshot();
-        let updated_at = self.state.lock().map_or_else(
-            |_| self.created_at.clone(),
-            |state| state.updated_at.clone(),
-        );
+        let (status, exit_code, dropped, updated_at) = {
+            let state = sync::lock(&self.state);
+            (
+                state.status,
+                state.exit_code,
+                state.backpressure_dropped,
+                state.updated_at.clone(),
+            )
+        };
         // The reference declares no field for a reader that fell behind: its
         // own reader reports every failure through `reader_error`, so output
         // this session had to drop is named there rather than through a field
@@ -253,24 +243,23 @@ impl ManagedSession {
     /// the reader that sees the process exit does not report it as completed.
     /// Reference `kill` sets the status under the session's condition first.
     fn mark(&self, status: SessionStatus) {
-        if let Ok(mut state) = self.state.lock() {
-            state.status = status;
-            state.updated_at = now_iso();
-        }
+        let mut state = sync::lock(&self.state);
+        state.status = status;
+        state.updated_at = now_iso();
     }
 
     /// Records how the process ended without touching its status, for a
     /// session a kill already marked.
     fn record_exit(&self, exit_code: Option<i32>) {
-        if let Ok(mut state) = self.state.lock()
-            && state.exit_code.is_none()
-        {
+        let mut state = sync::lock(&self.state);
+        if state.exit_code.is_none() {
             state.exit_code = exit_code;
         }
     }
 
     pub(super) fn settle(&self, status: SessionStatus, exit_code: Option<i32>) {
-        if let Ok(mut state) = self.state.lock() {
+        {
+            let mut state = sync::lock(&self.state);
             state.status = status;
             state.exit_code = exit_code;
             state.updated_at = now_iso();
@@ -316,12 +305,14 @@ pub(super) async fn run_managed_command(
     shell: &Arc<SessionShell>,
     config: &ShellConfig,
     working_directory: &Path,
-    arguments: &Value,
+    call: &ShellCallArguments,
     settings: &ShellCommandConfig,
     output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
-    let command = command_argument(arguments)?;
-    let requested_directory = string_argument(arguments, "cwd")
+    let command = &call.command;
+    let requested_directory = call
+        .cwd
+        .as_ref()
         .map_or_else(|| working_directory.to_path_buf(), PathBuf::from);
     // Reference `ExperimentalBash.run` resolves the shell before the session
     // exists: the call's override, then the tool's configured shell, then the
@@ -330,15 +321,15 @@ pub(super) async fn run_managed_command(
     let config = resolve_session_shell(
         shell.family,
         config,
-        string_argument(arguments, "shell"),
+        call.shell.as_deref(),
         settings.shell.as_deref(),
     )?;
     let session = start_managed_session(
         shell,
         &config,
         &requested_directory,
-        &command,
-        &environment_overrides(arguments),
+        command,
+        &call.environment,
         settings.max_output_bytes,
     )
     .await?;
@@ -352,13 +343,12 @@ pub(super) async fn run_managed_command(
     // a poll.
     let limit = settings.max_output_bytes;
     let handle = SessionHandle::Live(session.clone());
-    let background = arguments["background"].as_bool().unwrap_or(false);
-    if background {
+    if call.background {
         let window = SessionWindow::read(&handle, 0, limit)?;
         return Ok(window.command_document(true).into_output(window.display()));
     }
-    let hard_timeout = is_hard_timeout(arguments);
-    let timeout = timeout_argument(arguments, settings);
+    let hard_timeout = call.is_hard_timeout();
+    let timeout = call.wait(settings);
     let deadline = Instant::now() + timeout;
     // Reference `_kill_on_abort`: until the session exits or is handed to the
     // background, it belongs to this call, so a cancelled turn stops it rather
@@ -642,8 +632,8 @@ pub(super) fn spawn_pump(terminals: TerminalManager, session: Arc<ManagedSession
 }
 
 pub(super) fn append_chunks(session: &ManagedSession, chunks: &[ProcessChunk], dropped: bool) {
-    if dropped && let Ok(mut state) = session.state.lock() {
-        state.backpressure_dropped = true;
+    if dropped {
+        sync::lock(&session.state).backpressure_dropped = true;
     }
     if chunks.is_empty() {
         return;

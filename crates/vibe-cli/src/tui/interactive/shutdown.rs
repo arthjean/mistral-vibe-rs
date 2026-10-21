@@ -115,18 +115,12 @@ pub(super) async fn shut_down(
 /// tokens spent since the session baseline.
 fn session_exit_summary(runtime: &mut InteractiveRuntime) -> exit::SessionExitSummary {
     let stats = runtime.session_stats();
-    let tokens = |key: &str| {
-        stats
-            .get(key)
-            .or_else(|| stats.get(super::super::pickers::to_camel_case(key).as_str()))
-            .and_then(Value::as_u64)
-            .unwrap_or_default()
-    };
+    let tokens = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or_default();
     exit::SessionExitSummary {
         session_id: Some(runtime.session_id.clone()),
         usage: exit::SessionUsage {
-            input_tokens: tokens("session_prompt_tokens"),
-            output_tokens: tokens("session_completion_tokens"),
+            input_tokens: tokens("sessionPromptTokens"),
+            output_tokens: tokens("sessionCompletionTokens"),
         },
     }
 }

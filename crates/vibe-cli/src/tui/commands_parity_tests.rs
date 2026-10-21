@@ -33,7 +33,8 @@ use std::process::Command;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::replay::pinned_reference;
 
 use super::commands::{COMMANDS, CommandContext, command_available_in, parse_command_in};
 use super::help;
@@ -978,12 +979,9 @@ fn the_committed_corpus_replays_against_this_port() {
 /// pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "commands") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("commands") else {
         return;
-    }
+    };
     let repository = repo_root();
     let script = repository.join(CAPTURE_SCRIPT);
     let recaptured = repository.join("target/commands-corpus.json");

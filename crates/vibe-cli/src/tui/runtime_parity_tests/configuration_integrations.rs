@@ -11,7 +11,7 @@ use vibe_core::config::{ProxyEnvironmentStore, ProxyKey};
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::chat_input::{InputMode, Safety, VoicePhase};
-use crate::tui::command_handlers::format_loop_list;
+use crate::tui::command_handlers::loops::format_loop_list;
 use crate::tui::completion::CompletionEngine;
 use crate::tui::input::PromptEditor;
 use crate::tui::interaction::{
@@ -265,6 +265,7 @@ fn fixture_sources(mcp: &Value, connectors: &Value) -> (Vec<McpSource>, BTreeMap
         .iter()
         .map(|raw| McpSource {
             name: text(raw, "name"),
+            display_name: text(raw, "name"),
             kind: IntegrationKind::McpServer,
             transport: text(raw, "transport"),
             status: if enabled(raw) {
@@ -297,6 +298,7 @@ fn fixture_sources(mcp: &Value, connectors: &Value) -> (Vec<McpSource>, BTreeMap
         connector_names.insert(text(&raw, "id"), name.clone());
         let disabled = list(&raw, "/disabledTools");
         sources.push(McpSource {
+            display_name: name.clone(),
             name,
             kind: IntegrationKind::Connector,
             transport: "connector".to_owned(),
@@ -663,6 +665,7 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
         (
             mcp_overlay(&[McpSource {
                 name: "github".to_owned(),
+                display_name: "github".to_owned(),
                 kind: IntegrationKind::McpServer,
                 transport: "streamable-http".to_owned(),
                 status: McpSourceStatus::Enabled,

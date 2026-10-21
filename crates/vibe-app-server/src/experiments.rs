@@ -35,7 +35,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::sync::lock;
+use vibe_core::sync::lock;
 
 use vibe_core::config::LayeredConfig;
 use vibe_core::experiments::{

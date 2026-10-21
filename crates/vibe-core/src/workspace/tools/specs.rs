@@ -56,6 +56,52 @@ pub(super) struct WriteFileArgs {
     pub(super) content: String,
 }
 
+/// The arguments of a file tool, as the permission chain in front of it reads
+/// them.
+pub(super) trait PathArgs: DeserializeOwned {
+    /// The argument that names the path, as the schema spells it.
+    const ARGUMENT: &'static str;
+    /// Whether an empty path names the working directory rather than being
+    /// missing, which is what `GrepArgs.path` defaulting to it declares.
+    const EMPTY_IS_ROOT: bool = false;
+
+    /// The path argument as the call wrote it.
+    fn path(&self) -> &str;
+}
+
+impl PathArgs for ReadFileArgs {
+    const ARGUMENT: &'static str = "file_path";
+
+    fn path(&self) -> &str {
+        &self.file_path
+    }
+}
+
+impl PathArgs for GrepArgs {
+    const ARGUMENT: &'static str = "path";
+    const EMPTY_IS_ROOT: bool = true;
+
+    fn path(&self) -> &str {
+        &self.path
+    }
+}
+
+impl PathArgs for EditArgs {
+    const ARGUMENT: &'static str = "file_path";
+
+    fn path(&self) -> &str {
+        &self.file_path
+    }
+}
+
+impl PathArgs for WriteFileArgs {
+    const ARGUMENT: &'static str = "file_path";
+
+    fn path(&self) -> &str {
+        &self.file_path
+    }
+}
+
 /// Reference `ReadFileArgs.limit` default.
 const DEFAULT_READ_LINE_LIMIT: usize = 2000;
 

@@ -11,10 +11,11 @@ use super::super::pickers::{
 use super::super::setup::ResolvedTheme;
 use super::super::state::TuiState;
 use super::super::switching::{self, SwitchRequest};
-use super::super::{InteractiveRuntime, call_runtime, persist_user_setting, update_theme};
+use super::super::{
+    InteractiveRuntime, call_runtime, persist_setting, persist_user_setting, update_theme,
+};
 use super::config::{
-    apply_thinking, config_field_schema, configured_value, persist_config_setting, persisted_theme,
-    selected_config_target,
+    apply_thinking, config_field_schema, configured_value, persisted_theme, selected_config_target,
 };
 use super::mcp::{McpEffect, reduce_auth_action};
 use super::{
@@ -84,14 +85,7 @@ pub(super) async fn select_overlay_item(
                     let path = key.split('.').collect::<Vec<_>>();
                     let target =
                         selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-                    if persist_config_setting(
-                        runtime,
-                        &target,
-                        &path,
-                        json!(!current),
-                        false,
-                        state,
-                    ) {
+                    if persist_setting(runtime, &target, &path, json!(!current), false, state) {
                         show_config(runtime, state);
                     }
                 } else {
@@ -121,7 +115,7 @@ pub(super) async fn select_overlay_item(
             };
             let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
             let segments = path.split('.').collect::<Vec<_>>();
-            if persist_config_setting(runtime, &target, &segments, value, false, state) {
+            if persist_setting(runtime, &target, &segments, value, false, state) {
                 show_config(runtime, state);
             }
         }
@@ -211,7 +205,7 @@ pub(super) async fn select_overlay_item(
                 return None;
             };
             let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-            if persist_config_setting(runtime, &target, &[path.as_str()], value, false, state) {
+            if persist_setting(runtime, &target, &[path.as_str()], value, false, state) {
                 // Both audio surfaces are resolved again where the write
                 // landed: `sync_voice_preference` rebuilds the transcription
                 // session and `apply_render_preferences` the speech client, so

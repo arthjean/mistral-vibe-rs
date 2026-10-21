@@ -18,9 +18,8 @@ use clap::{Arg, ArgAction, Command, CommandFactory};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use vibe_core::parity::{
-    REFERENCE_COMMIT, REFERENCE_VERSION, off_pin_reason, pinned_interpreter, reference_root,
-};
+use vibe_core::parity::replay::pinned_reference;
+use vibe_core::parity::{REFERENCE_COMMIT, REFERENCE_VERSION, pinned_interpreter};
 
 use crate::{Arguments, OutputMode, mcp_command};
 
@@ -1595,11 +1594,9 @@ fn replaying_the_corpus_finds_no_difference_the_ledger_does_not_name() {
 /// is the ordinary case on CI.
 #[test]
 fn the_committed_corpus_still_matches_a_fresh_capture() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "CLI surface") {
-        eprintln!("{reason}");
+    let Some(root) = pinned_reference("CLI surface") else {
         return;
-    }
+    };
     let Some(interpreter) = pinned_interpreter(&root) else {
         eprintln!("skipping the live CLI surface probe: the checkout carries no interpreter");
         return;

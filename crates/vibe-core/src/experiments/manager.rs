@@ -17,13 +17,12 @@
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-use crate::pycompat::{self, Dumps};
+use crate::pycompat::{self, Dumps, python_eq};
 use crate::telemetry::ExperimentAssignment;
 use crate::text::hex_encode;
 
 use super::ExperimentName;
 use super::client::RemoteEvalClient;
-use super::json::python_eq;
 use super::models::{EvalResponse, ExperimentAttributes, FeatureDefinition, TrackData};
 
 /// How many hexadecimal characters of the digest the bucketing key keeps.
@@ -149,7 +148,9 @@ impl ExperimentManager {
     /// the proxy already resolved which applies; a confirmed exposure adds
     /// nothing a resolved value did not already say. A value equal to the
     /// default is dropped, so the low-precedence layer only ever expresses a
-    /// deviation from the schema.
+    /// deviation from the schema. Equal is Python's `==` over the decoded
+    /// values, so a rollout forcing `0` onto a flag defaulting to `false`
+    /// reaches no layer, as upstream.
     ///
     /// Reference `resolve.config_variants`.
     #[must_use]

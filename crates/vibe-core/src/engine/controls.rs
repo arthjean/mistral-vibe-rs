@@ -19,6 +19,7 @@ use super::{
 };
 use crate::events::{EngineEvent, ModelMessage, SessionHandoffCause};
 use crate::provider::ProviderInput;
+use crate::sync;
 
 #[derive(Debug, Clone)]
 pub struct CancellationToken {
@@ -113,13 +114,9 @@ pub struct TurnControlHandle {
 }
 
 impl TurnControlHandle {
-    pub fn send(&self, control: TurnControl) -> Result<(), EngineError> {
-        self.queue
-            .lock()
-            .map_err(|_| EngineError::ControlStatePoisoned)?
-            .push_back(control);
+    pub fn send(&self, control: TurnControl) {
+        sync::lock(&self.queue).push_back(control);
         self.arrived.notify_one();
-        Ok(())
     }
 
     pub(super) async fn arrived(&self) {
@@ -128,13 +125,9 @@ impl TurnControlHandle {
 
     /// Takes the queued steers, leaving every other control for the next
     /// cycle boundary.
-    pub(super) fn take_steers(&self) -> Result<Vec<(String, bool)>, EngineError> {
-        let mut queue = self
-            .queue
-            .lock()
-            .map_err(|_| EngineError::ControlStatePoisoned)?;
+    pub(super) fn take_steers(&self) -> Vec<(String, bool)> {
         let mut steers = Vec::new();
-        queue.retain(|control| match control {
+        sync::lock(&self.queue).retain(|control| match control {
             TurnControl::Steer {
                 content,
                 inject_invoked_skill,
@@ -144,16 +137,11 @@ impl TurnControlHandle {
             }
             _ => true,
         });
-        Ok(steers)
+        steers
     }
 
-    fn drain(&self) -> Result<Vec<TurnControl>, EngineError> {
-        Ok(self
-            .queue
-            .lock()
-            .map_err(|_| EngineError::ControlStatePoisoned)?
-            .drain(..)
-            .collect())
+    fn drain(&self) -> Vec<TurnControl> {
+        sync::lock(&self.queue).drain(..).collect()
     }
 }
 
@@ -221,7 +209,7 @@ where
         cancellation: &CancellationToken,
     ) -> Result<ControlOutcome, EngineError> {
         let mut cleared = false;
-        for control in controls.drain()? {
+        for control in controls.drain() {
             match control {
                 TurnControl::Steer {
                     content,

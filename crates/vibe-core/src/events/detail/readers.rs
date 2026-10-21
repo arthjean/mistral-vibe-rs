@@ -5,8 +5,8 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_json::Value;
 
+use crate::platform::{expand_home, resolve_lenient};
 use crate::scratchpad::SCRATCHPAD_PREFIX;
-use crate::workspace::tool_path;
 
 /// The spellings a call or a result names a file under.
 ///
@@ -72,8 +72,8 @@ pub(super) fn display_file_path(path: &str, working_directory: Option<&Path>) ->
     else {
         return path.to_owned();
     };
-    let root = lexically_normalized(&tool_path::expanded(&root));
-    let requested = tool_path::expanded(Path::new(path));
+    let root = lexically_normalized(&expand_home(&root));
+    let requested = expand_home(Path::new(path));
     let target = lexically_normalized(&if requested.is_absolute() {
         requested
     } else {
@@ -119,7 +119,7 @@ fn lexically_normalized(path: &Path) -> PathBuf {
 /// whether any component carries the scratchpad prefix, so any session's
 /// scratchpad is marked and not only this one's.
 pub(super) fn scratchpad_suffix(path: &str) -> &'static str {
-    let expanded = tool_path::expanded(Path::new(path));
+    let expanded = expand_home(Path::new(path));
     let absolute = if expanded.is_absolute() {
         expanded
     } else {
@@ -128,13 +128,12 @@ pub(super) fn scratchpad_suffix(path: &str) -> &'static str {
             Err(_) => return "",
         }
     };
-    let in_scratchpad =
-        tool_path::resolved(&absolute)
-            .components()
-            .any(|component| match component {
-                Component::Normal(name) => name.to_string_lossy().starts_with(SCRATCHPAD_PREFIX),
-                _ => false,
-            });
+    let in_scratchpad = resolve_lenient(&absolute)
+        .components()
+        .any(|component| match component {
+            Component::Normal(name) => name.to_string_lossy().starts_with(SCRATCHPAD_PREFIX),
+            _ => false,
+        });
     if in_scratchpad { "(scratchpad)" } else { "" }
 }
 

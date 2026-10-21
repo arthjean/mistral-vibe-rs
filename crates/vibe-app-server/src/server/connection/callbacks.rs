@@ -39,9 +39,7 @@ impl ServerConnection {
     /// question was delivered to whoever was attached before, so without the
     /// replay the new client would wait on a turn it cannot unblock.
     pub(crate) fn attachment_frames(&mut self, session_id: &str) -> Vec<Vec<u8>> {
-        let Ok(mut sessions) = self.server.lock_sessions() else {
-            return Vec::new();
-        };
+        let mut sessions = self.server.lock_sessions();
         let Some(session) = sessions.get_mut(session_id) else {
             return Vec::new();
         };

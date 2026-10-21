@@ -59,16 +59,11 @@ impl SessionToolExecutor {
     /// Publishes what `intent` enables from now on, in this executor and in
     /// every clone of it.
     pub(super) fn retarget(&self, intent: &SessionIntent) {
-        if let Ok(mut filters) = self.filters.write() {
-            *filters = SessionToolFilters::of(intent);
-        }
+        *vibe_core::sync::write(&self.filters) = SessionToolFilters::of(intent);
     }
 
     fn filters(&self) -> SessionToolFilters {
-        self.filters.read().map_or_else(
-            |poisoned| poisoned.into_inner().clone(),
-            |filters| filters.clone(),
-        )
+        vibe_core::sync::read(&self.filters).clone()
     }
 
     pub(super) fn with_allowed_tools(mut self, allowed: BTreeSet<String>) -> Self {
@@ -101,22 +96,18 @@ impl SessionToolExecutor {
                 .is_none_or(|allowed| allowed.contains(name))
     }
 
-    pub(in crate::client) fn definitions(&self) -> Result<Vec<ToolDefinition>, DriverError> {
+    pub(in crate::client) fn definitions(&self) -> Vec<ToolDefinition> {
         let filters = self.filters();
         self.tools
             .available(filters.enabled.as_ref(), &filters.disabled)
-            .map_err(|error| DriverError::Tool(error.to_string()))
-            .map(|definitions| {
-                definitions
-                    .into_iter()
-                    .filter(|definition| self.permits(&definition.name))
-                    .map(|spec| ToolDefinition {
-                        name: spec.name,
-                        description: spec.description,
-                        input_schema: spec.input_schema,
-                    })
-                    .collect()
+            .into_iter()
+            .filter(|definition| self.permits(&definition.name))
+            .map(|spec| ToolDefinition {
+                name: spec.name,
+                description: spec.description,
+                input_schema: spec.input_schema,
             })
+            .collect()
     }
 }
 

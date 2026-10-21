@@ -1,5 +1,5 @@
 use super::*;
-use crate::sync::lock;
+use vibe_core::sync::lock;
 
 mod mcp_backend;
 pub(crate) use mcp_backend::overlay_plugin_sources;

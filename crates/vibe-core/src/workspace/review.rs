@@ -10,6 +10,7 @@ use crate::checkpoints::{
     ReviewState, ReviewTarget, TurnFileDiff, decide_target, project_scope_diff, project_state,
     state_text,
 };
+use crate::sync::lock;
 
 const MAX_REWIND_SNAPSHOT_BYTES: usize = 64 * 1_048_576;
 
@@ -127,18 +128,8 @@ impl ReviewManager {
     }
 
     /// Runs `body` against the checkpoint log.
-    ///
-    /// # Errors
-    ///
-    /// Fails when another thread poisoned the log.
-    pub fn with_log<T>(
-        &self,
-        body: impl FnOnce(&mut Checkpointer) -> T,
-    ) -> Result<T, WorkspaceError> {
-        let mut log = self.log.lock().map_err(|_| WorkspaceError::LockPoisoned {
-            surface: "checkpoint log",
-        })?;
-        Ok(body(&mut log))
+    pub fn with_log<T>(&self, body: impl FnOnce(&mut Checkpointer) -> T) -> T {
+        body(&mut lock(&self.log))
     }
 
     // -- The review surface ---------------------------------------------------
@@ -157,12 +148,11 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when a tracked path exists but cannot be read, and when another
-    /// thread poisoned the log.
+    /// Fails when a tracked path exists but cannot be read.
     pub fn review_state(&self) -> Result<ReviewState, ReviewError> {
-        let tracked = self.with_review_log(|log| log.history().tracked_paths())?;
+        let tracked = self.with_log(|log| log.history().tracked_paths());
         let current = self.read_states(&tracked)?;
-        let (state, refused) = self.with_review_log(|log| {
+        let (state, refused) = self.with_log(|log| {
             let mut refused = None;
             for (path, state) in &current {
                 reconcile_tracked(log, path, state.clone(), &mut refused);
@@ -172,7 +162,7 @@ impl ReviewManager {
                 project_state(&view.history(), &log.history(), &current),
                 refused,
             )
-        })?;
+        });
         self.note_retention(refused);
         Ok(state)
     }
@@ -210,13 +200,10 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when the path exists but cannot be read, and when another thread
-    /// poisoned the log.
+    /// Fails when the path exists but cannot be read.
     pub fn baseline_text(&self, path: &str) -> Result<String, ReviewError> {
         let current = [(path.to_owned(), self.recorder.files().read(path)?)];
-        self.with_review_log(|log| {
-            state_text(&log.view(&current).history().accepted_baseline(path))
-        })
+        Ok(self.with_log(|log| state_text(&log.view(&current).history().accepted_baseline(path))))
     }
 
     /// One owner's own change to `path`: its kept regions against its kept plus
@@ -224,11 +211,10 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when the path exists but cannot be read, and when another thread
-    /// poisoned the log.
+    /// Fails when the path exists but cannot be read.
     pub fn scope_file_diff(&self, path: &str, owner: Owner) -> Result<TurnFileDiff, ReviewError> {
         let current = [(path.to_owned(), self.recorder.files().read(path)?)];
-        self.with_review_log(|log| project_scope_diff(&log.view(&current).history(), path, owner))
+        Ok(self.with_log(|log| project_scope_diff(&log.view(&current).history(), path, owner)))
     }
 
     /// Every pending change of `path`, located in a rendered diff.
@@ -241,15 +227,14 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when the path exists but cannot be read, and when another thread
-    /// poisoned the log.
+    /// Fails when the path exists but cannot be read.
     pub fn file_hunks(
         &self,
         path: &str,
         owner: Option<Owner>,
     ) -> Result<Vec<AnchoredHunk>, ReviewError> {
         let current = [(path.to_owned(), self.recorder.files().read(path)?)];
-        let (hunks, refused) = self.with_review_log(|log| {
+        let (hunks, refused) = self.with_log(|log| {
             let mut refused = None;
             reconcile_tracked(log, path, current[0].1.clone(), &mut refused);
             let hunks = log
@@ -264,7 +249,7 @@ impl ReviewManager {
                 })
                 .collect();
             (hunks, refused)
-        })?;
+        });
         self.note_retention(refused);
         Ok(hunks)
     }
@@ -276,10 +261,10 @@ impl ReviewManager {
         target: &ReviewTarget,
         decision: Decision,
     ) -> Result<Vec<String>, ReviewError> {
-        let tracked = self.with_review_log(|log| log.history().tracked_paths())?;
+        let tracked = self.with_log(|log| log.history().tracked_paths());
         let current = self.read_states(&tracked)?;
         let mut refused = None;
-        let decided = self.with_review_log(|log| {
+        let decided = self.with_log(|log| {
             for (path, state) in &current {
                 reconcile_tracked(log, path, state.clone(), &mut refused);
             }
@@ -295,22 +280,15 @@ impl ReviewManager {
                 }
                 Ok(affected)
             })
-        })?;
+        });
         self.note_retention(refused);
         decided
     }
 
     /// Keeps the log's refusal for want of room where a caller can publish it.
-    ///
-    /// A poisoned state lock loses the notice rather than failing the read that
-    /// carried it: the notice is a warning about history, and the answer the
-    /// caller asked for is still correct without it.
     fn note_retention(&self, refused: Option<String>) {
-        let Some(refused) = refused else {
-            return;
-        };
-        if let Ok(mut state) = self.state.lock() {
-            state.retention_notice.get_or_insert(refused);
+        if let Some(refused) = refused {
+            lock(&self.state).retention_notice.get_or_insert(refused);
         }
     }
 
@@ -345,15 +323,6 @@ impl ReviewManager {
             .collect()
     }
 
-    /// Runs `body` against the log, in the review surface's error vocabulary.
-    fn with_review_log<T>(
-        &self,
-        body: impl FnOnce(&mut Checkpointer) -> T,
-    ) -> Result<T, ReviewError> {
-        let mut log = self.log.lock().map_err(|_| ReviewError::LockPoisoned)?;
-        Ok(body(&mut log))
-    }
-
     /// The key the log files a located path under: its resolved absolute
     /// path, which is what the reference's `get_file_snapshot_for_path`
     /// (`vibe/core/tools/base.py:466-478`) records and what every review answer
@@ -375,7 +344,7 @@ impl ReviewManager {
     }
 
     pub fn begin_turn_at(&self, message_index: usize) -> Result<(), WorkspaceError> {
-        let mut state = self.lock_state()?;
+        let mut state = lock(&self.state);
         if state.active_turn.is_some() {
             return Err(WorkspaceError::ReviewBusy);
         }
@@ -383,7 +352,7 @@ impl ReviewManager {
         // rewind addresses and what a restore plan is cut at.
         let engine_turn =
             u64::try_from(message_index).map_err(|_| WorkspaceError::LimitOverflow)?;
-        self.with_log(|log| self.recorder.create_checkpoint(log, engine_turn))?
+        self.with_log(|log| self.recorder.create_checkpoint(log, engine_turn))
             .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
         state.active_turn = Some(CapturedBytes::default());
         Ok(())
@@ -413,10 +382,8 @@ impl ReviewManager {
         operations: &[EditOperation],
     ) -> Result<MutationResult, WorkspaceError> {
         let relative = self.workspace.located(path.as_ref(), true)?;
-        let lock = self.workspace.write_lock(&relative)?;
-        let _guard = lock.lock().map_err(|_| WorkspaceError::LockPoisoned {
-            surface: "file write locks",
-        })?;
+        let path_lock = self.workspace.write_lock(&relative);
+        let _guard = lock(&path_lock);
         self.capture_baseline(&relative)?;
         let original = self.workspace.read_raw(&relative)?;
         if original.contains(&0) {
@@ -439,14 +406,14 @@ impl ReviewManager {
     }
 
     pub fn seal_turn(&self) -> Result<(), WorkspaceError> {
-        let mut state = self.lock_state()?;
+        let mut state = lock(&self.state);
         if state.active_turn.is_none() {
             return Err(WorkspaceError::NoActiveTurn);
         }
         // A path that went unreadable while the turn ran keeps its change out
         // of the log rather than sealing it as unchanged; the turn closes
         // either way.
-        let _unreadable = self.with_log(|log| self.recorder.seal_turn(log))?;
+        let _unreadable = self.with_log(|log| self.recorder.seal_turn(log));
         state.active_turn = None;
         Ok(())
     }
@@ -459,10 +426,9 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when a planned path exists but cannot be read, and when another
-    /// thread poisoned the log.
+    /// Fails when a planned path exists but cannot be read.
     pub fn restorable_paths_at(&self, message_index: usize) -> Result<Vec<String>, WorkspaceError> {
-        let plan = self.restoration_plan(message_index)?;
+        let plan = self.restoration_plan(message_index);
         let files = self.recorder.files();
         let mut paths = Vec::new();
         for (path, target) in plan {
@@ -487,13 +453,12 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when a planned path exists but cannot be read, and when another
-    /// thread poisoned the log.
+    /// Fails when a planned path exists but cannot be read.
     pub fn stage_restore_to_message(
         &self,
         message_index: usize,
     ) -> Result<StagedRestore, WorkspaceError> {
-        let plan = self.restoration_plan(message_index)?;
+        let plan = self.restoration_plan(message_index);
         let files = self.recorder.files();
         let mut previous = Vec::new();
         for (path, _target) in &plan {
@@ -523,17 +488,13 @@ impl ReviewManager {
     /// Reference `RewindManager._truncate` drops those turns from the shared
     /// checkpointer rather than clearing it, so a later rewind can still reach
     /// an earlier turn and restore its files.
-    ///
-    /// # Errors
-    ///
-    /// Fails when another thread poisoned the log or the review state.
-    pub fn drop_turns_from(&self, message_index: usize) -> Result<(), WorkspaceError> {
-        self.lock_state()?.active_turn = None;
+    pub fn drop_turns_from(&self, message_index: usize) {
+        lock(&self.state).active_turn = None;
         self.with_log(|log| {
             if let Ok(turn) = u64::try_from(message_index) {
                 log.drop_turns_from(turn);
             }
-        })
+        });
     }
 
     /// Clears the log because the message list it is numbered against was
@@ -549,10 +510,10 @@ impl ReviewManager {
     /// # Errors
     ///
     /// Fails when the message index does not fit a turn identifier and when
-    /// another thread poisoned the log.
+    /// the log refuses to reopen the turn.
     pub fn reset_messages(&self, message_index: usize) -> Result<(), WorkspaceError> {
         let turn_id = u64::try_from(message_index).map_err(|_| WorkspaceError::LimitOverflow)?;
-        let mut state = self.lock_state()?;
+        let mut state = lock(&self.state);
         let was_open = state.active_turn.take().is_some();
         state.session = CapturedBytes::default();
         drop(state);
@@ -564,31 +525,24 @@ impl ReviewManager {
             } else {
                 Ok(())
             }
-        })?
+        })
         .map_err(|error| WorkspaceError::Checkpoint(error.to_string()))?;
         if was_open {
-            self.lock_state()?.active_turn = Some(CapturedBytes::default());
+            lock(&self.state).active_turn = Some(CapturedBytes::default());
         }
         Ok(())
     }
 
     /// The warning the log raised when it ran out of room, taken once.
-    ///
-    /// # Errors
-    ///
-    /// Fails when another thread poisoned the review state.
-    pub fn take_retention_notice(&self) -> Result<Option<String>, WorkspaceError> {
-        Ok(self.lock_state()?.retention_notice.take())
+    pub fn take_retention_notice(&self) -> Option<String> {
+        lock(&self.state).retention_notice.take()
     }
 
     /// What each file a rewind to `message_index` touches should hold once the
     /// cut lands, straight from the log.
-    fn restoration_plan(
-        &self,
-        message_index: usize,
-    ) -> Result<Vec<(String, FileState)>, WorkspaceError> {
+    fn restoration_plan(&self, message_index: usize) -> Vec<(String, FileState)> {
         let Ok(turn_id) = u64::try_from(message_index) else {
-            return Ok(Vec::new());
+            return Vec::new();
         };
         self.with_log(|log| log.history().restore_plan_to_turn(turn_id))
     }
@@ -615,7 +569,7 @@ impl ReviewManager {
     }
 
     fn capture_baseline(&self, relative: &Path) -> Result<(), WorkspaceError> {
-        let mut state = self.lock_state()?;
+        let mut state = lock(&self.state);
         let Some(turn) = state.active_turn.as_ref() else {
             return Err(WorkspaceError::NoActiveTurn);
         };
@@ -644,7 +598,7 @@ impl ReviewManager {
         if let Err(refusal) = self.with_log(|log| {
             self.recorder
                 .add_snapshot(log, &self.log_key(relative), snapshot)
-        })? {
+        }) {
             // A log with no room left refuses the capture rather than dropping
             // an earlier event to make space, and the write itself still
             // happens: the file changes, only its history stops being tracked.
@@ -665,12 +619,6 @@ impl ReviewManager {
             turn.record(relative, captured);
         }
         Ok(())
-    }
-
-    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, SnapshotState>, WorkspaceError> {
-        self.state
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned { surface: "review" })
     }
 }
 

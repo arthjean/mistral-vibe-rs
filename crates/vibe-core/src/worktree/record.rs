@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::atomic_file::{FileLock, FileMode, open_private_lock, write_atomically};
 use crate::platform::resolve_lenient;
+use crate::sync::lock;
 use crate::time::UtcTimestamp;
 
 use super::{ManagedRoot, WorktreeError};
@@ -438,9 +439,7 @@ impl WorktreeClaim {
             fs::create_dir_all(parent).map_err(|source| WorktreeError::io(parent, source))?;
         }
         let _registry = directory_lock(&self.managed, REGISTRY_LOCK_FILENAME)?;
-        let mut held = HELD_FILES
-            .lock()
-            .map_err(|_| WorktreeError::record("the holder registry is poisoned"))?;
+        let mut held = lock(&HELD_FILES);
         if let Some(entry) = held.get_mut(holder) {
             if !reference_counted {
                 return Err(WorktreeError::record(format!(
@@ -469,9 +468,8 @@ impl WorktreeClaim {
         let Ok(_registry) = directory_lock(&self.managed, REGISTRY_LOCK_FILENAME) else {
             return;
         };
-        if let Ok(mut held) = HELD_FILES.lock()
-            && let Some(entry) = held.get_mut(holder)
-        {
+        let mut held = lock(&HELD_FILES);
+        if let Some(entry) = held.get_mut(holder) {
             if entry.1 > 1 {
                 entry.1 -= 1;
                 return;
@@ -483,6 +481,7 @@ impl WorktreeClaim {
             }
             return;
         }
+        drop(held);
         discard_stale_holder(holder);
     }
 
@@ -528,9 +527,7 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
 }
 
 fn holder_is_owned(holder: &Path) -> bool {
-    HELD_FILES
-        .lock()
-        .is_ok_and(|held| held.contains_key(holder))
+    lock(&HELD_FILES).contains_key(holder)
 }
 
 /// Whether a holder file belongs to a live session.

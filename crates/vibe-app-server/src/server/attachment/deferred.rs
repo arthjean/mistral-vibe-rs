@@ -63,11 +63,9 @@ impl AppServer {
             None => match (&call, &session_id) {
                 // With no backend nothing but the recorded state is known, so
                 // a read answers it and anything else is refused.
-                (McpCatalogCall::Read { .. }, Some(session_id)) => self
-                    .resources
-                    .lock()
+                (McpCatalogCall::Read { .. }, Some(session_id)) => lock(&self.resources)
+                    .runtime(session_id)
                     .ok()
-                    .and_then(|resources| resources.runtime(session_id).ok())
                     .and_then(|mut runtime| runtime.remove("mcp"))
                     .map(|mcp| McpCatalogOutcome {
                         result: BTreeMap::from([("mcp".to_owned(), mcp)]),
@@ -91,10 +89,8 @@ impl AppServer {
             Ok(outcome) => outcome,
             Err(error) => return catalog_error_batch(request_id, error),
         };
-        if let (Some(session_id), Some(state)) = (&session_id, outcome.integrations.take())
-            && let Ok(mut resources) = self.resources.lock()
-        {
-            resources.record_integrations(session_id, state);
+        if let (Some(session_id), Some(state)) = (&session_id, outcome.integrations.take()) {
+            lock(&self.resources).record_integrations(session_id, state);
         }
         if let Some(session_id) = &session_id {
             self.overlay_session_connectors(session_id, outcome.result.get_mut("mcp"));
@@ -344,10 +340,8 @@ impl AppServer {
                 Err(error) => warning(redact(&error.to_string())),
             },
         };
-        if let Some(state) = signals.integrations.take()
-            && let Ok(mut resources) = self.resources.lock()
-        {
-            resources.record_integrations(session_id, state);
+        if let Some(state) = signals.integrations.take() {
+            lock(&self.resources).record_integrations(session_id, state);
         }
         signal_frames(self, session_id, &signals)
     }

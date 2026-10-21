@@ -46,10 +46,10 @@ use vibe_core::provider::{
 use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::session_id::rotate_session_id;
 use vibe_core::storage::SessionStore;
+use vibe_core::sync::lock;
 use vibe_core::tools::config::SharedToolConfig;
 use vibe_core::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler, ToolRegistry,
-    ToolSource, ToolSpec, reference_text,
+    OwnedToolHandlerFuture, ToolAvailability, ToolHandler, ToolRegistry, ToolSource, ToolSpec,
 };
 
 pub(super) mod compactor;
@@ -356,10 +356,7 @@ impl LiveTurnDriver {
                     .cloned(),
             );
         }
-        let pending_context = self
-            .pending_context
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
+        let pending_context = lock(&self.pending_context)
             .remove(&reservation.session_id)
             .unwrap_or_default();
         for entry in pending_context {
@@ -380,10 +377,7 @@ impl LiveTurnDriver {
             snapshot_attachments(&reservation.input, session_dir.as_deref()).await?;
         let session_tools =
             SessionToolExecutor::new(reservation.tools.clone(), &reservation.intent);
-        self.turn_tools
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
-            .insert(reservation.session_id.clone(), session_tools.clone());
+        lock(&self.turn_tools).insert(reservation.session_id.clone(), session_tools.clone());
         let input = ProviderInput {
             dialect: Default::default(),
             turn_id: Some(reservation.turn_id.clone()),
@@ -402,7 +396,7 @@ impl LiveTurnDriver {
                     .as_slice()
                     .to_vec(),
             },
-            tools: session_tools.definitions()?,
+            tools: session_tools.definitions(),
             tool_choice: None,
             thinking: reservation.intent.thinking,
             reasoning_effort: reservation.intent.reasoning_effort.clone(),
@@ -439,10 +433,7 @@ impl LiveTurnDriver {
             input.tool_choice.clone(),
             input.thinking,
         ));
-        self.session_compactors
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
-            .insert(reservation.session_id.clone(), compactor.clone());
+        lock(&self.session_compactors).insert(reservation.session_id.clone(), compactor.clone());
         let mut engine = ConversationEngine::new(Arc::clone(&self.provider))
             .with_tools(session_tools)
             .with_compactor(compactor)
@@ -460,12 +451,12 @@ impl LiveTurnDriver {
         // where `_setup_middleware` puts it: a cycle that reached the threshold
         // compacts instead of warning about a window it is about to replace.
         if let Some(warning) =
-            self.context_warning(&reservation.session_id, &reservation.compaction)?
+            self.context_warning(&reservation.session_id, &reservation.compaction)
         {
             engine = engine.with_middleware(warning);
         }
         // Registered last, as `_setup_middleware` adds `ReadOnlyAgentMiddleware`.
-        engine = engine.with_middleware(self.plan_agent(reservation, &input.tools)?);
+        engine = engine.with_middleware(self.plan_agent(reservation, &input.tools));
         if let Some(resolver) = reservation.tools.invoked_skills() {
             engine = engine.with_invoked_skills(resolver);
         }
@@ -609,13 +600,7 @@ impl TurnDriver for LiveTurnDriver {
     ) -> DriverFuture<'a> {
         Box::pin(async move {
             let key = (reservation.session_id.clone(), reservation.turn_id.clone());
-            let control = self
-                .controls
-                .lock()
-                .map_err(|_| DriverError::StatePoisoned)?
-                .entry(key.clone())
-                .or_default()
-                .clone();
+            let control = lock(&self.controls).entry(key.clone()).or_default().clone();
             let _registration = ControlRegistration {
                 controls: &self.controls,
                 key,
@@ -685,10 +670,7 @@ impl TurnDriver for LiveTurnDriver {
                 String::new(),
                 self.provider.model().map(ToOwned::to_owned),
             ));
-            let compactor = self
-                .session_compactors
-                .lock()
-                .map_err(|_| DriverError::StatePoisoned)?
+            let compactor = lock(&self.session_compactors)
                 .get(session_id)
                 .cloned()
                 .unwrap_or_else(|| self.compactor.clone());
@@ -749,10 +731,7 @@ impl TurnDriver for LiveTurnDriver {
     }
 
     fn interrupt(&self, session_id: &str, turn_id: &str) -> Result<(), DriverError> {
-        let mut controls = self
-            .controls
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?;
+        let mut controls = lock(&self.controls);
         let control = controls
             .entry((session_id.to_owned(), turn_id.to_owned()))
             .or_default();
@@ -784,9 +763,7 @@ impl TurnDriver for LiveTurnDriver {
         as_message: bool,
         inject_invoked_skill: bool,
     ) -> Result<(), DriverError> {
-        self.pending_context
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
+        lock(&self.pending_context)
             .entry(session_id.to_owned())
             .or_default()
             .push(PendingContext {
@@ -826,23 +803,13 @@ impl TurnDriver for LiveTurnDriver {
         tools: &ToolRegistry,
     ) -> Result<(), DriverError> {
         let agent_name = profile.name.as_str();
-        let definitions = SessionToolExecutor::new(tools.clone(), intent).definitions()?;
-        if let Some(executor) = self
-            .turn_tools
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
-            .get(session_id)
-        {
+        let definitions = SessionToolExecutor::new(tools.clone(), intent).definitions();
+        if let Some(executor) = lock(&self.turn_tools).get(session_id) {
             executor.retarget(intent);
         }
         // Reference `ReadOnlyAgentMiddleware` reads the active profile at the
         // top of the next cycle, which is where leaving plan mode is announced.
-        if let Some(plan) = self
-            .plan_agents
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
-            .get(session_id)
-        {
+        if let Some(plan) = lock(&self.plan_agents).get(session_id) {
             plan.set_active(agent_name == PLAN_AGENT);
         }
         self.send_control(
@@ -866,12 +833,7 @@ impl TurnDriver for LiveTurnDriver {
     ) -> Result<(), DriverError> {
         // Reference `clear_history` resets the middleware, so a cleared
         // conversation hears nothing about the plan mode it left.
-        if let Some(plan) = self
-            .plan_agents
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?
-            .get(session_id)
-        {
+        if let Some(plan) = lock(&self.plan_agents).get(session_id) {
             vibe_core::middleware::ConversationMiddleware::reset(
                 plan.as_ref(),
                 vibe_core::middleware::ResetReason::Compact,
@@ -895,16 +857,13 @@ impl LiveTurnDriver {
         turn_id: &str,
         command: TurnControl,
     ) -> Result<(), DriverError> {
-        let mut controls = self
-            .controls
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?;
+        let mut controls = lock(&self.controls);
         controls
             .entry((session_id.to_owned(), turn_id.to_owned()))
             .or_default()
             .engine
-            .send(command)
-            .map_err(DriverError::Engine)
+            .send(command);
+        Ok(())
     }
 }
 
@@ -915,9 +874,7 @@ struct ControlRegistration<'a> {
 
 impl Drop for ControlRegistration<'_> {
     fn drop(&mut self) {
-        if let Ok(mut controls) = self.controls.lock() {
-            controls.remove(&self.key);
-        }
+        lock(self.controls).remove(&self.key);
     }
 }
 

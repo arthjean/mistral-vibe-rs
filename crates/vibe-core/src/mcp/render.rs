@@ -9,10 +9,9 @@
 //! content as Python's `repr` of a dictionary, keys in the order the server
 //! sent them.
 
-use serde_json::{Value, json};
+use serde_json::Value;
 
-use crate::pycompat::repr_json;
-use crate::tools::reference_text::{boolean, joined};
+use crate::tools::document::Document;
 
 /// Reference `MCPToolResult` for one answered call.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,39 +55,21 @@ impl McpToolResult {
         }
     }
 
-    /// The text the model reads: one `field: value` line per field.
-    pub(crate) fn model_text(&self) -> String {
-        joined(&[
-            ("ok", boolean(true).to_owned()),
-            ("server", self.server.clone()),
-            ("tool", self.tool.clone()),
-            (
-                "text",
-                self.text.clone().unwrap_or_else(|| "None".to_owned()),
-            ),
-            (
-                "structured",
-                self.structured
-                    .as_ref()
-                    .map_or_else(|| "None".to_owned(), repr_json),
-            ),
-        ])
-    }
-
-    /// The typed result, `MCPToolResult.model_dump(mode="json")`.
-    pub(crate) fn typed(&self) -> Value {
-        json!({
-            "ok": true,
-            "server": self.server,
-            "tool": self.tool,
-            "text": self.text,
-            "structured": self.structured,
-        })
+    /// The published result, `MCPToolResult` in its declared field order.
+    pub(crate) fn document(self) -> Document {
+        Document::new()
+            .field("ok", true)
+            .field("server", self.server)
+            .field("tool", self.tool)
+            .field("text", self.text)
+            .field("structured", self.structured)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -101,7 +82,7 @@ mod tests {
             &message["result"],
         );
         assert_eq!(
-            result.model_text(),
+            result.document().model_text(),
             "ok: True\nserver: stdio:server\ntool: tool\ntext: None\nstructured: {'z': 1, 'a': [True, None, \"x'y\", 2.5]}"
         );
     }

@@ -13,13 +13,13 @@ impl AppServer {
     /// [`Self::plugins_of`] instead.
     #[must_use]
     pub fn session_plugins(&self, session_id: &str) -> Option<Arc<crate::plugins::SessionPlugins>> {
-        let table = self.session_plugins.lock().ok()?;
+        let table = lock(&self.session_plugins);
         if let Some(plugins) = table.get(session_id) {
             return Some(plugins.clone());
         }
         drop(table);
-        let key = self.lock_sessions().ok()?.key(session_id)?.to_owned();
-        self.session_plugins.lock().ok()?.get(&key).cloned()
+        let key = self.lock_sessions().key(session_id)?.to_owned();
+        lock(&self.session_plugins).get(&key).cloned()
     }
 
     /// The plugins `session` runs, found through any identifier it carried.
@@ -27,7 +27,7 @@ impl AppServer {
         &self,
         session: &SessionRuntime,
     ) -> Option<Arc<crate::plugins::SessionPlugins>> {
-        let table = self.session_plugins.lock().ok()?;
+        let table = lock(&self.session_plugins);
         std::iter::once(&session.id)
             .chain(session.aliases.iter())
             .find_map(|id| table.get(id).cloned())
@@ -38,9 +38,7 @@ impl AppServer {
         session_id: &str,
         plugins: crate::plugins::SessionPlugins,
     ) {
-        if let Ok(mut map) = self.session_plugins.lock() {
-            map.insert(session_id.to_owned(), Arc::new(plugins));
-        }
+        lock(&self.session_plugins).insert(session_id.to_owned(), Arc::new(plugins));
     }
 
     /// Resolves, pins and binds the plugins a unified session opens with. A
@@ -55,12 +53,7 @@ impl AppServer {
         add_directories: &[String],
         mcp_configs: &[vibe_core::mcp::McpServerConfig],
     ) {
-        if !self.harness_selection().use_unified
-            || self
-                .pluginless
-                .lock()
-                .is_ok_and(|pluginless| pluginless.contains(session_id))
-        {
+        if !self.harness_selection().use_unified || lock(&self.pluginless).contains(session_id) {
             return;
         }
         let sources = self.workspace.plugin_sources(
@@ -79,9 +72,7 @@ impl AppServer {
 
     /// Marks `session_id` as a session that opens with no plugins.
     pub(crate) fn bind_no_plugins(&self, session_id: &str) {
-        if let Ok(mut pluginless) = self.pluginless.lock() {
-            pluginless.insert(session_id.to_owned());
-        }
+        lock(&self.pluginless).insert(session_id.to_owned());
     }
 
     /// Rescans and re-pins the plugins of `session_id`, files the new set in
@@ -92,7 +83,7 @@ impl AppServer {
         previous: &crate::plugins::SessionPlugins,
     ) -> Result<Arc<crate::plugins::SessionPlugins>, ServerError> {
         let (key, working_directory, trusted, add_directories) = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let key = sessions
                 .key(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
@@ -124,12 +115,12 @@ impl AppServer {
             .ok_or_else(|| ServerError::Resource("the plugin rescan could not run".to_owned()))?;
         let reloaded = Arc::new(reloaded);
         {
-            let mut sessions = self.lock_sessions()?;
+            let mut sessions = self.lock_sessions();
             if let Some(session) = sessions.get_mut(&key) {
-                if let Ok(mut map) = self.session_plugins.lock() {
-                    map.insert(key.clone(), reloaded.clone());
-                    map.insert(session.id.clone(), reloaded.clone());
-                }
+                let mut map = lock(&self.session_plugins);
+                map.insert(key.clone(), reloaded.clone());
+                map.insert(session.id.clone(), reloaded.clone());
+                drop(map);
                 session.system_prompt = None;
             }
         }
@@ -145,19 +136,15 @@ impl AppServer {
     /// `session_id` is the registry key, read off the table alone, so a caller
     /// holding the session lock can ask.
     pub(crate) fn bind_plugin_mcp(&self, session_id: &str) {
-        let sources = self.session_plugins.lock().ok().and_then(|table| {
-            table
-                .get(session_id)
-                .map(|plugins| plugins.mcp_sources.clone())
-        });
+        let sources = lock(&self.session_plugins)
+            .get(session_id)
+            .map(|plugins| plugins.mcp_sources.clone());
         if let (Some(sources), Some(backend)) = (sources, &self.resource_backend) {
             backend.set_plugin_mcp(session_id, sources);
         }
-        let environment = self.session_plugins.lock().ok().and_then(|table| {
-            table
-                .get(session_id)
-                .map(|plugins| plugins.runtime_environment.clone())
-        });
+        let environment = lock(&self.session_plugins)
+            .get(session_id)
+            .map(|plugins| plugins.runtime_environment.clone());
         if let Some(environment) = environment {
             self.shell_tools
                 .set_session_environment(session_id, environment);
@@ -166,11 +153,10 @@ impl AppServer {
 
     /// Drops the plugins `session` ran under every identifier it carried.
     pub(crate) fn forget_session_plugins(&self, session: &SessionRuntime) {
-        if let Ok(mut map) = self.session_plugins.lock() {
-            map.remove(&session.id);
-            for alias in &session.aliases {
-                map.remove(alias);
-            }
+        let mut map = lock(&self.session_plugins);
+        map.remove(&session.id);
+        for alias in &session.aliases {
+            map.remove(alias);
         }
     }
 
@@ -180,9 +166,9 @@ impl AppServer {
         let Some(plugins) = self.plugins_of(session) else {
             return;
         };
-        if let Ok(mut map) = self.session_plugins.lock() {
-            map.entry(session.id.clone()).or_insert(plugins);
-        }
+        lock(&self.session_plugins)
+            .entry(session.id.clone())
+            .or_insert(plugins);
     }
 
     /// The skills a unified session's plugins publish, by alias, which seed its
@@ -195,7 +181,7 @@ impl AppServer {
         &self,
         session_id: &str,
     ) -> Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>> {
-        let plugins = self.session_plugins.lock().ok()?.get(session_id).cloned()?;
+        let plugins = lock(&self.session_plugins).get(session_id).cloned()?;
         Some(skill_seed(&plugins))
     }
 

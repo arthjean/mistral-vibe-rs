@@ -11,6 +11,11 @@ use super::super::interaction::{
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct McpSource {
     pub name: String,
+    /// The label a row and a detail title show, `name` staying the key every
+    /// toggle and row id uses. A producer that publishes none labels the
+    /// source by its name, as the reference model's validator does.
+    #[serde(rename = "displayName", default)]
+    pub display_name: String,
     pub kind: IntegrationKind,
     pub transport: String,
     pub status: McpSourceStatus,
@@ -51,16 +56,19 @@ impl McpSourceStatus {
         }
     }
 
-    /// Reference `mcp_app._source_status`, with one hint for an unavailable
-    /// source of either kind.
-    fn label(self) -> &'static str {
+    /// Reference `mcp_app._source_status`: an unavailable server points at
+    /// its configuration and an unavailable connector at a refresh.
+    fn label(self, kind: IntegrationKind) -> &'static str {
         match self {
             Self::Disabled => "disabled",
             Self::Connected => "connected",
             Self::Enabled => "enabled",
             Self::NeedsAuth => "needs auth",
             Self::NeedsSetup => "needs setup",
-            Self::Unavailable => "error - try refreshing",
+            Self::Unavailable => match kind {
+                IntegrationKind::McpServer => "error - check your config",
+                IntegrationKind::Connector => "error - try refreshing",
+            },
         }
     }
 }
@@ -74,10 +82,16 @@ impl McpSource {
     ///
     /// Returns the decoding error when the list does not have the published shape.
     pub fn published(state: &Value) -> Result<Vec<Self>, String> {
-        state
+        let mut sources = state
             .pointer("/mcp/sources")
             .map_or_else(|| Ok(Vec::new()), Vec::<Self>::deserialize)
-            .map_err(|error| format!("Malformed MCP state: {error}"))
+            .map_err(|error| format!("Malformed MCP state: {error}"))?;
+        for source in &mut sources {
+            if source.display_name.is_empty() {
+                source.display_name.clone_from(&source.name);
+            }
+        }
+        Ok(sources)
     }
 }
 
@@ -124,10 +138,15 @@ pub fn mcp_detail_overlay(sources: &[McpSource], target: &IntegrationTarget) -> 
         IntegrationKind::McpServer => "MCP Server",
         IntegrationKind::Connector => "Connector",
     };
-    let title = format!("{prefix}: {}", target.source);
     let source = sources
         .iter()
         .find(|source| source.kind == target.kind && source.name == target.source);
+    let title = format!(
+        "{prefix}: {}",
+        source.map_or(target.source.as_str(), |source| source
+            .display_name
+            .as_str())
+    );
     let status = source.map_or(McpSourceStatus::Unavailable, |source| source.status);
     let mut items = if status == McpSourceStatus::NeedsSetup {
         // The browser's `r` binding performs the refresh the instruction names.
@@ -173,7 +192,8 @@ pub fn mcp_detail_overlay(sources: &[McpSource], target: &IntegrationTarget) -> 
     Overlay::new(OverlayKind::McpDetail, title, items)
 }
 
-/// The sources of one kind, the ones with tools first and each group by name.
+/// The sources of one kind, the ones with tools first and each group by the
+/// label it shows, its name breaking ties (reference `_sort_sources_for_menu`).
 fn sorted_sources(sources: &[McpSource], kind: IntegrationKind) -> Vec<&McpSource> {
     let mut sources = sources
         .iter()
@@ -182,7 +202,7 @@ fn sorted_sources(sources: &[McpSource], kind: IntegrationKind) -> Vec<&McpSourc
     sources.sort_by_key(|source| {
         (
             source.tools.is_empty(),
-            source.name.to_ascii_lowercase(),
+            source.display_name.to_lowercase(),
             source.name.as_str(),
         )
     });
@@ -191,14 +211,14 @@ fn sorted_sources(sources: &[McpSource], kind: IntegrationKind) -> Vec<&McpSourc
 
 fn source_item(source: &McpSource) -> OverlayItem {
     let enabled = source.tools.iter().filter(|tool| tool.enabled).count();
-    let status = source.status.label();
+    let status = source.status.label(source.kind);
     integration_item(
         source.kind,
         &source.name,
         None,
         source.status != McpSourceStatus::Disabled,
         source.status,
-        &source.name,
+        &source.display_name,
         format!(
             "{} · {} · {status}",
             source.transport,
@@ -340,3 +360,6 @@ pub fn mcp_auth_failed_overlay(source: &str, enable_on_complete: bool) -> Overla
         ],
     )
 }
+
+#[cfg(test)]
+mod integrations_tests;

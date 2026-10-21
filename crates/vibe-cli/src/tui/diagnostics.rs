@@ -201,8 +201,7 @@ pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option
         DriverError::StaleTurn(_) => Some("cancelled"),
         // A unified turn's failure carries the code it was published with.
         DriverError::Published(error) => error.code.as_deref().and_then(turn_error_class),
-        DriverError::StatePoisoned
-        | DriverError::UnsupportedControl(_)
+        DriverError::UnsupportedControl(_)
         | DriverError::ImageAttachment(_)
         | DriverError::Compaction(_) => None,
     }

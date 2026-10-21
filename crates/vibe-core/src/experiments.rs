@@ -9,8 +9,7 @@
 //! value, drop the features it does not know, and keep configuration and
 //! telemetry reading the same response differently.
 //!
-//! [`json`] holds Python's equality over the JSON values the variants are
-//! carried as, [`models`] the payload shapes, [`client`] the lookup and its fail-open
+//! [`models`] holds the payload shapes, [`client`] the lookup and its fail-open
 //! contract, [`manager`] what a resolved response means, and [`cache`] the
 //! last response a user resolved, which the next session applies before its
 //! own lookup answers.
@@ -23,7 +22,6 @@ use serde_json::{Map, Value};
 
 mod cache;
 mod client;
-mod json;
 mod manager;
 mod models;
 mod session;
@@ -52,8 +50,6 @@ mod cache_tests;
 mod client_tests;
 #[cfg(test)]
 mod experiments_tests;
-#[cfg(test)]
-mod json_tests;
 #[cfg(test)]
 mod manager_tests;
 #[cfg(test)]

@@ -54,7 +54,7 @@ impl ServerConnection {
     ) -> Result<DispatchBatch, ProtocolFault> {
         self.require_root(session_id)?;
         let previous = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| not_found(session_id))?;
@@ -71,7 +71,7 @@ impl ServerConnection {
         let target = relocation_target(&self.server.workspace, &previous, cwd)?;
         let store = self.store();
         let mut metadata = store.open(session_id).map_err(storage_fault)?.metadata;
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| not_found(session_id))?;

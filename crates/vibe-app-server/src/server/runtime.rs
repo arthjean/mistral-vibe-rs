@@ -242,6 +242,19 @@ impl SessionRuntime {
         })
     }
 
+    /// Starts the session over as one with nothing said yet, created `now`:
+    /// what a cleared history continues as.
+    pub(crate) fn restart_fresh(&mut self, now: u64) {
+        self.created_at = now;
+        self.updated_at = now;
+        self.bumped_at = None;
+        self.event_watermark = 0;
+        self.stats = SessionStats::default();
+        self.turns.clear();
+        self.latest_turn = None;
+        self.status = SessionStatus::Idle;
+    }
+
     /// Reference `replace_idle_with_history`: the projection holds `history`
     /// under the session's identifier and runs no turn, and the turns start
     /// over.

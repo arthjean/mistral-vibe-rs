@@ -540,7 +540,7 @@ pub(crate) fn expand_powershell_path(
     }
     unresolved = unresolved || value.contains('$') || value.contains("@(");
     if (value == "~" || value.starts_with("~/") || value.starts_with("~\\"))
-        && let Some(home) = crate::config::user_home_directory()
+        && let Some(home) = crate::platform::user_home()
     {
         value = format!("{}{}", home.display(), &value[1..]);
     }

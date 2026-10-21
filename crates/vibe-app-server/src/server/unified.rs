@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde_json::{Map, Value, json};
 use tokio::sync::{mpsc, watch};
@@ -133,18 +133,6 @@ impl UnifiedHost {
         self.running = None;
         self.interrupt = None;
     }
-}
-
-/// Locks `mutex`, recovering it when a holder panicked.
-///
-/// This is the one lock policy of the unified host, which every lock it takes
-/// on a session goes through ([`UnifiedSession::core`], [`UnifiedSession::host`]
-/// and the session's other slots). The state a poisoned lock guards is what
-/// the panicking holder left, and serving it is the lesser harm: refusing
-/// would strand every later call on the session, its running turn and the
-/// callbacks that turn waits on included.
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 impl UnifiedSession {

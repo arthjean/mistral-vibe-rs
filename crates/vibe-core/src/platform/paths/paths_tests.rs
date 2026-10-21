@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use super::{canonicalize, simplified, strip_verbatim_prefix};
+use super::{canonicalize, resolve_lenient, simplified, strip_verbatim_prefix};
 
 #[test]
 fn the_reference_form_drops_every_verbatim_prefix() {
@@ -20,6 +20,18 @@ fn a_canonical_path_carries_no_verbatim_prefix() {
     assert!(!text.starts_with(r"\\?\"), "{text}");
     assert!(canonical.is_absolute(), "{text}");
     assert!(canonical.is_dir(), "{text}");
+}
+
+#[test]
+fn a_missing_tail_resolves_lexically_under_its_existing_prefix() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = canonicalize(directory.path()).expect("the directory resolves");
+    std::fs::create_dir(root.join("kept")).expect("directory");
+    assert_eq!(
+        resolve_lenient(&root.join("missing/../kept/./new.txt")),
+        root.join("kept/new.txt")
+    );
+    assert_eq!(resolve_lenient(&root.join("kept/..")), root);
 }
 
 #[cfg(windows)]

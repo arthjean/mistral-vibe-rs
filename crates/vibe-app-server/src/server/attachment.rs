@@ -193,13 +193,8 @@ impl AppServer {
         session_id: &str,
         turn_id: &str,
     ) -> Result<ProjectionSnapshot, ServerError> {
-        let sessions = self.lock_sessions()?;
-        let session = sessions
-            .get(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let sessions = self.lock_sessions();
+        let session = sessions.active_turn(session_id, turn_id)?;
         let mut snapshot = session
             .snapshot
             .clone()
@@ -225,13 +220,8 @@ impl AppServer {
         turn_id: &str,
         snapshot: ProjectionSnapshot,
     ) -> Result<u64, ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         if snapshot.session_id != session.id || snapshot.turn_id.as_deref() != Some(turn_id) {
             return Err(ServerError::SessionConflict(snapshot.session_id));
         }
@@ -249,23 +239,19 @@ impl AppServer {
     /// A log with no room left refuses to capture rather than dropping what it
     /// already holds, and an operator whose file history quietly stopped being
     /// tracked has no way to notice. `diagnostics/list` is where a client reads
-    /// what the session could not do, so that is where this lands. A lock this
-    /// cannot take loses the warning rather than failing the turn that carried
-    /// it.
+    /// what the session could not do, so that is where this lands.
     pub(crate) fn publish_retention_notice(&self, review: &ReviewManager) {
-        let Ok(Some(notice)) = review.take_retention_notice() else {
+        let Some(notice) = review.take_retention_notice() else {
             return;
         };
-        if let Ok(mut resources) = self.resources.lock() {
-            resources.record_diagnostic(FILE_HISTORY_LABEL, &notice);
-        }
+        lock(&self.resources).record_diagnostic(FILE_HISTORY_LABEL, &notice);
     }
 
     pub(crate) fn orphaned_resource_generation(
         &self,
         session_id: &str,
     ) -> Result<Option<u64>, ServerError> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         Ok(sessions
             .get(session_id)
             .filter(|session| session.attachments == 0)
@@ -277,7 +263,7 @@ impl AppServer {
         attachment: &RuntimeAttachment,
         review_override: Option<Arc<ReviewManager>>,
     ) -> Result<(), ServerError> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         if let Some(session) = sessions.get_mut(&attachment.id) {
             session.attachments = session.attachments.saturating_add(1);
             session.persisted = Some(attachment.hydrated.clone());
@@ -500,13 +486,11 @@ impl AppServer {
         session: ResourceSession,
     ) -> Result<(), ResourceError> {
         let session_id = session.session_id.clone();
-        let opened = self
-            .resources
-            .lock()
-            .map_err(|_| ResourceError::Unavailable("resource state lock is poisoned".to_owned()))
-            .and_then(|mut resources| {
-                resources.open_session(&session_id, session.policy.clone(), session.tools.clone())
-            });
+        let opened = lock(&self.resources).open_session(
+            &session_id,
+            session.policy.clone(),
+            session.tools.clone(),
+        );
         if let Err(error) = opened {
             sessions.remove(&session_id);
             return Err(error);
@@ -514,9 +498,7 @@ impl AppServer {
         if let Some(backend) = &self.resource_backend
             && let Err(error) = backend.open_session(session)
         {
-            if let Ok(mut resources) = self.resources.lock() {
-                resources.close_session(&session_id);
-            }
+            lock(&self.resources).close_session(&session_id);
             sessions.remove(&session_id);
             return Err(error);
         }
@@ -528,7 +510,7 @@ impl AppServer {
         attachment: &RuntimeAttachment,
         review_override: Option<Arc<ReviewManager>>,
     ) -> Result<(), ServerError> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(&attachment.id)
             .ok_or_else(|| ServerError::SessionNotFound(attachment.id.clone()))?;
@@ -550,7 +532,7 @@ impl AppServer {
         session.updated_at = now_millis();
         drop(sessions);
         if let Err(error) = self.refresh_session_workspace_tools(&attachment.id) {
-            self.lock_sessions()?.insert(previous);
+            self.lock_sessions().insert(previous);
             if let Err(rollback) = self.refresh_session_workspace_tools(&attachment.id) {
                 return Err(ServerError::Resource(format!(
                     "{error}; runtime rollback failed ({rollback})"
@@ -572,7 +554,7 @@ impl AppServer {
         agent_name: &str,
     ) -> Result<(AgentProfile, SessionIntent, ToolRegistry), ServerError> {
         let scoped = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -592,7 +574,7 @@ impl AppServer {
             .clone()
             .ok_or_else(|| ServerError::Resource("the agent switch named no profile".to_owned()))?;
         self.refresh_workspace_runtime(&attachment, None)?;
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         let session = sessions
             .get(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -606,7 +588,7 @@ impl AppServer {
     /// move took is given back.
     pub(crate) fn rebind_session_workspace(&self, session_id: &str) -> Result<(), ServerError> {
         let (working_directory, persisted, released) = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -633,7 +615,7 @@ impl AppServer {
             .tool_filters_for_session(target, trusted)
             .map_err(|error| ServerError::Resource(error.to_string()))?;
         {
-            let mut sessions = self.lock_sessions()?;
+            let mut sessions = self.lock_sessions();
             let session = sessions
                 .get_mut(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -667,7 +649,7 @@ impl AppServer {
     /// `reload_with_initial_messages(reload_hooks=True)`.
     pub(crate) fn reload_session_hooks(&self, session_id: &str) -> Result<(), ServerError> {
         let (working_directory, trusted, add_directories) = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -680,7 +662,7 @@ impl AppServer {
         let hooks =
             self.workspace
                 .session_hooks(Path::new(&working_directory), trusted, &add_directories);
-        if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+        if let Some(session) = self.lock_sessions().get_mut(session_id) {
             session.hooks = hooks;
             // The same reload reads the prompt's files again.
             session.system_prompt = None;
@@ -693,7 +675,7 @@ impl AppServer {
         session_id: &str,
     ) -> Result<(), ServerError> {
         let (working_directory, policy, tools, intent, previous_review) = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -722,7 +704,7 @@ impl AppServer {
                 previous_review.clone(),
             )?
             .or(previous_review);
-        if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+        if let Some(session) = self.lock_sessions().get_mut(session_id) {
             session.review = review;
         }
         Ok(())

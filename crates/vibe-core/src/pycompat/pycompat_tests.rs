@@ -1,11 +1,11 @@
 //! Every expectation below was printed by the pinned checkout's interpreter.
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::pydantic::{self, LineError};
 use super::{
-    Dumps, dumps, isprintable, isspace, os_error, parse_float, parse_int, repr_float, repr_json,
-    repr_str, splitlines, str_json, strip, thousands, title, truthy,
+    Dumps, dumps, isprintable, isspace, os_error, parse_float, parse_int, python_eq, repr_float,
+    repr_json, repr_str, splitlines, str_json, strip, thousands, title, truthy,
 };
 
 #[test]
@@ -329,4 +329,49 @@ fn validation_errors_render_as_pydantic_prints_them() {
          input_value=['xxxxxxxxxxxxxxxxxxxxxxx... 1.5, 1e+16, None, True], input_type=list]\n  \
          Value error, bad [type=value_error, input_value='zz', input_type=str]"
     );
+    assert_eq!(
+        pydantic::single_error(
+            "M",
+            "b",
+            "int_type",
+            "Input should be a valid integer",
+            &json!(null)
+        ),
+        "1 validation error for M\nb\n  Input should be a valid integer [type=int_type, \
+         input_value=None, input_type=NoneType]"
+    );
+}
+
+fn decode(text: &str) -> Value {
+    serde_json::from_str(text).expect("the oracle document parses")
+}
+
+#[test]
+fn a_boolean_equals_the_integer_and_the_float_it_stands_for() {
+    assert!(python_eq(&json!(false), &json!(0)));
+    assert!(python_eq(&json!(true), &json!(1.0)));
+    assert!(python_eq(&json!(1), &decode("1.0")));
+    assert!(!python_eq(&json!(true), &json!(2)));
+    assert!(!python_eq(&decode("1.5"), &json!(1)));
+}
+
+#[test]
+fn an_object_compares_regardless_of_key_order() {
+    assert!(python_eq(
+        &decode(r#"{"a": 1, "b": [true, null]}"#),
+        &decode(r#"{"b": [1, null], "a": 1.0}"#)
+    ));
+    assert!(!python_eq(
+        &decode(r#"{"a": 1}"#),
+        &decode(r#"{"a": 1, "b": 2}"#)
+    ));
+}
+
+#[test]
+fn values_of_different_kinds_never_compare_equal() {
+    assert!(python_eq(&Value::Null, &Value::Null));
+    assert!(!python_eq(&json!("0"), &json!(0)));
+    assert!(!python_eq(&json!([]), &json!({})));
+    assert!(!python_eq(&Value::Null, &json!(false)));
+    assert!(!python_eq(&json!(["a", "b"]), &json!(["b", "a"])));
 }

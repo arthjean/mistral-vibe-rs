@@ -20,13 +20,15 @@ impl ServerConnection {
             return Ok(success_batch(request.id.clone(), BTreeMap::new()));
         }
         let held = self.root_id().as_deref() == Some(session_id.as_str())
-            || self.server.lock_sessions().is_ok_and(|sessions| {
-                sessions.get(&session_id).is_some_and(|session| {
+            || self
+                .server
+                .lock_sessions()
+                .get(&session_id)
+                .is_some_and(|session| {
                     session.id == session_id
                         && session.attachments > 0
                         && session.status != SessionStatus::Closed
-                })
-            });
+                });
         if held {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,

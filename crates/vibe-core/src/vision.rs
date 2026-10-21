@@ -18,6 +18,7 @@ use crate::llm::retry::NoRetryObserver;
 use crate::llm::types::{Image, Message};
 use crate::llm::{Backend, BackendContext, ModelRequest};
 use crate::provider::config::{BackendKind, ModelConfig, ProviderConfig, ThinkingLevel};
+use crate::sync;
 use crate::telemetry::TelemetryCallType;
 
 /// Reference `MAX_DESCRIPTION_TOKENS`.
@@ -108,7 +109,7 @@ impl ImageDescriber {
     /// The description `image` already has.
     #[must_use]
     pub fn cached(&self, image: &ImageToDescribe) -> Option<String> {
-        self.cache.lock().ok()?.get(&image.key).cloned()
+        sync::lock(&self.cache).get(&image.key).cloned()
     }
 
     /// The text that replaces `image` in the turn input.
@@ -130,10 +131,7 @@ impl ImageDescriber {
     ) -> Vec<FailedDescription> {
         let mut pending: Vec<&ImageToDescribe> = Vec::new();
         for image in images {
-            let known = self
-                .cache
-                .lock()
-                .is_ok_and(|cache| cache.contains_key(&image.key));
+            let known = sync::lock(&self.cache).contains_key(&image.key);
             if !known && !pending.iter().any(|queued| queued.key == image.key) {
                 pending.push(image);
             }
@@ -157,9 +155,7 @@ impl ImageDescriber {
         for (image, result) in pending.into_iter().zip(results) {
             match result {
                 Ok(text) => {
-                    if let Ok(mut cache) = self.cache.lock() {
-                        cache.insert(image.key.clone(), text);
-                    }
+                    sync::lock(&self.cache).insert(image.key.clone(), text);
                 }
                 Err(reason) => failures.push(FailedDescription {
                     alias: image.alias.clone(),

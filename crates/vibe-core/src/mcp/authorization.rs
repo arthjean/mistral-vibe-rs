@@ -26,6 +26,7 @@ use crate::auth::mcp_oauth::{
     refresh_credential,
 };
 use crate::pycompat::{self, Dumps};
+use crate::sync::lock;
 
 /// What kind of credential a server connects with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -332,16 +333,8 @@ impl McpAuthenticationService {
         self
     }
 
-    fn state(&self) -> std::sync::MutexGuard<'_, ServiceState> {
-        self.state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
     fn lock_for(&self, name: &str) -> Arc<Mutex<()>> {
-        self.locks
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        lock(&self.locks)
             .entry(name.to_owned())
             .or_default()
             .clone()
@@ -351,7 +344,7 @@ impl McpAuthenticationService {
     /// advancing both revisions of any whose fingerprint changed, and forgets
     /// the ones it no longer configures unless another owner still does.
     pub async fn bind_catalog(&self, servers: &[McpServerConfig], owner: McpCatalogOwner) {
-        let mut state = self.state();
+        let mut state = lock(&self.state);
         let position = state.catalogs.iter().position(|(key, _)| *key == owner);
         let mut owned = position
             .map(|position| state.catalogs.remove(position).1)
@@ -388,17 +381,17 @@ impl McpAuthenticationService {
     /// Forgets what `owner` bound, as the reference's weak keys do when the
     /// session holding one ends.
     pub async fn release(&self, owner: &McpCatalogOwner) {
-        self.state().catalogs.retain(|(key, _)| key != owner);
+        lock(&self.state).catalogs.retain(|(key, _)| key != owner);
     }
 
     /// The server `name` means to `owner`.
     pub async fn bound(&self, name: &str, owner: &McpCatalogOwner) -> Option<McpServerConfig> {
-        self.state().bound(name, owner)
+        lock(&self.state).bound(name, owner)
     }
 
     /// Reference `reference_for`.
     pub async fn reference_for(&self, server: &McpServerConfig) -> McpAuthorizationRef {
-        let state = self.state();
+        let state = lock(&self.state);
         McpAuthorizationRef {
             server_name: server.alias.clone(),
             server_fingerprint: server_fingerprint(server),
@@ -408,17 +401,17 @@ impl McpAuthenticationService {
     }
 
     pub async fn descriptor_revision(&self, name: &str) -> String {
-        self.state().descriptor_revision(name)
+        lock(&self.state).descriptor_revision(name)
     }
 
     pub async fn connection_revision(&self, name: &str) -> String {
-        self.state().connection_revision(name)
+        lock(&self.state).connection_revision(name)
     }
 
     /// Reference `resolve`.
     pub async fn resolve(&self, reference: &McpAuthorizationRef) -> McpAuthorization {
-        let lock = self.lock_for(&reference.server_name);
-        let _guard = lock.lock().await;
+        let server_lock = self.lock_for(&reference.server_name);
+        let _guard = server_lock.lock().await;
         self.resolve_locked(reference).await
     }
 
@@ -429,8 +422,8 @@ impl McpAuthenticationService {
         reference: &McpAuthorizationRef,
         observed: &str,
     ) -> McpAuthorization {
-        let lock = self.lock_for(&reference.server_name);
-        let _guard = lock.lock().await;
+        let server_lock = self.lock_for(&reference.server_name);
+        let _guard = server_lock.lock().await;
         let current = self.resolve_locked(reference).await;
         if let McpAuthorization::Snapshot(snapshot) = &current
             && snapshot.connection_revision != observed
@@ -439,7 +432,7 @@ impl McpAuthenticationService {
         }
         let name = reference.server_name.as_str();
         let discard = {
-            let mut state = self.state();
+            let mut state = lock(&self.state);
             let material = state
                 .authorization_material
                 .get(name)
@@ -456,7 +449,7 @@ impl McpAuthenticationService {
         if discard && let Some(store) = &self.oauth {
             let _ = store.delete_tokens(name);
         }
-        let mut state = self.state();
+        let mut state = lock(&self.state);
         state.advance(name);
         state.required(
             name,
@@ -474,15 +467,15 @@ impl McpAuthenticationService {
         on_url: AuthUrlSink,
         owner: &McpCatalogOwner,
     ) -> Result<String, McpAuthenticationError> {
-        let lock = self.lock_for(name);
-        let _guard = lock.lock().await;
+        let server_lock = self.lock_for(name);
+        let _guard = server_lock.lock().await;
         let server = self.require_oauth_server(name, owner)?;
         let store = self.store(name)?;
         // An OAuth entry declares no headers of its own, reference
         // `_declared_headers` reading `http_headers()` off it.
         let declared = http_headers_with(&server, self.environment.as_ref());
         perform_login(&store, &server, &declared, on_url).await?;
-        let mut state = self.state();
+        let mut state = lock(&self.state);
         state.credential_changed(name);
         Ok(state.descriptor_revision(name))
     }
@@ -493,11 +486,11 @@ impl McpAuthenticationService {
         name: &str,
         owner: &McpCatalogOwner,
     ) -> Result<String, McpAuthenticationError> {
-        let lock = self.lock_for(name);
-        let _guard = lock.lock().await;
+        let server_lock = self.lock_for(name);
+        let _guard = server_lock.lock().await;
         self.require_oauth_server(name, owner)?;
         self.store(name)?.delete_credentials(name)?;
-        let mut state = self.state();
+        let mut state = lock(&self.state);
         state.credential_changed(name);
         Ok(state.descriptor_revision(name))
     }
@@ -514,7 +507,7 @@ impl McpAuthenticationService {
         let store = self.store(name)?;
         let backup = store.snapshot(name);
         let previous = {
-            let state = self.state();
+            let state = lock(&self.state);
             AuthorizationState {
                 descriptor_generation: state.descriptor_generations.get(name).copied(),
                 connection_generation: state.connection_generations.get(name).copied(),
@@ -523,7 +516,7 @@ impl McpAuthenticationService {
             }
         };
         store.delete_credentials(name)?;
-        let mut state = self.state();
+        let mut state = lock(&self.state);
         state.credential_changed(name);
         Ok(McpCredentialRemoval {
             name: name.to_owned(),
@@ -549,7 +542,7 @@ impl McpAuthenticationService {
                 .restore(name, &removal.backup)
                 .map_err(McpAuthenticationError::from)
         });
-        let mut state = self.state();
+        let mut state = lock(&self.state);
         let previous = removal.previous;
         restore_entry(
             &mut state.descriptor_generations,
@@ -609,7 +602,7 @@ impl McpAuthenticationService {
         name: &str,
         owner: &McpCatalogOwner,
     ) -> Result<McpServerConfig, McpAuthenticationError> {
-        self.state()
+        lock(&self.state)
             .bound(name, owner)
             .filter(|server| authorization_kind(server) == McpAuthorizationKind::Oauth)
             .ok_or_else(|| McpAuthenticationError::NotOauth(name.to_owned()))
@@ -626,7 +619,7 @@ impl McpAuthenticationService {
     async fn resolve_locked(&self, reference: &McpAuthorizationRef) -> McpAuthorization {
         let name = reference.server_name.as_str();
         let server = {
-            let mut state = self.state();
+            let mut state = lock(&self.state);
             let Some(server) = state.owned_server(name) else {
                 return state.required(name, McpAuthorizationReason::Invalid, None);
             };
@@ -650,7 +643,7 @@ impl McpAuthenticationService {
     /// Reference `_resolve_oauth`.
     async fn resolve_oauth(&self, server: &McpServerConfig) -> McpAuthorization {
         let name = server.alias.as_str();
-        let required = |reason| self.state().required(name, reason, None);
+        let required = |reason| lock(&self.state).required(name, reason, None);
         let Some(store) = &self.oauth else {
             return required(McpAuthorizationReason::Missing);
         };
@@ -665,9 +658,9 @@ impl McpAuthenticationService {
             // where the alias is shared, is another owner's live grant, which
             // is left alone: the fingerprint keeps it from being handed over.
             let stale = tokens.is_some() || saved.is_some();
-            if stale && !self.state().alias_is_shared(name) {
+            if stale && !lock(&self.state).alias_is_shared(name) {
                 let _ = store.delete_credentials(name);
-                self.state().advance(name);
+                lock(&self.state).advance(name);
             }
             return required(McpAuthorizationReason::Invalid);
         }
@@ -681,7 +674,7 @@ impl McpAuthenticationService {
             match refresh_credential(store, server).await {
                 RefreshOutcome::Completed => {}
                 RefreshOutcome::InvalidGrant => {
-                    self.state().advance(name);
+                    lock(&self.state).advance(name);
                     return required(McpAuthorizationReason::Expired);
                 }
                 RefreshOutcome::Failed | RefreshOutcome::Unexpected(_) => {
@@ -695,7 +688,7 @@ impl McpAuthenticationService {
         }
         let mut headers = http_headers_with(server, self.environment.as_ref());
         headers.insert("Authorization".to_owned(), tokens.authorization_value());
-        self.state().offer(name, headers)
+        lock(&self.state).offer(name, headers)
     }
 }
 

@@ -17,6 +17,7 @@ use serde_json::{Map, Value, json};
 use super::RemoteTool;
 use crate::atomic_file::{FileMode, ensure_private_directory, write_atomically};
 use crate::pycompat::{self, Dumps};
+use crate::sync::lock;
 use crate::time::UtcTimestamp;
 
 pub const DESCRIPTOR_CACHE_FORMAT: &str = "mistral.vibe.legacy-mcp-descriptors/v1";
@@ -106,7 +107,7 @@ impl McpDescriptorCache {
         if self.ttl_seconds == 0.0 {
             return None;
         }
-        let _guard = self.lock.lock().ok()?;
+        let _guard = lock(&self.lock);
         let record = self.load(key)?;
         if record.key != key || record.source_name != source_name || !self.fresh(&record, now) {
             return None;
@@ -141,9 +142,7 @@ impl McpDescriptorCache {
         if payload.len() as u64 > MAX_RECORD_BYTES {
             return false;
         }
-        let Ok(_guard) = self.lock.lock() else {
-            return false;
-        };
+        let _guard = lock(&self.lock);
         if self.replace(&self.path(key), &payload).is_err() {
             return false;
         }
@@ -162,9 +161,7 @@ impl McpDescriptorCache {
         if self.ttl_seconds == 0.0 {
             return;
         }
-        let Ok(_guard) = self.lock.lock() else {
-            return;
-        };
+        let _guard = lock(&self.lock);
         let Some(record) = self.load(key) else {
             return;
         };

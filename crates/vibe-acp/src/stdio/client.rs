@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::sync::{mpsc, oneshot};
 use vibe_acp::{AcpClientFuture, AcpClientPort};
+use vibe_core::sync::lock;
 
 pub(crate) enum WriterMessage {
     Value(Value),
@@ -42,11 +43,7 @@ impl StdioClientPort {
         let Some(id) = value.get("id").and_then(Value::as_i64) else {
             return;
         };
-        let sender = self
-            .pending
-            .lock()
-            .ok()
-            .and_then(|mut pending| pending.remove(&id));
+        let sender = lock(&self.pending).remove(&id);
         let Some(sender) = sender else {
             return;
         };
@@ -62,10 +59,8 @@ impl StdioClientPort {
 
     /// Fails every request still waiting on the client.
     pub(crate) fn disconnect(&self) {
-        if let Ok(mut pending) = self.pending.lock() {
-            for (_, sender) in std::mem::take(&mut *pending) {
-                let _ = sender.send(Err("the client disconnected".to_owned()));
-            }
+        for (_, sender) in std::mem::take(&mut *lock(&self.pending)) {
+            let _ = sender.send(Err("the client disconnected".to_owned()));
         }
     }
 
@@ -82,9 +77,7 @@ struct PendingGuard<'a> {
 
 impl Drop for PendingGuard<'_> {
     fn drop(&mut self) {
-        if let Ok(mut pending) = self.pending.lock() {
-            pending.remove(&self.id);
-        }
+        lock(self.pending).remove(&self.id);
     }
 }
 
@@ -93,10 +86,7 @@ impl AcpClientPort for StdioClientPort {
         Box::pin(async move {
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
             let (sender, receiver) = oneshot::channel();
-            self.pending
-                .lock()
-                .map_err(|_| "the client request table is poisoned".to_owned())?
-                .insert(id, sender);
+            lock(&self.pending).insert(id, sender);
             let _guard = PendingGuard {
                 pending: &self.pending,
                 id,

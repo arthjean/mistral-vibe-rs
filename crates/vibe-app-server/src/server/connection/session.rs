@@ -32,8 +32,7 @@ impl ServerConnection {
                 "disabled_tools entry `{entry}` is not a valid regular expression and is ignored"
             ));
         }
-        let withheld = tools.withheld().unwrap_or_default();
-        for name in withheld {
+        for name in tools.withheld() {
             issues.push(format!(
                 "tool `{name}` is withheld: its runtime prerequisite is missing"
             ));
@@ -41,10 +40,9 @@ impl ServerConnection {
         if issues.is_empty() {
             return;
         }
-        if let Ok(mut resources) = self.server.resources.lock() {
-            for issue in issues {
-                resources.record_diagnostic(CONFIG_FILE_LABEL, &issue);
-            }
+        let mut resources = lock(&self.server.resources);
+        for issue in issues {
+            resources.record_diagnostic(CONFIG_FILE_LABEL, &issue);
         }
     }
 
@@ -58,10 +56,9 @@ impl ServerConnection {
         if issues.is_empty() {
             return;
         }
-        if let Ok(mut resources) = self.server.resources.lock() {
-            for (file, message) in issues {
-                resources.record_diagnostic_once(&file, &message);
-            }
+        let mut resources = lock(&self.server.resources);
+        for (file, message) in issues {
+            resources.record_diagnostic_once(&file, &message);
         }
     }
 
@@ -172,9 +169,7 @@ impl ServerConnection {
         ) else {
             return;
         };
-        if let Ok(mut resources) = self.server.resources.lock() {
-            resources.record_diagnostic(worktrees::WORKTREE_LABEL, &note);
-        }
+        lock(&self.server.resources).record_diagnostic(worktrees::WORKTREE_LABEL, &note);
     }
 
     /// Registers the session a start resolved, and answers its identifier, its
@@ -279,7 +274,7 @@ impl ServerConnection {
         {
             persisted = Some(hydrated);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         if sessions.contains(&session_id) {
             return Err(ProtocolFault::new(
                 ProtocolErrorCode::Conflict,
@@ -355,10 +350,8 @@ impl ServerConnection {
         self.server.start_registry_sync(&session_id);
         // Reference `init_duration_ms`, which `session/ready/wait` answers: how
         // long the session took to become usable.
-        if let Ok(mut resources) = self.server.resources.lock() {
-            let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-            resources.record_init_duration(&session_id, elapsed);
-        }
+        let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        lock(&self.server.resources).record_init_duration(&session_id, elapsed);
         // The session stands in its directory from here on, so the attachment
         // hold becomes its own and a sweep reads the worktree as occupied.
         let pending_hold = resolution.pending_hold.take();
@@ -633,7 +626,7 @@ impl ServerConnection {
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
             return Ok(batch);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let key = sessions
             .key(&params.session_id)
             .map(ToOwned::to_owned)
@@ -681,9 +674,7 @@ impl ServerConnection {
             self.root = None;
         }
         self.release_worktree(&working_directory, &session_id, unstarted_worktree);
-        if let Ok(mut resources) = self.server.resources.lock() {
-            resources.close_session(&session_id);
-        }
+        lock(&self.server.resources).close_session(&session_id);
         // The scratchpad is a capability of the runtime, not of the workspace,
         // so it goes with the session that opened it. Reference
         // `cleanup_scratchpad` on the agent-loop shutdown path.
@@ -750,7 +741,7 @@ impl ServerConnection {
             return Ok(batch);
         }
         let canonical_session_id = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions
                 .get(&params.session_id)
                 .ok_or_else(|| session_missing("Session was not found"))?;
@@ -775,7 +766,7 @@ impl ServerConnection {
                 .workspace
                 .update_runtime_settings(&canonical_session_id, &params.entries())?
         };
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&params.session_id)
             .ok_or_else(|| session_missing("Session was not found"))?;
@@ -808,7 +799,7 @@ impl ServerConnection {
             return Ok(batch);
         }
         let canonical_session_id = {
-            let mut sessions = self.server.lock_sessions()?;
+            let mut sessions = self.server.lock_sessions();
             let session = sessions
                 .get_mut(&params.session_id)
                 .ok_or_else(|| session_missing("Session was not found"))?;

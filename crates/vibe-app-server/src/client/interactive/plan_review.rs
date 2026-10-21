@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use vibe_core::schema::ObjectSchema;
+use vibe_core::tools::document::Document;
 use vibe_core::tools::{
     ToolAvailability, ToolError, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
-    reference_text,
 };
 
 use super::questions::user_input_result;
@@ -228,13 +228,10 @@ pub(crate) async fn run_interactive_plan_review(
     // (`vibe/core/tools/builtins/exit_plan_mode.py:34`) declares `switched` then
     // `message`, and the agent loop renders one field per line, so the decision
     // reaches the model beside the sentence rather than only inside it.
-    let model_text = reference_text::joined(&[
-        ("switched", reference_text::boolean(switched).to_owned()),
-        ("message", message.clone()),
-    ]);
+    let document = Document::new()
+        .field("switched", switched)
+        .field("message", message.as_str());
     Ok(ToolExecutionOutput {
-        skip: None,
-        turn_failure: None,
         // Reference `ExitPlanModeConfig.permission` is `always`, so the call
         // runs on the configuration's say.
         approval: Some(vibe_core::tools::ToolApproval {
@@ -242,23 +239,17 @@ pub(crate) async fn run_interactive_plan_review(
             approval_type: vibe_core::tools::ToolApprovalType::Always,
             approval_source: vibe_core::tools::ToolApprovalSource::Config,
         }),
-        failure: None,
-        typed_result: json!({"switched": switched, "message": message}),
-        model_text,
+        pending_injection,
         // Reference `ExitPlanMode.format_result_display`: the verdict is the
         // header, and a plan that stays reads as unsuccessful.
-        display: json!({
+        ..document.into_output(json!({
             "success": switched,
             "verb": "",
             "message": message,
             "warnings": [],
             "approvalNote": null,
             "suffix": "",
-        }),
-        projected_result: serde_json::Value::Null,
-        chunks: Vec::new(),
-        pending_injection,
-        remote_result: None,
+        }))
     })
 }
 
@@ -284,7 +275,7 @@ pub(crate) fn plan_file_path(plan_directory: &Path, session_id: &str) -> PathBuf
             vibe_core::worktree::random_slug()
         )
     };
-    let name = crate::sync::lock(NAMES.get_or_init(Default::default))
+    let name = vibe_core::sync::lock(NAMES.get_or_init(Default::default))
         .entry(session_id.to_owned())
         .or_insert_with(draw)
         .clone();

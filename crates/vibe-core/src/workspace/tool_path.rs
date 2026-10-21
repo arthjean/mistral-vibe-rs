@@ -4,10 +4,10 @@
 //! and `path` argument through `normalize_windows_input_path`
 //! (`vibe/utils/paths.py`) before the tool sees it, and `resolve_tool_path`
 //! then expands a leading `~` and anchors a relative path on the working
-//! directory. Both steps live here so the permission chain and the handler
-//! that runs after it resolve the same file.
-
-use std::path::{Component, Path, PathBuf};
+//! directory. The first step lives here; the second is
+//! [`crate::platform::expand_home`] then [`crate::platform::resolve_lenient`],
+//! which the permission chain and the handler that runs after it both take, so
+//! the two resolve the same file.
 
 use crate::tools::ToolError;
 
@@ -76,49 +76,6 @@ fn is_unanchored_windows_path(path: &str) -> bool {
         separator(bytes.first())
     };
     has_drive != has_root
-}
-
-/// The path with a leading `~` replaced by the operator's home directory, as
-/// `Path.expanduser` replaces it.
-#[must_use]
-pub fn expanded(path: &Path) -> PathBuf {
-    let mut components = path.components();
-    match components.next() {
-        Some(Component::Normal(first)) if first == "~" => {
-            match crate::config::user_home_directory() {
-                Some(home) => home.join(components.as_path()),
-                None => path.to_path_buf(),
-            }
-        }
-        _ => path.to_path_buf(),
-    }
-}
-
-/// An absolute path resolved the way `Path.resolve()` resolves one that may
-/// not exist: every existing prefix has its links followed, and whatever does
-/// not exist yet is kept as written with `.` and `..` applied to it.
-#[must_use]
-pub fn resolved(path: &Path) -> PathBuf {
-    if let Ok(canonical) = crate::platform::canonicalize(path) {
-        return canonical;
-    }
-    let mut resolved = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Prefix(_) | Component::RootDir => resolved.push(component.as_os_str()),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                resolved.pop();
-            }
-            Component::Normal(name) => {
-                resolved.push(name);
-                if let Ok(canonical) = crate::platform::canonicalize(&resolved) {
-                    resolved = canonical;
-                }
-            }
-        }
-    }
-    resolved
 }
 
 #[cfg(test)]

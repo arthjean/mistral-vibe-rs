@@ -77,20 +77,16 @@ impl ShellCallPolicy {
     /// the workspace, and a custom shell or environment carries a requirement
     /// of its own that keeps an allowlisted command from running unasked.
     fn analysis(&self, arguments: &Value) -> Result<ShellAnalysis, ToolError> {
-        let command = command_argument(arguments)?;
+        let call = ShellCallArguments::read(arguments)?;
         let settings: ShellCommandConfig = self.config.view(&self.tool);
-        let overrides = self.overrides.then(|| CallOverrides {
-            cwd: string_argument(arguments, "cwd").map(ToOwned::to_owned),
-            requirements: context_requirements(arguments),
-            environment: environment_overrides(arguments),
-        });
+        let overrides = self.overrides.then(|| call.overrides());
         Ok(analyze(
             self.flavor,
             self.platform,
             &self.root,
             &self.policy.workspace_roots(),
             self.scratchpad.clone(),
-            &command,
+            &call.command,
             &ShellCommandLists::from_config(&settings),
             overrides,
         ))
@@ -293,16 +289,6 @@ pub(super) fn analyze(
     analyze_shell(flavor, command, &context, lists)
 }
 
-/// What a custom shell and a custom environment require.
-fn context_requirements(arguments: &Value) -> Vec<PermissionRequirement> {
-    let names = arguments
-        .get("env")
-        .and_then(Value::as_object)
-        .map(|overrides| overrides.keys().cloned().collect::<Vec<_>>())
-        .unwrap_or_default();
-    override_requirements(string_argument(arguments, "shell"), &names)
-}
-
 /// What a `*_log_file` call needs.
 ///
 /// Reference `BashLogFile.resolve_permission`: a read is always granted, and a
@@ -348,58 +334,109 @@ pub(super) fn stdin_requirements(
 // Arguments
 // --------------------------------------------------------------------------
 
-/// The command a call runs, exactly as the call spelled it: reference
-/// `TerminalSessionManager.start` refuses one that is blank once stripped, but
-/// runs and reports the text it was handed.
-pub(super) fn command_argument(arguments: &Value) -> Result<String, ToolError> {
-    let command = arguments["command"].as_str().unwrap_or_default();
-    if command.trim().is_empty() {
-        return Err(ToolError::SchemaViolation {
-            path: "/command".to_owned(),
-            message: "must not be empty".to_owned(),
-        });
+/// One command call's arguments, read once.
+///
+/// Every argument reads leniently, as the schema-validated call carries it: a
+/// value of another type than the one an argument expects reads as absent.
+pub(super) struct ShellCallArguments {
+    /// The command exactly as the call spelled it: reference
+    /// `TerminalSessionManager.start` refuses one that is blank once stripped,
+    /// but runs and reports the text it was handed.
+    pub(super) command: String,
+    /// The `cwd` override as the call wrote it.
+    pub(super) cwd: Option<String>,
+    /// The `shell` override as the call wrote it.
+    pub(super) shell: Option<String>,
+    /// Every name the `env` override carries, whatever its value: each one is
+    /// a requirement of its own.
+    env_names: Vec<String>,
+    /// The variables the `env` override sets: every one it names with a string
+    /// value, in the order it names them. A value of any other type sets
+    /// nothing.
+    pub(super) environment: Vec<(String, String)>,
+    timeout: Option<i64>,
+    timeout_seconds: Option<f64>,
+    hard_timeout: bool,
+    pub(super) background: bool,
+}
+
+impl ShellCallArguments {
+    pub(super) fn read(arguments: &Value) -> Result<Self, ToolError> {
+        let command = arguments["command"].as_str().unwrap_or_default();
+        if command.trim().is_empty() {
+            return Err(ToolError::SchemaViolation {
+                path: "/command".to_owned(),
+                message: "must not be empty".to_owned(),
+            });
+        }
+        let env = arguments.get("env").and_then(Value::as_object);
+        Ok(Self {
+            command: command.to_owned(),
+            cwd: string_argument(arguments, "cwd").map(ToOwned::to_owned),
+            shell: string_argument(arguments, "shell").map(ToOwned::to_owned),
+            env_names: env
+                .into_iter()
+                .flat_map(|env| env.keys().cloned())
+                .collect(),
+            environment: env
+                .into_iter()
+                .flatten()
+                .filter_map(|(key, value)| {
+                    value.as_str().map(|value| (key.clone(), value.to_owned()))
+                })
+                .collect(),
+            timeout: arguments["timeout"].as_i64(),
+            timeout_seconds: arguments["timeout_seconds"].as_f64(),
+            hard_timeout: arguments["hard_timeout"].as_bool().unwrap_or(false),
+            background: arguments["background"].as_bool().unwrap_or(false),
+        })
     }
-    Ok(command.to_owned())
+
+    /// The overrides the analysis of the command text cannot see.
+    fn overrides(&self) -> CallOverrides {
+        CallOverrides {
+            cwd: self.cwd.clone(),
+            requirements: override_requirements(self.shell.as_deref(), &self.env_names),
+            environment: self.environment.clone(),
+        }
+    }
+
+    /// The foreground wait of a managed command, bounded by the configured
+    /// maximum.
+    ///
+    /// Reference `ExperimentalBash.run` reads the legacy `timeout` first, even
+    /// at zero, then `timeout_seconds`, then the configured default, and caps
+    /// the result at `max_timeout_seconds`. A wait of zero checks the session
+    /// once and hands it to the background.
+    pub(super) fn wait(&self, settings: &ShellCommandConfig) -> Duration {
+        let requested = self
+            .timeout
+            .map(|seconds| seconds as f64)
+            .or(self.timeout_seconds)
+            .unwrap_or(settings.default_timeout as f64);
+        let bounded = requested.min(settings.max_timeout_seconds).max(0.0);
+        Duration::try_from_secs_f64(bounded).unwrap_or_default()
+    }
+
+    /// Reference `Bash.run`'s wait: `args.timeout or default_timeout`, so a
+    /// zero means the default, and no ceiling applies to the legacy variant.
+    pub(super) fn legacy_wait(&self, settings: &ShellCommandConfig) -> u64 {
+        self.timeout
+            .filter(|seconds| *seconds != 0)
+            .map_or(settings.default_timeout, |seconds| {
+                u64::try_from(seconds).unwrap_or(0)
+            })
+    }
+
+    /// Whether a managed wait that expires kills the session: reference
+    /// `hard_timeout or timeout is not None`.
+    pub(super) fn is_hard_timeout(&self) -> bool {
+        self.hard_timeout || self.timeout.is_some()
+    }
 }
 
 pub(super) fn string_argument<'a>(arguments: &'a Value, name: &str) -> Option<&'a str> {
     arguments.get(name).and_then(Value::as_str)
-}
-
-/// The variables the call's `env` override sets: every one it names with a
-/// string value, in the order it names them. A value of any other type sets
-/// nothing.
-pub(super) fn environment_overrides(arguments: &Value) -> Vec<(String, String)> {
-    arguments
-        .get("env")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flatten()
-        .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_owned())))
-        .collect()
-}
-
-/// The foreground wait of a managed command, bounded by the configured
-/// maximum.
-///
-/// Reference `ExperimentalBash.run` reads the legacy `timeout` first, even at
-/// zero, then `timeout_seconds`, then the configured default, and caps the
-/// result at `max_timeout_seconds`. A wait of zero checks the session once and
-/// hands it to the background.
-pub(super) fn timeout_argument(arguments: &Value, settings: &ShellCommandConfig) -> Duration {
-    let requested = arguments["timeout"]
-        .as_i64()
-        .map(|seconds| seconds as f64)
-        .or_else(|| arguments["timeout_seconds"].as_f64())
-        .unwrap_or(settings.default_timeout as f64);
-    let bounded = requested.min(settings.max_timeout_seconds).max(0.0);
-    Duration::try_from_secs_f64(bounded).unwrap_or_default()
-}
-
-/// Whether a managed wait that expires kills the session: reference
-/// `hard_timeout or timeout is not None`.
-pub(super) fn is_hard_timeout(arguments: &Value) -> bool {
-    arguments["hard_timeout"].as_bool().unwrap_or(false) || arguments["timeout"].as_i64().is_some()
 }
 
 /// Renders a wait the way Python's `{timeout:g}` renders a float.

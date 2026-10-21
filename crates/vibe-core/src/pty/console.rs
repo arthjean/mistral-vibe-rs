@@ -16,6 +16,8 @@ use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 
+use crate::sync::lock;
+
 #[cfg(test)]
 mod console_tests;
 
@@ -133,11 +135,10 @@ impl ConsoleReader {
     }
 
     fn answer(&self) {
-        if let Ok(mut writer) = self.writer.lock() {
-            let _ = writer
-                .write_all(CURSOR_POSITION_REPORT)
-                .and_then(|()| writer.flush());
-        }
+        let mut writer = lock(&self.writer);
+        let _ = writer
+            .write_all(CURSOR_POSITION_REPORT)
+            .and_then(|()| writer.flush());
     }
 }
 
@@ -183,18 +184,10 @@ struct ConsoleWriter(SharedWriter);
 
 impl Write for ConsoleWriter {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0
-            .lock()
-            .map_err(|_| std::io::Error::other("the terminal writer lock is poisoned"))?
-            .write(bytes)
+        lock(&self.0).write(bytes)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        match self.0.lock() {
-            Ok(mut writer) => writer.flush(),
-            Err(_) => Err(std::io::Error::other(
-                "the terminal writer lock is poisoned",
-            )),
-        }
+        lock(&self.0).flush()
     }
 }

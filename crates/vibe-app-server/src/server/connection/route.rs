@@ -262,9 +262,6 @@ impl ServerConnection {
                 .params
                 .insert(crate::server::CONNECTION_ROOT_PARAM.to_owned(), json!(root));
         }
-        if method == "session/start" {
-            return self.reference_session_start(request);
-        }
         // A unified root serves its turns, their queue, its loops, its
         // compactions and its rewinds itself.
         if let Some(root) = self
@@ -290,115 +287,97 @@ impl ServerConnection {
                 _ => {}
             }
         }
-        if matches!(method, "turn/interrupt" | "turn/steer") {
-            let expected = request
-                .params
-                .get("expectedTurnId")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            self.require_turn_route(expected)?;
-        }
-        if method == "turn/interrupt" {
-            return self.reference_turn_interrupt(request);
-        }
-        if method == "turn/steer" {
-            return Ok(self.steer_turn(request, SteerAnswer::LastEvent));
-        }
-        if method == "callback/result" {
-            return self.reference_callback_result(request);
-        }
-        if method == "workspace/prompt/prepare" {
-            return self.reference_prompt_prepare(&request);
-        }
-        if method == "session/shellCommand" {
-            return self.reference_shell_command(request);
-        }
-        if method == "narration/summarize" {
-            return Ok(self.narration_deferred(request));
-        }
-        if method == "skills/installed" {
-            let result = self.server.workspace.skills_installed();
-            return Ok(success_batch(request.id, object(result)));
-        }
-        // Reference `SkillsController._begin_mutation`: a skills mutation
-        // waits for the session to be idle.
-        if SKILLS_MUTATIONS.contains(&method) {
-            self.require_root_idle()?;
-        }
-        // The registry and the connector bootstrap answer over the network.
-        if matches!(
-            method,
-            "skills/catalog" | "skills/updates" | "skills/versions" | "skills/detail"
-        ) || SKILLS_MUTATIONS.contains(&method)
-            || is_connector_method(method)
-        {
-            let mut params = request.params;
-            if let Some(root) = self.root_id() {
-                params.insert(CONNECTION_ROOT_PARAM.to_owned(), json!(root));
+        match method {
+            "session/start" => self.reference_session_start(request),
+            "turn/interrupt" => {
+                let turn_id = self.require_turn_route(&request)?;
+                self.reference_turn_interrupt(request, turn_id)
             }
-            return Ok(DispatchBatch {
-                outbound: Vec::new(),
-                deferred: vec![DeferredWork::CloudRequest {
-                    request_id: request.id,
-                    method: request.method,
-                    params,
-                }],
-                close_after_flush: false,
-            });
-        }
-        // Reference `_dispatch_backend_host_lifecycle`: the root is the
-        // session named, and the connection closes once this is answered.
-        if method == "session/stop" {
-            return Ok(success_batch(
+            "turn/steer" => {
+                self.require_turn_route(&request)?;
+                Ok(self.steer_turn(request, SteerAnswer::LastEvent))
+            }
+            "callback/result" => self.reference_callback_result(request),
+            "workspace/prompt/prepare" => self.reference_prompt_prepare(&request),
+            "session/shellCommand" => self.reference_shell_command(request),
+            "narration/summarize" => Ok(self.narration_deferred(request)),
+            "skills/installed" => {
+                let result = self.server.workspace.skills_installed();
+                Ok(success_batch(request.id, object(result)))
+            }
+            // Reference `SkillsController._begin_mutation`: a skills mutation
+            // waits for the session to be idle.
+            method if SKILLS_MUTATIONS.contains(&method) => {
+                self.require_root_idle()?;
+                Ok(self.cloud_request(request))
+            }
+            // The registry and the connector bootstrap answer over the network.
+            "skills/catalog" | "skills/updates" | "skills/versions" | "skills/detail" => {
+                Ok(self.cloud_request(request))
+            }
+            method if is_connector_method(method) => Ok(self.cloud_request(request)),
+            // Reference `_dispatch_backend_host_lifecycle`: the root is the
+            // session named, and the connection closes once this is answered.
+            "session/stop" => Ok(success_batch(
                 request.id,
                 result_map([("closed", json!(true))]),
-            ));
-        }
-        if matches!(
-            method,
-            "session/agent/update" | "agents/install" | "agents/uninstall"
-        ) {
-            return Ok(self.reference_runtime_mutation(request));
-        }
-        // Reference `dispatch_extension` on a Unified Harness session serves
-        // no review: the edits a turn made are not tracked there.
-        if method.starts_with("review/")
-            && request
-                .params
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .is_some_and(|session_id| self.server.unified_session(session_id).is_some())
-        {
-            return Err(method_not_found(method));
-        }
-        if unified {
-            match method {
-                "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload" => {
-                    return Ok(self.plugin_request(request));
-                }
-                "providerAuth/read" => return Ok(self.provider_auth_request(request)),
-                "session/backgroundProcess/output" | "session/backgroundProcess/stop" => {
-                    return self.unified_background_process(&request);
-                }
-                "session/list" => return self.unified_list(&request),
-                "session/resume" => return self.unified_resume(request),
-                "session/continue" => return self.unified_continue(request),
-                "session/read" => return self.unified_read(&request),
-                "session/rename" => return self.unified_rename(&request),
-                "session/pin" | "session/archive" | "session/markAsSeen" => {
-                    return self.unified_mark(&request);
-                }
-                _ => {}
+            )),
+            "session/agent/update" | "agents/install" | "agents/uninstall" => {
+                self.reference_runtime_mutation(request)
             }
+            // Reference `dispatch_extension` on a Unified Harness session serves
+            // no review: the edits a turn made are not tracked there.
+            method
+                if method.starts_with("review/")
+                    && named
+                        .as_deref()
+                        .is_some_and(|id| self.server.unified_session(id).is_some()) =>
+            {
+                Err(method_not_found(method))
+            }
+            "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload" if unified => {
+                Ok(self.plugin_request(request))
+            }
+            "providerAuth/read" if unified => Ok(self.provider_auth_request(request)),
+            "session/backgroundProcess/output" | "session/backgroundProcess/stop" if unified => {
+                self.unified_background_process(&request)
+            }
+            "session/list" if unified => self.unified_list(&request),
+            "session/resume" if unified => self.unified_resume(request),
+            "session/continue" if unified => self.unified_continue(request),
+            "session/read" if unified => self.unified_read(&request),
+            "session/rename" if unified => self.unified_rename(&request),
+            "session/pin" | "session/archive" | "session/markAsSeen" if unified => {
+                self.unified_mark(&request)
+            }
+            _ => Ok(self.port_request(request)),
         }
-        Ok(self.port_request(request))
+    }
+
+    /// A request the registry or the connector bootstrap answers off the
+    /// request loop, told which session is the connection's root when there
+    /// is one: a catalog method is served without.
+    fn cloud_request(&self, request: ServerRequest) -> DispatchBatch {
+        let mut params = request.params;
+        if let Some(root) = self.root_id() {
+            params.insert(CONNECTION_ROOT_PARAM.to_owned(), json!(root));
+        }
+        DispatchBatch {
+            outbound: Vec::new(),
+            deferred: vec![DeferredWork::CloudRequest {
+                request_id: request.id,
+                method: request.method,
+                params,
+            }],
+            close_after_flush: false,
+        }
     }
 
     /// Reference `SessionExecution.require_idle` for the root: refused while
     /// a turn, a manual shell or a compaction runs on it.
     fn require_root_idle(&self) -> Result<(), ProtocolFault> {
-        let root = self.root_id().unwrap_or_default();
-        let sessions = self.server.lock_sessions()?;
+        let root = self.root_id_required()?;
+        let sessions = self.server.lock_sessions();
         let Some(session) = sessions.get(&root) else {
             return Ok(());
         };
@@ -424,10 +403,11 @@ impl ServerConnection {
     }
 
     /// Reference `_require_turn_route`: the root runs a turn, and it is the
-    /// one the client expects.
-    fn require_turn_route(&self, expected: &str) -> Result<(), ProtocolFault> {
-        let root = self.root_id().unwrap_or_default();
-        let sessions = self.server.lock_sessions()?;
+    /// one the client expects. Answers that turn.
+    fn require_turn_route(&self, request: &ServerRequest) -> Result<String, ProtocolFault> {
+        let expected = from_params::<ExpectedTurn>(&request.params)?.expected_turn_id;
+        let root = self.root_id_required()?;
+        let sessions = self.server.lock_sessions();
         let active = sessions
             .get(&root)
             .and_then(|session| session.active_turn.clone());
@@ -441,7 +421,7 @@ impl ServerConnection {
                 "Active turn does not match expectedTurnId",
                 json!({"activeTurnId": active}),
             )),
-            Some(_) => Ok(()),
+            Some(active) => Ok(active),
         }
     }
 
@@ -450,13 +430,13 @@ impl ServerConnection {
     fn reference_turn_interrupt(
         &mut self,
         request: ServerRequest,
+        turn_id: String,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let root = self.root_id().unwrap_or_default();
-        let sessions = self.server.lock_sessions()?;
+        let root = self.root_id_required()?;
+        let sessions = self.server.lock_sessions();
         let session = sessions
             .get(&root)
             .ok_or_else(|| session_missing("Session not found"))?;
-        let turn_id = session.active_turn.clone().unwrap_or_default();
         let result = result_map([
             ("accepted", json!(true)),
             ("lastEventId", json!(session.event_watermark)),
@@ -478,55 +458,29 @@ impl ServerConnection {
         &mut self,
         request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let root = self.root_id().unwrap_or_default();
-        let text = |key: &str| {
-            request
-                .params
-                .get(key)
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        };
-        let mut sessions = self.server.lock_sessions()?;
+        let root = self.root_id_required()?;
+        let params = from_params::<ShellCommandParams>(&request.params)?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&root)
             .ok_or_else(|| session_missing("Session not found"))?;
-        if text("action").as_deref() == Some("interrupt") {
-            let operation_id = text("operationId").unwrap_or_default();
-            if let Some(operation) = &session.shell_operation
-                && operation.id == operation_id
-            {
-                operation
-                    .interrupted
-                    .store(true, std::sync::atomic::Ordering::Release);
-                return Ok(DispatchBatch {
-                    outbound: Vec::new(),
-                    deferred: vec![DeferredWork::ShellInterrupt {
-                        request_id: request.id,
-                        session_id: session.id.clone(),
-                        operation_id,
-                    }],
-                    close_after_flush: false,
-                });
+        let (command, operation_id, timeout_seconds, cwd) = match params {
+            ShellCommandParams::Interrupt { operation_id } => {
+                return Ok(Self::shell_interrupt(request.id, session, operation_id));
             }
-            return Ok(success_batch(
-                request.id,
-                result_map([
-                    ("accepted", json!(true)),
-                    ("lastEventId", json!(session.event_watermark)),
-                ]),
-            ));
-        }
-        let command = text("command").unwrap_or_default();
-        let operation_id = text("operationId").unwrap_or_else(vibe_core::session_id::uuid_v4);
-        let timeout_seconds = request
-            .params
-            .get("timeoutSeconds")
-            .and_then(Value::as_f64)
-            .filter(|seconds| *seconds > 0.0)
-            .unwrap_or(super::super::manual_shell::DEFAULT_TIMEOUT_SECONDS);
+            ShellCommandParams::Run {
+                command,
+                operation_id,
+                timeout_seconds,
+                cwd,
+            } => (command, operation_id, timeout_seconds, cwd),
+        };
+        let operation_id = operation_id.unwrap_or_else(vibe_core::session_id::uuid_v4);
+        let timeout_seconds =
+            timeout_seconds.unwrap_or(super::super::manual_shell::DEFAULT_TIMEOUT_SECONDS);
         let cwd = super::super::manual_shell::resolve_workspace_cwd(
             Path::new(&session.working_directory),
-            text("cwd").as_deref(),
+            cwd.as_deref(),
         )?;
         if let Some(active) = &session.shell_operation {
             return Err(ProtocolFault::plain(
@@ -565,6 +519,39 @@ impl ServerConnection {
         })
     }
 
+    /// The interrupt half of [`Self::reference_shell_command`]: the operation
+    /// still running is asked to stop and answers once it has, any other is
+    /// answered at once.
+    fn shell_interrupt(
+        request_id: RequestId,
+        session: &SessionRuntime,
+        operation_id: String,
+    ) -> DispatchBatch {
+        if let Some(operation) = &session.shell_operation
+            && operation.id == operation_id
+        {
+            operation
+                .interrupted
+                .store(true, std::sync::atomic::Ordering::Release);
+            return DispatchBatch {
+                outbound: Vec::new(),
+                deferred: vec![DeferredWork::ShellInterrupt {
+                    request_id,
+                    session_id: session.id.clone(),
+                    operation_id,
+                }],
+                close_after_flush: false,
+            };
+        }
+        success_batch(
+            request_id,
+            result_map([
+                ("accepted", json!(true)),
+                ("lastEventId", json!(session.event_watermark)),
+            ]),
+        )
+    }
+
     /// Reference `prepare_prompt` (`vibe/app_server/_workspace.py`): the
     /// message goes out as typed, with the images it mentions attached and
     /// what it mentions counted.
@@ -572,15 +559,12 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let root = self.root_id().unwrap_or_default();
-        let message = request
-            .params
-            .get("message")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+        let root = self.root_id_required()?;
+        let PromptPrepareParams { message } = from_params(&request.params)?;
+        let message = message.as_str();
         let working_directory = self
             .server
-            .lock_sessions()?
+            .lock_sessions()
             .get(&root)
             .map(|session| PathBuf::from(&session.working_directory))
             .unwrap_or_default();
@@ -662,13 +646,16 @@ impl ServerConnection {
     /// publishes as `runtime/updated`: the agent switch answers the runtime
     /// itself (`RuntimeMutationResponse`), the agent catalog edits the
     /// catalog.
-    fn reference_runtime_mutation(&mut self, request: ServerRequest) -> DispatchBatch {
-        let root = self.root_id().unwrap_or_default();
+    fn reference_runtime_mutation(
+        &mut self,
+        request: ServerRequest,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let root = self.root_id_required()?;
         let id = request.id.clone();
         let switch = request.method == "session/agent/update";
         let answered = match session_management::answer(self, request) {
             Ok(answered) => answered,
-            Err(refused) => return refused,
+            Err(refused) => return Ok(refused),
         };
         let runtime = self.server.runtime_snapshot(&root);
         let result = if switch {
@@ -686,7 +673,7 @@ impl ServerConnection {
                 result_map([("sessionId", json!(root)), ("runtime", runtime)]),
             ));
         }
-        batch
+        Ok(batch)
     }
 
     /// Reference `_dispatch_narration`: the summary is a model call, so it is
@@ -746,12 +733,10 @@ impl ServerConnection {
             })
             .collect::<Vec<_>>()
             .join("; ");
-        if let Ok(resources) = self.server.resources.lock() {
-            resources.record_log(
-                LogLevel::Warning,
-                &format!("Refused {method}, its parameters did not validate: {detail}"),
-            );
-        }
+        lock(&self.server.resources).record_log(
+            LogLevel::Warning,
+            &format!("Refused {method}, its parameters did not validate: {detail}"),
+        );
         ProtocolFault::from(ParamsRejection::with_issues(
             issues.iter().map(wire_validation::Issue::wire).collect(),
         ))
@@ -786,15 +771,10 @@ impl ServerConnection {
                 "A session is already attached",
             ));
         }
-        let agent_config = request
-            .params
-            .get("agentConfig")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let mut params = reopen_start_params(&agent_config);
-        if let Some(limit) = request.params.get("historyLimit") {
-            params.insert("historyLimit".to_owned(), limit.clone());
+        let start = from_params::<StartParams>(&request.params)?;
+        let mut params = reopen_start_params(&start.agent_config);
+        if let Some(limit) = start.history_limit {
+            params.insert("historyLimit".to_owned(), json!(limit));
         }
         if self.server.harness_selection().use_unified {
             return self.unified_session_start(ServerRequest { params, ..request });
@@ -809,4 +789,83 @@ pub(super) fn method_not_found(method: &str) -> ProtocolFault {
         ProtocolErrorCode::MethodNotFound,
         format!("Method not found: {method}"),
     )
+}
+
+/// Reference `TurnInterruptParams` and `TurnSteerParams`, for the turn the
+/// client expects to be running.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExpectedTurn {
+    expected_turn_id: String,
+}
+
+/// Reference `SessionShellCommandParams`, read as the action it asks for: an
+/// interrupt names its operation, a run its command (`validate_action`).
+#[derive(Deserialize)]
+#[serde(try_from = "ShellCommandFields")]
+enum ShellCommandParams {
+    Interrupt {
+        operation_id: String,
+    },
+    Run {
+        command: String,
+        operation_id: Option<String>,
+        timeout_seconds: Option<f64>,
+        cwd: Option<String>,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ShellCommandFields {
+    #[serde(default)]
+    action: ShellAction,
+    command: Option<String>,
+    cwd: Option<String>,
+    timeout_seconds: Option<f64>,
+    operation_id: Option<String>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ShellAction {
+    #[default]
+    Run,
+    Interrupt,
+}
+
+impl TryFrom<ShellCommandFields> for ShellCommandParams {
+    type Error = &'static str;
+
+    fn try_from(fields: ShellCommandFields) -> Result<Self, Self::Error> {
+        match fields.action {
+            ShellAction::Interrupt => Ok(Self::Interrupt {
+                operation_id: fields
+                    .operation_id
+                    .ok_or("an interrupt names its operation")?,
+            }),
+            ShellAction::Run => Ok(Self::Run {
+                command: fields.command.ok_or("a run names its command")?,
+                operation_id: fields.operation_id,
+                timeout_seconds: fields.timeout_seconds,
+                cwd: fields.cwd,
+            }),
+        }
+    }
+}
+
+/// Reference `WorkspacePromptPrepareParams`, for the message it prepares.
+#[derive(Deserialize)]
+struct PromptPrepareParams {
+    message: String,
+}
+
+/// Reference `SessionStartParams` on the legacy host, as far as it carries
+/// over to the start this port knows.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartParams {
+    #[serde(default)]
+    agent_config: serde_json::Map<String, Value>,
+    history_limit: Option<u64>,
 }

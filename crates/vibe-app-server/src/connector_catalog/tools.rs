@@ -33,7 +33,7 @@ impl SessionConnectors {
     /// reference `ToolManager` filtering leaves of it; a connector that is not
     /// ready publishes nothing.
     pub(crate) fn publish_tools(&self, tools: &ToolRegistry) -> Result<(), ToolError> {
-        tools.retract_source(ToolSource::Connector)?;
+        tools.retract_source(ToolSource::Connector);
         let (Some((catalog, selection)), Some(account), Some(guard)) =
             (&self.accepted, &self.account, tools.guard())
         else {

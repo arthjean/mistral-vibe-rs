@@ -17,11 +17,12 @@ use std::collections::HashMap;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock, PoisonError};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use crate::child::wait_with_deadline;
 use crate::platform::BackgroundCommand as _;
+use crate::sync;
 
 /// The ceiling reference `_fetch_git_status` puts on every call, whatever
 /// `project_context.timeout_seconds` says.
@@ -128,20 +129,11 @@ pub fn git_context(root: &Path, settings: ProjectContextSettings) -> GitContext 
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, GitContext>>> = OnceLock::new();
     let root = crate::platform::resolve_lenient(root);
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(known) = cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .get(&root)
-    {
+    if let Some(known) = sync::lock(cache).get(&root) {
         return known.clone();
     }
     let answer = fetch_git_context(&root, settings);
-    cache
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .entry(root)
-        .or_insert(answer)
-        .clone()
+    sync::lock(cache).entry(root).or_insert(answer).clone()
 }
 
 /// How one git call ended.

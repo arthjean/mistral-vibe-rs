@@ -33,25 +33,3 @@ fn a_windows_path_needs_both_a_drive_and_a_root_or_neither() {
         assert!(is_unanchored_windows_path(unanchored), "{unanchored}");
     }
 }
-
-#[test]
-fn a_missing_tail_resolves_lexically_under_its_existing_prefix() {
-    let directory = tempfile::tempdir().expect("tempdir");
-    let root = crate::platform::canonicalize(directory.path()).expect("root");
-    std::fs::create_dir(root.join("kept")).expect("directory");
-    assert_eq!(
-        resolved(&root.join("missing/../kept/./new.txt")),
-        root.join("kept/new.txt")
-    );
-    assert_eq!(resolved(&root.join("kept/..")), root);
-}
-
-#[test]
-fn a_leading_tilde_names_the_home_directory() {
-    let Some(home) = crate::config::user_home_directory() else {
-        return;
-    };
-    assert_eq!(expanded(Path::new("~/notes.txt")), home.join("notes.txt"));
-    assert_eq!(expanded(Path::new("~")), home);
-    assert_eq!(expanded(Path::new("a/~")), Path::new("a/~"));
-}

@@ -36,7 +36,7 @@ impl AppServer {
         if !self.workspace.session_logging().enabled {
             return Ok(());
         }
-        let mut leases = self.leases.lock().map_err(|_| ServerError::StatePoisoned)?;
+        let mut leases = lock(&self.leases);
         if leases.contains_key(session_id) {
             return Ok(());
         }
@@ -55,11 +55,7 @@ impl AppServer {
 
     /// Lets `session_id` go, so another process may open it.
     pub(in crate::server) fn release_lease(&self, session_id: &str) {
-        let lease = self
-            .leases
-            .lock()
-            .ok()
-            .and_then(|mut leases| leases.remove(session_id));
+        let lease = lock(&self.leases).remove(session_id);
         drop(lease);
     }
 
@@ -169,7 +165,7 @@ impl ServerConnection {
     /// The registry key of the session this connection is rooted in.
     pub(in crate::server) fn root_key(&self) -> Option<String> {
         let root = self.root.as_ref()?;
-        let sessions = self.server.lock_sessions().ok()?;
+        let sessions = self.server.lock_sessions();
         sessions
             .get(root)
             .filter(|session| session.status != SessionStatus::Closed)
@@ -179,7 +175,7 @@ impl ServerConnection {
     /// The identifier the root session answers to now.
     pub(in crate::server) fn root_id(&self) -> Option<String> {
         let root = self.root_key()?;
-        let sessions = self.server.lock_sessions().ok()?;
+        let sessions = self.server.lock_sessions();
         sessions.get(&root).map(|session| session.id.clone())
     }
 
@@ -203,12 +199,17 @@ impl ServerConnection {
         }
     }
 
+    /// The root's identifier, refused as a method addressed to the root is
+    /// when the connection holds none.
+    pub(in crate::server) fn root_id_required(&self) -> Result<String, ProtocolFault> {
+        self.root_id()
+            .ok_or_else(|| ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT))
+    }
+
     /// The root, which `session_id` has to name (reference
     /// `_require_session`). Without a root the method was never the host's.
     fn require_root(&self, session_id: &str) -> Result<String, ProtocolFault> {
-        let Some(root) = self.root_id() else {
-            return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
-        };
+        let root = self.root_id_required()?;
         if root == session_id {
             Ok(root)
         } else {

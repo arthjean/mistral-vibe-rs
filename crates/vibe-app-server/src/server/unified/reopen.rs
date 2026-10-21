@@ -54,31 +54,20 @@ impl AppServer {
     /// host). The registry moves first, and a refusal there changes nothing.
     fn rekey_cleared_session(&self, from: &str, to: &str) -> Result<(), ServerError> {
         {
-            let mut sessions = self.lock_sessions()?;
+            let mut sessions = self.lock_sessions();
             sessions.rekey(from, to)?;
             if let Some(session) = sessions.get_mut(to) {
-                let now = now_millis();
-                session.created_at = now;
-                session.updated_at = now;
-                session.bumped_at = None;
-                session.event_watermark = 0;
-                session.stats = crate::server::runtime::SessionStats::default();
-                session.turns.clear();
-                session.latest_turn = None;
-                session.status = SessionStatus::Idle;
+                session.restart_fresh(now_millis());
             }
         }
-        if let Ok(mut resources) = self.resources.lock() {
-            resources.rekey_session(from, to);
-        }
-        if let Ok(mut plugins) = self.session_plugins.lock()
-            && let Some(set) = plugins.remove(from)
-        {
+        lock(&self.resources).rekey_session(from, to);
+        let mut plugins = lock(&self.session_plugins);
+        if let Some(set) = plugins.remove(from) {
             plugins.insert(to.to_owned(), set);
         }
-        if let Ok(mut pluginless) = self.pluginless.lock()
-            && pluginless.remove(from)
-        {
+        drop(plugins);
+        let mut pluginless = lock(&self.pluginless);
+        if pluginless.remove(from) {
             pluginless.insert(to.to_owned());
         }
         Ok(())
@@ -125,7 +114,7 @@ impl ServerConnection {
         stored: Option<(SessionStore, SessionCore, Map<String, Value>)>,
     ) -> Result<Arc<UnifiedSession>, ProtocolFault> {
         let (cwd, stats, context_window, created_at, headless) = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ProtocolFault::internal("the opened session is gone"))?;
@@ -297,8 +286,8 @@ impl ServerConnection {
             let opening = self
                 .server
                 .lock_sessions()
-                .ok()
-                .and_then(|sessions| sessions.get(&session_id).map(opening_stats));
+                .get(&session_id)
+                .map(opening_stats);
             if let Some(mut stats) = opening {
                 let core = live.core();
                 stats.seed(&wire_state(&core.projector.state, &WireContext::default()));
@@ -574,20 +563,27 @@ impl ServerConnection {
             .cloned()
             .unwrap_or_default();
         let new_id = vibe_core::session_id::generate_session_id(None);
-        // The new identifier is leased and registered before anything lets
-        // go of the old one, so a refusal leaves the root as it stood.
+        // The new identifier is leased, registered and opened before anything
+        // lets go of the old one, so a refusal leaves the root as it stood.
         self.server.acquire_lease(&new_id)?;
-        if let Err(error) = self.server.rekey_cleared_session(&key, &new_id) {
-            self.server.release_lease(&new_id);
-            return Err(error.into());
-        }
+        let opened = self
+            .server
+            .rekey_cleared_session(&key, &new_id)
+            .map_err(ProtocolFault::from)
+            .and_then(|()| self.open_unified(&new_id, None));
+        let session = match opened {
+            Ok(session) => session,
+            Err(fault) => {
+                self.server.release_lease(&new_id);
+                return Err(fault);
+            }
+        };
         self.server.release_lease(&session_id);
         self.server.remove_unified(&session_id);
         self.root = Some(new_id.clone());
         if self.attached_sessions.remove(&key) {
             self.attached_sessions.insert(new_id.clone());
         }
-        let session = self.open_unified(&new_id, None)?;
         let mut state = session.read_state(Some(limit));
         let mut history: Vec<Value> = carried
             .into_iter()

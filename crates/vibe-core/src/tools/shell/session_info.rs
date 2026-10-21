@@ -23,42 +23,26 @@ use super::session::{ManagedSession, SessionShell, SessionStatus};
 /// rather than omitted. The fields are declared in the reference order, which
 /// is the order a manifest is read back in.
 ///
-/// A manifest may lack any field but the identifier the orphan scan selects it
-/// by: one is still described, with an empty text and the `orphaned` status
-/// standing in for what it did not record, so a fragment a previous process
-/// left never refuses the listing of the sessions beside it
-/// (`the_orphan_filter_reads_the_identifier_rather_than_the_file_name`). A
-/// field of the wrong type is refused, as reference `_info_from_manifest`
-/// refuses it.
+/// Only the three optional fields may be missing from a manifest. One that
+/// lacks any other field, or carries one of the wrong type, is refused, as
+/// reference `_info_from_manifest` refuses it, and so is every listing that
+/// reads it (`a_fragment_manifest_refuses_the_sessions_listing`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(super) struct SessionInfo {
     pub(super) session_id: String,
-    #[serde(default)]
     pub(super) command: String,
-    #[serde(default)]
     pub(super) cwd: String,
-    #[serde(default)]
     pub(super) shell: String,
     #[serde(default)]
     pub(super) pty_backend: Option<String>,
-    #[serde(default = "unrecorded_status")]
     pub(super) status: SessionStatus,
     #[serde(default)]
     pub(super) exit_code: Option<i64>,
-    #[serde(default)]
     pub(super) output_path: String,
-    #[serde(default)]
     pub(super) created_at: String,
-    #[serde(default)]
     pub(super) updated_at: String,
     #[serde(default)]
     pub(super) reader_error: Option<String>,
-}
-
-/// The status a manifest that records none is described with: whatever it
-/// last was, its process is gone.
-fn unrecorded_status() -> SessionStatus {
-    SessionStatus::Orphaned
 }
 
 impl SessionInfo {

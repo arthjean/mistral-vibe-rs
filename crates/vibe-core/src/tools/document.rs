@@ -22,7 +22,8 @@ use crate::pycompat;
 use crate::tools::ToolExecutionOutput;
 
 /// One published result: the fields the reference declares, in its order.
-pub(crate) struct Document {
+#[derive(Default)]
+pub struct Document {
     fields: Vec<(&'static str, Node)>,
 }
 
@@ -36,12 +37,13 @@ enum Node {
 }
 
 impl Document {
-    pub(crate) fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         Self { fields: Vec::new() }
     }
 
     #[must_use]
-    pub(crate) fn field(mut self, name: &'static str, value: impl Into<Value>) -> Self {
+    pub fn field(mut self, name: &'static str, value: impl Into<Value>) -> Self {
         self.fields.push((name, Node::Leaf(value.into())));
         self
     }
@@ -49,19 +51,20 @@ impl Document {
     /// A nested result model, or `null` where the reference declares the field
     /// optional and this action leaves it unset.
     #[must_use]
-    pub(crate) fn nested(mut self, name: &'static str, value: Option<Self>) -> Self {
+    pub fn nested(mut self, name: &'static str, value: Option<Self>) -> Self {
         let node = value.map_or(Node::Leaf(Value::Null), Node::Object);
         self.fields.push((name, node));
         self
     }
 
     #[must_use]
-    pub(crate) fn nested_list(mut self, name: &'static str, values: Vec<Self>) -> Self {
+    pub fn nested_list(mut self, name: &'static str, values: Vec<Self>) -> Self {
         self.fields.push((name, Node::List(values)));
         self
     }
 
-    pub(crate) fn typed(&self) -> Value {
+    #[must_use]
+    pub fn typed(&self) -> Value {
         let mut map = Map::new();
         for (name, node) in &self.fields {
             map.insert((*name).to_owned(), node.value());
@@ -69,7 +72,8 @@ impl Document {
         Value::Object(map)
     }
 
-    pub(crate) fn model_text(&self) -> String {
+    #[must_use]
+    pub fn model_text(&self) -> String {
         let mut text = String::new();
         for (index, (name, node)) in self.fields.iter().enumerate() {
             if index > 0 {
@@ -82,7 +86,8 @@ impl Document {
         text
     }
 
-    pub(crate) fn into_output(self, display: Value) -> ToolExecutionOutput {
+    #[must_use]
+    pub fn into_output(self, display: Value) -> ToolExecutionOutput {
         ToolExecutionOutput::new(self.model_text())
             .displayed_as(display)
             .typed(self.typed())

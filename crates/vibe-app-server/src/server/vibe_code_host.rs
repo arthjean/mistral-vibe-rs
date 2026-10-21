@@ -41,7 +41,7 @@ impl SessionHost {
     }
 
     fn with_session<T>(&self, read: impl FnOnce(&mut SessionRuntime) -> T) -> Option<T> {
-        let mut sessions = self.server.lock_sessions().ok()?;
+        let mut sessions = self.server.lock_sessions();
         sessions.get_mut(&self.session_id).map(read)
     }
 }
@@ -256,12 +256,10 @@ impl AppServer {
         launch: ClientLaunch,
         deliver: FrameSink,
     ) -> DispatchBatch {
-        let controller = match self.lock_sessions() {
-            Ok(sessions) => sessions
-                .get(&session_id)
-                .map(|session| Arc::clone(&session.vibe_code)),
-            Err(error) => return internal_error_batch(request_id, &error),
-        };
+        let controller = self
+            .lock_sessions()
+            .get(&session_id)
+            .map(|session| Arc::clone(&session.vibe_code));
         let Some(controller) = controller else {
             return plain_error_batch(request_id, ProtocolErrorCode::NotFound, "Session not found");
         };
@@ -350,11 +348,10 @@ impl AppServer {
     /// Reference `VibeCodeController.reset`, for a session that is going
     /// away: its runs stop and its picker is dropped.
     async fn reset_vibe_code(&self, session_id: &str) {
-        let controller = self.lock_sessions().ok().and_then(|sessions| {
-            sessions
-                .get(session_id)
-                .map(|session| Arc::clone(&session.vibe_code))
-        });
+        let controller = self
+            .lock_sessions()
+            .get(session_id)
+            .map(|session| Arc::clone(&session.vibe_code));
         let Some(controller) = controller else {
             return;
         };

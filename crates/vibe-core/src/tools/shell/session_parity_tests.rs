@@ -26,7 +26,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
-use serde_json::Map;
+use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
@@ -756,9 +756,7 @@ impl Scenario {
         tools
             .register("session-1", &work, &registry, None, &guard)
             .expect("the shell family registers");
-        let shell = tools
-            .session_shell("session-1", ShellFamily::Bash)
-            .expect("the session shell");
+        let shell = tools.session_shell("session-1", ShellFamily::Bash);
         Self {
             root,
             registry,

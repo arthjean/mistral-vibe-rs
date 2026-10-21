@@ -27,10 +27,7 @@ impl ServerConnection {
             }
             error => storage_fault(error),
         })?;
-        if live
-            && let Ok(mut sessions) = self.server.lock_sessions()
-            && let Some(session) = sessions.get_mut(&session_id)
-        {
+        if live && let Some(session) = self.server.lock_sessions().get_mut(&session_id) {
             if let Some(snapshot) = session.snapshot.as_mut() {
                 snapshot.title.clone_from(&metadata.title);
             }

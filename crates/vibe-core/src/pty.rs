@@ -24,6 +24,7 @@ use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use crate::child::{
     ChildExit, ChildGroup, GROUP_POLL_INTERVAL, Leader, LeaderFuture, TerminationError,
 };
+use crate::sync::lock;
 
 mod console;
 #[cfg(test)]
@@ -125,9 +126,7 @@ impl PtyWriter {
     pub(crate) async fn write_all(&self, bytes: Vec<u8>) -> std::io::Result<()> {
         let inner = self.inner.clone();
         let written = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-            let mut guard = inner
-                .lock()
-                .map_err(|_| std::io::Error::other("the terminal writer lock is poisoned"))?;
+            let mut guard = lock(&inner);
             let writer = guard
                 .as_mut()
                 .ok_or_else(|| std::io::Error::other("the terminal writer is closed"))?;
@@ -143,9 +142,7 @@ impl PtyWriter {
 
     /// Releases the writer, sending EOF to the child. A second call is a no-op.
     pub(crate) fn close(&self) {
-        if let Ok(mut guard) = self.inner.lock() {
-            guard.take();
-        }
+        lock(&self.inner).take();
     }
 }
 

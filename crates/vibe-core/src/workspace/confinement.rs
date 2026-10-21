@@ -7,7 +7,8 @@ use std::sync::Arc;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
-use super::{Workspace, WorkspaceError, tool_path};
+use super::{Workspace, WorkspaceError};
+use crate::platform::{expand_home, resolve_lenient};
 
 impl Workspace {
     /// Where a file tool's path argument lands: relative to the root when it
@@ -26,13 +27,13 @@ impl Workspace {
         requested: &Path,
         must_exist: bool,
     ) -> Result<PathBuf, WorkspaceError> {
-        let expanded = tool_path::expanded(requested);
+        let expanded = expand_home(requested);
         let absolute = if expanded.is_absolute() {
             expanded
         } else {
             self.canonical_root.join(expanded)
         };
-        let resolved = tool_path::resolved(&absolute);
+        let resolved = resolve_lenient(&absolute);
         if must_exist && let Err(source) = std::fs::metadata(&resolved) {
             return Err(WorkspaceError::Io {
                 path: requested.to_path_buf(),

@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use super::{TodoItem, declared_document};
 use crate::schema::{ObjectSchema, Property};
+use crate::sync;
 use crate::tools::config::TodoConfig;
 use crate::tools::document::Document;
 use crate::tools::{
@@ -107,9 +108,7 @@ pub(super) fn run_todo(
     settings: &TodoConfig,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let action = arguments["action"].as_str().unwrap_or_default();
-    let mut stored = todos
-        .lock()
-        .map_err(|_| ToolError::Execution("the todo list lock is poisoned".to_owned()))?;
+    let mut stored = sync::lock(todos);
     let (verb, items) = match action {
         // A list that was never written reads back empty, not as an error.
         "read" => (

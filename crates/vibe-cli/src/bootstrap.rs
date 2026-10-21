@@ -13,11 +13,12 @@ use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::resources::{
     CoreResourceBackend, production_mcp_authentication, production_mcp_factory,
 };
-use vibe_app_server::server::{AppServer, WebSearchAccess};
+use vibe_app_server::server::AppServer;
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::config::DotenvValues;
 use vibe_core::mcp::SamplingHandler;
 use vibe_core::provider::config::{BackendKind, ModelRouting, ProviderConfig};
+use vibe_core::tools::builtins::WebSearchAccess;
 
 use secrecy::SecretString;
 use url::Url;

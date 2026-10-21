@@ -7,6 +7,10 @@
 pub use super::*;
 use std::fs;
 use vibe_core::events::ApprovalDecisionType;
+use vibe_core::tools::{
+    OwnedToolHandlerFuture, ToolAvailability, ToolOutputSink, ToolPresentationKind, ToolSource,
+    ToolSpec,
+};
 
 mod callback_tests;
 mod profile_tests;
@@ -62,11 +66,7 @@ struct RecordingResourceBackend {
 
 impl ResourceBackend for RecordingResourceBackend {
     fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError> {
-        let count = session
-            .tools
-            .list()
-            .map_err(|error| ResourceError::Unavailable(error.to_string()))?
-            .len();
+        let count = session.tools.list().len();
         *self
             .opened_with_tools
             .lock()

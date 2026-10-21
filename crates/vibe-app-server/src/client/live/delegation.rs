@@ -6,6 +6,7 @@
 //! sampling request are, and this binds them to a provider.
 
 use super::*;
+use vibe_core::tools::document::Document;
 
 /// Reference `TaskArgs.agent` default.
 pub(crate) const DEFAULT_SUBAGENT: &str = "explore";
@@ -259,32 +260,11 @@ pub(crate) fn task_handler(
                 // `response`, `turns_used` and `completed` and nothing else, so
                 // the delegation effect stays in the display payload the client
                 // reads and only those three reach the model.
-                let typed_result = json!({
-                    "response": effect.result,
-                    "turns_used": effect.turns_used,
-                    "completed": effect.completed,
-                });
-                let model_text = reference_text::joined(&[
-                    ("response", effect.result.clone()),
-                    ("turns_used", effect.turns_used.to_string()),
-                    (
-                        "completed",
-                        reference_text::boolean(effect.completed).to_owned(),
-                    ),
-                ]);
-                Ok(ToolExecutionOutput {
-                    skip: None,
-                    turn_failure: None,
-                    approval: None,
-                    failure: None,
-                    model_text,
-                    typed_result,
-                    display: json!({"kind": "subagent", "effect": effect}),
-                    projected_result: serde_json::Value::Null,
-                    chunks: Vec::new(),
-                    pending_injection: None,
-                    remote_result: None,
-                })
+                Ok(Document::new()
+                    .field("response", effect.result.as_str())
+                    .field("turns_used", effect.turns_used)
+                    .field("completed", effect.completed)
+                    .into_output(json!({"kind": "subagent", "effect": effect})))
             })
         },
     )
@@ -315,10 +295,7 @@ struct SubagentProgress {
 
 impl EventObserver for SubagentProgress {
     fn observe(&self, envelope: &vibe_core::events::EventEnvelope) -> Result<(), String> {
-        let mut reducer = self
-            .reducer
-            .lock()
-            .map_err(|_| "subagent progress lock is poisoned".to_owned())?;
+        let mut reducer = lock(&self.reducer);
         // The engine already validated the stream; a refusal here only means
         // this watcher cannot render the header, never that the run failed.
         let _ = reducer.apply(envelope);
@@ -388,7 +365,6 @@ impl SubagentRunner for ProviderSubagentRunner {
             let allowed = self
                 .tools
                 .available(None, &NameFilter::default())
-                .map_err(|error| error.to_string())?
                 .into_iter()
                 .filter(|spec| {
                     // `task` stays in the child's surface, matching the
@@ -412,7 +388,7 @@ impl SubagentRunner for ProviderSubagentRunner {
             if let Some(refusal) = context.delegation_refusal() {
                 executor = executor.refusing("task", refusal);
             }
-            let definitions = executor.definitions().map_err(|error| error.to_string())?;
+            let definitions = executor.definitions();
             // Reference `_create_subagent_loop` renders the child's prompt from
             // its own profile: its `system_prompt_id`, its skills and subagents,
             // and no scratchpad.

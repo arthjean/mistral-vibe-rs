@@ -10,6 +10,13 @@ fn aliases_are_normalized_as_the_reference_normalizes_them() {
 }
 
 #[test]
+fn a_source_status_names_itself_as_it_serializes() {
+    for status in McpSourceStatus::ALL {
+        assert_eq!(serde_json::json!(status), status.as_str());
+    }
+}
+
+#[test]
 fn the_server_url_is_the_api_base_before_its_version_segment() {
     assert_eq!(
         server_url("https://api.mistral.ai/v1").as_deref(),

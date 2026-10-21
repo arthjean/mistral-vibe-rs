@@ -548,7 +548,7 @@ fn analyze_on_host(command: &str) -> ShellAnalysis {
 /// expands `~\` as it expands `~/`.
 #[test]
 fn a_home_relative_operand_is_expanded_before_it_is_positioned() {
-    let Some(home) = crate::config::user_home_directory() else {
+    let Some(home) = crate::platform::user_home() else {
         eprintln!("skipping: the environment names no home directory");
         return;
     };

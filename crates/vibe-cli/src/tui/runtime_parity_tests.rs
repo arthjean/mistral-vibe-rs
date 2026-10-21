@@ -34,7 +34,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use vibe_app_server::client::ApprovalDecisionType;
-use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use vibe_core::parity::replay::pinned_reference;
+use vibe_core::parity::{REFERENCE_COMMIT, pinned_interpreter};
 use vibe_core::policy::{PathGrantScope, PermissionRequirement};
 
 /// The Python reference lives in a checkout outside this repository, so the
@@ -49,11 +50,7 @@ use vibe_core::policy::{PathGrantScope, PermissionRequirement};
 /// virtual environment and then hardcoding the POSIX path would turn a skip into
 /// a panic on exactly the machines the override exists for.
 fn pinned_python_oracle() -> Option<(PathBuf, PathBuf)> {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "Python oracle") {
-        eprintln!("{reason}");
-        return None;
-    }
+    let root = pinned_reference("Python oracle")?;
     let interpreter = pinned_interpreter(&root)?;
     Some((root, interpreter))
 }

@@ -412,7 +412,6 @@ impl Session {
             &runtime.service,
             scheduled.reservation,
             Some(scheduled.loop_id),
-            self.state.watermark,
             &mut self.controls,
         ) {
             Ok(started) => {
@@ -473,7 +472,7 @@ pub async fn run_interactive(
         .map_or_else(|| "setup".to_owned(), |runtime| runtime.session_id.clone());
     let mut state = match runtime.as_mut() {
         Some(runtime) => {
-            let mut state = hydrate_initial_state(runtime, &arguments, &working_directory)?;
+            let mut state = hydrate_initial_state(runtime, &arguments);
             if continuing && !arguments.continue_session {
                 push_local_notice(
                     &mut state,

@@ -732,22 +732,6 @@ fn compact_value(value: &Value) -> String {
     }
 }
 
-pub(super) fn to_camel_case(value: &str) -> String {
-    let mut output = String::new();
-    let mut uppercase = false;
-    for character in value.chars() {
-        if character == '_' {
-            uppercase = true;
-        } else if uppercase {
-            output.push(character.to_ascii_uppercase());
-            uppercase = false;
-        } else {
-            output.push(character);
-        }
-    }
-    output
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;

@@ -15,7 +15,7 @@ impl ServerConnection {
             return Err(review::no_session());
         }
         {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             if let Some(session) = self
                 .attached_sessions
                 .iter()
@@ -27,7 +27,7 @@ impl ServerConnection {
         }
         let validated = review::validate(request)?;
         let (engine, active_turn) = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             // Reference `_require_session`: only the connection's own current
             // session answers, under its current identifier.
             let session = sessions

@@ -45,8 +45,8 @@ impl AppServer {
             return (None, Disposition::NotLoaded);
         };
         let now = connector_clock();
-        if let Ok(memory) = self.connector_catalogs.lock()
-            && let Some((catalog, stored_at)) = memory.get(&provider.fingerprint)
+        if let Some((catalog, stored_at)) =
+            lock(&self.connector_catalogs).get(&provider.fingerprint)
             && *stored_at <= now
             && *stored_at > now - CATALOG_TTL_SECONDS
         {
@@ -54,9 +54,8 @@ impl AppServer {
         }
         match catalog::read_cache(&self.connector_cache_path(), &provider.fingerprint, now) {
             Some((catalog, stored_at)) => {
-                if let Ok(mut memory) = self.connector_catalogs.lock() {
-                    memory.insert(provider.fingerprint.clone(), (catalog.clone(), stored_at));
-                }
+                lock(&self.connector_catalogs)
+                    .insert(provider.fingerprint.clone(), (catalog.clone(), stored_at));
                 (Some(catalog), Disposition::FreshCache)
             }
             None => (None, Disposition::NotLoaded),
@@ -77,9 +76,8 @@ impl AppServer {
         let resolved = catalog::resolve_catalog(&payload, &provider.fingerprint)?;
         let stored_at = connector_clock();
         let _ = catalog::write_cache(&self.connector_cache_path(), &resolved, stored_at);
-        if let Ok(mut memory) = self.connector_catalogs.lock() {
-            memory.insert(provider.fingerprint.clone(), (resolved.clone(), stored_at));
-        }
+        lock(&self.connector_catalogs)
+            .insert(provider.fingerprint.clone(), (resolved.clone(), stored_at));
         Ok(resolved)
     }
 
@@ -104,7 +102,7 @@ impl AppServer {
             self.workspace.resolve_credential(variable)
         });
         {
-            let mut sessions = self.lock_sessions()?;
+            let mut sessions = self.lock_sessions();
             let session = sessions
                 .get_mut(session_id)
                 .ok_or_else(|| session_missing("Session not found"))?;
@@ -127,7 +125,7 @@ impl AppServer {
                 } else {
                     error.0
                 };
-                if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+                if let Some(session) = self.lock_sessions().get_mut(session_id) {
                     session.connectors.load_error = Some(message);
                 }
                 return Ok(self.runtime_snapshot(session_id).map(|runtime| {
@@ -144,7 +142,7 @@ impl AppServer {
         };
         let mut selection = catalog::resolve_selection(&snapshot, Some(&resolved));
         selection.implicit = unified;
-        if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+        if let Some(session) = self.lock_sessions().get_mut(session_id) {
             session.connectors.accept(resolved, selection);
             session.connectors.announce = unified;
             // A registry the session cannot publish into is a session whose
@@ -163,7 +161,7 @@ impl AppServer {
         resolved: ResolvedCatalog,
         selection: ConnectorSelection,
     ) -> Result<Value, ProtocolFault> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -183,7 +181,7 @@ impl AppServer {
     /// converges the pending connector selection on `turn/completed`.
     pub(crate) fn converge_connectors(&self, session_id: &str) -> Option<Vec<u8>> {
         {
-            let mut sessions = self.lock_sessions().ok()?;
+            let mut sessions = self.lock_sessions();
             let session = sessions.get_mut(session_id)?;
             let (resolved, selection) = session.connectors.pending.take()?;
             session.connectors.accept(resolved, selection);
@@ -197,7 +195,7 @@ impl AppServer {
     }
 
     fn session_connector_view(&self, session_id: &str) -> Result<Value, ProtocolFault> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         let session = sessions
             .get(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -415,7 +413,7 @@ impl AppServer {
         }
         let accepted = match &session_id {
             Some(session_id) => {
-                let sessions = self.lock_sessions()?;
+                let sessions = self.lock_sessions();
                 let session = sessions
                     .get(session_id)
                     .ok_or_else(|| session_missing("Session not found"))?;
@@ -459,7 +457,7 @@ impl AppServer {
             && let Some(root) = &root
         {
             let (live_sources, live_revision) = {
-                let sessions = self.lock_sessions()?;
+                let sessions = self.lock_sessions();
                 let live = sessions
                     .get(root)
                     .map(|session| session.connectors.accepted.clone());
@@ -528,7 +526,7 @@ impl AppServer {
         session_id: &str,
         alias: &str,
     ) -> Result<(String, String, &'static str, &'static str), ProtocolFault> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         let session = sessions
             .get(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -610,17 +608,11 @@ impl AppServer {
             revision.clone(),
             action.to_owned(),
         );
-        {
-            let mut pending = self
-                .connector_auth_requests
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the authorization ledger is poisoned"))?;
-            if !pending.insert(key.clone()) {
-                return Err(ProtocolFault::plain(
-                    ProtocolErrorCode::Conflict,
-                    "Connector authorization is already pending for this catalog revision",
-                ));
-            }
+        if !lock(&self.connector_auth_requests).insert(key.clone()) {
+            return Err(ProtocolFault::plain(
+                ProtocolErrorCode::Conflict,
+                "Connector authorization is already pending for this catalog revision",
+            ));
         }
         let broker_id = vibe_core::session_id::uuid_v4();
         let required = result_map([
@@ -664,9 +656,7 @@ impl AppServer {
                 }
             }
         }
-        if let Ok(mut pending) = self.connector_auth_requests.lock() {
-            pending.remove(&key);
-        }
+        lock(&self.connector_auth_requests).remove(&key);
         Ok(DispatchBatch {
             outbound,
             deferred: Vec::new(),
@@ -682,7 +672,7 @@ impl AppServer {
     ) -> Result<DispatchBatch, ProtocolFault> {
         self.open_session_connectors(session_id).await?;
         let counts = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             sessions
                 .get(session_id)
                 .ok_or_else(|| session_missing("Session not found"))?
@@ -704,7 +694,7 @@ impl AppServer {
             .connector_catalog_refresh(request_id.clone(), Some(session_id.to_owned()))
             .await?;
         let tool_count = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| session_missing("Session not found"))?;

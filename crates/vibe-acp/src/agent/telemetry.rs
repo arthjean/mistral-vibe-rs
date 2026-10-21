@@ -30,7 +30,7 @@ where
             .map_err(|error| {
                 AcpError::InvalidParams(format!("invalid ACP telemetry notification: {error}"))
             })?;
-        let Some(harness) = self.find_live_session(&notification.session_id)? else {
+        let Some(harness) = self.find_live_session(&notification.session_id) else {
             return Ok(());
         };
         let (properties, correlate) = match notification.event.as_str() {

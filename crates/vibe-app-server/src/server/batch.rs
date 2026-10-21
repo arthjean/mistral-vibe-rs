@@ -63,10 +63,8 @@ pub(super) fn resource_result_batch(
             // What the backend learned about the session's integrations is
             // recorded before anything is composed from it, so the runtime this
             // answer and the notification carry are the state after the call.
-            if let Some(state) = dispatch.signals.integrations.take()
-                && let Ok(mut resources) = server.resources.lock()
-            {
-                resources.record_integrations(session_id, state);
+            if let Some(state) = dispatch.signals.integrations.take() {
+                lock(&server.resources).record_integrations(session_id, state);
             }
             let mut outbound = vec![success_bytes(id, dispatch.result)];
             outbound.extend(signal_frames(server, session_id, &dispatch.signals));

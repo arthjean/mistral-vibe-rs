@@ -399,11 +399,12 @@ impl ServerPeer {
             answer
         }
         .map_err(session_error)?;
-        let result = McpToolResult::parse(self.label.clone(), name.to_owned(), &answer);
-        Ok(ToolExecutionOutput::new(result.model_text())
-            .displayed_as(json!({"kind": "mcp", "isError": false}))
-            .typed(result.typed())
-            .from_remote(answer))
+        Ok(
+            McpToolResult::parse(self.label.clone(), name.to_owned(), &answer)
+                .document()
+                .into_output(json!({"kind": "mcp", "isError": false}))
+                .from_remote(answer),
+        )
     }
 }
 
@@ -566,11 +567,12 @@ pub async fn call_connector_gateway(
     let terminate = answer.as_ref().err().is_none_or(Session::terminates);
     session.close(terminate).await;
     let answer = answer.map_err(failure)?;
-    let result = McpToolResult::parse(url.to_string(), name.to_owned(), &answer);
-    Ok(ToolExecutionOutput::new(result.model_text())
-        .displayed_as(json!({"kind": "mcp", "isError": false}))
-        .typed(result.typed())
-        .from_remote(answer))
+    Ok(
+        McpToolResult::parse(url.to_string(), name.to_owned(), &answer)
+            .document()
+            .into_output(json!({"kind": "mcp", "isError": false}))
+            .from_remote(answer),
+    )
 }
 
 /// The JSON-RPC answer to one `sampling/createMessage` request.

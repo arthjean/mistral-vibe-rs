@@ -2,13 +2,13 @@
 //! reference by the `handlers` family in `commands_parity_tests.rs`.
 
 use vibe_core::observability::{LogLevel, LogLevelChain};
+use vibe_core::pycompat::thousands;
 
 use super::log_level::{Applied, Badge, LogLevelBackend, Picker, apply};
+use super::loops::{format_duration, format_loop_list};
 use super::mcp_arguments::{parse_add, split_posix};
-use super::{
-    Effect, ScheduledLoop, Stats, format_duration, format_loop_list, session_cost, status_document,
-    thousands,
-};
+use super::status::{session_cost, status_document};
+use super::{Effect, ScheduledLoop, Stats};
 
 #[test]
 fn posix_splitting_follows_python_shlex() {

@@ -122,7 +122,7 @@ fn the_configured_key_gates_the_watcher() {
         .candidates(temporary.path(), "")
         .expect("a query with the key off is answered");
     assert!(
-        !index.inner.lock().is_ok_and(|index| index.is_watching()),
+        !vibe_core::sync::lock(&index.inner).is_watching(),
         "no watcher exists while the key is off"
     );
 
@@ -131,7 +131,7 @@ fn the_configured_key_gates_the_watcher() {
         .candidates(temporary.path(), "")
         .expect("a query with the key on is answered");
     assert!(
-        index.inner.lock().is_ok_and(|index| index.is_watching()),
+        vibe_core::sync::lock(&index.inner).is_watching(),
         "the key turns a watcher on"
     );
 
@@ -140,7 +140,7 @@ fn the_configured_key_gates_the_watcher() {
         .candidates(temporary.path(), "")
         .expect("a query after the key went off is answered");
     assert!(
-        !index.inner.lock().is_ok_and(|index| index.is_watching()),
+        !vibe_core::sync::lock(&index.inner).is_watching(),
         "the watcher is stopped before the query is answered"
     );
 }
@@ -220,7 +220,8 @@ fn an_unwatchable_root_reports_once_and_keeps_answering() {
 
     // Break the watcher the way an exhausted backend does: the controller
     // is asked to watch a root that is not there.
-    if let Ok(mut held) = index.inner.lock() {
+    {
+        let mut held = vibe_core::sync::lock(&index.inner);
         held.watcher.stop();
         held.watch_notice_shown = false;
         let absent = temporary.path().join("absent");

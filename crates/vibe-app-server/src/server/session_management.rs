@@ -170,8 +170,7 @@ pub(super) fn answer(
     // `_config_read` over `project_diagnostics`), not the files as they stand.
     if request.method == "config/read"
         && let Some(session_id) = target_session_id.as_deref()
-        && let Ok(sessions) = connection.server.lock_sessions()
-        && let Some(session) = sessions.get(session_id)
+        && let Some(session) = connection.server.lock_sessions().get(session_id)
     {
         dispatch
             .result
@@ -255,11 +254,11 @@ fn dispatch_workspace(
         },
         Dispatch::AgentScoped => {
             let scoped = match target_session_id {
-                Some(session_id) => connection.server.lock_sessions().ok().and_then(|sessions| {
-                    sessions
-                        .get(session_id)
-                        .map(|session| connection.server.agent_workspace(session))
-                }),
+                Some(session_id) => connection
+                    .server
+                    .lock_sessions()
+                    .get(session_id)
+                    .map(|session| connection.server.agent_workspace(session)),
                 // Reference `_list_agents` reads the host's directory under
                 // the trust it holds now.
                 None => {
@@ -286,7 +285,7 @@ fn session_scope(
     connection: &ServerConnection,
     target_session_id: Option<&str>,
 ) -> Option<(PathBuf, bool, Option<bool>)> {
-    let sessions = connection.server.lock_sessions().ok()?;
+    let sessions = connection.server.lock_sessions();
     sessions.get(target_session_id?).map(|session| {
         (
             PathBuf::from(&session.working_directory),
@@ -374,11 +373,9 @@ fn mutation_conflict(
         return None;
     }
     let session_id = session_id?;
-    let sessions = match connection.server.lock_sessions() {
-        Ok(sessions) => sessions,
-        Err(error) => return Some(internal_error_batch(request.id.clone(), &error)),
-    };
-    sessions
+    connection
+        .server
+        .lock_sessions()
         .get(session_id)
         .is_some_and(|session| session.active_turn.is_some())
         .then(|| {
@@ -402,12 +399,11 @@ fn delete_session(
             "session/delete requires sessionId",
         );
     };
-    let attached = match connection.server.lock_sessions() {
-        Ok(sessions) => sessions
-            .get(session_id)
-            .is_some_and(|session| session.attachments > 0),
-        Err(error) => return internal_error_batch(request.id, &error),
-    };
+    let attached = connection
+        .server
+        .lock_sessions()
+        .get(session_id)
+        .is_some_and(|session| session.attachments > 0);
     if attached {
         return error_batch(
             request.id,
@@ -443,11 +439,11 @@ fn enrich_active_agent(
     session_id: &str,
     dispatch: &mut WorkspaceDispatch,
 ) {
-    let summary = connection.server.lock_sessions().ok().and_then(|sessions| {
-        sessions
-            .get(session_id)
-            .and_then(|session| session.agent_summary.clone())
-    });
+    let summary = connection
+        .server
+        .lock_sessions()
+        .get(session_id)
+        .and_then(|session| session.agent_summary.clone());
     if let Some(summary) = summary {
         dispatch.result.insert("active".to_owned(), summary);
     }
@@ -497,7 +493,7 @@ pub(super) fn reset_checkpoint_log(
     message_count: usize,
 ) -> Result<(), ServerError> {
     let review = {
-        let sessions = connection.server.lock_sessions()?;
+        let sessions = connection.server.lock_sessions();
         sessions
             .get(session_id)
             .and_then(|session| session.review.clone())
@@ -527,31 +523,32 @@ fn switch_unified_agent(
     else {
         return Err(ProtocolFault::invalid_params("agentName is required").into_batch(request.id));
     };
-    let switched = connection
-        .server
-        .lock_sessions()
-        .map_err(ProtocolFault::from)
-        .and_then(|mut sessions| {
-            let session = sessions.get_mut(session_id).ok_or_else(|| {
+    let switched = {
+        let mut sessions = connection.server.lock_sessions();
+        sessions
+            .get_mut(session_id)
+            .ok_or_else(|| {
                 ProtocolFault::plain(
                     ProtocolErrorCode::NotFound,
                     format!("Session not found: {session_id}"),
                 )
-            })?;
-            if session.intent.agent.as_deref() == Some(name) {
-                return Ok(session.agent_summary.clone());
-            }
-            let profile = connection
-                .server
-                .agent_workspace(session)
-                .agent_profile(name)
-                .map_err(ProtocolFault::from)?;
-            super::attachment::apply_agent_profile_settings(&mut session.intent, &profile);
-            session.intent.agent = Some(name.to_owned());
-            session.agent_summary = Some(crate::workspace::agent_summary(&profile));
-            session.updated_at = now_millis();
-            Ok(session.agent_summary.clone())
-        });
+            })
+            .and_then(|session| {
+                if session.intent.agent.as_deref() == Some(name) {
+                    return Ok(session.agent_summary.clone());
+                }
+                let profile = connection
+                    .server
+                    .agent_workspace(session)
+                    .agent_profile(name)
+                    .map_err(ProtocolFault::from)?;
+                super::attachment::apply_agent_profile_settings(&mut session.intent, &profile);
+                session.intent.agent = Some(name.to_owned());
+                session.agent_summary = Some(crate::workspace::agent_summary(&profile));
+                session.updated_at = now_millis();
+                Ok(session.agent_summary.clone())
+            })
+    };
     match switched {
         Ok(agent) => Ok(Answered {
             result: result_map([("agent", agent.unwrap_or(Value::Null))]),
@@ -572,8 +569,7 @@ fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) 
     ) else {
         return;
     };
-    if let Ok(mut sessions) = connection.server.lock_sessions()
-        && let Some(session) = sessions.get_mut(session_id)
+    if let Some(session) = connection.server.lock_sessions().get_mut(session_id)
         && session.intent.agent.as_deref() != Some(agent)
     {
         let summary = connection

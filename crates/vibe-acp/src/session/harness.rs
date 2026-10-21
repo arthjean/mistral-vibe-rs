@@ -8,6 +8,7 @@ use serde_json::Value;
 use tokio::task::AbortHandle;
 use vibe_app_server::client::{HeadlessService, TurnDriver};
 use vibe_app_server::experiments::SessionExperiments;
+use vibe_core::sync::lock;
 
 use crate::client_tools::UpdateBarrier;
 use crate::protocol::AcpError;
@@ -105,17 +106,12 @@ where
             .get("turnId")
             .and_then(Value::as_str)
             .unwrap_or_default();
-        self.entries
-            .lock()
-            .ok()?
-            .insert(format!("{turn}\u{0}{id}"), entry.clone())
+        lock(&self.entries).insert(format!("{turn}\u{0}{id}"), entry.clone())
     }
 
     /// The last version of entry `id` of `turn` the client was told about.
     pub(crate) fn remembered_entry(&self, turn: &str, id: &str) -> Option<Value> {
-        self.entries
-            .lock()
-            .ok()?
+        lock(&self.entries)
             .get(&format!("{turn}\u{0}{id}"))
             .cloned()
     }
@@ -123,10 +119,9 @@ where
     /// Records a title the client set, as both the title and the label it
     /// was last told.
     pub(crate) fn set_display_title(&self, value: &str) {
-        if let Ok(mut title) = self.title.lock() {
-            title.title = Some(value.to_owned());
-            title.shown = Some(value.to_owned());
-        }
+        let mut title = lock(&self.title);
+        title.title = Some(value.to_owned());
+        title.shown = Some(value.to_owned());
     }
 
     /// Records the title and preview the session already has, which is what
@@ -139,11 +134,10 @@ where
                 .filter(|text| !text.is_empty())
                 .map(ToOwned::to_owned)
         };
-        if let Ok(mut title) = self.title.lock() {
-            title.title = text("title");
-            title.preview = text("preview");
-            title.shown = title.title.clone().or_else(|| title.preview.clone());
-        }
+        let mut title = lock(&self.title);
+        title.title = text("title");
+        title.preview = text("preview");
+        title.shown = title.title.clone().or_else(|| title.preview.clone());
     }
 
     /// Takes the title and preview a Unified Harness session published, and
@@ -151,10 +145,8 @@ where
     /// The title and preview the session last published, which a listing
     /// prefers to the stored ones while the session is open.
     pub(crate) fn names(&self) -> (Option<String>, Option<String>) {
-        self.title
-            .lock()
-            .map(|title| (title.title.clone(), title.preview.clone()))
-            .unwrap_or_default()
+        let title = lock(&self.title);
+        (title.title.clone(), title.preview.clone())
     }
 
     pub(crate) fn observe_names(
@@ -162,7 +154,7 @@ where
         published_title: Option<&str>,
         published_preview: Option<&str>,
     ) -> Option<String> {
-        let mut title = self.title.lock().ok()?;
+        let mut title = lock(&self.title);
         let text =
             |value: Option<&str>| value.filter(|text| !text.is_empty()).map(ToOwned::to_owned);
         title.title = text(published_title);
@@ -180,7 +172,7 @@ where
     /// title notice names the session, and its first operator message
     /// previews it until one does.
     pub(crate) fn observe_display_title(&self, entry: &Value) -> Option<String> {
-        let mut title = self.title.lock().ok()?;
+        let mut title = lock(&self.title);
         match entry.get("type").and_then(Value::as_str) {
             Some("notice")
                 if entry.pointer("/detail/kind").and_then(Value::as_str)
@@ -222,18 +214,15 @@ where
 
     /// Keeps `handle` so closing the session stops the work behind it.
     pub(crate) fn track(&self, handle: AbortHandle) {
-        if let Ok(mut tasks) = self.tasks.lock() {
-            tasks.retain(|task| !task.is_finished());
-            tasks.push(handle);
-        }
+        let mut tasks = lock(&self.tasks);
+        tasks.retain(|task| !task.is_finished());
+        tasks.push(handle);
     }
 
     /// Stops every task spawned for this session.
     pub(crate) fn abort_tasks(&self) {
-        if let Ok(mut tasks) = self.tasks.lock() {
-            for task in tasks.drain(..) {
-                task.abort();
-            }
+        for task in lock(&self.tasks).drain(..) {
+            task.abort();
         }
     }
 
@@ -254,7 +243,7 @@ where
     /// phase lock, so a cancel racing the end of the previous claim cannot
     /// latch onto the next one.
     pub(crate) fn begin(&self, phase: ActivePhase) -> Result<(), AcpError> {
-        let mut active = self.active.lock().map_err(|_| AcpError::StatePoisoned)?;
+        let mut active = lock(&self.active);
         if *active != ActivePhase::Idle {
             return Err(AcpError::Internal(format!(
                 "session `{}` is already running a prompt",
@@ -266,42 +255,37 @@ where
         Ok(())
     }
 
-    pub(crate) fn set_phase(&self, phase: ActivePhase) -> Result<(), AcpError> {
-        *self.active.lock().map_err(|_| AcpError::StatePoisoned)? = phase;
-        Ok(())
+    pub(crate) fn set_phase(&self, phase: ActivePhase) {
+        *lock(&self.active) = phase;
     }
 
-    pub(crate) fn release(&self) -> Result<(), AcpError> {
-        self.set_phase(ActivePhase::Idle)
+    pub(crate) fn release(&self) {
+        self.set_phase(ActivePhase::Idle);
     }
 
-    pub(crate) fn phase(&self) -> Result<ActivePhase, AcpError> {
-        Ok(self
-            .active
-            .lock()
-            .map_err(|_| AcpError::StatePoisoned)?
-            .clone())
+    pub(crate) fn phase(&self) -> ActivePhase {
+        lock(&self.active).clone()
     }
 
     /// Turn ID of a canonically reserved turn, which is the only phase where
     /// the driver has something to interrupt.
-    pub(crate) fn running_turn_id(&self) -> Result<Option<String>, AcpError> {
-        Ok(match self.phase()? {
+    pub(crate) fn running_turn_id(&self) -> Option<String> {
+        match self.phase() {
             ActivePhase::Running(turn_id) => Some(turn_id),
             ActivePhase::Idle | ActivePhase::Reserving => None,
-        })
+        }
     }
 
     /// Cancels whatever the session is doing and reports the phase the request
     /// observed, which is what tells the caller whether a canonical turn still
     /// needs interrupting. An idle session latches nothing: there is no claim
     /// to cancel, and latching would leak into the next one.
-    pub(crate) fn request_cancel(&self) -> Result<ActivePhase, AcpError> {
-        let active = self.active.lock().map_err(|_| AcpError::StatePoisoned)?;
+    pub(crate) fn request_cancel(&self) -> ActivePhase {
+        let active = lock(&self.active);
         if *active != ActivePhase::Idle {
             self.cancel.send_replace(true);
         }
-        Ok(active.clone())
+        active.clone()
     }
 
     pub(crate) fn is_cancelled(&self) -> bool {

@@ -62,9 +62,7 @@ fn reconcile_disabled_tools(
         .filter(|tool| registered.contains(tool))
         .collect::<BTreeSet<_>>();
     let names = disabled.iter().cloned().collect::<Vec<_>>();
-    if !set_all(tools, ToolSource::Mcp, &names, ToolAvailability::Disabled)
-        .map_err(|error| McpError::Tool(error.to_string()))?
-    {
+    if !set_all(tools, ToolSource::Mcp, &names, ToolAvailability::Disabled) {
         return Err(McpError::Tool(
             "MCP tool registry changed during reconciliation".to_owned(),
         ));

@@ -114,7 +114,7 @@ impl CallbackChannel {
         match self {
             Self::Shared(sender) => sender.send(request).await.map_err(drop),
             Self::Routed(routes) => {
-                let route = crate::sync::lock(routes)
+                let route = vibe_core::sync::lock(routes)
                     .get(request.session_id())
                     .cloned()
                     .ok_or(())?;

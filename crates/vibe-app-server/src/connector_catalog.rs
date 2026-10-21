@@ -21,13 +21,14 @@ mod selection;
 mod sources;
 mod tools;
 
+use crate::vocabulary::McpSourceStatus;
 pub(crate) use bootstrap::{fetch_bootstrap, resolve_catalog};
 pub(crate) use cache::{CACHE_FILE, read_cache, write_cache};
 pub(crate) use selection::{
     ConnectorSelection, ConnectorSetting, catalog_sources, connector_settings, resolve_selection,
     selections_view, toggled_selection, validate_toggle,
 };
-use sources::SourceStatus;
+use sources::source_status;
 
 const DEFAULT_BASE_URL: &str = "https://api.mistral.ai";
 const MAX_PUBLIC_NAME_CHARACTERS: usize = 256;
@@ -241,8 +242,8 @@ pub(crate) struct CatalogError(pub(crate) String);
 /// Reference `_connector_readiness`: the catalog's own word for how a
 /// connector stands, `ready` where a session would read it connected.
 fn readiness(connector: &ResolvedConnector) -> &'static str {
-    match SourceStatus::derive(true, connector.ready, Some(connector.auth_action)) {
-        SourceStatus::Connected => "ready",
+    match source_status(true, connector.ready, Some(connector.auth_action)) {
+        McpSourceStatus::Connected => "ready",
         status => status.as_str(),
     }
 }

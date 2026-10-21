@@ -723,3 +723,6 @@ async fn record_cleanup_failure(
         .await
         .push(format!("{terminal_id}: {error}"));
 }
+
+#[cfg(test)]
+mod client_tests;

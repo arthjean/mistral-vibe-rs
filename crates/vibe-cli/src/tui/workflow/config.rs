@@ -133,7 +133,7 @@ pub(super) fn set_config_value(
             return;
         }
     };
-    if persist_config_setting(runtime, target, &path, value, false, state) {
+    if persist_setting(runtime, target, &path, value, false, state) {
         apply_render_preferences(runtime, state);
         push_local_notice(state, "Configuration value saved", EntryStatus::Completed);
     }
@@ -230,7 +230,7 @@ pub(super) fn reset_config_value_at(
         }
         return;
     }
-    if persist_config_setting(runtime, target, &path, Value::Null, true, state) {
+    if persist_setting(runtime, target, &path, Value::Null, true, state) {
         apply_render_preferences(runtime, state);
         push_local_notice(state, "Configuration value reset", EntryStatus::Completed);
     }
@@ -303,17 +303,6 @@ pub(super) fn selected_config_target(runtime: &mut InteractiveRuntime) -> Option
         .get(0)?
         .as_str()
         .map(ToOwned::to_owned)
-}
-
-pub(super) fn persist_config_setting(
-    runtime: &mut InteractiveRuntime,
-    target: &str,
-    path: &[&str],
-    value: Value,
-    remove: bool,
-    state: &mut TuiState,
-) -> bool {
-    persist_setting(runtime, target, path, value, remove, state)
 }
 
 /// The theme the operator persisted, or the automatic entry the catalog opens

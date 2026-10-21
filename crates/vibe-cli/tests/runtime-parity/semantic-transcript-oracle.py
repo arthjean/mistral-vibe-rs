@@ -17,6 +17,16 @@ import re
 import sys
 import time
 
+# The reference code imported below runs from the pinned commit, refused when
+# the checkout has moved, rather than from whatever its working tree holds.
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
+
+from pin import DEFAULT_REFERENCE  # noqa: E402  the path insert above enables it
+from reference import reexecute_pinned  # noqa: E402
+
+if __name__ == "__main__":
+    reexecute_pinned(DEFAULT_REFERENCE)
+
 # The reference renders debug timestamps in the local zone; pin it so the
 # checked-in corpus is machine independent.
 os.environ["TZ"] = "UTC"

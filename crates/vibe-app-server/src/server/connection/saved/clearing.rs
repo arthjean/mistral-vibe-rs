@@ -20,7 +20,7 @@ impl ServerConnection {
         let session_id = self.require_root(&params.map_err(rejected)?.session_id)?;
         let key = self.root_key().unwrap_or_else(|| session_id.clone());
         {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             if sessions
                 .get(&key)
                 .is_some_and(|session| session.active_turn.is_some())
@@ -38,24 +38,28 @@ impl ServerConnection {
         };
         let draft = workspace.clear_session(&source)?;
         let new_id = draft.metadata.id.clone();
-        self.server.transfer_lease(&session_id, &new_id)?;
+        // The new identifier is leased, bound and registered before the old
+        // lease goes, so a refusal leaves the root holding what it held.
+        self.server.acquire_lease(&new_id)?;
+        let abandon = |error: ServerError| {
+            self.server.release_lease(&new_id);
+            ProtocolFault::from(error)
+        };
         self.server
             .projects
             .rebind_session(&session_id, &new_id)
-            .map_err(|error| ServerError::Projects(error.to_string()))?;
-        let now = now_millis();
-        let mut sessions = self.server.lock_sessions()?;
-        sessions.rename(&key, &new_id)?;
+            .map_err(|error| abandon(ServerError::Projects(error.to_string())))?;
+        let mut sessions = self.server.lock_sessions();
+        if let Err(error) = sessions.rename(&key, &new_id) {
+            drop(sessions);
+            return Err(abandon(error));
+        }
         let session = sessions
             .get_mut(&new_id)
             .ok_or_else(|| not_found(&new_id))?;
         session.intent.resume = Some(new_id.clone());
         session.persisted = Some(draft);
-        session.created_at = now;
-        session.updated_at = now;
-        session.bumped_at = None;
-        session.event_watermark = 0;
-        session.stats = crate::server::runtime::SessionStats::default();
+        session.restart_fresh(now_millis());
         // Reference `_reset_title_state`: a title still running names the
         // session left behind, and the cadence starts over.
         session.title_cadence = vibe_core::session_title::TitleCadence::default();
@@ -78,9 +82,9 @@ impl ServerConnection {
         snapshot.title = None;
         snapshot.watermark = 0;
         session.replace_idle(kept);
-        session.status = SessionStatus::Idle;
         let state = public_session_state(session);
         drop(sessions);
+        self.server.release_lease(&session_id);
         super::session_management::reset_checkpoint_log(self, &new_id, 1)?;
         Ok(success_batch(
             request.id.clone(),

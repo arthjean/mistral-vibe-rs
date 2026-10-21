@@ -39,7 +39,7 @@ impl ServerConnection {
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
             return Ok(batch);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&params.session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -105,7 +105,7 @@ impl ServerConnection {
             result_map([("lastEventId", json!(last_event_id)), ("turn", json!(turn))]),
         )];
         outbound.extend(self.user_activity_frames(&canonical_session_id, activity));
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&canonical_session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -323,7 +323,7 @@ impl ServerConnection {
             return Ok(batch);
         }
         let content = decoded_prompt(&params.input);
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&params.session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -428,7 +428,7 @@ impl ServerConnection {
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
             return Ok(batch);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&params.session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -527,7 +527,7 @@ impl ServerConnection {
         }
         let last_event_id = self
             .server
-            .lock_sessions()?
+            .lock_sessions()
             .get(&session_id)
             .map_or(0, |session| session.event_watermark);
         // The settlement is published before the answer, which carries its
@@ -554,7 +554,7 @@ impl ServerConnection {
         callback_id: &str,
         output: Value,
     ) -> Result<(Vec<Vec<u8>>, Vec<DeferredWork>), ProtocolFault> {
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -616,7 +616,7 @@ impl ServerConnection {
         message: &str,
     ) -> Result<(Option<Vec<u8>>, Vec<DeferredWork>), ProtocolFault> {
         let turn_id = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| session_missing("Session not found"))?;
@@ -678,7 +678,7 @@ impl ServerConnection {
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
             return Ok(batch);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&params.session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -783,7 +783,7 @@ impl ServerConnection {
         if let Some(batch) = self.attachment_error(request_id.clone(), session_id) {
             return Ok(batch);
         }
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;

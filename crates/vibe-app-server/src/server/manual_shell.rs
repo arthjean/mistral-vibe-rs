@@ -519,16 +519,13 @@ impl AppServer {
         const SETTLE_WAIT: Duration = Duration::from_secs(10);
         let started = Instant::now();
         loop {
-            let watermark = match self.lock_sessions() {
-                Ok(sessions) => sessions.get(&session_id).map(|session| {
-                    let running = session
-                        .shell_operation
-                        .as_ref()
-                        .is_some_and(|operation| operation.id == operation_id);
-                    (running, session.event_watermark)
-                }),
-                Err(error) => return internal_error_batch(request_id, &error),
-            };
+            let watermark = self.lock_sessions().get(&session_id).map(|session| {
+                let running = session
+                    .shell_operation
+                    .as_ref()
+                    .is_some_and(|operation| operation.id == operation_id);
+                (running, session.event_watermark)
+            });
             match watermark {
                 Some((true, _)) if started.elapsed() < SETTLE_WAIT => {
                     tokio::time::sleep(POLL_INTERVAL).await;
@@ -549,8 +546,7 @@ impl AppServer {
 
     /// Frees a session a command reserved and never ran.
     pub fn release_shell_operation(&self, session_id: &str, operation_id: &str) {
-        if let Ok(mut sessions) = self.lock_sessions()
-            && let Some(session) = sessions.get_mut(session_id)
+        if let Some(session) = self.lock_sessions().get_mut(session_id)
             && session
                 .shell_operation
                 .as_ref()
@@ -569,7 +565,7 @@ impl AppServer {
         command: &str,
         created_at: u64,
     ) -> Result<(Vec<u8>, Arc<AtomicBool>), ProtocolFault> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -609,7 +605,7 @@ impl AppServer {
         operation_id: &str,
         chunk: &str,
     ) -> Option<Vec<u8>> {
-        let mut sessions = self.lock_sessions().ok()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions.get_mut(session_id)?;
         let timestamp = now_millis();
         let (metadata, state) = shell_entry(session, operation_id)?;
@@ -640,7 +636,7 @@ impl AppServer {
         operation_id: &str,
         state: PublicEffectState,
     ) -> Result<Vec<u8>, ProtocolFault> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -683,7 +679,7 @@ impl AppServer {
         session_id: &str,
         record: ManualShellRecord,
     ) -> Result<(u64, Option<DeferredWork>), ProtocolFault> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;

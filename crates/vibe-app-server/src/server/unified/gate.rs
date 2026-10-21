@@ -24,8 +24,8 @@ use vibe_harness::gate::{
 use vibe_harness::smart::{self, ClassificationRequest, Classifier, SmartState, Verdict};
 use vibe_harness::state::ToolAction;
 
-use super::lock;
 use super::provided::ProvidedRoutes;
+use vibe_core::sync::lock;
 
 const DENIED_BY_POLICY: &str = "Tool execution denied by approval policy";
 const DENIED_BY_CALLBACK: &str = "Tool execution denied by approval callback";

@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use vibe_core::sync::lock;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -53,12 +54,8 @@ impl PersistedCredentialStore {
     /// run winning over the keyring.
     #[must_use]
     pub fn resolve(&self, account: &str) -> Option<String> {
-        if let Ok(overlay) = self.process_env.lock()
-            && let Some(secret) = overlay.get(account)
-        {
-            return Some(secret.clone());
-        }
-        self.store.get_api_key(account)
+        let overlaid = lock(&self.process_env).get(account).cloned();
+        overlaid.or_else(|| self.store.get_api_key(account))
     }
 
     /// Persists `secret` for `env_key` with the reference's outcomes: the
@@ -75,14 +72,7 @@ impl PersistedCredentialStore {
         secret: &str,
         custom_domain: bool,
     ) -> vibe_core::auth::PersistReport {
-        let Ok(mut overlay) = self.process_env.lock() else {
-            return vibe_core::auth::PersistReport {
-                outcome: vibe_core::auth::PersistOutcome::SaveError {
-                    detail: "the in-process credential overlay is unavailable".to_owned(),
-                },
-                telemetry: Vec::new(),
-            };
-        };
+        let mut overlay = lock(&self.process_env);
         vibe_core::auth::persist_api_key(
             env_key,
             backend_is_mistral,

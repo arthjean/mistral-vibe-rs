@@ -121,3 +121,30 @@ fn validation_answers_as_the_reference_does() {
             .join("\n")
     );
 }
+
+/// Pydantic quotes a tag that matches no choice with Python's `str`, so a
+/// container or an exponent float reads the way Python prints it. Measured on
+/// the pinned reference with `ContextInjectParams`.
+#[test]
+fn an_unmatched_tag_is_quoted_with_python_str() {
+    for (tag, quoted) in [
+        (serde_json::json!([1, 2]), "[1, 2]"),
+        (serde_json::json!(1e16), "1e+16"),
+        (serde_json::json!({"a": 1}), "{'a': 1}"),
+    ] {
+        let input = Json::from_value(&serde_json::json!({
+            "sessionId": "s",
+            "input": [{"type": tag}],
+        }));
+        let issues = validate_model_named("ContextInjectParams", &input)
+            .expect_err("the tag matches no content block");
+        assert_eq!(issues[0].kind, "union_tag_invalid");
+        assert_eq!(
+            issues[0].message,
+            format!(
+                "Input tag '{quoted}' found using 'type' does not match any of the expected \
+                 tags: 'text', 'image', 'resource'"
+            )
+        );
+    }
+}

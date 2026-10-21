@@ -482,11 +482,10 @@ impl<D: TurnDriver> Run<'_, D> {
             .await
             .map_err(|error| CliError::Session(client_error_message(&error)))?;
         self.session_id.clone_from(&reservation.session_id);
-        let (observer, mut updates) = match self.service.interactive_update_channel_after(
-            &reservation.session_id,
-            &reservation.turn_id,
-            0,
-        ) {
+        let (observer, mut updates) = match self
+            .service
+            .turn_updates(&reservation.session_id, &reservation.turn_id)
+        {
             Ok(channel) => channel,
             Err(error) => {
                 let _ = self.service.fail_reserved(
@@ -549,7 +548,7 @@ impl<D: TurnDriver> Run<'_, D> {
     /// Reference `AppServerSession.deny_callback`: an approval is denied
     /// without feedback, and a question is answered as cancelled.
     fn refuse_callbacks(&mut self) -> Result<(), CliError> {
-        for callback in self.service.drain_callbacks()? {
+        for callback in self.service.drain_callbacks() {
             let PublicHistoryEntry::Callback {
                 callback_id,
                 detail,

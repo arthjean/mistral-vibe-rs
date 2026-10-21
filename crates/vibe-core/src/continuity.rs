@@ -7,6 +7,7 @@ use thiserror::Error;
 
 use crate::events::ModelMessage;
 use crate::storage::{HydratedSession, SessionStore, StorageError};
+use crate::sync::lock;
 
 const CONTINUITY_KEY: &str = "__vibe_continuity";
 
@@ -80,7 +81,7 @@ impl SessionContinuity {
 
     pub fn attach(&self, hydrated: HydratedSession) -> Result<ContinuitySnapshot, ContinuityError> {
         let snapshot = snapshot_from_hydrated(hydrated);
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = lock(&self.sessions);
         if sessions.contains_key(&snapshot.session_id) {
             return Err(ContinuityError::SessionConflict(snapshot.session_id));
         }
@@ -93,7 +94,7 @@ impl SessionContinuity {
         hydrated: HydratedSession,
     ) -> Result<ContinuitySnapshot, ContinuityError> {
         let incoming = snapshot_from_hydrated(hydrated);
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = lock(&self.sessions);
         if let Some(snapshot) =
             snapshot_key(&sessions, &incoming.session_id).and_then(|key| sessions.get_mut(&key))
         {
@@ -106,15 +107,15 @@ impl SessionContinuity {
         Ok(incoming)
     }
 
-    pub fn remove(&self, selector: &str) -> Result<bool, ContinuityError> {
-        let mut sessions = self.lock_sessions()?;
-        Ok(snapshot_key(&sessions, selector)
+    pub fn remove(&self, selector: &str) -> bool {
+        let mut sessions = lock(&self.sessions);
+        snapshot_key(&sessions, selector)
             .and_then(|key| sessions.remove(&key))
-            .is_some())
+            .is_some()
     }
 
     pub fn reconnect(&self, selector: &str) -> Result<ContinuitySnapshot, ContinuityError> {
-        if let Some(snapshot) = self.find_snapshot(selector)? {
+        if let Some(snapshot) = self.find_snapshot(selector) {
             return Ok(snapshot);
         }
         // A saved session answers any selector; one held before its first
@@ -127,7 +128,7 @@ impl SessionContinuity {
     }
 
     pub fn snapshot(&self, selector: &str) -> Result<ContinuitySnapshot, ContinuityError> {
-        self.find_snapshot(selector)?
+        self.find_snapshot(selector)
             .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))
     }
 
@@ -136,30 +137,29 @@ impl SessionContinuity {
         selector: &str,
         callback: CallbackRoute,
     ) -> Result<(), ContinuityError> {
-        let mut sessions = self.lock_sessions()?;
-        let snapshot = attached_mut(&mut sessions, selector)?;
-        if snapshot
-            .callback_routes
-            .insert(callback.callback_id.clone(), callback)
-            .is_some()
-        {
-            return Err(ContinuityError::CallbackConflict);
-        }
-        self.persist(snapshot)
+        self.update(selector, |snapshot| {
+            if snapshot.callback_routes.contains_key(&callback.callback_id) {
+                return Err(ContinuityError::CallbackConflict);
+            }
+            snapshot
+                .callback_routes
+                .insert(callback.callback_id.clone(), callback);
+            Ok(())
+        })
     }
 
     pub fn add_child(&self, selector: &str, child_id: &str) -> Result<(), ContinuityError> {
-        let mut sessions = self.lock_sessions()?;
-        let snapshot = attached_mut(&mut sessions, selector)?;
-        snapshot.child_session_ids.insert(child_id.to_owned());
-        self.persist(snapshot)
+        self.update(selector, |snapshot| {
+            snapshot.child_session_ids.insert(child_id.to_owned());
+            Ok(())
+        })
     }
 
     pub fn add_resource(&self, selector: &str, resource: &str) -> Result<(), ContinuityError> {
-        let mut sessions = self.lock_sessions()?;
-        let snapshot = attached_mut(&mut sessions, selector)?;
-        snapshot.resources.insert(resource.to_owned());
-        self.persist(snapshot)
+        self.update(selector, |snapshot| {
+            snapshot.resources.insert(resource.to_owned());
+            Ok(())
+        })
     }
 
     pub fn handoff(
@@ -170,7 +170,7 @@ impl SessionContinuity {
         current_config: BTreeMap<String, Value>,
         now_ms: u64,
     ) -> Result<ContinuitySnapshot, ContinuityError> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = lock(&self.sessions);
         if sessions.contains_key(new_session_id) {
             return Err(ContinuityError::SessionConflict(new_session_id.to_owned()));
         }
@@ -218,25 +218,22 @@ impl SessionContinuity {
         operation_id: &str,
         event_id: u64,
     ) -> Result<bool, ContinuityError> {
-        let mut sessions = self.lock_sessions()?;
-        let snapshot = attached_mut(&mut sessions, selector)?;
-        if snapshot.completed_operations.contains(operation_id) {
-            return Ok(false);
-        }
-        if event_id != snapshot.watermark.saturating_add(1) {
-            return Err(ContinuityError::EventGap {
-                expected: snapshot.watermark.saturating_add(1),
-                actual: event_id,
-            });
-        }
-        let mut accepted = snapshot.clone();
-        accepted.watermark = event_id;
-        accepted
-            .completed_operations
-            .insert(operation_id.to_owned());
-        self.persist(&accepted)?;
-        *snapshot = accepted;
-        Ok(true)
+        self.update(selector, |snapshot| {
+            if snapshot.completed_operations.contains(operation_id) {
+                return Ok(false);
+            }
+            if event_id != snapshot.watermark.saturating_add(1) {
+                return Err(ContinuityError::EventGap {
+                    expected: snapshot.watermark.saturating_add(1),
+                    actual: event_id,
+                });
+            }
+            snapshot.watermark = event_id;
+            snapshot
+                .completed_operations
+                .insert(operation_id.to_owned());
+            Ok(true)
+        })
     }
 
     pub fn rewind(
@@ -250,7 +247,7 @@ impl SessionContinuity {
         let hydrated = self
             .store
             .rewind(&current.session_id, keep_messages, statistics, now_ms)?;
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = lock(&self.sessions);
         let snapshot = attached_mut(&mut sessions, selector)?;
         snapshot.messages = hydrated.messages;
         snapshot.statistics = hydrated.metadata.statistics;
@@ -265,6 +262,28 @@ impl SessionContinuity {
         self.rewind(selector, 0, BTreeMap::new(), now_ms)
     }
 
+    /// Applies `change` to a copy of the attached session `selector` names,
+    /// persists the copy, and only then holds it.
+    ///
+    /// A refused change or a write that does not land therefore leaves both
+    /// the held state and the saved one as they were, and a change that left
+    /// the session as it stood writes nothing.
+    fn update<T>(
+        &self,
+        selector: &str,
+        change: impl FnOnce(&mut ContinuitySnapshot) -> Result<T, ContinuityError>,
+    ) -> Result<T, ContinuityError> {
+        let mut sessions = lock(&self.sessions);
+        let held = attached_mut(&mut sessions, selector)?;
+        let mut updated = held.clone();
+        let answer = change(&mut updated)?;
+        if updated != *held {
+            self.persist(&updated)?;
+            *held = updated;
+        }
+        Ok(answer)
+    }
+
     /// Writes `snapshot`'s continuity into its session's saved metadata.
     fn persist(&self, snapshot: &ContinuitySnapshot) -> Result<(), ContinuityError> {
         let mut hydrated = self.store.open(&snapshot.session_id)?;
@@ -276,20 +295,11 @@ impl SessionContinuity {
         Ok(())
     }
 
-    fn find_snapshot(&self, selector: &str) -> Result<Option<ContinuitySnapshot>, ContinuityError> {
-        let sessions = self.lock_sessions()?;
-        Ok(snapshot_key(&sessions, selector)
+    fn find_snapshot(&self, selector: &str) -> Option<ContinuitySnapshot> {
+        let sessions = lock(&self.sessions);
+        snapshot_key(&sessions, selector)
             .and_then(|key| sessions.get(&key))
-            .cloned())
-    }
-
-    fn lock_sessions(
-        &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, ContinuitySnapshot>>, ContinuityError>
-    {
-        self.sessions
-            .lock()
-            .map_err(|_| ContinuityError::StatePoisoned)
+            .cloned()
     }
 }
 
@@ -338,8 +348,6 @@ fn attached_mut<'a>(
 
 #[derive(Debug, Error)]
 pub enum ContinuityError {
-    #[error("continuity state lock is poisoned")]
-    StatePoisoned,
     #[error("session `{0}` is already attached")]
     SessionConflict(String),
     #[error("session `{0}` is not attached")]
@@ -355,155 +363,4 @@ pub enum ContinuityError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::events::ModelMessage;
-
-    fn user(content: &str) -> ModelMessage {
-        ModelMessage::user(content.to_owned())
-    }
-
-    #[test]
-    fn handoff_preserves_routes_children_resources_and_durable_deduplication() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path()).with_pointer_key("test");
-        let mut metadata = store
-            .create("root-session", "/workspace", None, 1)
-            .expect("root session");
-        store
-            .append_message(&mut metadata, &user("before"), 2)
-            .expect("message appends");
-        let continuity = SessionContinuity::new(store.clone());
-        continuity
-            .attach(store.load("root-session").expect("root loads"))
-            .expect("root attaches");
-        continuity
-            .bind_callback(
-                "root-session",
-                CallbackRoute {
-                    callback_id: "callback-1".to_owned(),
-                    turn_id: "turn-1".to_owned(),
-                },
-            )
-            .expect("callback binds");
-        continuity
-            .add_child("root-session", "child-1")
-            .expect("child registers");
-        continuity
-            .add_resource("root-session", "terminal-1")
-            .expect("resource registers");
-        assert!(
-            continuity
-                .accept_operation("root-session", "operation-1", 1)
-                .expect("operation accepted")
-        );
-
-        let handoff = continuity
-            .handoff(
-                "root-session",
-                "next-session",
-                "current prompt",
-                BTreeMap::new(),
-                10,
-            )
-            .expect("handoff commits");
-        assert_eq!(handoff.parent_session_id.as_deref(), Some("root-session"));
-        assert!(handoff.child_session_ids.contains("child-1"));
-        assert!(handoff.callback_routes.contains_key("callback-1"));
-        assert!(handoff.resources.contains("terminal-1"));
-        assert_eq!(
-            continuity
-                .snapshot("root-session")
-                .expect("old alias still resolves")
-                .session_id,
-            "next-session"
-        );
-        assert!(
-            !continuity
-                .accept_operation("root-session", "operation-1", 2)
-                .expect("duplicate ignored")
-        );
-
-        let restarted = SessionContinuity::new(store.clone());
-        let recovered = restarted
-            .reconnect("next-session")
-            .expect("new session reconnects");
-        assert!(recovered.completed_operations.contains("operation-1"));
-        assert_eq!(recovered.watermark, 1);
-    }
-
-    #[test]
-    fn concurrent_operation_acceptance_is_serialized_and_deduplicated() {
-        let temporary = tempfile::tempdir().expect("temporary sessions");
-        let store = SessionStore::new(temporary.path());
-        let metadata = store
-            .create("root", "/workspace", None, 1)
-            .expect("root session");
-        let continuity = SessionContinuity::new(store);
-        continuity
-            .attach(HydratedSession {
-                metadata,
-                messages: Vec::new(),
-                current_config: BTreeMap::new(),
-            })
-            .expect("continuity attaches");
-        let barrier = Arc::new(std::sync::Barrier::new(3));
-        let mut workers = Vec::new();
-        for _ in 0..2 {
-            let continuity = continuity.clone();
-            let barrier = barrier.clone();
-            workers.push(std::thread::spawn(move || {
-                barrier.wait();
-                continuity.accept_operation("root", "same-operation", 1)
-            }));
-        }
-        barrier.wait();
-        let mut outcomes = workers
-            .into_iter()
-            .map(|worker| worker.join().expect("worker joins").expect("operation"))
-            .collect::<Vec<_>>();
-        outcomes.sort_unstable();
-        assert_eq!(outcomes, [false, true]);
-        let reconnected = SessionContinuity::new(continuity.store.clone())
-            .reconnect("root")
-            .expect("durable reconnect");
-        assert_eq!(reconnected.watermark, 1);
-        assert!(reconnected.completed_operations.contains("same-operation"));
-    }
-
-    #[test]
-    fn rewind_and_clear_match_persistence_after_restart() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        let mut metadata = store
-            .create("root-session", "/workspace", None, 1)
-            .expect("root session");
-        for (index, content) in ["one", "two", "three"].into_iter().enumerate() {
-            store
-                .append_message(
-                    &mut metadata,
-                    &user(content),
-                    u64::try_from(index).unwrap_or_default().saturating_add(2),
-                )
-                .expect("message appends");
-        }
-        let continuity = SessionContinuity::new(store.clone());
-        continuity
-            .attach(store.load("root-session").expect("session loads"))
-            .expect("session attaches");
-        let rewind = continuity
-            .rewind("root-session", 1, BTreeMap::new(), 10)
-            .expect("rewind persists");
-        assert_eq!(rewind.messages, [user("one")]);
-        continuity
-            .clear_history("root-session", 11)
-            .expect("history clears");
-        assert!(
-            store
-                .load("root-session")
-                .expect("restart loads")
-                .messages
-                .is_empty()
-        );
-    }
-}
+mod continuity_tests;

@@ -105,7 +105,7 @@ where
             json!({"action": "interrupt_agent"}),
         )
         .await;
-        if let ActivePhase::Running(turn_id) = harness.request_cancel()? {
+        if let ActivePhase::Running(turn_id) = harness.request_cancel() {
             let _ = harness
                 .service
                 .lock()
@@ -122,7 +122,7 @@ where
     ) -> Result<Value, AcpError> {
         harness.begin(ActivePhase::Reserving)?;
         let outcome = self.run_turn(harness, input).await;
-        harness.release()?;
+        harness.release();
         let end = match outcome {
             Ok(end) => end,
             Err(TurnFailure::Turn(code, error)) => {
@@ -264,11 +264,7 @@ where
             if let Some(opening_usage) = opening_usage {
                 self.session_update(&harness.session_id, opening_usage);
             }
-            let channel = service.interactive_update_channel_after(
-                &reservation.session_id,
-                &reservation.turn_id,
-                0,
-            );
+            let channel = service.turn_updates(&reservation.session_id, &reservation.turn_id);
             let (observer, updates) = match channel {
                 Ok(channel) => channel,
                 Err(error) => {
@@ -282,9 +278,7 @@ where
             };
             (reservation, service.turn_runner(), observer, updates)
         };
-        harness
-            .set_phase(ActivePhase::Running(reservation.turn_id.clone()))
-            .map_err(TurnFailure::Other)?;
+        harness.set_phase(ActivePhase::Running(reservation.turn_id.clone()));
         if harness.is_cancelled() {
             let _ = harness
                 .service

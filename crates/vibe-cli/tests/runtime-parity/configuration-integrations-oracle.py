@@ -3,7 +3,18 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+import sys
 import tempfile
+
+# The reference code imported below runs from the pinned commit, refused when
+# the checkout has moved, rather than from whatever its working tree holds.
+sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
+
+from pin import DEFAULT_REFERENCE  # noqa: E402  the path insert above enables it
+from reference import reexecute_pinned  # noqa: E402
+
+if __name__ == "__main__":
+    reexecute_pinned(DEFAULT_REFERENCE)
 
 from dotenv import set_key, unset_key
 from rich.text import Text

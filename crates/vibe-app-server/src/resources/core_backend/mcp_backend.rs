@@ -523,7 +523,6 @@ fn project_mcp(
 ) -> Value {
     let specs = tools
         .list()
-        .unwrap_or_default()
         .into_iter()
         .map(|tool| (tool.name.clone(), tool))
         .collect::<BTreeMap<_, _>>();

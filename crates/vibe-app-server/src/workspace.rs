@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use crate::sync::lock;
+use vibe_core::sync::lock;
 
 mod account;
 pub use account::AccountLookup;

@@ -123,14 +123,5 @@ impl FeedbackCache {
 /// has no randomness to give.
 #[must_use]
 pub fn uniform_roll() -> f64 {
-    let mut bytes = [0_u8; 8];
-    if getrandom::fill(&mut bytes).is_err() {
-        return 1.0;
-    }
-    let bits = u64::from_le_bytes(bytes) >> 11;
-    // 53 random bits over 2^53 is exact in an f64.
-    let scale = f64::from(1_u32 << 26) * f64::from(1_u32 << 27);
-    let high = u32::try_from(bits >> 21).unwrap_or(u32::MAX);
-    let low = u32::try_from(bits & 0x1f_ffff).unwrap_or(0);
-    (f64::from(high) * f64::from(1_u32 << 21) + f64::from(low)) / scale
+    crate::session_id::random_unit().unwrap_or(1.0)
 }

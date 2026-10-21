@@ -62,7 +62,7 @@ impl ServerConnection {
         ));
         let announce = self
             .server
-            .lock_sessions()?
+            .lock_sessions()
             .get_mut(&begun.session_id)
             .is_some_and(|session| std::mem::take(&mut session.connectors.announce));
         if announce {

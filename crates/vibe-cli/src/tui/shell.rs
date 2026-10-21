@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use vibe_app_server::client::{ClientError, PublicDispatch, PublicHistoryEntry};
+use vibe_core::process::{ProcessChunk, ProcessStream};
 
 use super::hydration::history_entry;
 use super::render::clean_output;
@@ -28,8 +29,7 @@ pub(super) struct ActiveShell {
     operation_id: String,
     transcript_id: String,
     working_directory: PathBuf,
-    chunks: Vec<ShellChunk>,
-    backpressure_dropped: bool,
+    chunks: Vec<ProcessChunk>,
     started: Instant,
     last_poll: Instant,
     timed_out: bool,
@@ -52,7 +52,6 @@ impl ActiveShell {
             transcript_id: transcript_id.into(),
             working_directory: working_directory.into(),
             chunks: Vec::new(),
-            backpressure_dropped: false,
             started: Instant::now(),
             last_poll: Instant::now(),
             timed_out: false,
@@ -64,21 +63,20 @@ impl ActiveShell {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ShellRead {
-    chunks: Vec<ShellChunk>,
+    chunks: Vec<ProcessChunk>,
     state: ShellState,
-    backpressure_dropped: bool,
 }
 
 impl ShellRead {
     #[cfg(test)]
     pub(super) fn running(cursor: u64, text: impl Into<Vec<u8>>) -> Self {
         Self {
-            chunks: vec![ShellChunk {
+            chunks: vec![ProcessChunk {
                 cursor,
+                stream: ProcessStream::Stdout,
                 bytes: text.into(),
             }],
             state: ShellState::Running,
-            backpressure_dropped: false,
         }
     }
 
@@ -87,16 +85,8 @@ impl ShellRead {
         Self {
             chunks: Vec::new(),
             state: ShellState::Interrupted,
-            backpressure_dropped: false,
         }
     }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ShellChunk {
-    cursor: u64,
-    bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -219,9 +209,9 @@ async fn follow_unified_shell(
 ) {
     let published = runtime
         .service
-        .unified_state(&runtime.session_id)
-        .and_then(|published| {
-            published["history"]
+        .published_state(&runtime.session_id, "history")
+        .and_then(|history| {
+            history
                 .as_array()?
                 .iter()
                 .find(|entry| entry["id"] == shell.operation_id.as_str())
@@ -338,33 +328,43 @@ fn settle_read(
 pub(super) struct ShellContext {
     command: String,
     working_directory: PathBuf,
-    outcome: String,
-    output: String,
+    status: String,
+    stdout: String,
+    stderr: String,
 }
 
 impl ShellContext {
-    /// Covers the facts reference `manual_shell_context` reports, in this
-    /// port's own words: the command, where it ran, how it ended, and its
-    /// output capped at `limit` characters.
+    /// The sections reference `manual_shell_context` reports, worded as the
+    /// app-server words them for a `session/shellCommand`: the command, where
+    /// it ran, how it ended, and each stream as the command wrote it, capped
+    /// at `limit` characters.
     fn render(&self, limit: usize) -> String {
-        let output = if self.output.trim().is_empty() {
-            "(no output)".to_owned()
-        } else if self.output.chars().count() > limit {
-            let kept = self.output.chars().take(limit).collect::<String>();
-            format!("{kept}\n... [output truncated]")
-        } else {
-            self.output.trim_end().to_owned()
-        };
-        [
-            "The user ran this shell command themselves with `!`. Treat its result as \
-             background for the conversation, not as a request."
+        let stdout = capped(&self.stdout, limit);
+        let stderr = capped(&self.stderr, limit);
+        let mut sections = vec![
+            "The user ran a `!` command by hand. Its result is context for you, not a request."
                 .to_owned(),
             format!("Command: `{}`", self.command),
             format!("Working directory: `{}`", self.working_directory.display()),
-            self.outcome.clone(),
-            format!("Output:\n```text\n{output}\n```"),
-        ]
-        .join("\n\n")
+            self.status.clone(),
+        ];
+        for (label, text) in [("Stdout", &stdout), ("Stderr", &stderr)] {
+            if !text.is_empty() {
+                sections.push(format!("{label}:\n```text\n{}\n```", text.trim_end()));
+            }
+        }
+        if stdout.is_empty() && stderr.is_empty() {
+            sections.push("Output:\n```text\n(no output)\n```".to_owned());
+        }
+        sections.join("\n\n")
+    }
+}
+
+/// Reference `_cap_output`: `text` cut to `limit` characters, the cut marked.
+fn capped(text: &str, limit: usize) -> String {
+    match text.char_indices().nth(limit) {
+        Some((cut, _)) => format!("{}\n... [truncated]", &text[..cut]),
+        None => text.to_owned(),
     }
 }
 
@@ -376,11 +376,10 @@ pub(super) fn apply_shell_read(
     read: ShellRead,
 ) -> Option<ShellContext> {
     shell.chunks.extend(read.chunks);
-    shell.backpressure_dropped |= read.backpressure_dropped;
     if let Some(entry) = shell_entry(session_id, &shell, &read.state) {
         let _ = state.replace_local(&shell.transcript_id, entry);
     }
-    let outcome = match &read.state {
+    let status = match &read.state {
         ShellState::Running => {
             retain_shell(shell_slot, state, shell);
             return None;
@@ -391,22 +390,19 @@ pub(super) fn apply_shell_read(
             state.waiting = false;
             return None;
         }
-        ShellState::Interrupted if shell.timed_out => "Outcome: timed out".to_owned(),
-        ShellState::Interrupted => "Outcome: interrupted by the user".to_owned(),
+        ShellState::Interrupted if shell.timed_out => "Status: timed out".to_owned(),
+        ShellState::Interrupted => "Status: interrupted by the user".to_owned(),
         ShellState::Exited { code, success } => {
-            format!("Exit status: {}", exit_status(*code, *success))
+            format!("Exit code: {}", exit_status(*code, *success))
         }
     };
     state.waiting = false;
-    let mut output = sanitized_process_output(&shell.chunks);
-    if shell.backpressure_dropped {
-        output.push_str("\n... [output truncated]");
-    }
     Some(ShellContext {
+        stdout: decoded(&shell.chunks, ProcessStream::Stdout),
+        stderr: decoded(&shell.chunks, ProcessStream::Stderr),
         command: shell.command,
         working_directory: shell.working_directory,
-        outcome,
-        output,
+        status,
     })
 }
 
@@ -513,14 +509,24 @@ fn shell_entry(
 
 /// The captured output in cursor order, decoded and cleaned as every command
 /// output is ([`clean_output`]).
-fn sanitized_process_output(chunks: &[ShellChunk]) -> String {
-    let mut chunks = chunks.to_vec();
+fn sanitized_process_output(chunks: &[ProcessChunk]) -> String {
+    clean_output(&String::from_utf8_lossy(&in_cursor_order(chunks.iter())))
+}
+
+/// What the command wrote to `stream`, decoded and otherwise untouched, which
+/// is how the model reads it.
+fn decoded(chunks: &[ProcessChunk], stream: ProcessStream) -> String {
+    let bytes = in_cursor_order(chunks.iter().filter(|chunk| chunk.stream == stream));
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn in_cursor_order<'a>(chunks: impl Iterator<Item = &'a ProcessChunk>) -> Vec<u8> {
+    let mut chunks = chunks.collect::<Vec<_>>();
     chunks.sort_by_key(|chunk| chunk.cursor);
-    let bytes = chunks
+    chunks
         .into_iter()
-        .flat_map(|chunk| chunk.bytes)
-        .collect::<Vec<_>>();
-    clean_output(&String::from_utf8_lossy(&bytes))
+        .flat_map(|chunk| chunk.bytes.iter().copied())
+        .collect()
 }
 
 #[cfg(test)]
@@ -541,20 +547,21 @@ mod tests {
             chunks: if bytes.is_empty() {
                 Vec::new()
             } else {
-                vec![ShellChunk {
+                vec![ProcessChunk {
                     cursor: 0,
+                    stream: ProcessStream::Stdout,
                     bytes: bytes.to_vec(),
                 }]
             },
             state,
-            backpressure_dropped: false,
         }
     }
 
     #[test]
     fn shell_output_strips_terminal_control_sequences() {
-        let chunks = vec![ShellChunk {
+        let chunks = vec![ProcessChunk {
             cursor: 0,
+            stream: ProcessStream::Stdout,
             bytes: b"plain \x1b[31mred\x1b[0m\n\x1b]0;title\x07done".to_vec(),
         }];
 
@@ -599,8 +606,9 @@ mod tests {
         assert_eq!(effect.header_text(), "Ran printf ok");
         let rendered = context.render(DEFAULT_CONTEXT_LIMIT);
         assert!(rendered.contains("Command: `printf ok`"));
-        assert!(rendered.contains("Exit status: 0"));
-        assert!(rendered.contains("```text\nok\n```"));
+        assert!(rendered.contains("Exit code: 0"));
+        assert!(rendered.contains("Stdout:\n```text\nok\n```"));
+        assert!(!rendered.contains("Stderr:"));
     }
 
     /// Reference `set_stream_message`: a running manual command shows what its
@@ -683,29 +691,73 @@ mod tests {
         }
     }
 
+    /// Reference `manual_shell_context`: each stream in a section of its own,
+    /// as written and capped on its own, and one placeholder when both are
+    /// empty.
     #[test]
-    fn the_model_context_is_capped_and_marks_the_truncation() {
+    fn the_model_reads_each_stream_raw_and_capped() {
         let context = ShellContext {
             command: "yes".to_owned(),
             working_directory: PathBuf::from("/workspace"),
-            outcome: "Exit status: 0".to_owned(),
-            output: "y\n".repeat(10),
+            status: "Exit code: 0".to_owned(),
+            stdout: "y\n".repeat(10),
+            stderr: "warning\n".to_owned(),
         };
         let rendered = context.render(4);
-        assert!(rendered.contains("```text\ny\ny\n\n... [output truncated]\n```"));
+        assert!(rendered.contains("Stdout:\n```text\ny\ny\n\n... [truncated]\n```"));
+        assert!(rendered.contains("Stderr:\n```text\nwarn\n... [truncated]\n```"));
+        assert!(!rendered.contains("(no output)"));
         let empty = ShellContext {
-            output: String::new(),
+            stdout: String::new(),
+            stderr: String::new(),
             ..context
         };
-        assert!(empty.render(4).contains("```text\n(no output)\n```"));
+        assert!(
+            empty
+                .render(4)
+                .contains("Output:\n```text\n(no output)\n```")
+        );
+    }
+
+    #[test]
+    fn a_settled_command_splits_its_streams_for_the_model() {
+        let mut state = TuiState::new("session");
+        let shell = running_shell(&mut state, "make");
+        let chunk = |cursor, stream, bytes: &[u8]| ProcessChunk {
+            cursor,
+            stream,
+            bytes: bytes.to_vec(),
+        };
+        let mut slot = None;
+        let context = apply_shell_read(
+            "session",
+            &mut slot,
+            &mut state,
+            shell,
+            ShellRead {
+                chunks: vec![
+                    chunk(2, ProcessStream::Stdout, b"two\n"),
+                    chunk(1, ProcessStream::Stderr, b"\x1b[1mwarn\x1b[0m\n"),
+                    chunk(0, ProcessStream::Stdout, b"one\n"),
+                ],
+                state: ShellState::Exited {
+                    code: Some(0),
+                    success: true,
+                },
+            },
+        )
+        .expect("a settled command reaches the model");
+        assert_eq!(context.stdout, "one\ntwo\n");
+        assert_eq!(context.stderr, "\x1b[1mwarn\x1b[0m\n");
     }
 
     #[test]
     fn late_output_cannot_revive_a_settled_command() {
         let mut state = TuiState::new("session");
         let mut shell = running_shell(&mut state, "printf test");
-        shell.chunks.push(ShellChunk {
+        shell.chunks.push(ProcessChunk {
             cursor: 0,
+            stream: ProcessStream::Stdout,
             bytes: b"partial".to_vec(),
         });
         let entry =
@@ -714,8 +766,9 @@ mod tests {
             .replace_local(&shell.transcript_id, entry)
             .expect("entry exists");
         let cancelled = state.entries[0].clone();
-        shell.chunks.push(ShellChunk {
+        shell.chunks.push(ProcessChunk {
             cursor: 1,
+            stream: ProcessStream::Stdout,
             bytes: b" late".to_vec(),
         });
         let late = shell_entry("session", &shell, &ShellState::Running).expect("entry projects");

@@ -269,9 +269,7 @@ pub(crate) fn provided(
 ) -> Provided {
     let mut mcp: BTreeMap<String, Vec<Remote>> = BTreeMap::new();
     let mut connectors: BTreeMap<String, Vec<Remote>> = BTreeMap::new();
-    let specs = registry
-        .and_then(|registry| registry.list().ok())
-        .unwrap_or_default();
+    let specs = registry.map(ToolRegistry::list).unwrap_or_default();
     for spec in specs {
         if spec.availability != ToolAvailability::Available || !available.contains(&spec.name) {
             continue;
@@ -532,5 +530,4 @@ fn unique_digest_name(candidate: &str, digest: &str, used: &[String]) -> String 
 }
 
 #[cfg(test)]
-#[path = "provided_tests.rs"]
 mod provided_tests;

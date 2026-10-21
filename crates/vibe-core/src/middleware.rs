@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::engine::{EngineLimits, SessionStats, TurnStopReason};
 use crate::events::ModelMessage;
 use crate::pycompat;
+use crate::sync;
 use crate::workspace::WARNING_TAG;
 
 #[cfg(test)]
@@ -422,9 +423,7 @@ impl PlanAgentMiddleware {
 
     /// Records the reminder the next activation injects.
     pub fn set_reminder(&self, reminder: String) {
-        if let Ok(mut current) = self.reminder.lock() {
-            *current = reminder;
-        }
+        *sync::lock(&self.reminder) = reminder;
     }
 }
 
@@ -487,12 +486,7 @@ impl ConversationMiddleware for PlanAgentMiddleware {
         let was_active = self.was_active.swap(active, Ordering::SeqCst);
         match (was_active, active) {
             (true, false) => MiddlewareResult::inject(plan_agent_exit()),
-            (false, true) => MiddlewareResult::inject(
-                self.reminder
-                    .lock()
-                    .map(|reminder| reminder.clone())
-                    .unwrap_or_default(),
-            ),
+            (false, true) => MiddlewareResult::inject(sync::lock(&self.reminder).clone()),
             _ => MiddlewareResult::proceed(),
         }
     }

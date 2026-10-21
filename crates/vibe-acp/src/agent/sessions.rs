@@ -59,11 +59,7 @@ where
         self: &Arc<Self>,
         request: AcpLoadSession,
     ) -> Result<Value, AcpError> {
-        let live = self
-            .lock_state()?
-            .sessions
-            .get(&request.session_id)
-            .cloned();
+        let live = self.lock_state().sessions.get(&request.session_id).cloned();
         if let Some(live) = live {
             // The Unified Harness reopens a session from its store whoever
             // holds it, and the client then follows the reopened one.
@@ -73,7 +69,7 @@ where
                     request.session_id
                 )));
             }
-            self.lock_state()?.sessions.remove(&request.session_id);
+            self.lock_state().sessions.remove(&request.session_id);
             stop_session(&live).await;
         }
         let harness = self
@@ -113,11 +109,7 @@ where
         self: &Arc<Self>,
         request: AcpLoadSession,
     ) -> Result<Value, AcpError> {
-        let live = self
-            .lock_state()?
-            .sessions
-            .get(&request.session_id)
-            .cloned();
+        let live = self.lock_state().sessions.get(&request.session_id).cloned();
         let harness = match live {
             Some(harness) => harness,
             None => {
@@ -194,7 +186,7 @@ where
     /// Reference `close_session`: only a live session can be closed.
     pub async fn close_session(&self, session_id: &str) -> Result<(), AcpError> {
         let harness = self
-            .lock_state()?
+            .lock_state()
             .sessions
             .remove(session_id)
             .ok_or_else(|| AcpError::SessionNotFound(session_id.to_owned()))?;
@@ -204,7 +196,7 @@ where
 
     /// Stops every live session, which is what a closing connection does.
     pub async fn disconnect(&self) -> Result<(), AcpError> {
-        let sessions = std::mem::take(&mut self.lock_state()?.sessions);
+        let sessions = std::mem::take(&mut self.lock_state().sessions);
         for harness in sessions.into_values() {
             stop_session(&harness).await;
         }
@@ -322,7 +314,7 @@ where
                 let live = item
                     .get("id")
                     .and_then(Value::as_str)
-                    .and_then(|id| self.find_live_session(id).ok().flatten())
+                    .and_then(|id| self.find_live_session(id))
                     .filter(|harness| harness.is_unified())
                     .map(|harness| harness.names());
                 let title = match live {
@@ -458,7 +450,7 @@ where
         mcp_servers: &[Value],
     ) -> Result<Arc<AcpHarness<D>>, AcpError> {
         let mcp_servers = project_acp_mcp_servers(mcp_servers)?;
-        let supports_user_input = self.lock_state()?.capabilities().elicitation_form;
+        let supports_user_input = self.lock_state().capabilities().elicitation_form;
         let disabled_tools = if supports_user_input {
             Vec::new()
         } else {
@@ -541,7 +533,7 @@ where
             );
             harness.track(pump.abort_handle());
         }
-        self.lock_state()?.open(Arc::clone(&harness));
+        self.lock_state().open(Arc::clone(&harness));
         self.warm_up(&harness);
         self.send_initial_commands(&harness);
         Ok(harness)
@@ -677,7 +669,7 @@ where
         experiments.close().await;
     }
     let mut service = harness.service.lock().await;
-    if let Ok(Some(turn_id)) = harness.running_turn_id() {
+    if let Some(turn_id) = harness.running_turn_id() {
         let _ = service.interrupt(&harness.session_id, &turn_id);
     }
     let _ = service.close_session(&harness.session_id).await;

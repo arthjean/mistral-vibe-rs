@@ -26,7 +26,7 @@ impl ServerConnection {
             return Ok(batch);
         }
         let now = now_millis();
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let session = sessions
             .get_mut(&session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -121,7 +121,7 @@ impl ServerConnection {
                 .extend(self.user_activity_frames(&canonical_session_id, activity));
         }
         if changed {
-            let mut sessions = self.server.lock_sessions()?;
+            let mut sessions = self.server.lock_sessions();
             if let Some(session) = sessions.get_mut(&canonical_session_id) {
                 batch.outbound.push(queue_updated_frame(session));
             }
@@ -136,25 +136,22 @@ impl ServerConnection {
     /// What a settled turn does to its session's queue: an interrupted one
     /// pauses it, any other runs its head. Reference `_after_turn_terminal`.
     pub(crate) fn after_turn_settled(&mut self, session_id: &str) -> DispatchBatch {
-        let interrupted = match self.server.lock_sessions() {
-            Ok(mut sessions) => match sessions.get_mut(session_id) {
-                Some(session)
-                    if session.latest_turn.as_ref().map(|turn| turn.status)
-                        == Some(PublicTurnStatus::Interrupted) =>
-                {
-                    if session.turn_queue.pause() {
-                        return DispatchBatch {
-                            outbound: vec![queue_updated_frame(session)],
-                            deferred: Vec::new(),
-                            close_after_flush: false,
-                        };
-                    }
-                    true
+        let interrupted = match self.server.lock_sessions().get_mut(session_id) {
+            Some(session)
+                if session.latest_turn.as_ref().map(|turn| turn.status)
+                    == Some(PublicTurnStatus::Interrupted) =>
+            {
+                if session.turn_queue.pause() {
+                    return DispatchBatch {
+                        outbound: vec![queue_updated_frame(session)],
+                        deferred: Vec::new(),
+                        close_after_flush: false,
+                    };
                 }
-                Some(_) => false,
-                None => true,
-            },
-            Err(_) => true,
+                true
+            }
+            Some(_) => false,
+            None => true,
         };
         if interrupted {
             return DispatchBatch::default();
@@ -166,7 +163,7 @@ impl ServerConnection {
     /// An item holding only context is injected and the next one tried.
     fn promote_queued_turn(&mut self, session_id: &str) -> Result<DispatchBatch, ProtocolFault> {
         let mut batch = DispatchBatch::default();
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         let Some(session) = sessions.get_mut(session_id) else {
             return Ok(batch);
         };

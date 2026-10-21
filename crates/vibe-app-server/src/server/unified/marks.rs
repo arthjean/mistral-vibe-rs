@@ -3,7 +3,10 @@
 //! Reference `rename`, `pin`, `archive` and `mark_as_seen` on the unified
 //! host (`vibe/app_server/_unified_harness_backend_adapter.py`): the marks
 //! live in the session's metadata, an open session publishes what changed,
-//! and a stored one is rewritten in place.
+//! and a stored one is rewritten in place. A mark that cannot be written is
+//! refused, open session or stored one; a title is the harness's, so the
+//! metadata that mirrors it is written at best (reference
+//! `_persist_session_metadata_best_effort`).
 
 use super::params::{MarkParams, RenameParams};
 use super::*;
@@ -99,18 +102,23 @@ fn mark_time(at: Option<u64>) -> Value {
 impl UnifiedSession {
     /// Rewrites the session's marks with `mark`, persists them, and publishes
     /// the patch it makes when that changes what a client holds. Answers the
-    /// response fields and that frame.
-    fn remark(&self, mark: Mark) -> (MarkFields, Option<Vec<u8>>) {
+    /// response fields and that frame; marks that cannot be persisted are
+    /// refused and left as they stood.
+    fn remark(&self, mark: Mark) -> Result<(MarkFields, Option<Vec<u8>>), ProtocolFault> {
         let title = self.title_meta();
         let mut host = self.host();
         let host = &mut *host;
-        host.meta.extend(title);
-        let (fields, patch) = mark.apply(&mut host.meta, &mut host.marks);
+        let mut meta = host.meta.clone();
+        meta.extend(title);
+        let mut marks = host.marks;
+        let (fields, patch) = mark.apply(&mut meta, &mut marks);
         if let Some(store) = &host.store {
-            let _ = store.write_meta(&host.meta);
+            store.write_meta(&meta).map_err(meta_fault)?;
         }
+        host.meta = meta;
+        host.marks = marks;
         let frame = host.translator.publish_session_patch(&patch).map(encode);
-        (fields, frame)
+        Ok((fields, frame))
     }
 }
 
@@ -123,7 +131,7 @@ impl ServerConnection {
         let params = from_params::<MarkParams>(&request.params)?;
         let mark = Mark::of(&request.method, &params);
         if let Some(live) = self.server.unified_session(&params.session_id) {
-            let (fields, frame) = live.remark(mark);
+            let (fields, frame) = live.remark(mark)?;
             let mut batch = success_batch(request.id.clone(), fields_map(fields));
             batch.outbound.splice(0..0, frame);
             return Ok(batch);
@@ -132,9 +140,7 @@ impl ServerConnection {
         let mut meta = stored.read_meta().unwrap_or_default();
         let mut marks = marks_of(&meta);
         let (fields, _) = mark.apply(&mut meta, &mut marks);
-        stored
-            .write_meta(&meta)
-            .map_err(|error| ProtocolFault::internal(error.to_string()))?;
+        stored.write_meta(&meta).map_err(meta_fault)?;
         Ok(success_batch(request.id.clone(), fields_map(fields)))
     }
 
@@ -193,6 +199,11 @@ impl ServerConnection {
         let _ = stored.write_meta(&meta);
         Ok(success_batch(request.id.clone(), respond(0)))
     }
+}
+
+/// The refusal of a mark the session metadata could not record.
+fn meta_fault(error: std::io::Error) -> ProtocolFault {
+    ProtocolFault::internal(error.to_string())
 }
 
 fn fields_map(fields: MarkFields) -> BTreeMap<String, Value> {

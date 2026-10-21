@@ -52,17 +52,12 @@ impl<D> Lazy<D> {
         if let Some(driver) = self.driver.get() {
             return Ok(driver);
         }
-        let _guard = self
-            .initialize
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?;
-        if self.driver.get().is_none() {
-            let driver = Arc::new((self.factory)()?);
-            self.driver
-                .set(driver)
-                .map_err(|_| DriverError::StatePoisoned)?;
+        let _guard = vibe_core::sync::lock(&self.initialize);
+        if let Some(driver) = self.driver.get() {
+            return Ok(driver);
         }
-        self.driver.get().ok_or(DriverError::StatePoisoned)
+        let driver = Arc::new((self.factory)()?);
+        Ok(self.driver.get_or_init(|| driver))
     }
 }
 

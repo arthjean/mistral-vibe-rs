@@ -5,7 +5,6 @@
 //! history fallback used when the canonical read comes back empty.
 
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -15,6 +14,7 @@ use vibe_app_server::client::{
     PublicMessageRole,
 };
 use vibe_core::storage::short_session_id;
+use vibe_core::sync::lock;
 
 use super::callback::sync_active_callbacks;
 use super::controls::ControlState;
@@ -80,9 +80,7 @@ pub(super) fn adopt_hydrated_session(
             .session_parents
             .bind(&session_id, parent);
     }
-    if let Ok(mut audio_session_id) = runtime.audio_session_id.lock() {
-        audio_session_id.clone_from(&session_id);
-    }
+    lock(&runtime.audio_session_id).clone_from(&session_id);
     sync_runtime_intent(runtime, None);
     // Reference `_reset_subagent_views`: the list and its views start over
     // with the session, under the preference already read.
@@ -106,8 +104,7 @@ pub(super) fn metadata_session_id(result: &BTreeMap<String, Value>) -> Option<St
 pub(super) fn hydrate_initial_state(
     runtime: &mut InteractiveRuntime,
     arguments: &Arguments,
-    _working_directory: &Path,
-) -> Result<TuiState, CliError> {
+) -> TuiState {
     let session_id = runtime.session_id.clone();
     match canonical_session_projection(runtime, &session_id, true) {
         Ok(mut state) => {
@@ -122,12 +119,12 @@ pub(super) fn hydrate_initial_state(
                     EntryStatus::Completed,
                 );
             }
-            Ok(state)
+            state
         }
-        Err(error) => Ok(recoverable_initial_state(
+        Err(error) => recoverable_initial_state(
             &session_id,
             format!("Initial session state is unavailable: {error}"),
-        )),
+        ),
     }
 }
 

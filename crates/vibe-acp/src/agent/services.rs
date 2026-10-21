@@ -51,7 +51,7 @@ where
         // the client descriptor the app server was handed, which for an editor
         // names the editor rather than this adapter.
         let (client_name, client_version) =
-            client_name_and_version(self.lock_state().ok()?.client_info.as_ref());
+            client_name_and_version(self.lock_state().client_info.as_ref());
         let launch = LaunchContext {
             client_name,
             client_version,
@@ -91,14 +91,14 @@ where
         additional_directories: &[String],
     ) -> Result<HeadlessService<D>, AcpError> {
         let (capabilities, client_info) = {
-            let state = self.lock_state()?;
+            let state = self.lock_state();
             (state.capabilities(), state.client_info.clone())
         };
         let (name, version) = client_name_and_version(client_info.as_ref());
         let mut server = AppServer::default()
             .using_client_telemetry(Arc::clone(&self.telemetry))
             .using_harness_selection(self.harness);
-        if let Some(projects) = self.shared_projects_service()? {
+        if let Some(projects) = self.shared_projects_service() {
             server = server.using_projects_service(projects);
         }
         if let Some(session_root) = &self.session_root {
@@ -167,13 +167,11 @@ where
     /// The one project service every session's server shares, so the
     /// scheduled loops of every session live in one store. The project links
     /// need nothing from it: each server reads them from its vibe home.
-    fn shared_projects_service(&self) -> Result<Option<ProjectsService>, AcpError> {
-        if !self.shared_projects {
-            return Ok(None);
-        }
-        let mut cached = self.projects.lock().map_err(|_| AcpError::StatePoisoned)?;
-        Ok(Some(
-            cached.get_or_insert_with(ProjectsService::default).clone(),
-        ))
+    fn shared_projects_service(&self) -> Option<ProjectsService> {
+        self.shared_projects.then(|| {
+            vibe_core::sync::lock(&self.projects)
+                .get_or_insert_with(ProjectsService::default)
+                .clone()
+        })
     }
 }

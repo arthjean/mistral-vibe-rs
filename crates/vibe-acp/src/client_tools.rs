@@ -14,6 +14,7 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use tokio::sync::{mpsc, oneshot};
 use vibe_app_server::client_tools::ClientToolBridge;
+use vibe_core::sync::lock;
 use vibe_protocol::{ClientToolCapability, RequestId};
 
 use crate::protocol::AcpClientCapabilities;
@@ -62,14 +63,12 @@ impl UpdateBarrier {
     /// Hands the running turn the requests to flush, until the guard drops.
     pub(crate) fn install(&self) -> (mpsc::UnboundedReceiver<oneshot::Sender<()>>, BarrierGuard) {
         let (sender, receiver) = mpsc::unbounded_channel();
-        if let Ok(mut slot) = self.0.lock() {
-            *slot = Some(sender);
-        }
+        *lock(&self.0) = Some(sender);
         (receiver, BarrierGuard(self.clone()))
     }
 
     async fn wait(&self) {
-        let sender = self.0.lock().ok().and_then(|slot| slot.clone());
+        let sender = lock(&self.0).clone();
         if let Some(sender) = sender {
             let (acknowledge, flushed) = oneshot::channel();
             if sender.send(acknowledge).is_ok() {
@@ -84,9 +83,7 @@ pub(crate) struct BarrierGuard(UpdateBarrier);
 
 impl Drop for BarrierGuard {
     fn drop(&mut self) {
-        if let Ok(mut slot) = (self.0).0.lock() {
-            *slot = None;
-        }
+        *lock(&(self.0).0) = None;
     }
 }
 

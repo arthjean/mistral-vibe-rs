@@ -75,14 +75,7 @@ impl Clock for SystemClock {
     }
 
     fn jitter(&self) -> f64 {
-        let mut bytes = [0_u8; 8];
-        if getrandom::fill(&mut bytes).is_err() {
-            return 0.5;
-        }
-        // 53 random bits make a uniform double in [0, 1).
-        #[allow(clippy::cast_precision_loss)]
-        let fraction = (u64::from_le_bytes(bytes) >> 11) as f64 / (1_u64 << 53) as f64;
-        fraction
+        crate::session_id::random_unit().unwrap_or(0.5)
     }
 }
 

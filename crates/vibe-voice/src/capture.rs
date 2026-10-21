@@ -26,6 +26,7 @@ use cpal::{
     SupportedStreamConfig,
 };
 use tokio::sync::mpsc;
+use vibe_core::sync::lock;
 
 /// Reference `DEFAULT_BUFFER_MS`: the length of one captured block.
 pub const CAPTURE_BUFFER_MS: u32 = 200;
@@ -221,9 +222,7 @@ impl ActiveCapture {
     fn close(self) -> Duration {
         let duration = self.started.elapsed();
         drop(self.stream);
-        if let Ok(mut sender) = self.sender.lock() {
-            sender.take();
-        }
+        lock(&self.sender).take();
         duration
     }
 }
@@ -306,12 +305,13 @@ impl CpalRecorder {
             {
                 return;
             }
-            let expired = active.lock().ok().and_then(|mut slot| {
+            let expired = {
+                let mut slot = lock(&active);
                 slot.as_ref()
                     .is_some_and(|capture| capture.id == id)
                     .then(|| slot.take())
                     .flatten()
-            });
+            };
             if let Some(capture) = expired {
                 capture.close();
             }
@@ -320,15 +320,13 @@ impl CpalRecorder {
     }
 
     fn take_active(&self) -> Option<ActiveCapture> {
-        self.active.lock().ok().and_then(|mut slot| slot.take())
+        lock(&self.active).take()
     }
 }
 
 impl AudioRecorder for CpalRecorder {
     fn start(&self, sample_rate: u32) -> Result<AudioStream, RecorderError> {
-        let mut slot = self.active.lock().map_err(|_| {
-            RecorderError::BackendUnavailable("the recorder is poisoned".to_owned())
-        })?;
+        let mut slot = lock(&self.active);
         if slot.is_some() {
             return Err(RecorderError::AlreadyRecording);
         }
@@ -393,9 +391,7 @@ impl CaptureSink {
             .iter()
             .flat_map(|sample| sample.to_le_bytes())
             .collect::<Vec<_>>();
-        if let Ok(sender) = self.sender.lock()
-            && let Some(sender) = sender.as_ref()
-        {
+        if let Some(sender) = lock(&self.sender).as_ref() {
             let _ = sender.send(bytes);
         }
     }

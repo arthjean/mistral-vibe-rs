@@ -29,23 +29,21 @@ fn the_log_is_never_shortened_behind_the_caller() {
         review.seal_turn().expect("seal turn");
     }
 
-    let (retained, exhausted) = review
-        .with_log(|log| {
-            (
-                (1..=turns)
-                    .filter(|turn| log.history().has_turn(u64::try_from(*turn).unwrap_or(0)))
-                    .count(),
-                log.retained_bytes(),
-            )
-        })
-        .expect("log");
+    let (retained, exhausted) = review.with_log(|log| {
+        (
+            (1..=turns)
+                .filter(|turn| log.history().has_turn(u64::try_from(*turn).unwrap_or(0)))
+                .count(),
+            log.retained_bytes(),
+        )
+    });
     assert_eq!(retained, turns, "every turn is still addressable");
     assert!(
         exhausted < RETAINED_BYTES_LIMIT,
         "this fixture is nowhere near the ceiling"
     );
     assert!(
-        review.take_retention_notice().expect("notice").is_none(),
+        review.take_retention_notice().is_none(),
         "nothing was refused, so nothing is published"
     );
 }
@@ -58,9 +56,7 @@ fn a_full_log_refuses_the_capture_and_publishes_it() {
     let root = tempdir().expect("workspace");
     std::fs::write(root.path().join("full.txt"), "one\n").expect("seed file");
     let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
-    review
-        .with_log(|log| *log = Checkpointer::with_retention_limit(2))
-        .expect("log");
+    review.with_log(|log| *log = Checkpointer::with_retention_limit(2));
 
     review.begin_turn_at(1).expect("begin turn");
     review
@@ -83,7 +79,6 @@ fn a_full_log_refuses_the_capture_and_publishes_it() {
     assert!(
         review
             .with_log(|log| log.history().tracked_paths())
-            .expect("log")
             .is_empty(),
         "nothing was captured, and nothing already captured was dropped to make room"
     );
@@ -93,14 +88,13 @@ fn a_full_log_refuses_the_capture_and_publishes_it() {
     );
     let notice = review
         .take_retention_notice()
-        .expect("notice")
         .expect("the refusal is published");
     assert!(
         notice.contains("limit"),
         "the notice names the limit: {notice}"
     );
     assert!(
-        review.take_retention_notice().expect("notice").is_none(),
+        review.take_retention_notice().is_none(),
         "the notice is published once"
     );
 }
@@ -121,14 +115,14 @@ fn a_message_list_reset_clears_the_log_and_reopens_a_running_turn() {
     let state = review.review_state().expect("state");
     assert!(state.files.is_empty() && state.scopes.is_empty());
     assert!(
-        !review.with_log(|log| log.has_open_turn()).expect("log"),
+        !review.with_log(|log| log.has_open_turn()),
         "no turn was running, so none is reopened"
     );
 
     review.begin_turn_at(2).expect("begin turn");
     review.reset_messages(7).expect("compacted mid-turn");
     assert!(
-        review.with_log(|log| log.has_open_turn()).expect("log"),
+        review.with_log(|log| log.has_open_turn()),
         "the turn that was running is reopened"
     );
     review
@@ -143,9 +137,7 @@ fn a_message_list_reset_clears_the_log_and_reopens_a_running_turn() {
         .expect("the remaining tool loop still records");
     review.seal_turn().expect("seal turn");
     assert_eq!(
-        review
-            .with_log(|log| log.history().turn_ids())
-            .expect("log"),
+        review.with_log(|log| log.history().turn_ids()),
         vec![7],
         "the reopened turn is numbered against the list that replaced the old one"
     );
@@ -284,15 +276,13 @@ fn the_checkpoint_engine_records_the_turns_the_manager_runs() {
         .expect("edit");
     review.seal_turn().expect("seal turn");
 
-    let owners = review
-        .with_log(|log| {
-            log.history()
-                .regions(&key(root.path(), "wired.txt"))
-                .into_iter()
-                .map(|region| region.owner)
-                .collect::<Vec<_>>()
-        })
-        .expect("log");
+    let owners = review.with_log(|log| {
+        log.history()
+            .regions(&key(root.path(), "wired.txt"))
+            .into_iter()
+            .map(|region| region.owner)
+            .collect::<Vec<_>>()
+    });
     assert_eq!(
         owners,
         vec![
@@ -303,14 +293,12 @@ fn the_checkpoint_engine_records_the_turns_the_manager_runs() {
         "the hand edit keeps its own slot between the two turns"
     );
 
-    let restorable = review
-        .with_log(|log| {
-            let plan = log.history().restore_plan_to_turn(2);
-            plan.iter()
-                .map(|(path, _state)| path.clone())
-                .collect::<Vec<_>>()
-        })
-        .expect("log");
+    let restorable = review.with_log(|log| {
+        let plan = log.history().restore_plan_to_turn(2);
+        plan.iter()
+            .map(|(path, _state)| path.clone())
+            .collect::<Vec<_>>()
+    });
     assert_eq!(restorable, vec![key(root.path(), "wired.txt")]);
 }
 
@@ -336,16 +324,14 @@ fn a_rewind_truncates_the_engine_log_at_its_point() {
         review.seal_turn().expect("seal turn");
     }
 
-    review.drop_turns_from(2).expect("truncate");
+    review.drop_turns_from(2);
 
-    let turns = review
-        .with_log(|log| {
-            let history = log.history();
-            (1..=3)
-                .filter(|turn| history.has_turn(*turn))
-                .collect::<Vec<_>>()
-        })
-        .expect("log");
+    let turns = review.with_log(|log| {
+        let history = log.history();
+        (1..=3)
+            .filter(|turn| history.has_turn(*turn))
+            .collect::<Vec<_>>()
+    });
     assert_eq!(turns, vec![1]);
 }
 
@@ -633,4 +619,39 @@ fn the_baseline_the_scope_diff_and_the_hunks_answer_from_the_log() {
             .is_empty(),
         "an owner with nothing pending anchors nothing"
     );
+}
+
+/// The rewind budget admits a capture of exactly its size and nothing past
+/// it: a file one byte over is refused whole, and once a turn has spent the
+/// budget even a one-byte file is. The large files are sparse, so the
+/// fixture costs no disk.
+#[test]
+fn the_rewind_budget_admits_its_exact_size_and_nothing_more() {
+    let root = tempdir().expect("workspace");
+    let sized = |name: &str, len: usize| {
+        let file = std::fs::File::create(root.path().join(name)).expect("create file");
+        file.set_len(u64::try_from(len).expect("length fits"))
+            .expect("size file");
+    };
+    sized("over.bin", MAX_REWIND_SNAPSHOT_BYTES + 1);
+    sized("at_limit.bin", MAX_REWIND_SNAPSHOT_BYTES);
+    std::fs::write(root.path().join("one_more.txt"), "x").expect("seed file");
+    let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
+    review.begin_turn_at(1).expect("begin turn");
+
+    assert!(matches!(
+        review.capture_before_mutation("over.bin"),
+        Err(WorkspaceError::ReviewSnapshotLimit { actual, limit })
+            if actual == MAX_REWIND_SNAPSHOT_BYTES + 1 && limit == MAX_REWIND_SNAPSHOT_BYTES
+    ));
+    review
+        .capture_before_mutation("at_limit.bin")
+        .expect("a capture of exactly the budget fits");
+    assert!(matches!(
+        review.capture_before_mutation("one_more.txt"),
+        Err(WorkspaceError::ReviewSnapshotLimit {
+            actual: 1,
+            limit: 0
+        })
+    ));
 }

@@ -53,9 +53,6 @@ pub enum ReviewError {
     /// back with it.
     #[error("{0}")]
     Persist(FileAccessError),
-    /// Another thread poisoned the log.
-    #[error("the checkpoint log lock is poisoned")]
-    LockPoisoned,
 }
 
 impl ReviewError {

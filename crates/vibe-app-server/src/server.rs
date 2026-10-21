@@ -86,19 +86,17 @@ use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::observability;
 use vibe_core::observability::{FileLog, LogLevel, LogSettings};
-pub use vibe_core::policy::{
+use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
 use vibe_core::scratchpad::{cleanup_scratchpad, init_scratchpad, scratchpad_path};
 use vibe_core::storage::HydratedSession;
+use vibe_core::sync::lock;
 use vibe_core::telemetry::{ClientTelemetry, NoClientTelemetry};
-pub use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
+use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::shell::ShellTools;
-pub use vibe_core::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolInvocation,
-    ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
-};
+use vibe_core::tools::{ToolExecutionOutput, ToolInvocation, ToolRegistry};
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_core::worktree::lifecycle::SessionWorktrees;
 use vibe_core::worktree::{ManagedWorktree, PreparedWorktree, naming_model};
@@ -486,9 +484,7 @@ impl AppServer {
     /// out of it.
     #[must_use]
     pub fn logging_to(self, log: FileLog) -> Self {
-        if let Ok(mut resources) = self.resources.lock() {
-            resources.set_log(log);
-        }
+        lock(&self.resources).set_log(log);
         self
     }
 
@@ -641,7 +637,7 @@ impl AppServer {
     }
 
     pub fn session(&self, session_id: &str) -> Result<SessionView, ServerError> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         sessions
             .get(session_id)
             .map(SessionView::from)
@@ -649,15 +645,15 @@ impl AppServer {
     }
 
     pub(crate) fn tool_registry(&self, session_id: &str) -> Result<ToolRegistry, ServerError> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         sessions
             .get(session_id)
             .map(|session| session.tools.clone())
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))
     }
 
-    fn lock_sessions(&self) -> Result<std::sync::MutexGuard<'_, SessionRegistry>, ServerError> {
-        self.sessions.lock().map_err(|_| ServerError::StatePoisoned)
+    fn lock_sessions(&self) -> std::sync::MutexGuard<'_, SessionRegistry> {
+        lock(&self.sessions)
     }
 
     /// Reference `AgentLoop._start_refresh_registry_skills`: once a session
@@ -674,11 +670,11 @@ impl AppServer {
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             return;
         };
-        let Some((working_directory, trusted)) = self.lock_sessions().ok().and_then(|sessions| {
-            sessions
-                .get(session_id)
-                .map(|session| (session.working_directory.clone(), session.intent.trusted))
-        }) else {
+        let Some((working_directory, trusted)) = self
+            .lock_sessions()
+            .get(session_id)
+            .map(|session| (session.working_directory.clone(), session.intent.trusted))
+        else {
             return;
         };
         let workspace = Arc::clone(&self.workspace);
@@ -691,9 +687,7 @@ impl AppServer {
             if result.status != vibe_core::skills::registry::sync::SyncStatus::Ok {
                 return;
             }
-            if let Ok(mut sessions) = sessions.lock()
-                && let Some(session) = sessions.get_mut(&session_id)
-            {
+            if let Some(session) = lock(&sessions).get_mut(&session_id) {
                 session.system_prompt = None;
             }
         });
@@ -726,8 +720,6 @@ pub enum ServerError {
     InvalidCallbackRequest,
     #[error("callback detail is invalid: {0}")]
     InvalidCallbackDetail(String),
-    #[error("server state lock is poisoned")]
-    StatePoisoned,
     #[error("tool execution failed: {0}")]
     Tool(String),
     #[error("resource cleanup failed: {0}")]

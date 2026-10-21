@@ -278,6 +278,22 @@ where
         self.client.session(session_id)
     }
 
+    fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError> {
+        let mut result = self.call("stats/read", json!({"sessionId": session_id}))?;
+        Ok((
+            result.remove("stats").unwrap_or(Value::Null),
+            result
+                .get("contextWindow")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+        ))
+    }
+
+    /// A legacy session publishes no state of its own: the server holds it.
+    fn published(&mut self, _session_id: &str, _field: &str) -> Option<Value> {
+        None
+    }
+
     fn reserve(
         &mut self,
         session_id: &str,

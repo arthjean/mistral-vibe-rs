@@ -103,6 +103,27 @@ impl SessionBackend for UnifiedSessions<'_> {
         Ok(view)
     }
 
+    /// Reference `runtime.stats` on a unified session: what its last
+    /// `session/statsUpdated` carried, and its runtime before that.
+    fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError> {
+        if let Some(accounting) = self.link.accounting(session_id) {
+            return Ok(accounting);
+        }
+        let mut result = self.call(session_id, "runtime/read", json!({"sessionId": session_id}))?;
+        let runtime = result.remove("runtime").unwrap_or(Value::Null);
+        Ok((
+            runtime.get("stats").cloned().unwrap_or(Value::Null),
+            runtime
+                .get("contextWindow")
+                .and_then(Value::as_u64)
+                .unwrap_or(0),
+        ))
+    }
+
+    fn published(&mut self, session_id: &str, field: &str) -> Option<Value> {
+        self.link.published(session_id, field)
+    }
+
     /// Reference `AppServerSession.act` up to its first event: `turn/start`,
     /// after which the session runs the turn on its own.
     fn reserve(
@@ -130,7 +151,7 @@ impl SessionBackend for UnifiedSessions<'_> {
             .and_then(Value::as_str)
             .ok_or_else(|| ClientError::InvalidResponse("missing turnId".to_owned()))?
             .to_owned();
-        self.link.listen(&turn_id)?;
+        self.link.listen(&turn_id);
         Ok(self
             .server
             .unified_reservation(session_id, &turn_id, turn)?)

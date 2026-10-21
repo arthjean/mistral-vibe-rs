@@ -123,6 +123,22 @@ pub fn random_bytes<const N: usize>() -> [u8; N] {
     bytes
 }
 
+/// A uniform draw in `[0, 1)` from the operating system's random source, or
+/// [`None`] when it refuses.
+///
+/// Unlike [`random_bytes`] this never derives a substitute, because what a
+/// draw that did not happen should mean differs by caller: a jittered delay
+/// takes the middle of its range, a sampled prompt stays hidden.
+#[must_use]
+pub fn random_unit() -> Option<f64> {
+    let mut bytes = [0_u8; 8];
+    getrandom::fill(&mut bytes).ok()?;
+    // 53 random bits over 2^53 is exact in an f64.
+    #[allow(clippy::cast_precision_loss)]
+    let unit = (u64::from_le_bytes(bytes) >> 11) as f64 / (1_u64 << 53) as f64;
+    Some(unit)
+}
+
 /// `N` [`random_bytes`] as lowercase hexadecimal.
 #[must_use]
 pub fn random_hex<const N: usize>() -> String {

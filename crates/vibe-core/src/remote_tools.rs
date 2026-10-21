@@ -10,7 +10,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::tools::{ToolAvailability, ToolError, ToolRegistry, ToolSource};
+use crate::tools::{ToolAvailability, ToolRegistry, ToolSource};
 
 /// Longest connector alias the reference keeps.
 const MAX_CONNECTOR_ALIAS: usize = 256;
@@ -105,7 +105,7 @@ pub(crate) fn set_all(
     source: ToolSource,
     names: &[String],
     availability: ToolAvailability,
-) -> Result<bool, ToolError> {
+) -> bool {
     let updates = names
         .iter()
         .cloned()

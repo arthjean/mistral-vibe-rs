@@ -16,9 +16,10 @@ use vibe_core::telemetry::TelemetryRecord;
 
 use super::super::chat_input::ChatInputState;
 use super::super::clipboard::copy_text_verified;
+use super::super::command_handlers::status::session_cost;
 use super::super::command_handlers::{
     CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpState, Panel, ProviderAuth,
-    Reloaded, ScheduledLoop, SessionLog, Stats, session_cost,
+    Reloaded, ScheduledLoop, SessionLog, Stats,
 };
 use super::super::commands::{CommandContext, parse_command_in};
 use super::super::controls::ControlState;

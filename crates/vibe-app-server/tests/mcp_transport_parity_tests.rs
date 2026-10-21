@@ -552,7 +552,6 @@ impl Session {
         let specs = self
             .tools
             .list()
-            .expect("tool list")
             .into_iter()
             .map(|spec| (spec.name.clone(), spec))
             .collect::<BTreeMap<_, _>>();

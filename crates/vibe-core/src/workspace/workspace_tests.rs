@@ -315,13 +315,11 @@ fn rewind_restoration_is_target_specific_transactional_and_truncates_the_log() {
     assert!(!directory.path().join("generated/first.txt").exists());
     assert!(!directory.path().join("generated/later.txt").exists());
 
-    review.drop_turns_from(4).expect("rewind truncation");
+    review.drop_turns_from(4);
     assert_eq!(
-        review
-            .with_log(|log| (1..=4)
-                .filter(|turn| log.history().has_turn(*turn))
-                .collect::<Vec<_>>())
-            .expect("truncated log"),
+        review.with_log(|log| (1..=4)
+            .filter(|turn| log.history().has_turn(*turn))
+            .collect::<Vec<_>>()),
         vec![2],
         "a rewind keeps the turns before its point and drops the rest"
     );
@@ -409,7 +407,6 @@ async fn the_file_tools_publish_the_reference_names_and_argument_keys() {
 
     let names = registry
         .list()
-        .expect("list")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<Vec<_>>();
@@ -1626,9 +1623,7 @@ async fn an_approved_path_outside_the_root_is_reached_by_every_file_tool() {
         "made\n"
     );
 
-    let tracked = review
-        .with_log(|log| log.history().tracked_paths())
-        .expect("log");
+    let tracked = review.with_log(|log| log.history().tracked_paths());
     assert!(
         tracked.contains(&notes),
         "the outside edit is tracked under its absolute path: {tracked:?}"

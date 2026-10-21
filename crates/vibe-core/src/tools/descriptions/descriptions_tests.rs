@@ -234,7 +234,6 @@ fn registry(names: &[(&str, ToolSource)]) -> ToolRegistry {
 fn published(registry: &ToolRegistry) -> BTreeMap<String, String> {
     registry
         .available(None, &NameFilter::default())
-        .expect("the surface publishes")
         .into_iter()
         .map(|spec| (spec.name, spec.description))
         .collect()

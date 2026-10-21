@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::observability::{self, LogLevel};
-use crate::platform::resolve_lenient;
+use crate::platform::{expand_home, resolve_lenient};
 
 use super::{
     ManagedRoot, ManagedWorktree, PendingSessionHold, PreparedWorktree, RetainedRepositoryMapping,
@@ -83,13 +83,13 @@ impl SessionWorktrees {
         base_cwd: &Path,
         suggested_name: Option<&str>,
     ) -> Result<ResolvedWorktree, LifecycleError> {
-        let base_cwd = resolve_lenient(&crate::workspace::tool_path::expanded(base_cwd));
+        let base_cwd = resolve_lenient(&expand_home(base_cwd));
         if !base_cwd.is_dir() {
             return Err(LifecycleError::BaseNotADirectory(base_cwd));
         }
         let created = match request {
             WorktreeRequest::UseExisting { cwd } => {
-                let requested = resolve_lenient(&crate::workspace::tool_path::expanded(cwd));
+                let requested = resolve_lenient(&expand_home(cwd));
                 let linked = WorktreeRepository::open(&base_cwd, &self.managed)?.linked()?;
                 if !linked.iter().any(|worktree| worktree.path == requested) {
                     return Err(LifecycleError::NotLinked(requested));

@@ -13,6 +13,7 @@ use crate::compaction::CompactionStatus;
 use crate::events::{EngineEvent, ModelMessage, SessionHandoffCause};
 use crate::middleware::{MiddlewarePipeline, ResetReason};
 use crate::provider::ProviderInput;
+use crate::sync;
 
 /// The summarization requests one compaction made: each is stamped with the
 /// census as a secondary call and kept as the `RequestSent` it reports.
@@ -52,10 +53,7 @@ impl SummaryRequestRecorder {
 
     /// The reports of every request made so far, in order.
     pub fn take(&self) -> Vec<EngineEvent> {
-        self.sent
-            .lock()
-            .map(|mut sent| std::mem::take(&mut *sent))
-            .unwrap_or_default()
+        std::mem::take(&mut *sync::lock(&self.sent))
     }
 }
 
@@ -81,9 +79,7 @@ impl crate::compaction::manager::SummaryRequestHook for SummaryRequestRecorder {
             self.message_id.clone(),
             call_type,
         );
-        if let Ok(mut sent) = self.sent.lock() {
-            sent.push(report);
-        }
+        sync::lock(&self.sent).push(report);
     }
 }
 

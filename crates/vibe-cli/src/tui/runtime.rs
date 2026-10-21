@@ -335,21 +335,11 @@ pub(super) fn apply_ui_operation_completion(
 }
 
 impl InteractiveRuntime {
-    /// The session's accounting, as `stats/read` spells it. A unified
-    /// session answers no `stats/read`: its client keeps what the session
-    /// last published instead (reference `usage_since_baseline`).
+    /// The session's accounting, reference `runtime.stats`.
     pub(super) fn session_stats(&mut self) -> Value {
-        if self.service.is_unified(&self.session_id) {
-            return self
-                .service
-                .unified_accounting(&self.session_id)
-                .map_or(Value::Null, |(stats, _)| stats);
-        }
         self.service
-            .public_call("stats/read", json!({"sessionId": self.session_id}))
-            .ok()
-            .and_then(|result| result.get("stats").cloned())
-            .unwrap_or(Value::Null)
+            .stats(&self.session_id)
+            .map_or(Value::Null, |(stats, _)| stats)
     }
 
     /// The events this runtime was handed since the last call, oldest first.
@@ -358,10 +348,7 @@ impl InteractiveRuntime {
     /// assert each dispatch on its own.
     #[cfg(test)]
     pub(in crate::tui) fn take_reported(&self) -> Vec<TelemetryRecord> {
-        self.recorded
-            .lock()
-            .map(|mut recorded| std::mem::take(&mut *recorded))
-            .unwrap_or_default()
+        std::mem::take(&mut *vibe_core::sync::lock(&self.recorded))
     }
 
     /// Hands the session this runtime just adopted in place of `previous` to
@@ -384,9 +371,7 @@ impl InteractiveRuntime {
     /// to the operator, because a census failure is not news about their turn.
     pub(super) fn report(&self, record: &TelemetryRecord) {
         #[cfg(test)]
-        if let Ok(mut recorded) = self.recorded.lock() {
-            recorded.push(record.clone());
-        }
+        vibe_core::sync::lock(&self.recorded).push(record.clone());
         if let Some(telemetry) = self.telemetry.as_ref() {
             let _ = telemetry.enqueue(record, Some(self.session_id.as_str()));
         }

@@ -47,7 +47,7 @@ impl ServerConnection {
     fn read_rewind(&self, request: &ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let params = rewind_params(&request.params, false)?;
         let (review, working_directory) = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = current_session(&sessions, &params.session_id)?;
             (session.review.clone(), session.working_directory.clone())
         };
@@ -70,7 +70,7 @@ impl ServerConnection {
 
     fn rewind(&self, request: &ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let params = rewind_params(&request.params, true)?;
-        let mut sessions = self.server.lock_sessions()?;
+        let mut sessions = self.server.lock_sessions();
         current_session(&sessions, &params.session_id)?;
         // The registry keeps a session under the identifier it opened with,
         // which is what the connection recorded when it attached.
@@ -160,9 +160,7 @@ impl ServerConnection {
             .get_mut(&params.session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
         if let Some(review) = &session.review {
-            review
-                .drop_turns_from(turn)
-                .map_err(|error| ServerError::Resource(error.to_string()))?;
+            review.drop_turns_from(turn);
         }
         // Reference `replace_idle_with_history`: the entries before the one
         // rewound to, rebound to the session that now holds them, then the

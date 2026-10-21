@@ -542,8 +542,6 @@ pub enum EngineError {
     /// A tool's answer failed the turn; the message is the turn's error.
     #[error("{0}")]
     ToolFailure(String),
-    #[error("turn control state lock is poisoned")]
-    ControlStatePoisoned,
 }
 
 impl TracedError for EngineError {

@@ -17,6 +17,7 @@ use serde_json::Value;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use vibe_core::config::DotenvValues;
+use vibe_core::sync::lock;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_voice::capture::{AudioRecorder, CpalRecorder};
 use vibe_voice::identity::{MetadataGetter, audio_request_metadata};
@@ -65,10 +66,7 @@ pub(super) fn audio_credentials(vibe_home: &Path) -> CredentialLookup {
 pub(super) fn audio_metadata(session_id: &Arc<std::sync::Mutex<String>>) -> MetadataGetter {
     let session_id = Arc::clone(session_id);
     Arc::new(move || {
-        let session_id = session_id
-            .lock()
-            .map(|session_id| session_id.clone())
-            .unwrap_or_default();
+        let session_id = lock(&session_id).clone();
         audio_request_metadata(&session_id, None)
     })
 }

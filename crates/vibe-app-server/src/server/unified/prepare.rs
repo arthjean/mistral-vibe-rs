@@ -178,7 +178,7 @@ impl AppServer {
     /// The model that describes images to `unified`'s model, when it needs one.
     fn unified_vision(&self, unified: &UnifiedSession) -> Option<vibe_core::vision::VisionRoute> {
         let scope = {
-            let sessions = self.lock_sessions().ok()?;
+            let sessions = self.lock_sessions();
             crate::server::turns::prompt_scope(sessions.get(&unified.id)?, None)
         };
         let (model, provider, api) = self.workspace.session_vision(&scope)?;

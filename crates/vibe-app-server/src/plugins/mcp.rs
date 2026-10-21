@@ -16,7 +16,7 @@ use vibe_core::plugins::compatibility::{PluginMcpHttpAuth, PluginMcpServer};
 use vibe_core::plugins::native::PluginMcpServerDefinition;
 
 use super::SessionPlugins;
-use crate::sync::lock;
+use vibe_core::sync::lock;
 
 /// The MCP servers a session's plugins declare, as `/mcp` lists them: under
 /// their catalog names, sorted by them, with what `records` holds for each and

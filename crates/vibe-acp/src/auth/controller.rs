@@ -3,7 +3,7 @@
 //! credential removal path.
 
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use toml::Table;
@@ -14,6 +14,7 @@ use vibe_core::auth::{
     configured_custom_domain, effective_browser_auth_url, is_valid_custom_domain,
     resolve_api_key_provider, resolve_browser_auth_urls, same_provider, supports_browser_sign_in,
 };
+use vibe_core::sync::lock;
 
 use crate::auth::{
     AcpAuthEnvironment, SIGN_IN_TARGET_CUSTOM, SIGN_IN_TARGET_MISTRAL, browser_method,
@@ -198,7 +199,7 @@ impl AuthController {
                 }
             }
         });
-        self.pending().insert(
+        lock(&self.pending).insert(
             attempt.process_id.clone(),
             PendingSignIn { attempt, provider },
         );
@@ -215,11 +216,14 @@ impl AuthController {
                 AcpError::InvalidParams("a browser sign-in attempt ID is required".to_owned())
             })?
             .to_owned();
-        let pending = self.pending().get(&attempt_id).cloned().ok_or_else(|| {
-            AcpError::InvalidParams(format!(
-                "no browser sign-in attempt is pending under `{attempt_id}`"
-            ))
-        })?;
+        let pending = lock(&self.pending)
+            .get(&attempt_id)
+            .cloned()
+            .ok_or_else(|| {
+                AcpError::InvalidParams(format!(
+                    "no browser sign-in attempt is pending under `{attempt_id}`"
+                ))
+            })?;
         let completed = self
             .environment
             .complete_attempt(&pending.provider, &pending.attempt)
@@ -233,12 +237,12 @@ impl AuthController {
                     error.code,
                     SignInErrorCode::ExchangeFailed | SignInErrorCode::PollFailed
                 ) {
-                    self.pending().remove(&attempt_id);
+                    lock(&self.pending).remove(&attempt_id);
                 }
                 return Err(AcpError::InvalidParams(error.message().to_owned()));
             }
         };
-        self.pending().remove(&attempt_id);
+        lock(&self.pending).remove(&attempt_id);
         let mut meta = self.persist_credentials(pending.provider, &api_key).await;
         meta.insert("status".to_owned(), json!("completed"));
         let mut delegated = Map::new();
@@ -380,9 +384,5 @@ impl AuthController {
             ));
         }
         Ok(provider)
-    }
-
-    fn pending(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, PendingSignIn>> {
-        self.pending.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }

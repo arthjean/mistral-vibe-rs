@@ -2,52 +2,37 @@
 //! counts, and the MCP rows of the legacy and Unified Harness runtimes.
 //!
 //! Every status, here and in the catalog view, comes from
-//! [`SourceStatus::derive`]; each projection only says what enables a source,
-//! what connects it and which auth action can hold it, as its reference
-//! function reads them.
+//! [`source_status`]; each projection only says what enables a source, what
+//! connects it and which auth action can hold it, as its reference function
+//! reads them.
 
 use serde_json::{Value, json};
 
 use super::{
     ConnectorSelection, ConnectorSetting, ResolvedCatalog, ResolvedConnector, SessionConnectors,
 };
+use crate::vocabulary::{McpSourceKind, McpSourceStatus};
 
 /// How a connector stands where a session publishes it (reference
-/// `MCPSourceStatus` and the `status` of `SessionConnectorSourceState`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum SourceStatus {
-    Disabled,
-    Connected,
-    NeedsAuth,
-    NeedsSetup,
-    Unavailable,
-}
-
-impl SourceStatus {
-    /// A source that is not enabled is disabled, one that is connected is
-    /// connected, and any other waits on the auth action holding it:
-    /// authorization, credentials, or nothing it can act on.
-    pub(super) fn derive(enabled: bool, connected: bool, held_by: Option<&str>) -> Self {
-        if !enabled {
-            Self::Disabled
-        } else if connected {
-            Self::Connected
-        } else {
-            match held_by {
-                Some("oauth") => Self::NeedsAuth,
-                Some("credentials_setup") => Self::NeedsSetup,
-                _ => Self::Unavailable,
-            }
-        }
-    }
-
-    pub(super) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Disabled => "disabled",
-            Self::Connected => "connected",
-            Self::NeedsAuth => "needs_auth",
-            Self::NeedsSetup => "needs_setup",
-            Self::Unavailable => "unavailable",
+/// `MCPSourceStatus` and the `status` of `SessionConnectorSourceState`). A
+/// source that is not enabled is disabled, one that is connected is
+/// connected, and any other waits on the auth action holding it:
+/// authorization, credentials, or nothing it can act on. A connector is
+/// never merely `enabled`, which only a server's transport reports.
+pub(super) fn source_status(
+    enabled: bool,
+    connected: bool,
+    held_by: Option<&str>,
+) -> McpSourceStatus {
+    if !enabled {
+        McpSourceStatus::Disabled
+    } else if connected {
+        McpSourceStatus::Connected
+    } else {
+        match held_by {
+            Some("oauth") => McpSourceStatus::NeedsAuth,
+            Some("credentials_setup") => McpSourceStatus::NeedsSetup,
+            _ => McpSourceStatus::Unavailable,
         }
     }
 }
@@ -57,8 +42,8 @@ impl SourceStatus {
 /// session's registry connected (reference `ConnectorRegistry.is_connected`),
 /// unless its auth action is unknown; only a connector that is not ready is
 /// held by its auth action, so a ready one left unconnected is unavailable.
-fn legacy_status(connector: &ResolvedConnector, selection: &ConnectorSelection) -> SourceStatus {
-    SourceStatus::derive(
+fn legacy_status(connector: &ResolvedConnector, selection: &ConnectorSelection) -> McpSourceStatus {
+    source_status(
         selection.source_enabled(&connector.alias),
         connector.ready && connector.auth_action != "unknown" && !connector.tools.is_empty(),
         (!connector.ready).then_some(connector.auth_action),
@@ -89,7 +74,7 @@ impl SessionConnectors {
                 json!({
                     "alias": connector.alias,
                     "displayName": connector.display_name,
-                    "status": legacy_status(connector, selection).as_str(),
+                    "status": legacy_status(connector, selection),
                     "tools": connector.tools.iter().map(|tool| json!({
                         "name": tool.raw_name,
                         "description": tool.description,
@@ -138,7 +123,7 @@ impl SessionConnectors {
                         .connectors
                         .iter()
                         .filter(|connector| {
-                            legacy_status(connector, selection) == SourceStatus::Connected
+                            legacy_status(connector, selection) == McpSourceStatus::Connected
                         })
                         .count(),
                     catalog.connectors.len(),
@@ -163,12 +148,12 @@ impl SessionConnectors {
         let mut rows = Vec::with_capacity(connectors.len());
         let mut connected = 0;
         for connector in connectors {
-            let status = SourceStatus::derive(
+            let status = source_status(
                 selection.source_enabled(&connector.alias),
                 connector.ready,
                 Some(connector.auth_action),
             );
-            connected += usize::from(status == SourceStatus::Connected);
+            connected += usize::from(status == McpSourceStatus::Connected);
             let mut tools = connector.tools.iter().collect::<Vec<_>>();
             tools.sort_by(|left, right| left.raw_name.cmp(&right.raw_name));
             let tools = tools
@@ -181,7 +166,7 @@ impl SessionConnectors {
                             .clone()
                             .filter(|description| !description.is_empty())
                             .unwrap_or_else(|| format!("Connector tool {}.", tool.raw_name)),
-                        "enabled": status == SourceStatus::Connected
+                        "enabled": status == McpSourceStatus::Connected
                             && selection.tool_enabled(&connector.alias, &tool.raw_name),
                     })
                 })
@@ -189,9 +174,9 @@ impl SessionConnectors {
             rows.push(json!({
                 "name": connector.alias,
                 "displayName": connector.display_name,
-                "kind": "connector",
+                "kind": McpSourceKind::Connector,
                 "transport": "connector",
-                "status": status.as_str(),
+                "status": status,
                 "tools": tools,
                 "error": connector.diagnostic(),
                 "pluginName": null,
@@ -233,7 +218,7 @@ impl SessionConnectors {
                 let connector = connectors.iter().find(|connector| connector.alias == name);
                 let connected = connector
                     .is_some_and(|connector| connector.ready && !connector.tools.is_empty());
-                let status = SourceStatus::derive(
+                let status = source_status(
                     setting.is_some_and(|setting| !setting.disabled),
                     connected,
                     connector.map(|connector| connector.auth_action),
@@ -268,9 +253,9 @@ impl SessionConnectors {
                 json!({
                     "name": name,
                     "displayName": name,
-                    "kind": "connector",
+                    "kind": McpSourceKind::Connector,
                     "transport": "connector",
-                    "status": status.as_str(),
+                    "status": status,
                     "tools": tools,
                     "error": connector.and_then(|connector| connector.diagnostic()),
                     "pluginName": null,

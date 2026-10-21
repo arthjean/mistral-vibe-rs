@@ -20,23 +20,29 @@ use super::{
     BoundedRead, EditResult, MutationResult, ReadFileResult, SearchOptions, WARNING_TAG, Workspace,
     WriteFileResult, path_display, unified_diff,
 };
+use crate::platform::expand_home;
 use crate::policy::{
     PolicyGuardedTool, RequirementResolver, ToolGuard, resolve_file_tool_permission,
 };
 use crate::process::ClientToolIo;
 use crate::tools::config::SharedToolConfig;
 use crate::tools::config::{GrepConfig, ReadFileConfig, ToolConfigResolver, WriteFileConfig};
+use crate::tools::document::Document;
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolError, ToolExecutionOutput, ToolHandler,
-    ToolInvocation, ToolOutputSink, ToolRegistry, ToolSpec, reference_text,
+    ToolInvocation, ToolOutputSink, ToolRegistry, ToolSpec,
 };
 
 mod specs;
 
 use specs::{
-    EditArgs, GrepArgs, ReadFileArgs, WriteFileArgs, edit_spec, grep_spec, parsed, read_file_spec,
-    write_file_spec,
+    EditArgs, GrepArgs, PathArgs, ReadFileArgs, WriteFileArgs, edit_spec, grep_spec, parsed,
+    read_file_spec, write_file_spec,
 };
+
+/// The permission chain one file tool is published behind, built from its
+/// published name, the workspace root and the guard.
+type PermissionChain = fn(&'static str, &Path, &ToolGuard) -> Arc<RequirementResolver>;
 
 pub struct WorkspaceTools {
     workspace: Arc<Workspace>,
@@ -78,39 +84,41 @@ impl WorkspaceTools {
         // Reference `ReadFileTool`, `GrepTool`, `EditTool` and `WriteFileTool`
         // all resolve their permission through one chain over their own path
         // argument, which is what this table declares: the published name, the
-        // argument that names a path, and the handler behind it. `grep` is the
-        // one whose argument defaults to the working directory, which is what
-        // `GrepArgs.path` declares.
-        let published: [(&'static str, &'static str, ToolSpec, Arc<dyn ToolHandler>); 4] = [
+        // handler behind it, and the chain read over that tool's arguments.
+        let published: [(
+            &'static str,
+            ToolSpec,
+            Arc<dyn ToolHandler>,
+            PermissionChain,
+        ); 4] = [
             (
                 "read_file",
-                "file_path",
                 read_file_spec(),
                 read_handler(
                     self.workspace.clone(),
                     self.client_io.clone(),
                     guard.config.clone(),
                 ),
+                file_tool_permission::<ReadFileArgs>,
             ),
             (
                 "grep",
-                "path",
                 grep_spec(),
                 grep_handler(self.workspace.clone(), guard.config.clone()),
+                file_tool_permission::<GrepArgs>,
             ),
             (
                 "edit",
-                "file_path",
                 edit_spec(),
                 edit_handler(
                     self.workspace.clone(),
                     self.review.clone(),
                     self.client_io.clone(),
                 ),
+                file_tool_permission::<EditArgs>,
             ),
             (
                 "write_file",
-                "file_path",
                 write_file_spec(),
                 write_handler(
                     self.workspace.clone(),
@@ -118,18 +126,19 @@ impl WorkspaceTools {
                     self.client_io.clone(),
                     guard.config.clone(),
                 ),
+                file_tool_permission::<WriteFileArgs>,
             ),
         ];
         published
             .into_iter()
-            .map(|(name, argument, spec, handler)| {
+            .map(|(name, spec, handler, permission)| {
                 registry.register(
                     spec,
                     Arc::new(PolicyGuardedTool::new(
                         name,
                         guard.policy.clone(),
                         guard.approval.clone(),
-                        file_tool_permission(name, argument, &root, guard),
+                        permission(name, &root, guard),
                         handler,
                     )),
                 )
@@ -242,12 +251,6 @@ fn grep_handler(workspace: Arc<Workspace>, config: ToolConfigResolver) -> Arc<dy
                 let outcome = workspace
                     .search(&pattern, &path, &options)
                     .map_err(|error| ToolError::Execution(error.to_string()))?;
-                let result = json!({
-                    "matches": outcome.matches.clone(),
-                    "match_count": outcome.match_count,
-                    "pattern": pattern,
-                    "was_truncated": outcome.was_truncated,
-                });
                 // The projection drops the pattern the model reads and adds
                 // the match list a client renders. The search root is what the
                 // relative paths `rg` prints resolve against, which is why the
@@ -259,18 +262,12 @@ fn grep_handler(workspace: Arc<Workspace>, config: ToolConfigResolver) -> Arc<dy
                     "was_truncated": outcome.was_truncated,
                     "parsed_matches": parsed_matches(&outcome.matches, workspace.root()),
                 });
-                let model_text = reference_text::joined(&[
-                    ("matches", outcome.matches.clone()),
-                    ("match_count", outcome.match_count.to_string()),
-                    ("pattern", pattern),
-                    (
-                        "was_truncated",
-                        reference_text::boolean(outcome.was_truncated).to_owned(),
-                    ),
-                ]);
-                Ok(ToolExecutionOutput::new(model_text)
-                    .displayed_as(json!({"kind": "search", "matches": outcome.match_count}))
-                    .typed(result)
+                Ok(Document::new()
+                    .field("matches", outcome.matches)
+                    .field("match_count", outcome.match_count)
+                    .field("pattern", pattern)
+                    .field("was_truncated", outcome.was_truncated)
+                    .into_output(json!({"kind": "search", "matches": outcome.match_count}))
                     .projected(projected))
             })
         },
@@ -527,12 +524,11 @@ fn write_handler(
 /// answer `resolve_permission` by handing their own name, configuration and
 /// path argument to one shared chain. This is that chain's entry point: the
 /// argument is resolved against the workspace root, the configuration is read
-/// at every call so an operator's edit lands without a re-registration, and the
-/// call that names no path at all falls back to the root, which is what
-/// `GrepArgs.path` defaults to.
-fn file_tool_permission(
+/// at every call so an operator's edit lands without a re-registration, and an
+/// empty path falls back to the root for the tool whose argument defaults to
+/// it ([`PathArgs::EMPTY_IS_ROOT`]).
+fn file_tool_permission<A: PathArgs>(
     tool: &'static str,
-    argument: &'static str,
     root: &Path,
     guard: &ToolGuard,
 ) -> Arc<RequirementResolver> {
@@ -540,13 +536,11 @@ fn file_tool_permission(
     let config = guard.config.clone();
     let scratchpad = guard.scratchpad.clone();
     Arc::new(move |invocation: &ToolInvocation| {
-        let requested = tool_path::normalized(
-            argument,
-            invocation.arguments[argument].as_str().unwrap_or_default(),
-        )?;
-        if requested.is_empty() && argument != "path" {
+        let requested = tool_path::normalized(A::ARGUMENT, parsed::<A>(invocation)?.path())?;
+        if requested.is_empty() && !A::EMPTY_IS_ROOT {
             return Err(ToolError::Execution(format!(
-                "{tool} {argument} is missing"
+                "{tool} {} is missing",
+                A::ARGUMENT
             )));
         }
         // Reference `resolve_file_tool_permission` expands `~` and anchors a
@@ -555,7 +549,7 @@ fn file_tool_permission(
         let path = if requested.is_empty() {
             root.clone()
         } else {
-            root.join(tool_path::expanded(Path::new(&requested)))
+            root.join(expand_home(Path::new(&requested)))
         };
         let settings: SharedToolConfig = config.view(tool);
         Ok(resolve_file_tool_permission(

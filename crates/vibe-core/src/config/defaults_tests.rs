@@ -82,7 +82,7 @@ fn a_relative_session_log_directory_is_absolutized() {
 
 #[test]
 fn a_home_relative_session_log_directory_is_expanded() {
-    let Some(home) = user_home_directory() else {
+    let Some(home) = crate::platform::user_home() else {
         eprintln!("skipping the home expansion check: this process resolves no home directory");
         return;
     };

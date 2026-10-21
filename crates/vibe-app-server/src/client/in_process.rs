@@ -6,7 +6,6 @@
 //! are what a caller reads a turn through when nothing is on the wire.
 
 use super::*;
-use crate::sync::lock;
 
 pub(super) struct ProgrammaticEventObserver {
     pub(super) reducer: Mutex<ProjectionReducer>,
@@ -17,10 +16,7 @@ pub(super) struct ProgrammaticEventObserver {
 
 impl EventObserver for ProgrammaticEventObserver {
     fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
-        let mut reducer = self
-            .reducer
-            .lock()
-            .map_err(|_| "programmatic projection lock is poisoned".to_owned())?;
+        let mut reducer = lock(&self.reducer);
         if reducer.state().watermark == 0
             && reducer.state().turn_id.is_none()
             && let Some(turn_id) = &event.turn_id
@@ -31,10 +27,7 @@ impl EventObserver for ProgrammaticEventObserver {
             return Ok(());
         }
         forward_stats(&self.sender, event)?;
-        let mut emitted = self
-            .emitted
-            .lock()
-            .map_err(|_| "programmatic emission lock is poisoned".to_owned())?;
+        let mut emitted = lock(&self.emitted);
         for entry in &reducer.state().history {
             if !entry.is_completed() {
                 continue;
@@ -106,17 +99,11 @@ pub(super) struct ServerProjectionObserver {
 impl EventObserver for ServerProjectionObserver {
     fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
         let (snapshot, changed) = {
-            let mut reducer = self
-                .reducer
-                .lock()
-                .map_err(|_| "interactive projection lock is poisoned".to_owned())?;
+            let mut reducer = lock(&self.reducer);
             if reducer.apply(event).map_err(|error| error.to_string())? == ApplyOutcome::Duplicate {
                 return Ok(());
             }
-            let mut emitted = self
-                .emitted
-                .lock()
-                .map_err(|_| "interactive emission lock is poisoned".to_owned())?;
+            let mut emitted = lock(&self.emitted);
             let mut changed = Vec::new();
             for entry in &reducer.state().history {
                 let encoded = serde_json::to_value(entry).map_err(|error| error.to_string())?;
@@ -493,14 +480,6 @@ impl InProcessClient {
     pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
         self.call("session/read", json!({"sessionId": session_id}))?;
         self.server.session(session_id).map_err(ClientError::Server)
-    }
-
-    pub fn reserve_turn(
-        &mut self,
-        session_id: &str,
-        prompt: &str,
-    ) -> Result<TurnReservation, ClientError> {
-        self.reserve_turn_request(session_id, &TurnRequest::text(prompt))
     }
 
     pub fn reserve_turn_request(

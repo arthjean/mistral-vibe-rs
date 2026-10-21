@@ -78,7 +78,6 @@ mod surface_parity_tests;
 #[cfg(test)]
 mod view_tests;
 
-pub(crate) use crate::platform::user_home as user_home_directory;
 pub use dotenv::{DotenvValues, global_env_file, inherited_by_children};
 pub use encode::encode_document;
 pub use error::ConfigError;

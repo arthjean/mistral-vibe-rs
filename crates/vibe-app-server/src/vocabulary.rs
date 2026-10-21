@@ -94,6 +94,18 @@ impl McpSourceStatus {
         Self::NeedsSetup,
         Self::Unavailable,
     ];
+
+    /// The wire value, for a caller that matches on it as text.
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Connected => "connected",
+            Self::Enabled => "enabled",
+            Self::NeedsAuth => "needs_auth",
+            Self::NeedsSetup => "needs_setup",
+            Self::Unavailable => "unavailable",
+        }
+    }
 }
 
 /// How much an agent profile is trusted to do without asking.

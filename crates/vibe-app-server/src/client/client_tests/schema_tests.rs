@@ -113,7 +113,6 @@ fn driver_failures_classify_into_the_reference_error_vocabulary() {
             DriverError::Engine(EngineError::Compaction("no summary".to_owned())),
             TurnErrorCode::CompactionFailed,
         ),
-        (DriverError::StatePoisoned, TurnErrorCode::InternalError),
     ] {
         assert_eq!(
             turn_error_code(&error),
@@ -179,7 +178,6 @@ fn the_interactive_schema_is_camel_case_while_the_file_tools_stay_snake_case() {
         .expect("workspace tools register");
     let edit = tools
         .list()
-        .expect("tools list")
         .into_iter()
         .find(|spec| spec.name == "edit")
         .expect("edit is published");

@@ -85,13 +85,8 @@ impl AppServer {
             .map_err(|message| ServerError::InvalidCallbackDetail(message.to_owned()))?;
         let related_entry_id = detail.related_entry_id().map(str::to_owned);
         let related = related_entry_id.clone();
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         if session.pending_callback.is_some() {
             return Err(ServerError::CallbackConflict);
         }
@@ -200,13 +195,8 @@ impl AppServer {
         route: &CallbackRoute,
         reason: &str,
     ) -> Result<(Vec<u8>, Vec<DeferredWork>), ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(&route.session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(route.session_id.clone()))?;
-        if session.active_turn.as_deref() != Some(&route.turn_id) {
-            return Err(ServerError::StaleTurn(route.turn_id.clone()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(&route.session_id, &route.turn_id)?;
         let Some(callback) = session.pending_callback.take() else {
             return Ok((Vec::new(), Vec::new()));
         };

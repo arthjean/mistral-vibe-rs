@@ -695,7 +695,7 @@ pub(super) fn poll(
 ) {
     let children = runtime
         .service
-        .unified_children(&runtime.session_id)
+        .published_state(&runtime.session_id, "childSessions")
         .map(|children| children_of(&json!({"childSessions": children})))
         .unwrap_or_default();
     state.subagents.sync(children);

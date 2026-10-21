@@ -29,13 +29,8 @@ impl AppServer {
         session_id: &str,
         turn_id: &str,
     ) -> Result<Vec<Vec<u8>>, ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         let turn = session
             .latest_turn
             .as_ref()
@@ -72,7 +67,7 @@ impl AppServer {
         now_seconds: u64,
     ) -> Result<Option<ScheduledLoopWork>, ServerError> {
         let (canonical_session_id, idle) = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -97,7 +92,7 @@ impl AppServer {
             .projects
             .fire_loop_for_session(&loop_id, &canonical_session_id, now_seconds, true)
             .map_err(|error| ServerError::Projects(error.to_string()))?;
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(&canonical_session_id)
             .ok_or_else(|| ServerError::SessionNotFound(canonical_session_id.clone()))?;
@@ -219,18 +214,13 @@ impl AppServer {
         stop_reason: Option<vibe_core::events::PublicTurnStopReason>,
         error: Option<PublicError>,
     ) -> Result<Vec<Vec<u8>>, ServerError> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let source_key = sessions
             .key(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
             .to_owned();
         let (started_at, active_scheduled_loop, review, queue_item_id, rejection) = {
-            let session = sessions
-                .get(&source_key)
-                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-            if session.active_turn.as_deref() != Some(turn_id) {
-                return Err(ServerError::StaleTurn(turn_id.to_owned()));
-            }
+            let session = sessions.active_turn(session_id, turn_id)?;
             (
                 session.active_turn_started_at.unwrap_or_default(),
                 session.active_scheduled_loop.clone(),
@@ -332,13 +322,8 @@ impl AppServer {
         turn_id: &str,
         error: PublicError,
     ) -> Result<Vec<Vec<u8>>, ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         // A turn failed over a refused callback reports the refusal.
         let error = match session.callback_rejection.take() {
             Some(rejection) => public_turn_failure(TurnErrorCode::InternalError, &rejection),
@@ -404,13 +389,8 @@ impl AppServer {
         output_tokens: u64,
         cached_tokens: u64,
     ) -> Result<(), ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         session
             .stats
             .observe(context_tokens, input_tokens, output_tokens, cached_tokens);
@@ -423,7 +403,7 @@ impl AppServer {
         &self,
         session_id: &str,
     ) -> Result<Option<Vec<u8>>, ServerError> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -440,13 +420,8 @@ impl AppServer {
         settled: vibe_core::engine::ToolCallTally,
         after_turn: bool,
     ) -> Result<(), ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         if after_turn {
             session.stats.deferred_tool_calls = session.stats.deferred_tool_calls.plus(settled);
         } else {
@@ -464,13 +439,8 @@ impl AppServer {
         session_id: &str,
         turn_id: &str,
     ) -> Result<Option<Vec<u8>>, ServerError> {
-        let mut sessions = self.lock_sessions()?;
-        let session = sessions
-            .get_mut(session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-        if session.active_turn.as_deref() != Some(turn_id) {
-            return Err(ServerError::StaleTurn(turn_id.to_owned()));
-        }
+        let mut sessions = self.lock_sessions();
+        let session = sessions.active_turn_mut(session_id, turn_id)?;
         Ok(
             (session.stats.context_tokens != session.stats.published_context_tokens)
                 .then(|| stats_updated_frame(session)),
@@ -485,7 +455,7 @@ impl AppServer {
         turn_id: &str,
         text: &str,
     ) -> Result<Option<Vec<u8>>, ServerError> {
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions
             .get_mut(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -527,20 +497,12 @@ impl AppServer {
                     | ProtocolFault::WithData { message, .. } => message,
                 })
             })?;
-        let mut sessions = self.lock_sessions()?;
+        let mut sessions = self.lock_sessions();
         let source_key = sessions
             .key(old_session_id)
             .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?
             .to_owned();
-        let previous_id = {
-            let session = sessions
-                .get(&source_key)
-                .ok_or_else(|| ServerError::SessionNotFound(old_session_id.to_owned()))?;
-            if session.active_turn.as_deref() != Some(turn_id) {
-                return Err(ServerError::StaleTurn(turn_id.to_owned()));
-            }
-            session.id.clone()
-        };
+        let previous_id = { sessions.active_turn(old_session_id, turn_id)?.id.clone() };
         sessions.rename(&source_key, new_session_id)?;
         self.projects
             .rebind_session(&previous_id, new_session_id)
@@ -607,7 +569,7 @@ impl AppServer {
         turn_id: &str,
         request: &crate::client::TurnRequest,
     ) -> Result<TurnReservation, ServerError> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         let session = sessions
             .get(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -659,7 +621,7 @@ impl AppServer {
             return Err(ServerError::MissingTurnReservation);
         };
         let (mut reservation, scope, cached) = {
-            let sessions = self.lock_sessions()?;
+            let sessions = self.lock_sessions();
             let session = sessions
                 .get(&session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.clone()))?;
@@ -701,7 +663,7 @@ impl AppServer {
                     .workspace
                     .session_system_prompt(&scope)
                     .map_err(|error| ServerError::Resource(error.to_string()))?;
-                if let Some(session) = self.lock_sessions()?.get_mut(&reservation.session_id) {
+                if let Some(session) = self.lock_sessions().get_mut(&reservation.session_id) {
                     session.system_prompt = Some(super::runtime::ComposedPrompt {
                         scope: scope.clone(),
                         settings,
@@ -775,8 +737,9 @@ pub(crate) fn prompt_scope(
         tool_names: session
             .tools
             .list()
-            .map(|specs| specs.into_iter().map(|spec| spec.name).collect())
-            .unwrap_or_default(),
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect(),
         skill_seed,
     }
 }

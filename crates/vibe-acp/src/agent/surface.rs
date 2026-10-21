@@ -241,43 +241,14 @@ where
         })
     }
 
+    /// Reference `runtime.stats`, or nothing when the session cannot be read.
     async fn stats(&self, harness: &AcpHarness<D>) -> (Value, u64) {
-        // Reference `runtime.stats`: a Unified Harness session's client holds
-        // the accounting its last `session/statsUpdated` carried, and the
-        // runtime it opened with before that.
-        if harness.is_unified() {
-            let published = harness
-                .service
-                .lock()
-                .await
-                .unified_accounting(&harness.session_id);
-            if let Some(accounting) = published {
-                return accounting;
-            }
-            return match self.call(harness, "runtime/read", json!({})).await {
-                Ok(mut result) => {
-                    let runtime = result.remove("runtime").unwrap_or(Value::Null);
-                    (
-                        runtime.get("stats").cloned().unwrap_or(Value::Null),
-                        runtime
-                            .get("contextWindow")
-                            .and_then(Value::as_u64)
-                            .unwrap_or(0),
-                    )
-                }
-                Err(_) => (Value::Null, 0),
-            };
-        }
-        match self.call(harness, "stats/read", json!({})).await {
-            Ok(mut result) => (
-                result.remove("stats").unwrap_or(Value::Null),
-                result
-                    .get("contextWindow")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0),
-            ),
-            Err(_) => (Value::Null, 0),
-        }
+        harness
+            .service
+            .lock()
+            .await
+            .stats(&harness.session_id)
+            .unwrap_or((Value::Null, 0))
     }
 
     /// The `usage_update` the session's statistics read as now.

@@ -441,7 +441,6 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
 
     let review = server
         .lock_sessions()
-        .expect("runtime sessions")
         .get("source-session")
         .and_then(|session| session.review.clone())
         .expect("live review manager");
@@ -711,7 +710,6 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
     ));
     let review = server
         .lock_sessions()
-        .expect("runtime sessions")
         .get("source-session")
         .and_then(|session| session.review.clone())
         .expect("live review manager");
@@ -845,7 +843,6 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
     ));
     let review = server
         .lock_sessions()
-        .expect("runtime sessions")
         .get("review-session")
         .and_then(|session| session.review.clone())
         .expect("review manager");

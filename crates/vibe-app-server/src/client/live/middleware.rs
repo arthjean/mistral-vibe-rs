@@ -16,17 +16,14 @@ impl LiveTurnDriver {
         &self,
         session_id: &str,
         settings: &CompactionSettings,
-    ) -> Result<Option<Arc<ContextWarningMiddleware>>, DriverError> {
+    ) -> Option<Arc<ContextWarningMiddleware>> {
         if !settings.context_warnings {
-            return Ok(None);
+            return None;
         }
-        let mut warnings = self
-            .context_warnings
-            .lock()
-            .map_err(|_| DriverError::StatePoisoned)?;
-        Ok(Some(Arc::clone(
+        let mut warnings = lock(&self.context_warnings);
+        Some(Arc::clone(
             warnings.entry(session_id.to_owned()).or_default(),
-        )))
+        ))
     }
 
     /// The plan-agent reminder of this session, told which agent the turn
@@ -35,11 +32,9 @@ impl LiveTurnDriver {
         &self,
         reservation: &TurnReservation,
         tools: &[vibe_core::provider::ToolDefinition],
-    ) -> Result<Arc<PlanAgentMiddleware>, DriverError> {
+    ) -> Arc<PlanAgentMiddleware> {
         let middleware = Arc::clone(
-            self.plan_agents
-                .lock()
-                .map_err(|_| DriverError::StatePoisoned)?
+            lock(&self.plan_agents)
                 .entry(reservation.session_id.clone())
                 .or_default(),
         );
@@ -55,7 +50,7 @@ impl LiveTurnDriver {
             published("exit_plan_mode"),
         ));
         middleware.set_active(runs_plan_agent(reservation));
-        Ok(middleware)
+        middleware
     }
 }
 

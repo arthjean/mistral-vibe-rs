@@ -33,15 +33,12 @@ async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
             continuation: &str,
             plan_file_path: Option<&str>,
         ) -> Result<(), DriverError> {
-            self.clearings
-                .lock()
-                .map_err(|_| DriverError::StatePoisoned)?
-                .push(RecordedClearing {
-                    session_id: session_id.to_owned(),
-                    turn_id: turn_id.to_owned(),
-                    continuation: continuation.to_owned(),
-                    plan_file_path: plan_file_path.map(str::to_owned),
-                });
+            lock(&self.clearings).push(RecordedClearing {
+                session_id: session_id.to_owned(),
+                turn_id: turn_id.to_owned(),
+                continuation: continuation.to_owned(),
+                plan_file_path: plan_file_path.map(str::to_owned),
+            });
             Ok(())
         }
     }
@@ -96,10 +93,7 @@ async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
         .await
         .expect("clearing queues");
     assert!(
-        service
-            .drain_callbacks()
-            .expect("the clearing drains")
-            .is_empty(),
+        service.drain_callbacks().is_empty(),
         "a clearing is not a callback entry"
     );
     acknowledgment
@@ -169,9 +163,7 @@ async fn interactive_user_input_callbacks_serialize_and_resolve_through_the_serv
 
     let first_entry = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
-            let entries = service
-                .drain_callbacks()
-                .expect("callback queue remains valid");
+            let entries = service.drain_callbacks();
             if let Some(entry) = entries.into_iter().next() {
                 break entry;
             }
@@ -180,12 +172,7 @@ async fn interactive_user_input_callbacks_serialize_and_resolve_through_the_serv
     })
     .await
     .expect("first callback arrives");
-    assert!(
-        service
-            .drain_callbacks()
-            .expect("second request remains queued")
-            .is_empty()
-    );
+    assert!(service.drain_callbacks().is_empty());
     assert!(matches!(first_entry, PublicHistoryEntry::Callback { .. }));
     let PublicHistoryEntry::Callback {
         callback_id: first_callback_id,
@@ -218,7 +205,6 @@ async fn interactive_user_input_callbacks_serialize_and_resolve_through_the_serv
 
     let second_entry = service
         .drain_callbacks()
-        .expect("queued callback opens")
         .pop()
         .expect("second callback is delivered");
     assert!(matches!(second_entry, PublicHistoryEntry::Callback { .. }));
@@ -327,11 +313,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
     });
     let entry = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
-            if let Some(entry) = service
-                .drain_callbacks()
-                .expect("callback queue remains valid")
-                .pop()
-            {
+            if let Some(entry) = service.drain_callbacks().pop() {
                 break entry;
             }
             tokio::task::yield_now().await;
@@ -411,7 +393,7 @@ async fn server_bound_observer_sequences_repeated_turns_without_replaying_histor
         .await
         .expect("first turn reserves");
     let (first_observer, mut first_updates) = service
-        .interactive_update_channel_after(&session_id, &first.turn_id, 0)
+        .turn_updates(&session_id, &first.turn_id)
         .expect("first observer binds");
     let first_outcome = service
         .driver()
@@ -447,7 +429,7 @@ async fn server_bound_observer_sequences_repeated_turns_without_replaying_histor
         .await
         .expect("second turn reserves");
     let (second_observer, mut second_updates) = service
-        .interactive_update_channel_after(&session_id, &second.turn_id, first_watermark)
+        .turn_updates(&session_id, &second.turn_id)
         .expect("second observer binds");
     let second_outcome = service
         .driver()

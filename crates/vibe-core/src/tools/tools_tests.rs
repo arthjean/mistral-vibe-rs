@@ -419,7 +419,7 @@ async fn registry_exposes_typed_contract_and_later_equal_priority_wins() {
             .expect("replace"),
         RegistrationOutcome::Replaced
     );
-    let listed = registry.list().expect("list");
+    let listed = registry.list();
     assert_eq!(listed[0].config["maxBytes"], 1024);
     assert_eq!(listed[0].state["calls"], 0);
     let result = registry
@@ -471,7 +471,6 @@ fn discovery_ordered_registry() -> (ToolRegistry, Vec<String>) {
 fn published_names(registry: &ToolRegistry) -> Vec<String> {
     registry
         .available(None, &NameFilter::default())
-        .expect("available")
         .into_iter()
         .map(|spec| spec.name)
         .collect()
@@ -489,7 +488,6 @@ fn the_published_surface_keeps_the_discovery_order() {
     assert_eq!(
         registry
             .list()
-            .expect("list")
             .into_iter()
             .map(|spec| spec.name)
             .collect::<Vec<_>>(),
@@ -529,9 +527,7 @@ fn a_replacing_variant_keeps_the_position_of_the_first_registration() {
             .expect("register");
     }
 
-    let published = registry
-        .available(None, &NameFilter::default())
-        .expect("available");
+    let published = registry.available(None, &NameFilter::default());
     assert_eq!(
         published
             .iter()
@@ -566,7 +562,6 @@ fn a_withheld_tool_leaves_the_remaining_order_unchanged() {
     assert_eq!(
         registry
             .available(None, &NameFilter::new(&["shell"]))
-            .expect("available")
             .into_iter()
             .map(|spec| spec.name)
             .collect::<Vec<_>>(),
@@ -667,15 +662,14 @@ async fn a_conditional_tool_follows_its_prerequisite_at_publication_time() {
     let published = || {
         registry
             .available(None, &NameFilter::default())
-            .expect("available")
             .into_iter()
             .map(|spec| spec.name)
             .collect::<Vec<_>>()
     };
     // Registered, so it is listed, and withheld, so nothing publishes it.
-    assert_eq!(registry.list().expect("list").len(), 1);
+    assert_eq!(registry.list().len(), 1);
     assert!(published().is_empty());
-    assert_eq!(registry.withheld().expect("withheld"), ["read".to_owned()]);
+    assert_eq!(registry.withheld(), ["read".to_owned()]);
     assert!(matches!(
         registry
             .invoke(
@@ -691,7 +685,7 @@ async fn a_conditional_tool_follows_its_prerequisite_at_publication_time() {
 
     present.store(true, Ordering::Release);
     assert_eq!(published(), ["read".to_owned()]);
-    assert!(registry.withheld().expect("withheld").is_empty());
+    assert!(registry.withheld().is_empty());
     assert!(
         registry
             .invoke(

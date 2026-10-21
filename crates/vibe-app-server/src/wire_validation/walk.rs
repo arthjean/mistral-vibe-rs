@@ -1,10 +1,8 @@
 //! The walk of an input over a schema node, which collects every issue
 //! pydantic-core would and builds the value it would produce.
 
-use std::fmt::Write as _;
-
 use serde_json::{Number, Value};
-use vibe_core::pycompat::pydantic;
+use vibe_core::pycompat::{self, pydantic};
 use vibe_protocol::PathSegment;
 
 use super::coercion::{self, Refusal};
@@ -167,7 +165,7 @@ impl Walk {
                 let value = input.clone().into_value();
                 if expected
                     .iter()
-                    .any(|candidate| python_equal(candidate, &value))
+                    .any(|candidate| pycompat::python_eq(candidate, &value))
                 {
                     Some(value)
                 } else {
@@ -373,7 +371,7 @@ impl Walk {
                 format!(
                     "Input tag '{}' found using '{discriminator}' does not match any of the \
                      expected tags: {expected}",
-                    python_repr_bare(tag)
+                    pycompat::str_json(&tag.clone().into_value())
                 ),
             );
             return None;
@@ -489,41 +487,11 @@ impl Walk {
     }
 }
 
-/// Python's `==` between two JSON values: `1`, `1.0` and `true` compare
-/// equal, which is how a literal meets its input.
-fn python_equal(left: &Value, right: &Value) -> bool {
-    let numeric = |value: &Value| match value {
-        Value::Bool(value) => Some(if *value { 1.0 } else { 0.0 }),
-        Value::Number(number) => number.as_f64(),
-        _ => None,
-    };
-    match (numeric(left), numeric(right)) {
-        (Some(left), Some(right)) => left == right,
-        _ => left == right,
-    }
-}
-
 /// A bound as Python prints it: an integral bound without a fractional part.
 fn number_text(value: f64) -> String {
     if value.fract() == 0.0 && value.abs() < 1e15 {
         format!("{value:.0}")
     } else {
         value.to_string()
-    }
-}
-
-/// A tag as the union error quotes it, without Python's own quotes.
-fn python_repr_bare(value: &Json) -> String {
-    match value {
-        Json::String(text) => text.clone(),
-        Json::Null => "None".to_owned(),
-        Json::Bool(true) => "True".to_owned(),
-        Json::Bool(false) => "False".to_owned(),
-        Json::Number(number) => number.to_string(),
-        Json::Array(_) | Json::Object(_) => {
-            let mut text = String::new();
-            let _ = write!(text, "{}", value.clone().into_value());
-            text
-        }
     }
 }

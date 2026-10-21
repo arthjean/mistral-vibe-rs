@@ -471,7 +471,7 @@ async fn published_specs_with(
     host: HostShells,
 ) -> Vec<ToolSpec> {
     let (_directory, registry) = published_registry_with(web_search, rollout, host).await;
-    registry.list().expect("list")
+    registry.list()
 }
 
 /// The same surface, kept as a registry so a test can ask it what the two
@@ -587,7 +587,6 @@ async fn the_published_surface_carries_the_registration_order_not_the_name_order
         published_registry_with(false, ShellRollout::Legacy, posix_host()).await;
     let builtins = registry
         .list()
-        .expect("the registered surface")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<Vec<_>>();
@@ -658,7 +657,6 @@ async fn the_published_surface_carries_the_registration_order_not_the_name_order
     .expect("the connector tool registers");
     let published = registry
         .list()
-        .expect("the registered surface")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<Vec<_>>();
@@ -1357,7 +1355,6 @@ async fn the_configured_filters_publish_what_the_reference_publishes() {
         published_registry_with(false, ShellRollout::Legacy, posix_host()).await;
     let here = registry
         .available(None, &NameFilter::default())
-        .expect("the unfiltered surface")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<BTreeSet<_>>();
@@ -1377,7 +1374,6 @@ async fn the_configured_filters_publish_what_the_reference_publishes() {
         let disabled = NameFilter::new(&gate.disabled_tools);
         let published = registry
             .available(enabled.as_ref(), &disabled)
-            .expect("the filtered surface")
             .into_iter()
             .map(|spec| spec.name)
             .filter(|name| shared.contains(name))
@@ -1478,7 +1474,7 @@ async fn the_four_surface_quadrants_publish_what_the_reference_publishes() {
             client,
         )
         .await;
-        let specs = registry.list().expect("the registered surface");
+        let specs = registry.list();
         // Which class serves a shell name is what the arbitration decides, and
         // the priority the surface carries is where that decision lands: the
         // reference ranks the variants publishing one name by

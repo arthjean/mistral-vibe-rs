@@ -15,11 +15,13 @@ use vibe_app_server::workspace::WorkspaceService;
 
 use super::clipboard_images::ImageModels;
 use super::cloud_workflow::CloudWorkflowState;
+use super::interaction::IntegrationKind;
+use super::pickers::{McpSource, McpSourceStatus};
 use super::runtime::{BannerMetrics, InteractiveRuntime, RuntimeSkill, UiOperationCompletion};
 use super::voice::{SpeechManager, VoiceManager, audio_credentials, audio_metadata};
 use super::{
     Arguments, CliError, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL, active_agent_safety, bootstrap,
-    startup,
+    map_value, startup,
 };
 
 pub(super) fn start_runtime(
@@ -350,27 +352,18 @@ pub(super) async fn refresh_server_banner_metrics(
     if let Ok(dispatch) = service
         .public_call_async("mcp/read", json!({"sessionId": session_id}))
         .await
-        && let Some(sources) = dispatch
-            .result
-            .get("mcp")
-            .and_then(|mcp| mcp.get("sources"))
-            .and_then(Value::as_array)
+        && let Ok(sources) = McpSource::published(&map_value(dispatch.result))
     {
         // The published list carries the connectors too, and the banner counts
         // them on their own line.
         let servers = sources
             .iter()
-            .filter(|source| source.get("kind").and_then(Value::as_str) != Some("connector"))
+            .filter(|source| source.kind == IntegrationKind::McpServer)
             .collect::<Vec<_>>();
         banner.mcp_servers_total = servers.len();
         banner.mcp_servers_enabled = servers
             .iter()
-            .filter(|source| {
-                source
-                    .get("status")
-                    .and_then(Value::as_str)
-                    .is_none_or(|status| status != "disabled")
-            })
+            .filter(|source| source.status != McpSourceStatus::Disabled)
             .count();
     }
     if let Ok(result) = service.public_call("diagnostics/list", json!({"sessionId": session_id})) {

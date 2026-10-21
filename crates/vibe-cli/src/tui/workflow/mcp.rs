@@ -4,7 +4,7 @@ use std::pin::Pin;
 use serde_json::{Value, json};
 
 use super::super::clipboard::copy_text_bounded;
-use super::super::command_handlers::mcp_authenticated;
+use super::super::command_handlers::mcp::mcp_authenticated;
 use super::super::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, IntegrationTarget, Overlay, OverlayAction,
     OverlayItem, OverlayKind,

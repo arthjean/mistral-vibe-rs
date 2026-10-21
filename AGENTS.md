@@ -52,7 +52,8 @@ documentation use the Linux form; read them relative to the local checkout.
   under the reference interpreter, or the `*-oracle.py` beside its corpus in
   `crates/vibe-cli/tests/runtime-parity/`. `scripts/parity/reference.py` is
   the one place that checks the pin and re-executes a driver; a driver never
-  imports another driver.
+  imports another driver, only shared modules and its own `<driver>_cases.py`
+  or `<driver>_scenarios.py` data table.
 - Rust parity tests replay committed corpora unconditionally and gate only the
   live probe on `vibe_core::parity::off_pin_reason`, so a missing or off-pin
   checkout skips instead of failing `cargo test`. A new parity test builds on

@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::EditOccurrence;
-use crate::tools::reference_text;
+use crate::tools::document::Document;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,22 +46,16 @@ impl ReadFileResult {
     /// The text the model reads back.
     #[must_use]
     pub fn model_text(&self) -> String {
-        reference_text::joined(&[
-            ("file_path", self.file_path.clone()),
-            ("content", self.content.clone()),
-            ("num_lines", self.num_lines.to_string()),
-            ("start_line", self.start_line.to_string()),
-            (
-                "requested_offset",
-                reference_text::optional(self.requested_offset),
-            ),
-            ("requested_limit", self.requested_limit.to_string()),
-            ("total_lines", reference_text::optional(self.total_lines)),
-            (
-                "was_truncated",
-                reference_text::boolean(self.was_truncated).to_owned(),
-            ),
-        ])
+        Document::new()
+            .field("file_path", self.file_path.as_str())
+            .field("content", self.content.as_str())
+            .field("num_lines", self.num_lines)
+            .field("start_line", self.start_line)
+            .field("requested_offset", self.requested_offset)
+            .field("requested_limit", self.requested_limit)
+            .field("total_lines", self.total_lines)
+            .field("was_truncated", self.was_truncated)
+            .model_text()
     }
 }
 
@@ -76,11 +70,11 @@ pub struct WriteFileResult {
 impl WriteFileResult {
     #[must_use]
     pub fn model_text(&self) -> String {
-        reference_text::joined(&[
-            ("file_path", self.file_path.clone()),
-            ("bytes_written", self.bytes_written.to_string()),
-            ("content", self.content.clone()),
-        ])
+        Document::new()
+            .field("file_path", self.file_path.as_str())
+            .field("bytes_written", self.bytes_written)
+            .field("content", self.content.as_str())
+            .model_text()
     }
 }
 
@@ -96,12 +90,12 @@ pub struct EditResult {
 impl EditResult {
     #[must_use]
     pub fn model_text(&self) -> String {
-        reference_text::joined(&[
-            ("file", self.file.clone()),
-            ("message", self.message.clone()),
-            ("old_string", self.old_string.clone()),
-            ("new_string", self.new_string.clone()),
-        ])
+        Document::new()
+            .field("file", self.file.as_str())
+            .field("message", self.message.as_str())
+            .field("old_string", self.old_string.as_str())
+            .field("new_string", self.new_string.as_str())
+            .model_text()
     }
 }
 

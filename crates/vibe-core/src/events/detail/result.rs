@@ -370,7 +370,7 @@ fn completed_header(
                 format!(
                     "{} ({} chars, {})",
                     string_argument(output, &["url"]),
-                    pycompat::thousands(u64::try_from(content_length).unwrap_or(u64::MAX)),
+                    pycompat::thousands(content_length),
                     content_type.split(';').next().unwrap_or_default()
                 ),
                 truncated(truncated_flag(output)),

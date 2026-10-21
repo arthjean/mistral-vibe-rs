@@ -148,6 +148,27 @@ pub fn validation_error(title: &str, errors: &[LineError<'_>]) -> String {
     rendered
 }
 
+/// [`validation_error`] for a `ValidationError` carrying the one error
+/// `location`, `kind`, `message` and `input` describe.
+#[must_use]
+pub fn single_error(
+    title: &str,
+    location: &str,
+    kind: &str,
+    message: &str,
+    input: &Value,
+) -> String {
+    validation_error(
+        title,
+        &[LineError {
+            location,
+            kind,
+            message,
+            input,
+        }],
+    )
+}
+
 fn input_value(input: &Value) -> String {
     let repr = repr_json(input);
     let characters = repr.chars().collect::<Vec<_>>();

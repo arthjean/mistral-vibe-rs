@@ -20,6 +20,7 @@ use super::{
 use crate::engine::{ToolExecutor, ToolFuture, ToolStreamSink};
 use crate::events::RemoteToolOrigin;
 use crate::matching::NameFilter;
+use crate::sync;
 use crate::text::truncate_utf8;
 
 /// A runtime prerequisite re-read every time the surface is published.
@@ -89,10 +90,7 @@ impl fmt::Debug for ToolRegistry {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ToolRegistry")
-            .field(
-                "tool_count",
-                &self.tools.read().map_or(0, |tools| tools.len()),
-            )
+            .field("tool_count", &sync::read(&self.tools).len())
             .field("max_output_bytes", &self.max_output_bytes)
             .finish_non_exhaustive()
     }
@@ -129,49 +127,40 @@ impl ToolRegistry {
     /// any earlier source so a re-registration after a working-directory change
     /// reads the directories that change resolved.
     pub fn set_descriptions(&self, source: Arc<dyn descriptions::DescriptionSource>) {
-        if let Ok(mut slot) = self.descriptions.write() {
-            *slot = Some(source);
-        }
+        *sync::write(&self.descriptions) = Some(source);
     }
 
     /// The session's description source, absent until the workspace tools
     /// register.
     #[must_use]
     pub fn descriptions(&self) -> Option<Arc<dyn descriptions::DescriptionSource>> {
-        self.descriptions.read().ok().and_then(|slot| slot.clone())
+        sync::read(&self.descriptions).clone()
     }
 
     /// Installs the guard the session's tools are published behind, replacing
     /// any earlier one so a re-registration after an agent switch carries the
     /// approval agent that registration resolved.
     pub fn set_guard(&self, guard: crate::policy::ToolGuard) {
-        if let Ok(mut slot) = self.guard.write() {
-            *slot = Some(guard);
-        }
+        *sync::write(&self.guard) = Some(guard);
     }
 
     /// The session's guard, absent until the builtin surface registers.
     #[must_use]
     pub fn guard(&self) -> Option<crate::policy::ToolGuard> {
-        self.guard.read().ok().and_then(|slot| slot.clone())
+        sync::read(&self.guard).clone()
     }
 
     /// Installs the session's invoked-skill resolver, replacing any earlier
     /// one: a re-registration after an agent switch re-reads the discovery it
     /// was handed then.
     pub fn set_invoked_skills(&self, resolver: Arc<dyn crate::skills::InvokedSkillResolver>) {
-        if let Ok(mut slot) = self.invoked_skills.write() {
-            *slot = Some(resolver);
-        }
+        *sync::write(&self.invoked_skills) = Some(resolver);
     }
 
     /// The invoked-skill resolver, absent until the `skill` tool registers.
     #[must_use]
     pub fn invoked_skills(&self) -> Option<Arc<dyn crate::skills::InvokedSkillResolver>> {
-        self.invoked_skills
-            .read()
-            .ok()
-            .and_then(|slot| slot.clone())
+        sync::read(&self.invoked_skills).clone()
     }
 
     pub fn register(
@@ -223,7 +212,7 @@ impl ToolRegistry {
     /// implements it.
     #[must_use]
     pub fn remote_origin(&self, name: &str) -> Option<RemoteToolOrigin> {
-        self.tools.read().ok()?.get(name)?.remote.clone()
+        sync::read(&self.tools).get(name)?.remote.clone()
     }
 
     fn insert(
@@ -237,10 +226,7 @@ impl ToolRegistry {
     ) -> Result<RegistrationOutcome, ToolError> {
         spec.validate()?;
         let discovery_index = self.next_discovery_index.fetch_add(1, Ordering::Relaxed);
-        let mut tools = self
-            .tools
-            .write()
-            .map_err(|_| ToolError::RegistryPoisoned)?;
+        let mut tools = sync::write(&self.tools);
         // A provider re-registering its own tool is a refresh, not a second
         // claim on the name, so only a different origin is a duplicate.
         if exclusive
@@ -300,12 +286,12 @@ impl ToolRegistry {
         ordered
     }
 
-    pub fn list(&self) -> Result<Vec<ToolSpec>, ToolError> {
-        let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
-        Ok(Self::in_discovery_order(&tools)
+    pub fn list(&self) -> Vec<ToolSpec> {
+        let tools = sync::read(&self.tools);
+        Self::in_discovery_order(&tools)
             .into_iter()
             .map(|tool| tool.spec.clone())
-            .collect())
+            .collect()
     }
 
     /// The surface a session publishes: every available tool the filters keep.
@@ -329,17 +315,13 @@ impl ToolRegistry {
     /// The order is the discovery order both reference filters preserve, not
     /// the name order this registry stores under: see
     /// [`Self::in_discovery_order`].
-    pub fn available(
-        &self,
-        enabled: Option<&NameFilter>,
-        disabled: &NameFilter,
-    ) -> Result<Vec<ToolSpec>, ToolError> {
+    pub fn available(&self, enabled: Option<&NameFilter>, disabled: &NameFilter) -> Vec<ToolSpec> {
         let overrides = self
             .descriptions()
             .map(|source| source.overrides())
             .unwrap_or_default();
-        let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
-        Ok(Self::in_discovery_order(&tools)
+        let tools = sync::read(&self.tools);
+        Self::in_discovery_order(&tools)
             .into_iter()
             .filter(|tool| tool.available())
             .map(|tool| tool.spec.clone())
@@ -351,14 +333,14 @@ impl ToolRegistry {
                 }
                 spec
             })
-            .collect())
+            .collect()
     }
 
     /// The registered names no publication can carry, because the prerequisite
     /// they were registered under does not hold.
-    pub fn withheld(&self) -> Result<Vec<String>, ToolError> {
-        let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
-        Ok(tools
+    pub fn withheld(&self) -> Vec<String> {
+        let tools = sync::read(&self.tools);
+        tools
             .values()
             .filter(|tool| {
                 tool.condition
@@ -366,7 +348,7 @@ impl ToolRegistry {
                     .is_some_and(|condition| !condition())
             })
             .map(|tool| tool.spec.name.clone())
-            .collect())
+            .collect()
     }
 
     /// Removes every tool `source` published, answering their names.
@@ -375,11 +357,8 @@ impl ToolRegistry {
     /// tools it registers again take the end of the discovery order: reference
     /// `integrate_connectors_async` drops the connector tools from the manager
     /// and appends the new ones.
-    pub fn retract_source(&self, source: ToolSource) -> Result<Vec<String>, ToolError> {
-        let mut tools = self
-            .tools
-            .write()
-            .map_err(|_| ToolError::RegistryPoisoned)?;
+    pub fn retract_source(&self, source: ToolSource) -> Vec<String> {
+        let mut tools = sync::write(&self.tools);
         let retracted = tools
             .values()
             .filter(|tool| tool.spec.source == source)
@@ -388,7 +367,7 @@ impl ToolRegistry {
         for name in &retracted {
             tools.remove(name);
         }
-        Ok(retracted)
+        retracted
     }
 
     pub fn set_availability(
@@ -396,43 +375,37 @@ impl ToolRegistry {
         name: &str,
         source: ToolSource,
         availability: ToolAvailability,
-    ) -> Result<bool, ToolError> {
-        let mut tools = self
-            .tools
-            .write()
-            .map_err(|_| ToolError::RegistryPoisoned)?;
+    ) -> bool {
+        let mut tools = sync::write(&self.tools);
         let Some(registered) = tools.get_mut(name) else {
-            return Ok(false);
+            return false;
         };
         if registered.spec.source != source {
-            return Ok(false);
+            return false;
         }
         registered.spec.availability = availability;
-        Ok(true)
+        true
     }
 
     pub fn set_availabilities(
         &self,
         source: ToolSource,
         updates: &[(String, ToolAvailability)],
-    ) -> Result<bool, ToolError> {
-        let mut tools = self
-            .tools
-            .write()
-            .map_err(|_| ToolError::RegistryPoisoned)?;
+    ) -> bool {
+        let mut tools = sync::write(&self.tools);
         if updates.iter().any(|(name, _)| {
             tools
                 .get(name)
                 .is_none_or(|registered| registered.spec.source != source)
         }) {
-            return Ok(false);
+            return false;
         }
         for (name, availability) in updates {
             if let Some(registered) = tools.get_mut(name) {
                 registered.spec.availability = *availability;
             }
         }
-        Ok(true)
+        true
     }
 
     /// What the policy in front of `name` makes of a call, the way invoking
@@ -444,10 +417,7 @@ impl ToolRegistry {
         name: &str,
         mut invocation: ToolInvocation,
     ) -> Option<Result<crate::policy::PermissionOutcome, crate::policy::PolicyError>> {
-        let registered = {
-            let tools = self.tools.read().ok()?;
-            tools.get(name).cloned()?
-        };
+        let registered = { sync::read(&self.tools).get(name).cloned()? };
         if !registered.available() {
             return None;
         }
@@ -477,7 +447,7 @@ impl ToolRegistry {
         stream: Option<ToolStreamSink>,
     ) -> Result<ToolExecutionOutput, ToolError> {
         let registered = {
-            let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
+            let tools = sync::read(&self.tools);
             tools
                 .get(name)
                 .cloned()
@@ -554,11 +524,7 @@ impl ToolExecutor for ToolRegistry {
         let mut arguments: Value = serde_json::from_str(arguments)
             .map_err(|error| format!("invalid tool arguments: {error}"))?;
         let schema = {
-            let tools = self
-                .tools
-                .read()
-                .map_err(|_| ToolError::RegistryPoisoned.to_string())?;
-            tools
+            sync::read(&self.tools)
                 .get(name)
                 .map(|registered| registered.spec.input_schema.clone())
                 .ok_or_else(|| ToolError::Unavailable(name.to_owned()).to_string())?
@@ -579,9 +545,7 @@ impl ToolExecutor for ToolRegistry {
     }
 
     fn publishes(&self, name: &str) -> bool {
-        self.tools
-            .read()
-            .is_ok_and(|tools| tools.contains_key(name))
+        sync::read(&self.tools).contains_key(name)
     }
 
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {

@@ -18,7 +18,7 @@ use thiserror::Error;
 use crate::engine::{ToolStreamItem, ToolStreamSink};
 use crate::text::truncate_utf8;
 
-pub(crate) mod document;
+pub mod document;
 mod registry;
 mod validate;
 
@@ -32,7 +32,6 @@ use validate::{
 pub mod builtins;
 pub mod config;
 pub mod descriptions;
-pub mod reference_text;
 pub mod shell;
 
 #[cfg(test)]
@@ -392,7 +391,7 @@ impl CallProgress {
     /// The decision the permission gate reached, once it reached one.
     #[must_use]
     pub fn approval(&self) -> Option<ToolApproval> {
-        self.approval.lock().ok().and_then(|approval| *approval)
+        *crate::sync::lock(&self.approval)
     }
 
     /// Whether the call is waiting on the operator's answer to its approval
@@ -419,9 +418,7 @@ pub fn mark_awaiting_approval(waiting: bool) {
 /// nothing.
 pub fn mark_call_started(approval: ToolApproval) {
     let _ = CALL_PROGRESS.try_with(|progress| {
-        if let Ok(mut slot) = progress.approval.lock() {
-            *slot = Some(approval);
-        }
+        *crate::sync::lock(&progress.approval) = Some(approval);
         progress
             .started
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -505,8 +502,6 @@ where
 
 #[derive(Debug, Error)]
 pub enum ToolError {
-    #[error("tool registry lock is poisoned")]
-    RegistryPoisoned,
     /// A call the permission gate let through and that then failed.
     #[error("{source}")]
     Approved {

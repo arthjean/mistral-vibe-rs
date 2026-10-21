@@ -37,7 +37,7 @@ impl ServerConnection {
     /// The state of a session this connection holds, or `None` for one it
     /// does not.
     pub(super) fn live_state(&self, session_id: &str) -> Result<Option<Value>, ProtocolFault> {
-        let sessions = self.server.lock_sessions()?;
+        let sessions = self.server.lock_sessions();
         Ok(sessions
             .get(session_id)
             .filter(|session| {
@@ -119,14 +119,12 @@ impl ServerConnection {
         }
         let live = (self.root_id().as_deref() == Some(session_id.as_str()))
             .then(|| {
-                self.server.lock_sessions().ok().and_then(|sessions| {
-                    sessions.get(&session_id).map(|session| {
-                        session
-                            .snapshot
-                            .as_ref()
-                            .map(|snapshot| snapshot.history.clone())
-                            .unwrap_or_default()
-                    })
+                self.server.lock_sessions().get(&session_id).map(|session| {
+                    session
+                        .snapshot
+                        .as_ref()
+                        .map(|snapshot| snapshot.history.clone())
+                        .unwrap_or_default()
                 })
             })
             .flatten();
@@ -191,7 +189,7 @@ impl ServerConnection {
         }
         let turns = match self.require_root(&session_id) {
             Ok(_) => {
-                let sessions = self.server.lock_sessions()?;
+                let sessions = self.server.lock_sessions();
                 sessions
                     .get(&session_id)
                     .map(|session| session.turns.clone())
@@ -232,7 +230,7 @@ impl ServerConnection {
         let Some(root) = self.root_key() else {
             return Ok(None);
         };
-        let sessions = self.server.lock_sessions()?;
+        let sessions = self.server.lock_sessions();
         let Some(snapshot) = sessions
             .get(&root)
             .and_then(|session| session.snapshot.as_ref())

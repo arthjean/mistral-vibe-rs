@@ -16,7 +16,6 @@ fn plan_review_tool_is_absent_without_a_canonical_plan_directory() {
 
     let names = tools
         .list()
-        .expect("tools list")
         .into_iter()
         .map(|spec| spec.name)
         .collect::<Vec<_>>();

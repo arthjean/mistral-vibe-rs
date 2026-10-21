@@ -1,7 +1,8 @@
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
 use tokio::sync::mpsc::{self, Receiver};
+use vibe_core::sync::lock;
 
 use super::attachments::{normalize_pasted_text, normalize_typed_text};
 use super::chat_input::{EditorSnapshot, InputEffect, InputEvent};
@@ -63,10 +64,7 @@ impl PathNormalizationManager {
             request,
         };
         let (state, ready) = self.state.as_ref();
-        let mut state = state
-            .lock()
-            .map_err(|_| "path normalization worker lock is poisoned".to_owned())?;
-        state.pending = Some(work);
+        lock(state).pending = Some(work);
         ready.notify_one();
         Ok(())
     }
@@ -96,7 +94,8 @@ impl PathNormalizationManager {
     pub fn shutdown(&mut self) {
         self.results.close();
         let (state, ready) = self.state.as_ref();
-        if let Ok(mut state) = state.lock() {
+        {
+            let mut state = lock(state);
             state.shutdown = true;
             state.pending = None;
             ready.notify_one();
@@ -156,15 +155,11 @@ fn worker_loop(
     loop {
         let work = {
             let (state, ready) = shared.as_ref();
-            let Ok(mut state) = state.lock() else {
-                return;
-            };
-            while state.pending.is_none() && !state.shutdown {
-                let Ok(next) = ready.wait(state) else {
-                    return;
-                };
-                state = next;
-            }
+            let mut state = ready
+                .wait_while(lock(state), |state| {
+                    state.pending.is_none() && !state.shutdown
+                })
+                .unwrap_or_else(PoisonError::into_inner);
             if state.shutdown {
                 return;
             }

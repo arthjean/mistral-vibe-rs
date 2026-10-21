@@ -94,12 +94,7 @@ fn todo_settings() -> TodoConfig {
 }
 
 fn names(registry: &ToolRegistry) -> Vec<String> {
-    registry
-        .list()
-        .expect("list")
-        .into_iter()
-        .map(|spec| spec.name)
-        .collect()
+    registry.list().into_iter().map(|spec| spec.name).collect()
 }
 
 fn probe_access(endpoint: String) -> WebSearchAccess {
@@ -234,7 +229,6 @@ async fn the_todo_enums_carry_the_reference_members_in_order() {
     let registry = registered(directory.path(), None).await;
     let schema = registry
         .list()
-        .expect("list")
         .into_iter()
         .find(|spec| spec.name == "todo")
         .expect("todo is published")

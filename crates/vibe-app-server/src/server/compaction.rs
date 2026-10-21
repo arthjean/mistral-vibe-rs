@@ -31,7 +31,7 @@ impl AppServer {
         hydrated: HydratedSession,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let (state, canonical_session_id) = {
-            let mut sessions = self.lock_sessions()?;
+            let mut sessions = self.lock_sessions();
             let session = sessions
                 .get_mut(session_id)
                 .ok_or_else(|| session_missing("Session was not found"))?;
@@ -106,9 +106,7 @@ impl AppServer {
         session_id: &str,
         reason: &str,
     ) -> DispatchBatch {
-        if let Ok(mut sessions) = self.lock_sessions()
-            && let Some(session) = sessions.get_mut(session_id)
-        {
+        if let Some(session) = self.lock_sessions().get_mut(session_id) {
             session.compaction_pending = false;
             session.updated_at = now_millis();
         }

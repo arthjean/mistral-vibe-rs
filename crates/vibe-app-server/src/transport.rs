@@ -14,12 +14,13 @@ use crate::client::interactive::{
 };
 use crate::client::{
     DriverError, TurnDriver, TurnReservation, public_driver_error, public_turn_error,
+    schedule_title,
 };
 use crate::live_projection::{
     AppServerUpdate, app_server_notification, app_server_update_channel_for_turn,
 };
 use crate::server::{AppServer, DeferredWork, ServerConnection, ServerError, server_error_frame};
-use crate::sync::lock;
+use vibe_core::sync::lock;
 
 pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
 const TASK_CLEANUP_GRACE: Duration = Duration::from_secs(5);
@@ -765,41 +766,23 @@ async fn run_turn<D>(
     // asking reaches the client first.
     let (questions, mut asked) = mpsc::unbounded_channel();
     lock(&routes).insert(reservation.session_id.clone(), questions);
-    // Reference `_schedule_title_generation_events`: a completed model step
-    // may make a title due, which runs beside the rest of the turn and lands
-    // whenever the utility model answers.
-    let schedule_title = |update: &AppServerUpdate| {
-        let AppServerUpdate::StepCompleted {
+    let publish = |update: AppServerUpdate| -> Result<(), ServerError> {
+        if let AppServerUpdate::StepCompleted {
             session_id,
             turn_completing,
-        } = update
-        else {
-            return;
-        };
-        let Some(periodic) = driver.title_model_is_fast() else {
-            return;
-        };
-        let Some((job, started)) = server.title_job(session_id, periodic, *turn_completing) else {
-            return;
-        };
-        let _ = events.send(ServeEvent::Frame(started));
-        let title = driver.generate_title(
-            job.session_id.clone(),
-            job.messages.clone(),
-            job.previous_title.clone(),
-            server.client_telemetry(),
-        );
-        let server = server.clone();
-        let events = events.clone();
-        tokio::spawn(async move {
-            let title = title.await;
-            for frame in server.land_title(job, title) {
-                let _ = events.send(ServeEvent::Frame(frame));
-            }
-        });
-    };
-    let publish = |update: AppServerUpdate| -> Result<(), ServerError> {
-        schedule_title(&update);
+        } = &update
+        {
+            let events = events.clone();
+            schedule_title(
+                &server,
+                driver.as_ref(),
+                session_id,
+                *turn_completing,
+                move |frame| {
+                    let _ = events.send(ServeEvent::Frame(frame));
+                },
+            );
+        }
         if let Some(bytes) = app_server_notification(&server, update)? {
             let _ = events.send(ServeEvent::Frame(bytes));
         }

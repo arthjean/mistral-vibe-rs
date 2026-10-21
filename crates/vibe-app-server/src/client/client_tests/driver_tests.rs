@@ -695,7 +695,6 @@ fn published_under(enabled: &[&str], disabled: &[&str]) -> Vec<String> {
     );
     executor
         .definitions()
-        .expect("definitions")
         .into_iter()
         .map(|definition| definition.name)
         .collect()

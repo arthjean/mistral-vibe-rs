@@ -386,7 +386,6 @@ impl McpRegistry {
                 &tool_names,
                 ToolAvailability::Disabled,
             )
-            .map_err(|error| McpError::Tool(error.to_string()))?
         {
             return Err(McpError::Tool(
                 "MCP tool registry changed during server disable".to_owned(),
@@ -434,10 +433,7 @@ impl McpRegistry {
             )));
         }
         let availability = tool_availability(enabled, &BTreeSet::new(), tool_name);
-        if !tools
-            .set_availability(tool_name, ToolSource::Mcp, availability)
-            .map_err(|error| McpError::Tool(error.to_string()))?
-        {
+        if !tools.set_availability(tool_name, ToolSource::Mcp, availability) {
             return Err(McpError::Tool(format!(
                 "MCP tool `{tool_name}` is no longer registered"
             )));
@@ -483,19 +479,10 @@ impl McpRegistry {
         let mut cleanup_diagnostic = None;
         if let Some(tools) = tools {
             for tool_name in tool_names {
-                match tools.set_availability(&tool_name, ToolSource::Mcp, availability) {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        cleanup_diagnostic = Some(format!(
-                            "MCP `{alias}`: tool registry changed during authentication cleanup"
-                        ));
-                    }
-                    Err(error) => {
-                        cleanup_diagnostic = Some(canonical_diagnostic(
-                            alias,
-                            &McpError::Tool(error.to_string()),
-                        ));
-                    }
+                if !tools.set_availability(&tool_name, ToolSource::Mcp, availability) {
+                    cleanup_diagnostic = Some(format!(
+                        "MCP `{alias}`: tool registry changed during authentication cleanup"
+                    ));
                 }
             }
         }

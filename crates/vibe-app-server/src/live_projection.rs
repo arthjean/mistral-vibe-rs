@@ -15,6 +15,7 @@ use vibe_core::events::{
     ApplyOutcome, EngineEvent, EventEnvelope, ProjectionReducer, ProjectionSnapshot,
     PublicHistoryEntry, SessionHandoffCause,
 };
+use vibe_core::sync::lock;
 
 use crate::server::{AppServer, HandoffNotice, ServerError, notification_method};
 
@@ -137,10 +138,7 @@ pub(crate) fn app_server_update_channel_for_turn(
 
 impl EventObserver for AppServerEventObserver {
     fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
-        let mut projection = self
-            .projection
-            .lock()
-            .map_err(|_| "app-server projection lock is poisoned".to_owned())?;
+        let mut projection = lock(&self.projection);
         if projection
             .reducer
             .apply(event)

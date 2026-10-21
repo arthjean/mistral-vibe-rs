@@ -29,6 +29,7 @@ use toml::{Table, Value};
 
 use crate::config::{ConfigSnapshot, LayeredConfig};
 use crate::policy::PermissionMode;
+use crate::sync;
 
 mod declarations;
 mod lists;
@@ -596,8 +597,8 @@ impl ToolConfigResolver {
             }
             accepted.insert(tool, Value::Table(kept));
         }
-        *write_through_poison(&self.settings) = accepted;
-        *lock_through_poison(&self.diagnostics) = diagnostics;
+        *sync::write(&self.settings) = accepted;
+        *sync::lock(&self.diagnostics) = diagnostics;
     }
 
     /// Reads the `tools` table and the shell rollout out of `snapshot` and
@@ -616,7 +617,7 @@ impl ToolConfigResolver {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
         );
-        *write_through_poison(&self.mistral_server_url) =
+        *sync::write(&self.mistral_server_url) =
             crate::telemetry::mistral_provider(&snapshot.effective).and_then(|provider| {
                 provider
                     .get("api_base")
@@ -631,10 +632,7 @@ impl ToolConfigResolver {
     /// SDK's default. Reference `WebSearch._resolve_server_url`.
     #[must_use]
     pub fn mistral_server_url(&self) -> Option<String> {
-        self.mistral_server_url
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        sync::read(&self.mistral_server_url).clone()
     }
 
     /// Whether the managed shell family is published in place of the one-shot
@@ -678,7 +676,7 @@ impl ToolConfigResolver {
     /// What the last [`Self::update`] refused, one line per refused value.
     #[must_use]
     pub fn diagnostics(&self) -> Vec<String> {
-        lock_through_poison(&self.diagnostics).clone()
+        sync::lock(&self.diagnostics).clone()
     }
 
     /// The configuration `tool` reads: its declared defaults, the operator's
@@ -812,19 +810,6 @@ fn merge_entry(values: &mut BTreeMap<String, Value>, settings: &Table, tool: &st
 /// `(alias, canonical)`: `max_inline_chars` is read as `max_inline_bytes` by
 /// every model declaring the latter.
 const CONFIG_ALIASES: &[(&str, &str)] = &[("max_inline_chars", "max_inline_bytes")];
-
-/// The write guard, whether or not a panicking writer poisoned the lock.
-///
-/// A poisoned settings lock still holds a table, and refusing to write through
-/// it would freeze every later configuration change behind one panic.
-fn write_through_poison<T>(lock: &RwLock<T>) -> std::sync::RwLockWriteGuard<'_, T> {
-    lock.write()
-        .unwrap_or_else(|poisoned| poisoned.into_inner())
-}
-
-fn lock_through_poison<T>(lock: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
-}
 
 fn is_positive(value: &Value) -> bool {
     value

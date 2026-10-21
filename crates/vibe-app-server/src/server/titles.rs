@@ -34,9 +34,8 @@ impl AppServer {
             return false;
         }
         self.lock_sessions()
-            .ok()
-            .and_then(|sessions| sessions.get(session_id).map(|session| session.auto_title))
-            .unwrap_or(false)
+            .get(session_id)
+            .is_some_and(|session| session.auto_title)
     }
 
     /// The title the model step that just completed on `session_id` makes
@@ -55,7 +54,7 @@ impl AppServer {
             return None;
         }
         let store = self.workspace.session_store();
-        let mut sessions = self.lock_sessions().ok()?;
+        let mut sessions = self.lock_sessions();
         let session = sessions.get_mut(session_id)?;
         if !session.auto_title || session.title_in_flight {
             return None;
@@ -85,9 +84,7 @@ impl AppServer {
     /// again. A session that moved on to another identifier meanwhile keeps
     /// its own title and hears nothing.
     pub(crate) fn land_title(&self, job: TitleJob, title: Option<String>) -> Vec<Vec<u8>> {
-        let Ok(mut sessions) = self.lock_sessions() else {
-            return Vec::new();
-        };
+        let mut sessions = self.lock_sessions();
         let Some(session) = sessions.get_mut(&job.session_id) else {
             return Vec::new();
         };

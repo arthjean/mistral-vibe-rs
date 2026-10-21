@@ -8,6 +8,7 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use serde_json::Value;
 use tempfile::{TempDir, tempdir};
 
 use super::session::{SessionLimits, new_session_id};
@@ -77,9 +78,7 @@ impl Harness {
     }
 
     fn shell(&self) -> Arc<SessionShell> {
-        self.tools
-            .session_shell("session-1", self.family)
-            .expect("session shell")
+        self.tools.session_shell("session-1", self.family)
     }
 
     fn approval_count(&self) -> usize {
@@ -122,7 +121,6 @@ impl Harness {
         let tool = self.family_tool(tool);
         self.registry
             .list()
-            .expect("list")
             .into_iter()
             .find(|spec| spec.name == tool)
             .expect("the tool is published")
@@ -137,7 +135,6 @@ impl Harness {
         let tool = self.family_tool(tool);
         self.registry
             .list()
-            .expect("list")
             .into_iter()
             .find(|spec| spec.name == tool)
             .expect("the tool is published")
@@ -147,7 +144,6 @@ impl Harness {
     fn names(&self) -> Vec<String> {
         self.registry
             .list()
-            .expect("list")
             .into_iter()
             .map(|spec| spec.name)
             .collect()
@@ -356,7 +352,6 @@ fn the_managed_variant_outranks_the_legacy_one_whatever_the_registration_order()
         }
         let published = registry
             .list()
-            .expect("list")
             .into_iter()
             .find(|spec| spec.name == "bash")
             .expect("bash is published");
@@ -1485,10 +1480,9 @@ async fn closing_the_session_terminates_every_session_it_left_running() {
 /// wait is honored as asked.
 #[test]
 fn the_foreground_wait_is_bounded_by_the_reference_ceiling() {
-    use super::policy::timeout_argument;
     let settings = shell_settings();
     let seconds = |arguments: Value, settings: &ShellCommandConfig| {
-        timeout_argument(&arguments, settings).as_secs_f64()
+        call_arguments(arguments).wait(settings).as_secs_f64()
     };
     assert_eq!(seconds(json!({}), &settings), 300.0);
     assert_eq!(seconds(json!({"timeout": 5}), &settings), 5.0);
@@ -1515,13 +1509,22 @@ fn the_foreground_wait_is_bounded_by_the_reference_ceiling() {
 #[test]
 fn the_legacy_wait_reads_the_default_for_zero_and_has_no_ceiling() {
     let settings = shell_settings();
-    assert_eq!(legacy_timeout(&json!({}), &settings), 300);
-    assert_eq!(legacy_timeout(&json!({"timeout": 0}), &settings), 300);
-    assert_eq!(legacy_timeout(&json!({"timeout": 5}), &settings), 5);
+    let legacy_timeout = |arguments: Value, settings: &ShellCommandConfig| {
+        call_arguments(arguments).legacy_wait(settings)
+    };
+    assert_eq!(legacy_timeout(json!({}), &settings), 300);
+    assert_eq!(legacy_timeout(json!({"timeout": 0}), &settings), 300);
+    assert_eq!(legacy_timeout(json!({"timeout": 5}), &settings), 5);
     assert_eq!(
-        legacy_timeout(&json!({"timeout": 100_000}), &settings),
+        legacy_timeout(json!({"timeout": 100_000}), &settings),
         100_000
     );
+}
+
+/// A command call carrying `arguments` beside a command.
+fn call_arguments(mut arguments: Value) -> ShellCallArguments {
+    arguments["command"] = json!("true");
+    ShellCallArguments::read(&arguments).expect("the call names a command")
 }
 
 /// The declared `bash` configuration, which is what a call resolves when
@@ -1649,7 +1652,6 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
     let published = || {
         registry
             .available(None, &NameFilter::default())
-            .expect("available")
             .into_iter()
             .map(|spec| spec.name)
             .collect::<Vec<_>>()
@@ -1662,7 +1664,7 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
         "an uninstalled interpreter still published: {:?}",
         published()
     );
-    assert_eq!(registry.withheld().expect("withheld").len(), 5);
+    assert_eq!(registry.withheld().len(), 5);
     assert!(matches!(
         registry
             .invoke(
@@ -3172,7 +3174,7 @@ async fn the_orphan_filter_reads_the_identifier_rather_than_the_file_name() {
     let adopted = format!("{prefix}_20260101_000000_deadbeef");
     std::fs::write(
         directory.join("left-behind.json"),
-        format!("{{\"session_id\": \"{adopted}\", \"status\": \"running\"}}"),
+        serde_json::to_vec(&full_manifest(&harness, &adopted)).expect("the manifest encodes"),
     )
     .expect("an unhelpfully named manifest");
     // What this port wrote before US-296: a camelCase key and an
@@ -3209,6 +3211,57 @@ async fn the_orphan_filter_reads_the_identifier_rather_than_the_file_name() {
         !ids.contains(&previous),
         "a manifest in the previous format was read: {ids:?}"
     );
+}
+
+/// Reference `list_sessions` validates every orphan it lists, so a manifest of
+/// this family that lacks a required field fails the whole listing rather than
+/// being described with stand-ins for what it did not record.
+#[tokio::test]
+async fn a_fragment_manifest_refuses_the_sessions_listing() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let directory = harness.shell().sessions_directory();
+    std::fs::create_dir_all(&directory).expect("the sessions directory");
+    let fragment = format!("{}_20260101_000000_deadbeef", harness.family.name());
+    let mut manifest = full_manifest(&harness, &fragment);
+    manifest
+        .as_object_mut()
+        .expect("the manifest is an object")
+        .remove("command");
+    std::fs::write(
+        directory.join(format!("{fragment}.json")),
+        serde_json::to_vec(&manifest).expect("the manifest encodes"),
+    )
+    .expect("a fragment manifest");
+
+    let restarted = reopened(&harness).await;
+    let refused = invoke(
+        &harness,
+        &restarted,
+        "bash_sessions",
+        json!({"action": "list"}),
+    )
+    .await
+    .expect_err("the fragment refuses the listing");
+    assert!(refused.to_string().contains(&fragment), "{refused}");
+}
+
+/// A manifest carrying every field reference `SessionInfo` requires, for a
+/// session `session_id` that a previous process left running.
+fn full_manifest(harness: &Harness, session_id: &str) -> Value {
+    json!({
+        "session_id": session_id,
+        "command": "sleep 30",
+        "cwd": harness.root().to_string_lossy(),
+        "shell": "/bin/bash",
+        "status": "running",
+        "output_path": harness
+            .shell()
+            .sessions_directory()
+            .join(format!("{session_id}.log"))
+            .to_string_lossy(),
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:01+00:00",
+    })
 }
 
 /// The eleven fields reference `SessionInfo` declares, in the order the

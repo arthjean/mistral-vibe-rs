@@ -19,10 +19,7 @@ impl ServerConnection {
             Err(error) => return catalog_error_batch(request.id, error),
         };
         let target = {
-            let sessions = match self.server.lock_sessions() {
-                Ok(sessions) => sessions,
-                Err(error) => return internal_error_batch(request.id, &error),
-            };
+            let sessions = self.server.lock_sessions();
             let attached = |session_id: &str| {
                 sessions
                     .key(session_id)
@@ -85,7 +82,7 @@ impl ServerConnection {
             return Ok(self.feedback_request(request, &session_id));
         }
         let session_active = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             sessions
                 .get(&session_id)
                 .is_some_and(|session| session.active_turn.is_some())
@@ -105,12 +102,8 @@ impl ServerConnection {
                 close_after_flush: false,
             });
         }
-        let mut result = self
-            .server
-            .resources
-            .lock()
-            .map_err(|_| ProtocolFault::internal("Resource state lock is poisoned"))?
-            .dispatch(&request.method, &request.params, session_active);
+        let mut result =
+            lock(&self.server.resources).dispatch(&request.method, &request.params, session_active);
         // Reference `project_diagnostics`: the hooks the session loaded, and
         // why the rest did not load, ahead of every other issue.
         if request.method == "diagnostics/list"
@@ -118,7 +111,7 @@ impl ServerConnection {
         {
             let hooks = self
                 .server
-                .lock_sessions()?
+                .lock_sessions()
                 .get(&session_id)
                 .map(|session| session.hooks.clone())
                 .unwrap_or_default();
@@ -173,10 +166,7 @@ impl ServerConnection {
                     runtime["stats"] = stats;
                     runtime["contextWindow"] = json!(context_window);
                 }
-                let ready = match self.server.resources.lock() {
-                    Ok(resources) => resources.is_ready(),
-                    Err(_) => false,
-                };
+                let ready = lock(&self.server.resources).is_ready();
                 result_map([
                     ("runtime", runtime),
                     ("sessionLog", self.server.session_log_summary(session_id)),
@@ -202,17 +192,13 @@ impl ServerConnection {
                 );
             }
             "stats/read" => {
-                let (stats, context_window) = match self.server.lock_sessions() {
-                    Ok(sessions) => {
-                        let session = sessions.get(session_id);
-                        (
-                            public_stats(session),
-                            session.map_or(0, |session| session.context_window),
-                        )
-                    }
-                    Err(error) => {
-                        return Some(internal_error_batch(request.id.clone(), &error));
-                    }
+                let (stats, context_window) = {
+                    let sessions = self.server.lock_sessions();
+                    let session = sessions.get(session_id);
+                    (
+                        public_stats(session),
+                        session.map_or(0, |session| session.context_window),
+                    )
                 };
                 let stats = priced(stats, self.server.workspace.active_model_pricing());
                 result_map([("stats", stats), ("contextWindow", json!(context_window))])
@@ -258,11 +244,7 @@ impl ServerConnection {
                 "client event {} for session {} (correlateLastRequest={}, properties: {properties})",
                 params.name, params.session_id, params.correlate_last_request
             );
-            self.server
-                .resources
-                .lock()
-                .map_err(|_| ProtocolFault::internal("Resource state lock is poisoned"))?
-                .record_log(LogLevel::Info, &message);
+            lock(&self.server.resources).record_log(LogLevel::Info, &message);
             self.server.client_telemetry.record_client_event(
                 &params.name,
                 params.properties.into_iter().collect(),
@@ -305,10 +287,11 @@ impl ServerConnection {
             .and_then(Value::as_u64)
             .and_then(|pending| usize::try_from(pending).ok())
             .unwrap_or(0);
-        let user_messages = match self.server.lock_sessions() {
-            Ok(sessions) => sessions.get(session_id).map_or(0, count_user_messages),
-            Err(error) => return internal_error_batch(request.id, &error),
-        };
+        let user_messages = self
+            .server
+            .lock_sessions()
+            .get(session_id)
+            .map_or(0, count_user_messages);
         let is_mistral = self
             .server
             .workspace

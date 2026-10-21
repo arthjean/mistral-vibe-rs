@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use super::command_policy::analyze_command_policy;
 use super::extract::analyze_text;
 use super::lexer::{WordSplit, split_tokens};
-use super::operands::{expand_home, policy_path_to_host, render_policy_path};
+use super::operands::{policy_path_to_host, render_policy_path};
 use super::repository::{git_repository_identity, git_repository_requires_approval};
 use super::{ShellCommandLists, ShellPolicyContext};
 use crate::platform::PolicyPath;
@@ -232,7 +232,7 @@ fn resolve_tool_path(raw: &str, cwd: &Path) -> PathBuf {
     } else {
         raw.to_owned()
     };
-    let expanded = PathBuf::from(expand_home(&raw));
+    let expanded = crate::platform::expand_home(Path::new(&raw));
     let joined = if expanded.is_absolute() {
         expanded
     } else {

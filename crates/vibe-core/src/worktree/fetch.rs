@@ -31,6 +31,7 @@ use super::WorktreeError;
 use super::git::{GitRepo, NO_HOOKS_PATH, search_trusted_path};
 use crate::child::wait_with_deadline;
 use crate::platform::BackgroundCommand as _;
+use crate::sync::lock;
 
 /// How long a refresh may take before it is abandoned, which the reference
 /// bounds the same way (`vibe/core/git/repo.py:29,440-456`).
@@ -685,9 +686,7 @@ fn config_environment(config: &[(String, String)]) -> Vec<(String, String)> {
 
 fn trusted_git_exec_path(executable: &Path) -> Result<String, UnsafeFetch> {
     let unresolved = || unsafe_fetch("cannot resolve git's trusted helper path");
-    if let Ok(cache) = EXEC_PATHS.lock()
-        && let Some(path) = cache.get(executable)
-    {
+    if let Some(path) = lock(&EXEC_PATHS).get(executable) {
         return Ok(path.clone());
     }
     let mut command = Command::new(executable);
@@ -703,9 +702,7 @@ fn trusted_git_exec_path(executable: &Path) -> Result<String, UnsafeFetch> {
     if !output.status.success() || path.is_empty() {
         return Err(unresolved());
     }
-    if let Ok(mut cache) = EXEC_PATHS.lock() {
-        cache.insert(executable.to_path_buf(), path.clone());
-    }
+    lock(&EXEC_PATHS).insert(executable.to_path_buf(), path.clone());
     Ok(path)
 }
 

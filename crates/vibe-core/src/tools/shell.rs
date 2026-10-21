@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::sync::Mutex;
 
 use crate::policy::{PolicyGuardedTool, ToolGuard};
@@ -38,6 +38,7 @@ use crate::process::{
     TerminalManager, TerminalState,
 };
 use crate::shell::ShellConfig;
+use crate::sync;
 use crate::tools::config::{ShellCommandConfig, ToolConfigResolver};
 use crate::tools::document::Document;
 use crate::tools::{
@@ -80,8 +81,8 @@ pub fn resolve_windows_shell() -> WindowsShell {
 }
 use host::{ShellFamily, family_config, published_family};
 use policy::{
-    CommandWiring, command_argument, environment_overrides, guarded_command, log_file_requirements,
-    render_seconds, stdin_requirements, string_argument, timeout_argument,
+    CommandWiring, ShellCallArguments, guarded_command, log_file_requirements, render_seconds,
+    stdin_requirements,
 };
 use session::{
     SessionShell, SessionStatus, guarded_session, kill_managed_session, run_managed_command,
@@ -166,25 +167,15 @@ impl ShellTools {
     /// unified harness `{**os.environ, **process_environment}` as the
     /// environment its commands run in.
     pub fn set_session_environment(&self, session_id: &str, environment: BTreeMap<String, String>) {
-        let Ok(mut environments) = self.environments.lock() else {
-            return;
-        };
-        let held = environments.entry(session_id.to_owned()).or_default();
-        if let Ok(mut base) = held.lock() {
-            *base = environment;
-        }
+        let held = self.base_environment(session_id);
+        *sync::lock(&held) = environment;
     }
 
     fn base_environment(&self, session_id: &str) -> BaseEnvironment {
-        self.environments
-            .lock()
-            .map(|mut environments| {
-                environments
-                    .entry(session_id.to_owned())
-                    .or_default()
-                    .clone()
-            })
-            .unwrap_or_default()
+        sync::lock(&self.environments)
+            .entry(session_id.to_owned())
+            .or_default()
+            .clone()
     }
 
     /// Publishes this host's shell family for one session.
@@ -251,7 +242,7 @@ impl ShellTools {
         let config = config.clone().with_posix_shell(
             family.uses_posix_shell() && shell_config.flavor != crate::shell::ShellFlavor::Cmd,
         );
-        let shell = self.session_shell(session_id, family)?;
+        let shell = self.session_shell(session_id, family);
         let platform = host.platform;
         let working_directory = working_directory.to_path_buf();
         // Reference `git_bash_shell_available` and `powershell_shell_available`
@@ -386,7 +377,7 @@ impl ShellTools {
     /// A managed session outlives the call that started it by design, so
     /// session teardown is the only place that can stop it.
     pub async fn close_session(&self, session_id: &str) -> Result<(), ToolError> {
-        let Some(shell) = self.take_session_shell(session_id)? else {
+        let Some(shell) = self.take_session_shell(session_id) else {
             return Ok(());
         };
         // Reference `TerminalRuntime.close` resets every family without
@@ -413,16 +404,8 @@ impl ShellTools {
             .map_err(|error| ToolError::Execution(error.to_string()))
     }
 
-    fn session_shell(
-        &self,
-        session_id: &str,
-        family: ShellFamily,
-    ) -> Result<Arc<SessionShell>, ToolError> {
-        let mut sessions = self
-            .sessions
-            .lock()
-            .map_err(|_| ToolError::Execution("the shell session lock is poisoned".to_owned()))?;
-        Ok(sessions
+    fn session_shell(&self, session_id: &str, family: ShellFamily) -> Arc<SessionShell> {
+        sync::lock(&self.sessions)
             .entry(session_id.to_owned())
             .or_insert_with(|| {
                 let shell = Arc::new(SessionShell {
@@ -440,14 +423,11 @@ impl ShellTools {
                 shell.load_orphaned_manifests();
                 shell
             })
-            .clone())
+            .clone()
     }
 
-    fn take_session_shell(&self, session_id: &str) -> Result<Option<Arc<SessionShell>>, ToolError> {
-        self.sessions
-            .lock()
-            .map_err(|_| ToolError::Execution("the shell session lock is poisoned".to_owned()))
-            .map(|mut sessions| sessions.remove(session_id))
+    fn take_session_shell(&self, session_id: &str) -> Option<Arc<SessionShell>> {
+        sync::lock(&self.sessions).remove(session_id)
     }
 }
 
@@ -519,6 +499,7 @@ fn command_handler(
             let client = client_io.clone();
             let call_id = invocation.call_id.clone();
             Box::pin(async move {
+                let call = ShellCallArguments::read(&arguments)?;
                 // A client terminal is one command's terminal: it is created,
                 // waited on and released inside this call, which is why the
                 // delegation covers the legacy variant and leaves the managed
@@ -528,7 +509,7 @@ fn command_handler(
                     && let Some(delegated) = delegated_command(
                         client.as_ref(),
                         &working_directory,
-                        &arguments,
+                        &call,
                         &settings,
                         &output,
                         &call_id,
@@ -542,7 +523,7 @@ fn command_handler(
                         &shell,
                         &config,
                         &working_directory,
-                        &arguments,
+                        &call,
                         &settings,
                         client.as_ref(),
                         &call_id,
@@ -554,14 +535,13 @@ fn command_handler(
                         &shell,
                         &config,
                         &working_directory,
-                        &arguments,
+                        &call,
                         &settings,
                         &output,
                     )
                     .await
                 } else {
-                    run_legacy_command(&shell, &config, &working_directory, &arguments, &settings)
-                        .await
+                    run_legacy_command(&shell, &config, &working_directory, &call, &settings).await
                 }
             })
         },
@@ -572,7 +552,7 @@ fn command_handler(
 async fn delegated_command(
     client: Option<&ClientToolIo>,
     working_directory: &Path,
-    arguments: &Value,
+    call: &ShellCallArguments,
     settings: &ShellCommandConfig,
     output: &ToolOutputSink,
     call_id: &str,
@@ -580,8 +560,8 @@ async fn delegated_command(
     let Some(client) = client.filter(|client| client.supports_terminal()) else {
         return Ok(None);
     };
-    let command = command_argument(arguments)?;
-    let timeout = legacy_timeout(arguments, settings);
+    let command = call.command.clone();
+    let timeout = call.legacy_wait(settings);
     let limit = settings
         .max_output_bytes
         .min(output.remaining_bytes().max(1));
@@ -661,11 +641,11 @@ async fn run_legacy_command(
     shell: &SessionShell,
     config: &ShellConfig,
     working_directory: &Path,
-    arguments: &Value,
+    call: &ShellCallArguments,
     settings: &ShellCommandConfig,
 ) -> Result<ToolExecutionOutput, ToolError> {
-    let command = command_argument(arguments)?;
-    let timeout = legacy_timeout(arguments, settings);
+    let command = &call.command;
+    let timeout = call.legacy_wait(settings);
     // Reference `spawn_shell_command` reads `$SHELL` at every call on a POSIX
     // host, so a session whose environment changed runs the shell it now names.
     let mut config = config.clone();
@@ -680,7 +660,7 @@ async fn run_legacy_command(
         shell,
         &config,
         working_directory,
-        &command,
+        command,
         &[],
         limit.saturating_mul(4),
         false,
@@ -697,7 +677,7 @@ async fn run_legacy_command(
     let stdout = render_stream_chars(&read.chunks, ProcessStream::Stdout, limit);
     let stderr = render_stream_chars(&read.chunks, ProcessStream::Stderr, limit);
     let status = exit_status(&read.state);
-    command_output(&command, stdout, stderr, status)
+    command_output(command, stdout, stderr, status)
 }
 
 /// Runs one command through the Git Bash or PowerShell tool that stands in
@@ -714,14 +694,16 @@ async fn run_windows_fallback(
     shell: &SessionShell,
     config: &ShellConfig,
     working_directory: &Path,
-    arguments: &Value,
+    call: &ShellCallArguments,
     settings: &ShellCommandConfig,
     client: Option<&ClientToolIo>,
     call_id: &str,
 ) -> Result<ToolExecutionOutput, ToolError> {
-    let command = command_argument(arguments)?;
-    let timeout = timeout_argument(arguments, settings);
-    let cwd = string_argument(arguments, "cwd")
+    let command = &call.command;
+    let timeout = call.wait(settings);
+    let cwd = call
+        .cwd
+        .as_deref()
         .filter(|cwd| !cwd.is_empty())
         .map_or_else(
             || working_directory.to_path_buf(),
@@ -730,19 +712,19 @@ async fn run_windows_fallback(
     let resolved = host::resolve_session_shell(
         shell.family,
         config,
-        string_argument(arguments, "shell"),
+        call.shell.as_deref(),
         settings.shell.as_deref(),
     )?;
     let executable = resolved.executable.to_string_lossy().into_owned();
     let limit = settings.max_output_bytes;
-    let overrides = environment_overrides(arguments);
+    let overrides = &call.environment;
     if let Some(client) = client.filter(|client| client.supports_terminal()) {
         let mut environment = shell
             .family
             .environment(false)
             .into_iter()
             .collect::<BTreeMap<_, _>>();
-        environment.extend(overrides);
+        environment.extend(overrides.iter().cloned());
         let (stdout, stderr, status) = run_on_client(
             client,
             ClientShellRequest {
@@ -761,13 +743,13 @@ async fn run_windows_fallback(
                 output_byte_limit: u64::try_from(limit).unwrap_or(u64::MAX),
                 timeout,
             },
-            &command,
+            command,
             limit,
         )
         .await?;
-        return command_output_with_shell(&command, &executable, stdout, stderr, status);
+        return command_output_with_shell(command, &executable, stdout, stderr, status);
     }
-    let spec = process_spec(shell, &resolved, &cwd, &command, &overrides, limit, false);
+    let spec = process_spec(shell, &resolved, &cwd, command, overrides, limit, false);
     let Some(read) = run_to_completion(shell, spec, timeout).await? else {
         return Err(ToolError::Execution(format!(
             "the command timed out after {}s: `{command}`",
@@ -777,23 +759,12 @@ async fn run_windows_fallback(
     let stdout = render_stream_bytes(&read.chunks, ProcessStream::Stdout, limit);
     let stderr = render_stream_bytes(&read.chunks, ProcessStream::Stderr, limit);
     command_output_with_shell(
-        &command,
+        command,
         &executable,
         stdout,
         stderr,
         exit_status(&read.state),
     )
-}
-
-/// Reference `Bash.run`'s wait: `args.timeout or default_timeout`, so a zero
-/// means the default, and no ceiling applies to the legacy variant.
-fn legacy_timeout(arguments: &Value, settings: &ShellCommandConfig) -> u64 {
-    arguments["timeout"]
-        .as_i64()
-        .filter(|seconds| *seconds != 0)
-        .map_or(settings.default_timeout, |seconds| {
-            u64::try_from(seconds).unwrap_or(0)
-        })
 }
 
 /// What one finished command reports, whether this host ran it or a client did.
@@ -871,10 +842,11 @@ fn process_spec(
     // reference merges the call's overrides over them, so a call may still ask
     // for a pager it will read.
     let family = shell.family;
-    if let Ok(base) = shell.base_environment.lock() {
-        spec.environment
-            .extend(base.iter().map(|(key, value)| (key.clone(), value.clone())));
-    }
+    spec.environment.extend(
+        sync::lock(&shell.base_environment)
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone())),
+    );
     spec.unset_environment = family.unset_environment(managed);
     for (key, value) in family.environment(managed) {
         spec.environment.insert(key, value);
@@ -904,4 +876,4 @@ fn exit_status(state: &TerminalState) -> i32 {
 #[cfg(test)]
 mod session_parity_tests;
 #[cfg(test)]
-mod tests;
+mod shell_tests;

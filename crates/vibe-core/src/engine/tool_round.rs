@@ -190,7 +190,7 @@ where
                     let Some(steering) = steering.as_mut() else {
                         continue;
                     };
-                    for (content, inject_implicit) in steering.controls.take_steers()? {
+                    for (content, inject_implicit) in steering.controls.take_steers() {
                         let before = steering.messages.len();
                         if let Some(message) = self
                             .apply_steer(recorder, steering.messages, content, inject_implicit, cancellation)

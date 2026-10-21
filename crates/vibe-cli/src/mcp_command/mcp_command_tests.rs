@@ -66,9 +66,7 @@ impl KeyringBackend for SharedKeyring {
     }
 
     fn delete(&self, service: &str, account: &str) -> Result<(), KeyringFailure> {
-        if let Ok(mut deletions) = self.0.deletions.lock() {
-            deletions.push((service.to_owned(), account.to_owned()));
-        }
+        vibe_core::sync::lock(&self.0.deletions).push((service.to_owned(), account.to_owned()));
         match &self.0.refusal {
             Some(KeyringFailure::NoEntry) => Err(KeyringFailure::NoEntry),
             Some(KeyringFailure::NoBackend) => Err(KeyringFailure::NoBackend),
@@ -121,9 +119,7 @@ impl SharedLogin {
     }
 
     fn record(&self, call: &str) {
-        if let Ok(mut calls) = self.0.calls.lock() {
-            calls.push(call.to_owned());
-        }
+        vibe_core::sync::lock(&self.0.calls).push(call.to_owned());
     }
 }
 

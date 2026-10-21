@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use super::{MAX_LISTED_SKILL_FILES, MAX_LISTED_SKILLS, declared_document};
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::schema::{ObjectSchema, Property};
+use crate::sync;
 use crate::tools::document::Document;
 use crate::tools::{
     ToolAvailability, ToolError, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
@@ -108,15 +109,10 @@ pub(super) fn run_skill(
     // A skill already loaded in this conversation is acknowledged rather than
     // rendered again: the instructions are still in the transcript, and paying
     // for them twice buys nothing.
-    let already_loaded = {
-        let mut loaded = loaded
-            .lock()
-            .map_err(|_| ToolError::Execution("the skill ledger lock is poisoned".to_owned()))?;
-        !loaded
-            .entry(session_id.to_owned())
-            .or_default()
-            .insert(skill.name.clone())
-    };
+    let already_loaded = !sync::lock(loaded)
+        .entry(session_id.to_owned())
+        .or_default()
+        .insert(skill.name.clone());
     Ok(skill_output(skill, directory.as_deref(), already_loaded))
 }
 
@@ -178,12 +174,10 @@ impl crate::skills::InvokedSkillResolver for SkillInvocationResolver {
         );
         let parsed = crate::skills::parse_skill_command(&catalog.skills, prompt)?;
         let skill = catalog.skills.get(&parsed.name)?;
-        if let Ok(mut loaded) = self.loaded.lock() {
-            loaded
-                .entry(self.session_id.clone())
-                .or_default()
-                .insert(skill.name.clone());
-        }
+        sync::lock(&self.loaded)
+            .entry(self.session_id.clone())
+            .or_default()
+            .insert(skill.name.clone());
         let directory = skill_directory(skill);
         Some(crate::skills::InvokedSkill {
             name: skill.name.clone(),

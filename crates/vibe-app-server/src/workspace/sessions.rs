@@ -143,7 +143,7 @@ impl WorkspaceService {
     /// leaves of it upstream: nothing.
     pub(crate) fn discard_draft(&self, session_id: &str) {
         if lock(&self.drafts).remove(session_id).is_some() {
-            let _ = self.continuity.remove(session_id);
+            self.continuity.remove(session_id);
         }
     }
 

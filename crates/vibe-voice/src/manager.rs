@@ -17,11 +17,12 @@
 //! recording was started under, so a caller that starts another recording can
 //! tell a late event from a current one.
 
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio::task::{AbortHandle, JoinHandle};
+use vibe_core::sync::lock;
 use vibe_core::telemetry::TelemetryRecord;
 
 use crate::capture::{AudioRecorder, AudioStream, RecorderError};
@@ -122,14 +123,6 @@ struct Shared {
 }
 
 impl Shared {
-    fn lock(&self) -> MutexGuard<'_, Inner> {
-        // A panic while the lock was held leaves plain data behind; the state
-        // it describes is still the best reading there is.
-        self.inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
     fn emit(&self, event: VoiceEvent) {
         let _ = self.events.send(event);
     }
@@ -148,7 +141,7 @@ impl Shared {
 
     /// Reference `_run_transcription`'s normal end.
     fn finish(&self, run: u64) {
-        let mut inner = self.lock();
+        let mut inner = lock(&self.inner);
         if inner.run != run {
             return;
         }
@@ -175,7 +168,7 @@ impl Shared {
     /// Reference `_run_transcription`'s failure path: the recorder is
     /// cancelled, the manager returns to idle, and the error is reported.
     fn fail(&self, run: u64, message: String) {
-        let mut inner = self.lock();
+        let mut inner = lock(&self.inner);
         if inner.run != run {
             return;
         }
@@ -237,13 +230,13 @@ impl VoiceManager {
 
     #[must_use]
     pub fn state(&self) -> TranscribeState {
-        self.shared.lock().state
+        lock(&self.shared.inner).state
     }
 
     /// Whether a start is opening the microphone.
     #[must_use]
     pub fn is_starting(&self) -> bool {
-        self.shared.lock().starting
+        lock(&self.shared.inner).starting
     }
 
     /// Reference `peak`.
@@ -261,7 +254,7 @@ impl VoiceManager {
     /// resolve, or a recorder that cannot open.
     pub async fn start_recording(&self, request: StartRequest) -> Result<(), RecordingStartError> {
         let client = {
-            let mut inner = self.shared.lock();
+            let mut inner = lock(&self.shared.inner);
             if inner.state != TranscribeState::Idle || inner.starting {
                 return Ok(());
             }
@@ -284,7 +277,7 @@ impl VoiceManager {
         let sample_rate = request.sample_rate;
         let opened = tokio::task::spawn_blocking(move || recorder.start(sample_rate)).await;
         let pending = {
-            let mut inner = self.shared.lock();
+            let mut inner = lock(&self.shared.inner);
             inner.starting = false;
             let audio = match opened {
                 Ok(Ok(audio)) => audio,
@@ -328,7 +321,7 @@ impl VoiceManager {
     /// returns to idle.
     pub async fn stop_recording(&self) {
         let (run, task) = {
-            let mut inner = self.shared.lock();
+            let mut inner = lock(&self.shared.inner);
             if inner.starting {
                 inner.pending = Some(Pending::Stop);
                 return;
@@ -344,7 +337,7 @@ impl VoiceManager {
         // again: the task's ending reads that duration.
         let shared = Arc::clone(&self.shared);
         let stopped = tokio::task::spawn_blocking(move || {
-            let mut inner = shared.lock();
+            let mut inner = lock(&shared.inner);
             if inner.run != run {
                 return false;
             }
@@ -364,7 +357,7 @@ impl VoiceManager {
                 .is_err()
             {
                 abort.abort();
-                let inner = self.shared.lock();
+                let inner = lock(&self.shared.inner);
                 if inner.run != run {
                     return;
                 }
@@ -377,7 +370,7 @@ impl VoiceManager {
                 });
             }
         }
-        let mut inner = self.shared.lock();
+        let mut inner = lock(&self.shared.inner);
         if inner.run != run {
             return;
         }
@@ -387,7 +380,7 @@ impl VoiceManager {
 
     /// Reference `cancel_recording`.
     pub fn cancel_recording(&self) {
-        let mut inner = self.shared.lock();
+        let mut inner = lock(&self.shared.inner);
         if inner.starting {
             inner.pending = Some(Pending::Cancel);
             return;
@@ -408,7 +401,7 @@ impl VoiceManager {
     /// Reference `close`: a running recording is cancelled and its
     /// transcription awaited.
     pub async fn close(&self) {
-        let task = self.shared.lock().task.take();
+        let task = lock(&self.shared.inner).task.take();
         self.cancel_recording();
         if let Some(task) = task {
             let _ = task.await;
@@ -431,12 +424,12 @@ async fn run_transcription(
             event = events.recv() => match event {
                 None => break None,
                 Some(TranscribeEvent::TextDelta(text)) => {
-                    shared.lock().tracking.record_text(&text);
+                    lock(&shared.inner).tracking.record_text(&text);
                     shared.emit(VoiceEvent::Text { tag, text });
                 }
                 Some(TranscribeEvent::Error(message)) => break Some(message),
                 Some(TranscribeEvent::SessionCreated { request_id }) => {
-                    let mut inner = shared.lock();
+                    let mut inner = lock(&shared.inner);
                     inner.tracking.set_recording_id(request_id);
                     let event = inner.tracking.start_event();
                     drop(inner);

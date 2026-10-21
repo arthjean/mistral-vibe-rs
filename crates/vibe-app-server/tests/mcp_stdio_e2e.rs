@@ -228,7 +228,7 @@ async fn discovered_fixture(
     // `nextCursor` (measured by `mcp_transport_parity_tests`), so the tool the
     // fixture holds back for its second page stays unpublished.
     assert_eq!(
-        tools.list().expect("registered tools").len(),
+        tools.list().len(),
         1,
         "only the first page of tools is registered"
     );

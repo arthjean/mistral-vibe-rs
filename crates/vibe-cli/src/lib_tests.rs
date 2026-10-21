@@ -288,9 +288,7 @@ async fn a_programmatic_run_opens_a_headless_session_without_the_interactive_too
 
     impl TurnDriver for IntentRecordingDriver {
         fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a> {
-            if let Ok(mut seen) = self.seen.lock() {
-                *seen = Some(reservation.intent.clone());
-            }
+            *vibe_core::sync::lock(&self.seen) = Some(reservation.intent.clone());
             self.inner.run(reservation)
         }
     }

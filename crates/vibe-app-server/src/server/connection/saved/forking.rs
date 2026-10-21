@@ -24,7 +24,7 @@ impl ServerConnection {
             return Err(not_found(&source));
         }
         let (busy, logging_enabled) = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions.get(&source).ok_or_else(|| not_found(&source))?;
             (
                 session.active_turn.clone(),
@@ -83,9 +83,7 @@ impl ServerConnection {
         }
         let attachment = crate::workspace::runtime_attachment(&forked);
         self.server.attach_workspace_runtime(&attachment, None)?;
-        if let Ok(mut sessions) = self.server.lock_sessions()
-            && let Some(session) = sessions.get_mut(&new_id)
-        {
+        if let Some(session) = self.server.lock_sessions().get_mut(&new_id) {
             session.snapshot = Some(persisted_projection(
                 &forked,
                 u16::try_from(history_limit).unwrap_or(u16::MAX),
@@ -113,8 +111,7 @@ impl ServerConnection {
             return;
         };
         let current = self.root_id_of(&root);
-        if let Ok(mut sessions) = self.server.lock_sessions()
-            && let Some(session) = sessions.get_mut(&root)
+        if let Some(session) = self.server.lock_sessions().get_mut(&root)
             && self.attached_sessions.remove(&root)
         {
             session.attachments = session.attachments.saturating_sub(1);
@@ -124,7 +121,7 @@ impl ServerConnection {
     }
 
     fn root_id_of(&self, key: &str) -> Option<String> {
-        let sessions = self.server.lock_sessions().ok()?;
+        let sessions = self.server.lock_sessions();
         sessions.get(key).map(|session| session.id.clone())
     }
 }

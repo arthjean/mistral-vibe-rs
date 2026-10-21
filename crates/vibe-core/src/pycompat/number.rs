@@ -55,10 +55,12 @@ pub fn repr_float(value: f64) -> String {
     rendered
 }
 
-/// `format(value, ",")`: the digits grouped by three with commas.
+/// `format(value, ",")`: the digits grouped by three with commas. Any
+/// integer type groups as is; a `u128` past the `i128` range saturates at its
+/// maximum.
 #[must_use]
-pub fn thousands(value: impl Into<i128>) -> String {
-    let value = value.into();
+pub fn thousands(value: impl TryInto<i128>) -> String {
+    let value = value.try_into().unwrap_or(i128::MAX);
     let digits = value.unsigned_abs().to_string();
     let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 + 1);
     if value < 0 {

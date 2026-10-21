@@ -39,6 +39,32 @@ impl SessionRegistry {
         self.sessions.get_mut(&key)
     }
 
+    /// The session `session_id` names, while `turn_id` is the turn it runs.
+    pub(super) fn active_turn(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<&SessionRuntime, ServerError> {
+        let session = self
+            .get(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        running(session, turn_id)?;
+        Ok(session)
+    }
+
+    /// [`Self::active_turn`], to change the session.
+    pub(super) fn active_turn_mut(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<&mut SessionRuntime, ServerError> {
+        let session = self
+            .get_mut(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        running(session, turn_id)?;
+        Ok(session)
+    }
+
     /// Inserts a session under its current identifier.
     ///
     /// Any alias the session already carries is indexed, so a resumed session
@@ -114,5 +140,14 @@ impl SessionRegistry {
             session.aliases.insert(alias.to_owned());
         }
         self.aliases.insert(alias.to_owned(), key);
+    }
+}
+
+/// Refuses `session` unless `turn_id` is the turn it runs.
+fn running(session: &SessionRuntime, turn_id: &str) -> Result<(), ServerError> {
+    if session.active_turn.as_deref() == Some(turn_id) {
+        Ok(())
+    } else {
+        Err(ServerError::StaleTurn(turn_id.to_owned()))
     }
 }

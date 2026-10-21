@@ -13,13 +13,15 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::storage::short_session_id;
+
 /// The prefix the reference names every scratchpad with.
 pub const SCRATCHPAD_PREFIX: &str = "vibe-scratchpad-";
 
 /// Where `session_id`'s scratchpad lives, whether or not it exists yet.
 #[must_use]
 pub fn scratchpad_path(session_id: &str) -> PathBuf {
-    let short = session_id.chars().take(8).collect::<String>();
+    let short = short_session_id(session_id);
     std::env::temp_dir().join(format!("{SCRATCHPAD_PREFIX}{short}"))
 }
 

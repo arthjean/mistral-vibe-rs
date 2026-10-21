@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, TryLockError};
+
+use vibe_core::sync::lock;
 
 use super::{CompletionCandidate, CompletionKind};
 use crate::tui::input::InputError;
@@ -346,12 +348,6 @@ impl Default for PathIndex {
 }
 
 impl PathIndex {
-    fn locked(&self) -> Result<MutexGuard<'_, WorkspaceIndex>, InputError> {
-        self.inner.lock().map_err(|_| {
-            InputError::CompletionWorker("completion index lock is poisoned".to_owned())
-        })
-    }
-
     /// What the composer's path completer answers for the text after `@`,
     /// reference `PathCompleter._collect_matches`.
     pub(crate) fn completer_candidates(
@@ -359,7 +355,7 @@ impl PathIndex {
         workspace: &Path,
         raw_query: &str,
     ) -> Result<Vec<CompletionCandidate>, InputError> {
-        self.locked()?.collect(workspace, raw_query)
+        lock(&self.inner).collect(workspace, raw_query)
     }
 
     /// Publishes `file_watcher_for_autocomplete`. The index reads it on every
@@ -375,27 +371,26 @@ impl PathIndex {
         workspace: &Path,
         raw_query: &str,
     ) -> Result<Vec<CompletionCandidate>, InputError> {
-        self.locked()?.candidates(workspace, raw_query)
+        lock(&self.inner).candidates(workspace, raw_query)
     }
 
     /// How many times this index has walked a tree, which is what proves the
     /// two code paths that answer a mention query share one walk.
     #[cfg(test)]
     pub(crate) fn rebuilds(&self) -> u64 {
-        self.inner
-            .lock()
-            .map(|index| index.stats().rebuilds)
-            .unwrap_or_default()
+        lock(&self.inner).stats().rebuilds
     }
 
     /// Takes the watcher diagnostic, which is raised at most once per session.
     /// A query in flight keeps the notice until the next poll rather than
     /// blocking the caller on the walk.
     pub(crate) fn take_notice(&self) -> Option<String> {
-        self.inner
-            .try_lock()
-            .ok()
-            .and_then(|mut index| index.notice.take())
+        let mut index = match self.inner.try_lock() {
+            Ok(index) => index,
+            Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(TryLockError::WouldBlock) => return None,
+        };
+        index.notice.take()
     }
 }
 

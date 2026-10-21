@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use cap_std::ambient_authority;
 use cap_std::fs::{Dir, OpenOptions};
 
+use crate::sync::lock;
 use crate::text::matches_wildcard;
 
 mod confinement;
@@ -92,14 +93,11 @@ impl Workspace {
     }
 
     /// The lock guarding one path's read-modify-write.
-    pub(crate) fn write_lock(&self, relative: &Path) -> Result<Arc<Mutex<()>>, WorkspaceError> {
-        let mut locks = self
-            .write_locks
-            .lock()
-            .map_err(|_| WorkspaceError::LockPoisoned {
-                surface: "file write locks",
-            })?;
-        Ok(locks.entry(relative.to_path_buf()).or_default().clone())
+    pub(crate) fn write_lock(&self, relative: &Path) -> Arc<Mutex<()>> {
+        lock(&self.write_locks)
+            .entry(relative.to_path_buf())
+            .or_default()
+            .clone()
     }
 
     /// Reads a whole workspace file as text, bounded by the byte budget.

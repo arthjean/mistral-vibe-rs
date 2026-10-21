@@ -35,7 +35,8 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
-use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::replay::pinned_reference;
 
 use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
 
@@ -1691,12 +1692,9 @@ fn the_entry_mask_records_one_bit_per_ascii_codepoint() {
 /// the pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "autocompletion") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("autocompletion") else {
         return;
-    }
+    };
     let repository = repo_root();
     let script = repository.join(CAPTURE_SCRIPT);
     let recaptured = repository.join("target/autocompletion-corpus.json");

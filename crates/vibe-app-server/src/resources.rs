@@ -560,9 +560,7 @@ impl ResourceService {
         let registry = self.tool_registries.get(session_id).ok_or_else(|| {
             ResourceError::NotFound(format!("session `{session_id}` was not found"))
         })?;
-        let tools = registry
-            .list()
-            .map_err(|error| ResourceError::Unavailable(error.to_string()))?;
+        let tools = registry.list();
         Ok(Value::Array(
             tools
                 .into_iter()

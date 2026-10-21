@@ -12,8 +12,8 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use crate::sync::lock;
 use std::time::Duration;
+use vibe_core::sync::lock;
 
 use serde_json::{Value, json};
 use tokio::sync::oneshot;

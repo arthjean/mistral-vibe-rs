@@ -30,7 +30,7 @@ where
         &self,
         harness: &Arc<AcpHarness<D>>,
     ) -> Result<(), AcpError> {
-        let callbacks = harness.service.lock().await.drain_callbacks()?;
+        let callbacks = harness.service.lock().await.drain_callbacks();
         for callback in callbacks {
             let PublicHistoryEntry::Callback {
                 metadata,

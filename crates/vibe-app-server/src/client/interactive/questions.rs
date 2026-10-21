@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use vibe_core::schema::{ObjectSchema, Property};
+use vibe_core::tools::document::Document;
 use vibe_core::tools::{
     ToolAvailability, ToolError, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
-    reference_text,
 };
 
 use super::{CallbackChannel, related_entry_id, request_interactive_tool_callback};
@@ -125,19 +125,7 @@ fn question_tool_output(
                 "cancelled question response included answers".to_owned(),
             ));
         }
-        return Ok(ToolExecutionOutput {
-            skip: None,
-            turn_failure: None,
-            approval: None,
-            failure: None,
-            typed_result: json!({"answers": [], "cancelled": true}),
-            model_text: answer_model_text(&[], true),
-            display: json!({"kind": "user_question"}),
-            projected_result: serde_json::Value::Null,
-            chunks: Vec::new(),
-            pending_injection: None,
-            remote_result: None,
-        });
+        return Ok(answer_document(&[], true).into_output(json!({"kind": "user_question"})));
     }
     if answers.len() != questions.len() {
         return Err(ToolError::Execution(format!(
@@ -166,29 +154,7 @@ fn question_tool_output(
             is_other,
         });
     }
-    Ok(ToolExecutionOutput {
-        skip: None,
-        turn_failure: None,
-        approval: None,
-        failure: None,
-        typed_result: json!({
-            "answers": published
-                .iter()
-                .map(|answer| json!({
-                    "question": answer.question,
-                    "answer": answer.answer,
-                    "is_other": answer.is_other,
-                }))
-                .collect::<Vec<_>>(),
-            "cancelled": false,
-        }),
-        model_text: answer_model_text(&published, false),
-        display: json!({"kind": "user_question"}),
-        projected_result: serde_json::Value::Null,
-        chunks: Vec::new(),
-        pending_injection: None,
-        remote_result: None,
-    })
+    Ok(answer_document(&published, false).into_output(json!({"kind": "user_question"})))
 }
 
 /// One answer as reference `UserAnswer` (`vibe/questions.py:58`) declares it.
@@ -205,24 +171,19 @@ struct PublishedAnswer {
 /// Reference `UserQuestionResult` (`vibe/questions.py:66`) declares `answers`
 /// and `cancelled`, and the agent loop renders one field per line, with the
 /// answer list as Python's repr of a list of dictionaries.
-fn answer_model_text(answers: &[PublishedAnswer], cancelled: bool) -> String {
-    let rendered = answers
+fn answer_document(answers: &[PublishedAnswer], cancelled: bool) -> Document {
+    let answers = answers
         .iter()
         .map(|answer| {
-            vec![
-                ("question", vibe_core::pycompat::repr_str(&answer.question)),
-                ("answer", vibe_core::pycompat::repr_str(&answer.answer)),
-                (
-                    "is_other",
-                    reference_text::boolean(answer.is_other).to_owned(),
-                ),
-            ]
+            Document::new()
+                .field("question", answer.question.as_str())
+                .field("answer", answer.answer.as_str())
+                .field("is_other", answer.is_other)
         })
-        .collect::<Vec<_>>();
-    reference_text::joined(&[
-        ("answers", reference_text::dictionary_list(&rendered)),
-        ("cancelled", reference_text::boolean(cancelled).to_owned()),
-    ])
+        .collect();
+    Document::new()
+        .nested_list("answers", answers)
+        .field("cancelled", cancelled)
 }
 
 fn validate_interactive_answer(

@@ -176,9 +176,7 @@ impl WorkspaceService {
             Err(StorageError::SessionNotFound(_)) => None,
             Err(error) => return Err(storage_error(error)),
         };
-        self.continuity
-            .remove(session_id)
-            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
+        self.continuity.remove(session_id);
         match self.store.delete(session_id) {
             Ok(_) | Err(StorageError::SessionNotFound(_)) => {}
             Err(error) => {

@@ -87,7 +87,6 @@ pub(super) fn start_active_turn(
     service: &HeadlessService<LiveTurnDriver>,
     reservation: TurnReservation,
     scheduled_loop_id: Option<String>,
-    event_id: u64,
     controls: &mut ControlState,
 ) -> Result<ActiveTurn, Box<(TurnReservation, CliError)>> {
     if let Err(error) = controls.begin_turn(&reservation.turn_id) {
@@ -96,18 +95,15 @@ pub(super) fn start_active_turn(
             CliError::Terminal(error.to_string()),
         )));
     }
-    let (observer, updates) = match service.interactive_update_channel_after(
-        &reservation.session_id,
-        &reservation.turn_id,
-        event_id,
-    ) {
-        Ok(channel) => channel,
-        Err(error) => {
-            let turn_id = reservation.turn_id.clone();
-            controls.complete_turn(&turn_id, "Reserved turn failed before local execution");
-            return Err(Box::new((reservation, error.into())));
-        }
-    };
+    let (observer, updates) =
+        match service.turn_updates(&reservation.session_id, &reservation.turn_id) {
+            Ok(channel) => channel,
+            Err(error) => {
+                let turn_id = reservation.turn_id.clone();
+                controls.complete_turn(&turn_id, "Reserved turn failed before local execution");
+                return Err(Box::new((reservation, error.into())));
+            }
+        };
     let observer: Arc<dyn EventObserver> = Arc::new(CompositeEventObserver::new(
         observer,
         service.title_scheduler(),

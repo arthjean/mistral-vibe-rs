@@ -136,7 +136,6 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
 
     let event_id_before_callback = server
         .lock_sessions()
-        .expect("sessions")
         .get("session-1")
         .expect("session")
         .event_watermark;
@@ -152,7 +151,6 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
     assert_eq!(
         server
             .lock_sessions()
-            .expect("sessions")
             .get("session-1")
             .expect("session")
             .event_watermark,
@@ -205,7 +203,6 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
     assert_eq!(
         server
             .lock_sessions()
-            .expect("sessions")
             .get("session-1")
             .expect("session")
             .event_watermark,
@@ -671,7 +668,7 @@ fn a_plan_review_becomes_a_notice_and_leaves_the_callback_detail_conformant() {
         )
         .expect("the plan review is accepted");
 
-    let sessions = server.lock_sessions().expect("sessions");
+    let sessions = server.lock_sessions();
     let history = &sessions
         .get("session-1")
         .expect("session")
@@ -1068,7 +1065,7 @@ fn attachment_counts_are_serialized_and_cleaned_on_close() {
     reattached
         .attach_session("session-1")
         .expect("reattachment succeeds");
-    let sessions = server.lock_sessions().expect("session state");
+    let sessions = server.lock_sessions();
     let session = sessions.get("session-1").expect("reattached session");
     assert_eq!(session.attachments, 1);
     assert_eq!(session.resource_generation, 2);

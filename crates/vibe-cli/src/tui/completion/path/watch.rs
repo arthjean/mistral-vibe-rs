@@ -22,12 +22,13 @@
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use notify::event::{EventKind, ModifyKind, RenameMode};
 use notify::{RecursiveMode, Watcher};
+use vibe_core::sync::lock;
 
 /// The reference's `step=200`: how often the change set is polled.
 const WATCH_STEP: Duration = Duration::from_millis(200);
@@ -82,25 +83,22 @@ struct Flag {
 
 impl Flag {
     fn set(&self) {
-        if let Ok(mut raised) = self.raised.lock() {
-            *raised = true;
-            self.changed.notify_all();
-        }
+        *lock(&self.raised) = true;
+        self.changed.notify_all();
     }
 
     fn is_set(&self) -> bool {
-        self.raised.lock().is_ok_and(|raised| *raised)
+        *lock(&self.raised)
     }
 
     /// Waits until the flag is raised or `timeout` elapses, reporting whether
     /// it was raised.
     fn wait(&self, timeout: Duration) -> bool {
-        let Ok(raised) = self.raised.lock() else {
-            return false;
-        };
-        self.changed
-            .wait_timeout_while(raised, timeout, |raised| !*raised)
-            .is_ok_and(|(raised, _)| *raised)
+        let (raised, _) = self
+            .changed
+            .wait_timeout_while(lock(&self.raised), timeout, |raised| !*raised)
+            .unwrap_or_else(PoisonError::into_inner);
+        *raised
     }
 }
 
@@ -169,7 +167,8 @@ impl WatchController {
                 .map_err(|error| error.to_string())?
         };
         ready.wait(READY_TIMEOUT);
-        if let Some(reason) = failure.lock().ok().and_then(|reason| reason.clone()) {
+        let failed = lock(&failure).clone();
+        if let Some(reason) = failed {
             stop.set();
             drop(thread);
             return Err(reason);
@@ -346,9 +345,7 @@ fn is_ignored_entity(name: &str) -> bool {
 }
 
 fn report(failure: &Arc<Mutex<Option<String>>>, ready: &Arc<Flag>, reason: &str) {
-    if let Ok(mut failure) = failure.lock() {
-        *failure = Some(reason.to_owned());
-    }
+    *lock(failure) = Some(reason.to_owned());
     ready.set();
 }
 

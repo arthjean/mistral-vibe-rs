@@ -33,7 +33,7 @@ impl AppServer {
             .unwrap_or_default();
         let unified = self.unified_session(session_id).is_some();
         let (connector_sources, counts, load_error) = {
-            let sessions = self.lock_sessions().ok()?;
+            let sessions = self.lock_sessions();
             let session = sessions.get(session_id)?;
             let (sources, counts) = if unified {
                 session.connectors.unified_sources()
@@ -73,15 +73,10 @@ impl AppServer {
     /// them (reference `project_mcp_sources` over the harness runtime's
     /// `SessionMCPSourceState`, where the legacy projection sorts them).
     fn unified_tool_rows(&self, session_id: &str, snapshot: &mut serde_json::Map<String, Value>) {
-        let Some(registry) = self
-            .resources
-            .lock()
-            .ok()
-            .and_then(|resources| resources.session_tool_registry(session_id))
-        else {
+        let Some(registry) = lock(&self.resources).session_tool_registry(session_id) else {
             return;
         };
-        let specs = registry.list().unwrap_or_default();
+        let specs = registry.list();
         if let Some(Value::Array(tools)) = snapshot.get_mut("tools") {
             tools.retain(|tool| {
                 specs
@@ -129,40 +124,28 @@ impl AppServer {
     /// what makes the answer live rather than a fixed payload, and it is the
     /// same composition the notification publishes.
     pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
-        let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
-        let (agents, active_agent, stats, context_window, pinned, hooks, plugins, tool_filters) =
-            match self.lock_sessions() {
-                Ok(sessions) => {
-                    let session = sessions.get(session_id);
+        let mut snapshot = lock(&self.resources).runtime(session_id).ok()?;
+        let (agents, active_agent, stats, context_window, pinned, hooks, plugins, tool_filters) = {
+            let sessions = self.lock_sessions();
+            let session = sessions.get(session_id);
+            (
+                session.map(|session| self.agent_workspace(session)),
+                session.and_then(|session| session.intent.agent.clone()),
+                public_stats(session),
+                session.map_or(0, |session| session.context_window),
+                session.is_some_and(|session| session.pinned_model.is_some()),
+                session
+                    .map(|session| session.hooks.clone())
+                    .unwrap_or_default(),
+                session.and_then(|session| self.plugins_of(session)),
+                session.map(|session| {
                     (
-                        session.map(|session| self.agent_workspace(session)),
-                        session.and_then(|session| session.intent.agent.clone()),
-                        public_stats(session),
-                        session.map_or(0, |session| session.context_window),
-                        session.is_some_and(|session| session.pinned_model.is_some()),
-                        session
-                            .map(|session| session.hooks.clone())
-                            .unwrap_or_default(),
-                        session.and_then(|session| self.plugins_of(session)),
-                        session.map(|session| {
-                            (
-                                session.intent.enabled_tools.clone(),
-                                session.intent.disabled_tools.clone(),
-                            )
-                        }),
+                        session.intent.enabled_tools.clone(),
+                        session.intent.disabled_tools.clone(),
                     )
-                }
-                Err(_) => (
-                    None,
-                    None,
-                    public_stats(None),
-                    0,
-                    false,
-                    Default::default(),
-                    None,
-                    None,
-                ),
-            };
+                }),
+            )
+        };
         if let (Some((enabled, disabled)), Some(Value::Array(tools))) =
             (&tool_filters, snapshot.get_mut("tools"))
         {
@@ -240,10 +223,7 @@ impl AppServer {
         if self.workspace.active_model_supports_images() {
             return 0;
         }
-        let Ok(sessions) = self.lock_sessions() else {
-            return 0;
-        };
-        sessions
+        self.lock_sessions()
             .get(session_id)
             .and_then(|session| session.snapshot.as_ref())
             .map(|snapshot| {
@@ -272,17 +252,15 @@ impl AppServer {
         let store = self.workspace.session_store();
         let (held, snapshot_title) = self
             .lock_sessions()
-            .ok()
-            .and_then(|sessions| {
-                sessions.get(session_id).map(|session| {
-                    (
-                        session.persisted.clone(),
-                        session
-                            .snapshot
-                            .as_ref()
-                            .and_then(|snapshot| snapshot.title.clone()),
-                    )
-                })
+            .get(session_id)
+            .map(|session| {
+                (
+                    session.persisted.clone(),
+                    session
+                        .snapshot
+                        .as_ref()
+                        .and_then(|snapshot| snapshot.title.clone()),
+                )
             })
             .unwrap_or_default();
         let metadata = store

@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 use url::Url;
 
 use super::{Inbound, SessionError, protocol};
+use crate::sync::lock;
 
 /// Reference `create_vibe_mcp_http_client` names the client unless the entry
 /// declares its own user agent. The product token is the reference's; the
@@ -95,11 +96,8 @@ impl HttpChannel {
     }
 
     pub(super) fn negotiated(&mut self, version: &str) {
-        if let (Ok(value), Ok(mut slot)) = (
-            HeaderValue::from_str(version),
-            self.shared.protocol_version.lock(),
-        ) {
-            *slot = Some(value);
+        if let Ok(value) = HeaderValue::from_str(version) {
+            *lock(&self.shared.protocol_version) = Some(value);
         }
     }
 
@@ -108,14 +106,10 @@ impl HttpChannel {
     /// once the handshake settled it.
     fn prepared(shared: &HttpShared, base: &HeaderMap) -> HeaderMap {
         let mut headers = base.clone();
-        if let Ok(session) = shared.session_id.lock()
-            && let Some(session) = session.as_ref()
-        {
+        if let Some(session) = lock(&shared.session_id).as_ref() {
             headers.insert("mcp-session-id", session.clone());
         }
-        if let Ok(version) = shared.protocol_version.lock()
-            && let Some(version) = version.as_ref()
-        {
+        if let Some(version) = lock(&shared.protocol_version).as_ref() {
             headers.insert("mcp-protocol-version", version.clone());
         }
         headers
@@ -150,11 +144,8 @@ impl HttpChannel {
                 let _ = sender.send(Inbound::Failed(SessionError::Status(status.as_u16())));
                 return;
             }
-            if initialize
-                && let Some(session) = response.headers().get("mcp-session-id")
-                && let Ok(mut slot) = shared.session_id.lock()
-            {
-                *slot = Some(session.clone());
+            if initialize && let Some(session) = response.headers().get("mcp-session-id") {
+                *lock(&shared.session_id) = Some(session.clone());
             }
             if status == reqwest::StatusCode::ACCEPTED {
                 return;
@@ -196,11 +187,7 @@ impl HttpChannel {
     async fn open_listening_stream(&mut self) {
         // The SDK opens it only on a session the server named: without an
         // `Mcp-Session-Id` it returns before sending anything.
-        let has_session = self
-            .shared
-            .session_id
-            .lock()
-            .is_ok_and(|session| session.is_some());
+        let has_session = lock(&self.shared.session_id).is_some();
         if !has_session {
             return;
         }
@@ -228,11 +215,7 @@ impl HttpChannel {
         for task in &self.tasks {
             task.abort();
         }
-        let has_session = self
-            .shared
-            .session_id
-            .lock()
-            .is_ok_and(|session| session.is_some());
+        let has_session = lock(&self.shared.session_id).is_some();
         if terminate && has_session {
             let _ = self
                 .client

@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicI64;
 use tokio::sync::{Notify, mpsc, oneshot};
 
 use super::*;
-use crate::sync::lock;
 
 /// A session a client opened: its identifier, the answer that opened it and
 /// the work that answer deferred.
@@ -57,12 +56,6 @@ impl Shared {
     /// Whether `session_id` is a session these mirrors follow.
     pub(super) fn serves(&self, session_id: &str) -> bool {
         lock(&self.hub).sessions.contains_key(session_id)
-    }
-
-    fn hub(&self) -> Result<std::sync::MutexGuard<'_, Hub>, ClientError> {
-        self.hub.lock().map_err(|_| {
-            ClientError::InvalidResponse("the unified client lock is poisoned".to_owned())
-        })
     }
 
     /// Folds one frame a unified session published into the mirrors.
@@ -424,8 +417,7 @@ impl UnifiedLink {
             .as_str()
             .map(ToOwned::to_owned)
             .ok_or_else(|| ClientError::InvalidResponse("missing sessionId".to_owned()))?;
-        self.shared
-            .hub()?
+        lock(&self.shared.hub)
             .sessions
             .insert(session_id.clone(), Mirror::new(state));
         let rest = self.settle(server, batch.deferred);
@@ -571,8 +563,7 @@ impl UnifiedLink {
                     && let Some(id) = state["session"]["id"].as_str()
                     && id != session_id
                 {
-                    self.shared
-                        .hub()?
+                    lock(&self.shared.hub)
                         .sessions
                         .insert(id.to_owned(), Mirror::new(state.clone()));
                 }
@@ -580,8 +571,7 @@ impl UnifiedLink {
             }
             None if answered_later => {
                 let (sender, receiver) = oneshot::channel();
-                self.shared
-                    .hub()?
+                lock(&self.shared.hub)
                     .answers
                     .insert(request_key(&request_id), sender);
                 Some(receiver)
@@ -605,14 +595,12 @@ impl UnifiedLink {
     /// Closes the connection of `session_id`, once the session is closed.
     pub(super) fn forget(&mut self, session_id: &str) {
         self.connections.remove(session_id);
-        if let Ok(mut hub) = self.shared.hub() {
-            hub.sessions.remove(session_id);
-        }
+        lock(&self.shared.hub).sessions.remove(session_id);
     }
 
     /// The history the mirror of `session_id` holds.
     pub(super) fn history(&self, session_id: &str) -> Result<Vec<PublicHistoryEntry>, ClientError> {
-        let hub = self.shared.hub()?;
+        let hub = lock(&self.shared.hub);
         let mirror = hub.sessions.get(session_id).ok_or_else(|| {
             ClientError::Server(ServerError::SessionNotFound(session_id.to_owned()))
         })?;
@@ -623,32 +611,18 @@ impl UnifiedLink {
             .collect())
     }
 
-    /// The state the mirror of `session_id` holds, as the wire spells it.
     /// The accounting `session_id` last published, if it published any.
     pub(super) fn accounting(&self, session_id: &str) -> Option<(Value, u64)> {
-        self.shared
-            .hub()
-            .ok()?
+        lock(&self.shared.hub)
             .sessions
             .get(session_id)
             .and_then(|mirror| mirror.accounting.clone())
     }
 
-    pub(super) fn state(&self, session_id: &str) -> Option<Value> {
-        self.shared
-            .hub()
-            .ok()?
-            .sessions
-            .get(session_id)
-            .map(|mirror| mirror.state.clone())
-    }
-
-    /// One field of the state `session_id` last published, without copying
-    /// the rest of it.
-    pub(super) fn state_field(&self, session_id: &str, field: &str) -> Option<Value> {
-        self.shared
-            .hub()
-            .ok()?
+    /// One field of the state `session_id` last published, as the wire
+    /// spells it, without copying the rest of it.
+    pub(super) fn published(&self, session_id: &str, field: &str) -> Option<Value> {
+        lock(&self.shared.hub)
             .sessions
             .get(session_id)
             .and_then(|mirror| mirror.state.get(field).cloned())
@@ -656,11 +630,11 @@ impl UnifiedLink {
 
     /// Opens the channel a turn's entries go to, before the turn can publish
     /// any, and parks its receiving end for the runner.
-    pub(super) fn listen(&self, turn_id: &str) -> Result<(), ClientError> {
+    pub(super) fn listen(&self, turn_id: &str) {
         let (sender, receiver) = tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
-        let mut hub = self.shared.hub()?;
+        let mut hub = lock(&self.shared.hub);
         if hub.parked.contains_key(turn_id) {
-            return Ok(());
+            return;
         }
         for update in hub.orphans.remove(turn_id).unwrap_or_default() {
             let _ = sender.try_send(update);
@@ -669,7 +643,6 @@ impl UnifiedLink {
             hub.listeners.insert(turn_id.to_owned(), sender);
         }
         hub.parked.insert(turn_id.to_owned(), receiver);
-        Ok(())
     }
 
     /// The receiving end [`Self::listen`] parked for `turn_id`.
@@ -677,19 +650,21 @@ impl UnifiedLink {
         &self,
         turn_id: &str,
     ) -> Result<tokio::sync::mpsc::Receiver<ProgrammaticUpdate>, ClientError> {
-        self.shared.hub()?.parked.remove(turn_id).ok_or_else(|| {
-            ClientError::InvalidResponse(format!("turn {turn_id} is not listened to"))
-        })
+        lock(&self.shared.hub)
+            .parked
+            .remove(turn_id)
+            .ok_or_else(|| {
+                ClientError::InvalidResponse(format!("turn {turn_id} is not listened to"))
+            })
     }
 
     /// The callbacks sessions asked for since the last drain, oldest first.
-    pub(super) fn drain_callbacks(&self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
-        let mut hub = self.shared.hub()?;
-        Ok(hub
+    pub(super) fn drain_callbacks(&self) -> Vec<PublicHistoryEntry> {
+        lock(&self.shared.hub)
             .callbacks
             .drain(..)
             .filter_map(|callback| serde_json::from_value(callback).ok())
-            .collect())
+            .collect()
     }
 
     /// A session this link serves, for a read that names none.
@@ -715,9 +690,7 @@ impl UnifiedLink {
 
     /// The session a callback this link delivered belongs to.
     pub(super) fn callback_session(&self, callback_id: &str) -> Option<String> {
-        self.shared
-            .hub()
-            .ok()?
+        lock(&self.shared.hub)
             .callback_sessions
             .get(callback_id)
             .cloned()
@@ -772,7 +745,7 @@ pub(super) async fn settled_turn(
         tokio::pin!(notified);
         notified.as_mut().enable();
         {
-            let mut hub = shared.hub.lock().map_err(|_| DriverError::StatePoisoned)?;
+            let mut hub = lock(&shared.hub);
             if let Some(turn) = hub.settled.remove(&turn_id) {
                 hub.parked.remove(&turn_id);
                 break turn;
@@ -780,7 +753,7 @@ pub(super) async fn settled_turn(
         }
         notified.await;
     };
-    let hub = shared.hub.lock().map_err(|_| DriverError::StatePoisoned)?;
+    let hub = lock(&shared.hub);
     let mirror = hub.sessions.get(&session_id);
     let history: Vec<PublicHistoryEntry> = mirror
         .map(|mirror| {

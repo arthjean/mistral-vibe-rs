@@ -159,7 +159,7 @@ impl ServerConnection {
         decision: WorkspaceTrustDecision,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let (working_directory, busy) = {
-            let sessions = self.server.lock_sessions()?;
+            let sessions = self.server.lock_sessions();
             let session = sessions.get(session_id).ok_or_else(|| {
                 ProtocolFault::new(
                     ProtocolErrorCode::NotFound,
@@ -197,7 +197,7 @@ impl ServerConnection {
         // keeps the verdict the session started with, as upstream's layer
         // cache does.
         let trusted = store.is_trusted(&target) == Some(true);
-        if let Some(session) = self.server.lock_sessions()?.get_mut(session_id) {
+        if let Some(session) = self.server.lock_sessions().get_mut(session_id) {
             session.intent.trusted = trusted;
         }
         self.server

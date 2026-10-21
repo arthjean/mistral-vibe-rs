@@ -780,12 +780,10 @@ async fn a_cleared_context_rotates_the_session_and_keeps_only_the_continuation()
     impl ToolExecutor for ClearingTools {
         fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
             Box::pin(async move {
-                self.controls
-                    .send(TurnControl::ClearContext {
-                        continuation: "Plan approved. Switch to code mode.".to_owned(),
-                        plan_file_path: Some("/plans/session-1.md".to_owned()),
-                    })
-                    .map_err(|error| error.to_string())?;
+                self.controls.send(TurnControl::ClearContext {
+                    continuation: "Plan approved. Switch to code mode.".to_owned(),
+                    plan_file_path: Some("/plans/session-1.md".to_owned()),
+                });
                 Ok(ToolExecutionOutput::text("plan accepted"))
             })
         }
@@ -895,12 +893,10 @@ async fn clearing_without_a_compactor_fails_the_turn() {
     impl ToolExecutor for ClearingTools {
         fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
             Box::pin(async move {
-                self.controls
-                    .send(TurnControl::ClearContext {
-                        continuation: "continue".to_owned(),
-                        plan_file_path: None,
-                    })
-                    .map_err(|error| error.to_string())?;
+                self.controls.send(TurnControl::ClearContext {
+                    continuation: "continue".to_owned(),
+                    plan_file_path: None,
+                });
                 Ok(ToolExecutionOutput::text("plan accepted"))
             })
         }
@@ -1297,12 +1293,10 @@ async fn a_compaction_keeps_the_parent_a_clearing_does_not() {
     impl ToolExecutor for ClearingTools {
         fn execute<'a>(&'a self, _name: &'a str, _arguments: &'a str) -> ToolFuture<'a> {
             Box::pin(async move {
-                self.controls
-                    .send(TurnControl::ClearContext {
-                        continuation: "start over".to_owned(),
-                        plan_file_path: None,
-                    })
-                    .map_err(|error| error.to_string())?;
+                self.controls.send(TurnControl::ClearContext {
+                    continuation: "start over".to_owned(),
+                    plan_file_path: None,
+                });
                 Ok(ToolExecutionOutput::text("cleared"))
             })
         }
@@ -2324,12 +2318,10 @@ async fn a_steer_injects_the_skill_only_when_its_flag_says_so() {
     for (inject, expected_pairs) in [(true, 1_usize), (false, 0_usize)] {
         let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
         let controls = TurnControlHandle::default();
-        controls
-            .send(TurnControl::Steer {
-                content: "/probe".to_owned(),
-                inject_invoked_skill: inject,
-            })
-            .expect("queue steer");
+        controls.send(TurnControl::Steer {
+            content: "/probe".to_owned(),
+            inject_invoked_skill: inject,
+        });
         let outcome = ConversationEngine::new(provider)
             .with_invoked_skills(Arc::new(StubSkills))
             .run_turn_controlled(

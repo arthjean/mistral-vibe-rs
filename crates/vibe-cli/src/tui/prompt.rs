@@ -201,13 +201,7 @@ pub(super) async fn start_prompt_with_client_id(
     clipboard_images
         .consume(&prepared.cleanup_paths, &protected, state)
         .await;
-    let started = match start_active_turn(
-        &runtime.service,
-        reservation,
-        None,
-        state.watermark,
-        controls,
-    ) {
+    let started = match start_active_turn(&runtime.service, reservation, None, controls) {
         Ok(started) => started,
         Err(failure) => {
             let (reservation, error) = *failure;

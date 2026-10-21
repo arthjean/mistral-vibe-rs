@@ -20,9 +20,8 @@ impl AppServer {
         let model = self.workspace.active_model_alias();
         let thinking = self
             .lock_sessions()
-            .ok()
-            .and_then(|sessions| {
-                let session = sessions.get(session_id)?;
+            .get(session_id)
+            .and_then(|session| {
                 self.workspace
                     .session_model(&crate::server::turns::prompt_scope(session, None))
                     .ok()
@@ -41,7 +40,7 @@ impl AppServer {
         unified: &UnifiedSession,
         launch: Option<&vibe_core::telemetry::LaunchContext>,
     ) -> Result<TurnEnvironment, ProtocolFault> {
-        let sessions = self.lock_sessions()?;
+        let sessions = self.lock_sessions();
         let session = sessions
             .get(&unified.id)
             .ok_or_else(|| ProtocolFault::internal("the session is gone"))?;
@@ -73,17 +72,12 @@ impl AppServer {
             .filter(|turns| *turns > 0)
             .unwrap_or(1_000);
         drop(sessions);
-        let tools = self
-            .resources
-            .lock()
-            .ok()
-            .and_then(|resources| resources.session_tool_registry(&unified.id));
+        let tools = lock(&self.resources).session_tool_registry(&unified.id);
         let available: Vec<String> = tools
             .as_ref()
-            .and_then(|tools| tools.list().ok())
-            .map(|specs| {
+            .map(|tools| {
                 published_tool_names(
-                    specs.into_iter().map(|spec| spec.name).collect(),
+                    tools.list().into_iter().map(|spec| spec.name).collect(),
                     &enabled,
                     &disabled,
                 )

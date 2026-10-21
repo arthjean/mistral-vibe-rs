@@ -90,7 +90,7 @@ where
     async fn set_title(&self, params: &Map<String, Value>) -> Result<Value, AcpError> {
         let session_id = text(params, "sessionId")?;
         let title = text(params, "title")?;
-        let live = self.find_live_session(&session_id)?;
+        let live = self.find_live_session(&session_id);
         let renamed = match &live {
             Some(harness) => self
                 .call_async(harness, "session/rename", json!({"title": title}))
@@ -127,8 +127,7 @@ where
                 .service
                 .lock()
                 .await
-                .unified_state(&harness.session_id)
-                .map(|state| state["session"].clone());
+                .published_state(&harness.session_id, "session");
             if let Some(session) = published {
                 let name = |key: &str| session[key].as_str().map(ToOwned::to_owned);
                 if let Some(shown) =
@@ -176,7 +175,7 @@ where
                 _ => Err(error),
             }
         };
-        let Some(harness) = self.find_live_session(session_id)? else {
+        let Some(harness) = self.find_live_session(session_id) else {
             return self
                 .host_call("session/delete", json!({"sessionId": session_id}))
                 .await
@@ -263,7 +262,7 @@ where
             _ => json!({}),
         };
         let harness = self
-            .find_live_session(&session_id)?
+            .find_live_session(&session_id)
             .ok_or_else(|| AcpError::SessionNotFound(session_id.clone()))?;
         let method = match method {
             "loops/list" | "loops/create" | "loops/delete" => method,
@@ -646,7 +645,7 @@ where
     /// What the voice managers are built against, from the session opened
     /// first, or `None` when no session is open.
     async fn voice_session(&self) -> Result<Option<voice::VoiceSession>, AcpError> {
-        let Some(harness) = self.lock_state()?.first_session() else {
+        let Some(harness) = self.lock_state().first_session() else {
             return Ok(None);
         };
         let mut config = self

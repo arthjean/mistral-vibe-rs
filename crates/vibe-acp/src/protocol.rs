@@ -279,8 +279,6 @@ pub enum AcpError {
     /// answers as `Internal error` with the text under `details`.
     #[error("{0}")]
     Unexpected(String),
-    #[error("ACP state lock is poisoned")]
-    StatePoisoned,
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
@@ -337,7 +335,6 @@ impl AcpError {
             | Self::InvalidResponse(_)
             | Self::ClientToolTimeout(_)
             | Self::ClientTool(_)
-            | Self::StatePoisoned
             | Self::Json(_)
             | Self::AppServer(_)
             | Self::Disconnected
@@ -379,7 +376,6 @@ impl AcpError {
             | Self::InvalidResponse(_)
             | Self::ClientToolTimeout(_)
             | Self::ClientTool(_)
-            | Self::StatePoisoned
             | Self::Json(_)
             | Self::AppServer(_)
             | Self::Disconnected

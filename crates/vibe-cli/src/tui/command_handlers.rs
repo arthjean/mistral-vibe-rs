@@ -16,7 +16,6 @@
 
 use std::collections::BTreeMap;
 
-use vibe_core::pycompat::thousands;
 use vibe_core::storage::short_session_id;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::TelemetryCommandKind;
@@ -28,7 +27,10 @@ use super::interaction::IntegrationKind;
 use super::plugins::{self, PluginCatalog, PluginsPort, ReloadOutcome};
 
 pub(super) mod log_level;
+pub(super) mod loops;
+pub(super) mod mcp;
 mod mcp_arguments;
+pub(super) mod status;
 
 pub(in crate::tui) use mcp_arguments::AddArguments as McpAddArguments;
 
@@ -347,8 +349,8 @@ pub(super) async fn run<B: CommandBackend>(
         CommandId::Debug => open(backend, Panel::DebugConsole),
         CommandId::Compact => compact(arguments, backend).await,
         CommandId::Exit => backend.emit(Effect::Exit),
-        CommandId::Status => status(backend).await,
-        CommandId::Whoami => whoami(backend).await,
+        CommandId::Status => status::show(backend).await,
+        CommandId::Whoami => status::whoami(backend).await,
         // Reference `_teleport_command` ignores its arguments: a teleport with
         // a prompt is typed as `&prompt`, which dispatch routes itself.
         CommandId::Teleport => backend.emit(Effect::Teleport {
@@ -362,7 +364,7 @@ pub(super) async fn run<B: CommandBackend>(
         CommandId::ProxySetup => open(backend, Panel::ProxySetup),
         CommandId::Resume => resume(backend).await,
         CommandId::Rename => rename(arguments, backend).await,
-        CommandId::Mcp => mcp(arguments, backend).await,
+        CommandId::Mcp => mcp::handle(arguments, backend).await,
         CommandId::Plugins => show_plugins(backend),
         CommandId::ReloadPlugins => reload_plugins(backend),
         CommandId::Todo => {
@@ -385,7 +387,7 @@ pub(super) async fn run<B: CommandBackend>(
                 });
             }
         }
-        CommandId::Loop => scheduled_loop(arguments, backend).await,
+        CommandId::Loop => loops::handle(arguments, backend).await,
         CommandId::DataRetention => {
             backend.emit(Effect::Message(DATA_RETENTION_MESSAGE.to_owned()));
         }
@@ -545,151 +547,6 @@ async fn compact<B: CommandBackend>(arguments: &str, backend: &mut B) {
     backend.emit(status);
 }
 
-/// Reference `session_token_cost`: cached prompt tokens bill at the cached
-/// price when the model declares one, and never beyond the prompt count.
-pub(super) fn session_cost(
-    prompt_tokens: u64,
-    completion_tokens: u64,
-    cached_tokens: u64,
-    input_price: f64,
-    output_price: f64,
-    cached_input_price: Option<f64>,
-) -> f64 {
-    let cached = cached_tokens.min(prompt_tokens);
-    let cached_price = cached_input_price.unwrap_or(input_price);
-    let input =
-        prompt_tokens.saturating_sub(cached) as f64 * input_price + cached as f64 * cached_price;
-    let output = completion_tokens as f64 * output_price;
-    (input + output) / 1_000_000.0
-}
-
-/// Reference `_show_status`.
-pub(super) fn status_document(stats: &Stats) -> String {
-    let cached = |tokens: u64| {
-        if tokens > 0 {
-            format!(" _(including {} cached)_", thousands(tokens))
-        } else {
-            String::new()
-        }
-    };
-    format!(
-        "## Agent Statistics\n\n- **Steps**: {}\n- **Session Prompt Tokens**: {}{}\n- **Session \
-         Completion Tokens**: {}\n- **Session Total LLM Tokens**: {}\n- **Last Turn Tokens**: \
-         {}{}\n- **Cost**: ${:.4}\n",
-        thousands(stats.steps),
-        thousands(stats.session_prompt_tokens),
-        cached(stats.session_cached_tokens),
-        thousands(stats.session_completion_tokens),
-        thousands(stats.session_total_llm_tokens),
-        thousands(stats.last_turn_total_tokens),
-        cached(stats.last_turn_cached_tokens),
-        stats.session_cost,
-    )
-}
-
-/// Reference `_show_status`: the statistics, then the provider section when the
-/// session runs the unified mode. The section is read-only and optional, so a
-/// failed read leaves the statistics alone rather than adding an error.
-async fn status<B: CommandBackend>(backend: &mut B) {
-    let mut document = status_document(&backend.stats());
-    if backend.experimental_harness() {
-        match backend.provider_auth().await {
-            Ok(view) => {
-                document.push('\n');
-                document.push_str(&provider_auth_section(&view));
-            }
-            // The reference logs the failure's type alone, never its text,
-            // which could carry what the redaction was meant to keep out.
-            Err(_) => vibe_core::observability::log(
-                vibe_core::observability::LogLevel::Warning,
-                "Provider auth status read failed",
-            ),
-        }
-    }
-    backend.emit(Effect::Message(document));
-}
-
-/// Reference `render_provider_auth_section`
-/// (`vibe/cli/textual_ui/provider_auth_status.py`): the "Model & Provider"
-/// section, every dynamic value escaped so the Markdown it renders through
-/// shows it literally.
-fn provider_auth_section(view: &ProviderAuth) -> String {
-    let api_base = view
-        .api_base
-        .as_deref()
-        .map_or_else(|| "Invalid API URL".to_owned(), markdown_literal);
-    format!(
-        "## Model & Provider\n\n- **Model**: {}\n- **Provider**: {}\n- **API base**: {api_base}",
-        markdown_literal(&view.model_display_name),
-        markdown_literal(&view.provider_name),
-    )
-}
-
-/// A one-line value as Markdown that renders it character for character.
-///
-/// A control character (Unicode category `Cc`, which is what
-/// [`char::is_control`] tests) has no literal form on one line, so it becomes a
-/// space. Every character that starts inline syntax, `.` and `:` included
-/// because linkification reads them, is backslash-escaped; a tilde only next to
-/// another tilde, since strikethrough needs a pair and a lone one is literal.
-fn markdown_literal(value: &str) -> String {
-    const INLINE: &str = "\\`*_.:<>&!#[]";
-    let cleaned = value
-        .chars()
-        .map(|character| {
-            if character.is_control() {
-                ' '
-            } else {
-                character
-            }
-        })
-        .collect::<Vec<_>>();
-    let mut literal = String::with_capacity(value.len());
-    for (index, &character) in cleaned.iter().enumerate() {
-        let paired_tilde = character == '~'
-            && (index.checked_sub(1).and_then(|before| cleaned.get(before)) == Some(&'~')
-                || cleaned.get(index + 1) == Some(&'~'));
-        if paired_tilde || INLINE.contains(character) {
-            literal.push('\\');
-        }
-        literal.push(character);
-    }
-    literal
-}
-
-/// Reference `_show_whoami`: a failed read is the same answer as no identity.
-async fn whoami<B: CommandBackend>(backend: &mut B) {
-    let identity = backend.identity().await.ok().flatten();
-    let plan = backend.account_plan().await.ok().flatten();
-    let Some(identity) = identity else {
-        backend.emit(Effect::Message(
-            "## Who am I\n\nNo identity information is available for the active model.".to_owned(),
-        ));
-        return;
-    };
-    let mut lines = vec!["## Who am I".to_owned(), String::new()];
-    if let Some(name) = identity
-        .name
-        .as_deref()
-        .filter(|name| !name.is_empty() && Some(*name) != identity.email.as_deref())
-    {
-        lines.push(format!("- **Name**: {name}"));
-    }
-    if let Some(email) = identity.email.as_deref().filter(|email| !email.is_empty()) {
-        lines.push(format!("- **Email**: {email}"));
-    }
-    if let Some(workspace) = &identity.workspace {
-        lines.push(format!("- **Workspace**: {workspace}"));
-    }
-    if let Some(organization) = &identity.organization {
-        lines.push(format!("- **Organization**: {organization}"));
-    }
-    if let Some(plan) = plan.filter(|plan| !plan.is_empty()) {
-        lines.push(format!("- **Plan**: {plan}"));
-    }
-    backend.emit(Effect::Message(lines.join("\n")));
-}
-
 /// Reference `_resume_session`: the command line leaves the transcript, the
 /// picker opens while the list loads, and an empty list closes it again.
 async fn resume<B: CommandBackend>(backend: &mut B) {
@@ -728,161 +585,6 @@ async fn rename<B: CommandBackend>(arguments: &str, backend: &mut B) {
             )));
         }
         Err(error) => backend.emit(Effect::Error(format!("Failed to rename session: {error}"))),
-    }
-}
-
-/// Reference `_show_mcp` and `_maybe_handle_mcp_subcommand`.
-async fn mcp<B: CommandBackend>(arguments: &str, backend: &mut B) {
-    use mcp_arguments::Subcommand;
-
-    if let Some((subcommand, rest)) = mcp_arguments::parse_subcommand(arguments) {
-        match subcommand {
-            Subcommand::Add => mcp_add(rest, backend).await,
-            Subcommand::Status if !rest.is_empty() => {
-                backend.emit(Effect::Error("Usage: /mcp status".to_owned()));
-            }
-            Subcommand::Status => {
-                let statuses = backend.mcp_state().await.statuses;
-                if statuses.is_empty() {
-                    backend.emit(Effect::Message("No MCP servers configured.".to_owned()));
-                } else {
-                    let mut lines = vec!["### MCP auth status".to_owned(), String::new()];
-                    lines.extend(
-                        statuses
-                            .iter()
-                            .map(|(alias, status)| format!("- `{alias}`: `{status}`")),
-                    );
-                    backend.emit(Effect::Message(lines.join("\n")));
-                }
-            }
-            Subcommand::Login => mcp_login(rest, backend).await,
-            Subcommand::Logout => {
-                if rest.is_empty() {
-                    backend.emit(Effect::Error("Usage: /mcp logout <alias>".to_owned()));
-                } else {
-                    match backend.mcp_logout(rest).await {
-                        Ok(()) => backend
-                            .emit(Effect::Message(format!("MCP server `{rest}` logged out."))),
-                        Err(error) => backend.emit(Effect::Error(error)),
-                    }
-                }
-            }
-        }
-        return;
-    }
-    let state = backend.mcp_state().await;
-    if let Some(error) = &state.connector_error {
-        backend.emit(Effect::Error(format!(
-            "Could not load connectors.\n{error}"
-        )));
-    }
-    if state.sources.is_empty() {
-        if state.connector_error.is_none() {
-            backend.emit(Effect::Message(
-                "No MCP servers or connectors configured.".to_owned(),
-            ));
-        }
-        return;
-    }
-    let name = arguments.trim();
-    if !name.is_empty() && !state.sources.iter().any(|(source, _)| source == name) {
-        let known = state
-            .sources
-            .iter()
-            .map(|(source, _)| source.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
-        backend.emit(Effect::Error(format!(
-            "Unknown MCP server or connector: {name}. Known: {known}"
-        )));
-        return;
-    }
-    backend.emit(Effect::Message("MCP and connectors opened...".to_owned()));
-    backend.emit(Effect::Panel {
-        panel: Panel::Mcp,
-        initial: Some(name.to_owned()),
-    });
-}
-
-/// Reference `_mcp_login` and `_maybe_login_connector`: a name only a
-/// connector carries opens the connector's sign-in; a server, including one
-/// sharing its alias with a connector, runs the OAuth login.
-async fn mcp_login<B: CommandBackend>(alias: &str, backend: &mut B) {
-    if alias.is_empty() {
-        backend.emit(Effect::Error("Usage: /mcp login <alias>".to_owned()));
-        return;
-    }
-    let state = backend.mcp_state().await;
-    let carries = |kind| {
-        state
-            .sources
-            .iter()
-            .any(|(name, source_kind)| name == alias && *source_kind == kind)
-    };
-    if carries(IntegrationKind::Connector) && !carries(IntegrationKind::McpServer) {
-        backend.emit(Effect::ClosePanel);
-        backend.emit(Effect::Panel {
-            panel: Panel::ConnectorAuth,
-            initial: Some(alias.to_owned()),
-        });
-        return;
-    }
-    let login = match backend.mcp_login(alias).await {
-        Ok(login) => login,
-        Err(error) => {
-            backend.emit(Effect::Error(error));
-            return;
-        }
-    };
-    for url in &login.urls {
-        backend.emit(Effect::Message(format!(
-            "Open this URL in your browser:\n\n  {url}"
-        )));
-        backend.open_url(url);
-    }
-    if login.completed {
-        backend.emit(Effect::Message(mcp_authenticated(alias)));
-    }
-}
-
-/// What a completed server login reports.
-pub(super) fn mcp_authenticated(alias: &str) -> String {
-    format!("MCP server `{alias}` authenticated.")
-}
-
-/// Reference `_mcp_add`.
-async fn mcp_add<B: CommandBackend>(arguments: &str, backend: &mut B) {
-    if mcp_arguments::is_add_help_request(arguments) {
-        backend.emit(Effect::Message(mcp_arguments::add_help()));
-        return;
-    }
-    let parsed = match mcp_arguments::parse_add(arguments) {
-        Ok(parsed) => parsed,
-        Err(error) => {
-            backend.emit(Effect::Error(error));
-            return;
-        }
-    };
-    let (name, created) = match backend.mcp_add(&parsed).await {
-        Ok(added) => added,
-        Err(error) => {
-            backend.emit(Effect::Error(error));
-            return;
-        }
-    };
-    let head = if created {
-        format!("Added OAuth MCP server `{name}`.")
-    } else {
-        format!("OAuth MCP server `{name}` is already configured.")
-    };
-    let tail = if parsed.login {
-        "Starting OAuth login...".to_owned()
-    } else {
-        format!("Run `/mcp login {name}` to authenticate, or `/mcp status` to inspect it.")
-    };
-    backend.emit(Effect::Message(format!("{head}\n{tail}")));
-    if parsed.login {
-        mcp_login(&name, backend).await;
     }
 }
 
@@ -960,96 +662,4 @@ pub(super) fn retry_prompt(additional_instructions: &str) -> String {
         ));
     }
     format!("<{WARNING_TAG}>{message}</{WARNING_TAG}>")
-}
-
-const LOOP_USAGE: &str =
-    "Usage:\n  /loop <interval> <prompt>\n  /loop list\n  /loop cancel <id|all>\n";
-
-/// Reference `_format_duration`: every nonzero unit, or only the largest.
-pub(super) fn format_duration(mut seconds: u64, short: bool) -> String {
-    let mut parts = Vec::new();
-    for (unit_seconds, suffix) in [(86_400, "d"), (3_600, "h"), (60, "m"), (1, "s")] {
-        let value = seconds / unit_seconds;
-        if value > 0 {
-            parts.push(format!("{value}{suffix}"));
-            seconds %= unit_seconds;
-        }
-    }
-    if parts.is_empty() {
-        parts.push("0s".to_owned());
-    }
-    if short {
-        parts.swap_remove(0)
-    } else {
-        parts.concat()
-    }
-}
-
-/// Reference `_format_loop_list`.
-pub(super) fn format_loop_list(loops: &[ScheduledLoop], now: f64) -> String {
-    if loops.is_empty() {
-        return "No scheduled loops.".to_owned();
-    }
-    let mut rows = vec![
-        "| Prompt | Next in | Every | ID |".to_owned(),
-        "|--------|------|-------|----|".to_owned(),
-    ];
-    for scheduled in loops {
-        // Python's `int` truncates toward zero before `max(0, ...)` clamps.
-        let remaining = (scheduled.next_fire_at - now).trunc().max(0.0) as u64;
-        let prompt = scheduled.prompt.replace('|', "\\|").replace('\n', " ");
-        rows.push(format!(
-            "| {prompt} | {} | {} | `{}` |",
-            format_duration(remaining, true),
-            format_duration(scheduled.interval_seconds, false),
-            scheduled.id
-        ));
-    }
-    rows.join("\n")
-}
-
-/// Reference `ScheduledLoopCommands.handle_command`.
-async fn scheduled_loop<B: CommandBackend>(arguments: &str, backend: &mut B) {
-    let arguments = arguments.trim();
-    let outcome = loop_outcome(arguments, backend).await;
-    match outcome {
-        Ok(message) => backend.emit(Effect::Message(message)),
-        Err(error) => backend.emit(Effect::Error(format!("{error}\n{LOOP_USAGE}"))),
-    }
-}
-
-async fn loop_outcome<B: CommandBackend>(
-    arguments: &str,
-    backend: &mut B,
-) -> Result<String, String> {
-    if arguments.is_empty() || matches!(arguments.to_lowercase().as_str(), "list" | "ls") {
-        let loops = backend.loops_list().await?;
-        return Ok(format_loop_list(&loops, backend.now()));
-    }
-    let (verb, rest) = arguments.split_once(' ').unwrap_or((arguments, ""));
-    if !matches!(
-        verb.to_lowercase().as_str(),
-        "cancel" | "rm" | "stop" | "delete"
-    ) {
-        let created = backend.loops_create(verb, rest).await?;
-        return Ok(format!(
-            "Scheduled loop `{}` every {}: {}",
-            created.id,
-            format_duration(created.interval_seconds, false),
-            created.prompt
-        ));
-    }
-    let id = rest.trim();
-    if id.is_empty() {
-        return Err("Missing loop id.".to_owned());
-    }
-    if id.to_lowercase() == "all" {
-        let count = backend.loops_clear().await?;
-        return Ok(format!("Cancelled {count} scheduled loop(s)."));
-    }
-    let deleted = backend.loops_delete(id).await?;
-    Ok(format!(
-        "Cancelled loop `{}`: {}",
-        deleted.id, deleted.prompt
-    ))
 }

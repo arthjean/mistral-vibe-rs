@@ -29,6 +29,7 @@ use crate::provider::{
     AssistantMessage, ModelCallDescriptor, ProviderChunk, ProviderInput, ProviderStream,
 };
 use crate::storage::{SessionMetadata, SessionStore};
+use crate::sync;
 
 pub trait CompletionProvider: Send + Sync {
     fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a>;
@@ -445,13 +446,12 @@ fn stats_record(
 
 impl TranscriptSink for SessionTranscriptSink {
     fn record_agent(&self, profile: &serde_json::Value) {
-        if let Ok(mut metadata) = self.metadata.lock() {
-            metadata.agent_profile = Some(profile.clone());
-            // Written at once rather than at the next checkpoint: a clearing
-            // may be what comes next, and it moves on to a new record without
-            // rewriting this one.
-            let _ = self.store.update_metadata(&metadata);
-        }
+        let mut metadata = sync::lock(&self.metadata);
+        metadata.agent_profile = Some(profile.clone());
+        // Written at once rather than at the next checkpoint: a clearing may be
+        // what comes next, and it moves on to a new record without rewriting
+        // this one.
+        let _ = self.store.update_metadata(&metadata);
     }
 
     fn persist<'a>(
@@ -461,10 +461,7 @@ impl TranscriptSink for SessionTranscriptSink {
     ) -> PersistenceFuture<'a> {
         Box::pin(async move {
             let persisted_at = crate::clock::now_millis();
-            let mut metadata = self
-                .metadata
-                .lock()
-                .map_err(|_| "session metadata lock poisoned".to_owned())?;
+            let mut metadata = sync::lock(&self.metadata);
             if snapshot.session_id != metadata.id {
                 let handoff = self
                     .store
@@ -515,10 +512,7 @@ impl TranscriptSink for SessionTranscriptSink {
 
     fn persist_stats<'a>(&'a self, stats: &'a SessionStats) -> PersistenceFuture<'a> {
         Box::pin(async move {
-            let mut metadata = self
-                .metadata
-                .lock()
-                .map_err(|_| "session metadata lock poisoned".to_owned())?;
+            let mut metadata = sync::lock(&self.metadata);
             for (key, value) in stats_record(stats, self.pricing) {
                 metadata.statistics.insert(key.to_owned(), value);
             }

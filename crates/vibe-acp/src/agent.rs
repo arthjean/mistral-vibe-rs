@@ -193,7 +193,7 @@ where
     ) -> Result<AcpInitializeResponse, AcpError> {
         let auth_methods = self.advertised_auth_methods(&request)?;
         {
-            let mut state = self.lock_state()?;
+            let mut state = self.lock_state();
             state.client_capabilities = request.client_capabilities;
             state.client_info = request.client_info;
         }
@@ -278,21 +278,18 @@ where
     /// The live session the client names, or the reference's
     /// `SessionNotFoundError`.
     pub(crate) fn session_harness(&self, session_id: &str) -> Result<Arc<AcpHarness<D>>, AcpError> {
-        self.find_live_session(session_id)?
+        self.find_live_session(session_id)
             .ok_or_else(|| AcpError::SessionNotFound(session_id.to_owned()))
     }
 
     /// The live session the client names, if any. Reference
     /// `_find_live_session`: a session is keyed by the one identity both the
     /// client and the app server address it by.
-    pub(crate) fn find_live_session(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<Arc<AcpHarness<D>>>, AcpError> {
-        Ok(self.lock_state()?.sessions.get(session_id).cloned())
+    pub(crate) fn find_live_session(&self, session_id: &str) -> Option<Arc<AcpHarness<D>>> {
+        self.lock_state().sessions.get(session_id).cloned()
     }
 
-    pub(crate) fn lock_state(&self) -> Result<MutexGuard<'_, AgentState<D>>, AcpError> {
-        self.state.lock().map_err(|_| AcpError::StatePoisoned)
+    pub(crate) fn lock_state(&self) -> MutexGuard<'_, AgentState<D>> {
+        vibe_core::sync::lock(&self.state)
     }
 }

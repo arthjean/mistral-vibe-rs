@@ -16,6 +16,7 @@ use base64::Engine as _;
 use serde_json::{Value, json};
 
 use crate::platform::resolve_lenient;
+use crate::sync;
 use crate::tools::document::Document;
 use crate::tools::{ToolError, ToolExecutionOutput, ToolOutputSink};
 
@@ -299,9 +300,7 @@ pub(super) async fn run_sessions(
                 // of this family in the sessions directory goes, whichever
                 // session wrote it and whether or not one did.
                 shell.managed.lock().await.clear();
-                if let Ok(mut orphaned) = shell.orphaned.lock() {
-                    orphaned.clear();
-                }
+                sync::lock(&shell.orphaned).clear();
                 let prefix = format!("{}_", shell.family.name());
                 if let Ok(entries) = std::fs::read_dir(shell.sessions_directory()) {
                     for entry in entries.flatten() {

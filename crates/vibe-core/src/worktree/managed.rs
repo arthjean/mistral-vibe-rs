@@ -16,7 +16,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::observability::{self, LogLevel};
-use crate::platform::resolve_lenient;
+use crate::platform::{expand_home, resolve_lenient};
 
 use super::git::{self, GitRepo};
 use super::record::{PruneLock, WorktreeClaim};
@@ -219,12 +219,12 @@ impl ManagedWorktree {
     #[must_use]
     pub fn retained_repository_mapping(&self, cwd: &Path) -> Option<RetainedRepositoryMapping> {
         let recovery = self.claim.read_recovery()?;
-        let requested = resolve_lenient(&crate::workspace::tool_path::expanded(cwd));
+        let requested = resolve_lenient(&expand_home(cwd));
         let relative = requested
             .strip_prefix(resolve_lenient(&self.root()))
             .ok()?
             .to_path_buf();
-        let root = resolve_lenient(&crate::workspace::tool_path::expanded(&recovery.repo_root));
+        let root = resolve_lenient(&expand_home(&recovery.repo_root));
         Some(RetainedRepositoryMapping {
             cwd: root.join(relative),
             root,
@@ -754,7 +754,7 @@ impl ManagedWorktree {
     /// validated and its recovery record consumed; one that is gone is
     /// recreated from its snapshot (`vibe/core/git/worktree/repository.py:957-1009`).
     pub fn restore(&self, cwd: &Path) -> Result<bool, WorktreeError> {
-        let requested = resolve_lenient(&crate::workspace::tool_path::expanded(cwd));
+        let requested = resolve_lenient(&expand_home(cwd));
         let root = self.root();
         if !requested.starts_with(&root) {
             return Err(WorktreeError::failed(

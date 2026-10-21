@@ -11,7 +11,7 @@
 use std::fs;
 use std::path::Path;
 
-use vibe_core::parity::{off_pin_reason, reference_root};
+use vibe_core::parity::replay::pinned_reference;
 
 /// One declared input: its name, whether it is required, and its default.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,11 +119,9 @@ fn the_action_declares_every_reference_input_unchanged_and_adds_only_optional_on
 
 #[test]
 fn the_recorded_reference_inputs_match_the_pinned_checkout() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "action inputs") {
-        eprintln!("{reason}");
+    let Some(root) = pinned_reference("action inputs") else {
         return;
-    }
+    };
     let text = fs::read_to_string(root.join("action.yml")).expect("the reference action");
     assert_eq!(declared_inputs(&text), reference_inputs());
 }

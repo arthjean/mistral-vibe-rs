@@ -36,6 +36,43 @@
   not UTF-8 is decoded instead of skipped, and surrounding whitespace is
   trimmed as Python trims it.
 
+- Validation and file errors read as the reference prints them: pydantic
+  messages no longer end with an `errors.pydantic.dev` link and shorten long
+  inputs the way pydantic does, an unmatched union tag is quoted with Python
+  `str`, file errors quote the path with Python `repr` and drop `[Errno 0]`,
+  and floats print in Python form (`1e+16`). Lax coercion follows pydantic
+  2.13: boolean words are no longer trimmed, `"1_000.0"` is an integer, and
+  `"1.5"` is not.
+
+- Listing shell sessions refuses a session whose manifest lacks a required
+  field or holds one of the wrong type, as the reference does, instead of
+  listing it with blank or verbatim values.
+
+- Pinning, archiving or marking a Unified Harness session as seen fails when
+  its metadata cannot be written, instead of reporting success; renaming stays
+  best effort, as in the reference.
+
+- The TUI MCP panel lists sources under their display name and filters on it,
+  shows the tool descriptions in a connector's detail view, and tells an
+  unavailable server (`error - check your config`) from an unavailable
+  connector (`error - try refreshing`). `vibe mcp` quotes an invalid value as
+  argparse does.
+
+- Output of a manual `!` command is cleaned as the reference cleans it: a
+  carriage-return redraw keeps its last write and stray escape sequences and
+  DEL are dropped. In legacy sessions the context sent to the model keeps
+  stdout and stderr apart, raw and truncated each on its own, with the exit
+  status, as Unified Harness sessions already did.
+
+- The hidden launch arguments (`--model`, `--provider-style`, `--api-base`,
+  `--credential-environment`, `--input-price`, `--output-price`) override the
+  configured route whenever they are given; one that repeated its default
+  value used to count as left out.
+
+- `/status` and the exit summary of a Unified Harness session report its
+  runtime stats before its first stats update, and a malformed teleport event
+  fails `teleport` instead of being skipped.
+
 - Onboarding saves the API key under the variable the provider names. It used
   to save it, typed or from a browser sign-in, under `[redacted]`, so the next
   launch found no key and the session never started; run setup again to store

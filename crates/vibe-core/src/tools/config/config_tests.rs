@@ -244,7 +244,7 @@ fn resolution_does_not_wait_behind_a_settings_write() {
     let held = resolver.settings.clone();
     let (blocked, release) = std::sync::mpsc::channel::<()>();
     let writer = thread::spawn(move || {
-        let guard = write_through_poison(&held);
+        let guard = sync::write(&held);
         blocked.send(()).expect("the reader is waiting");
         thread::sleep(Duration::from_millis(200));
         drop(guard);
@@ -271,7 +271,7 @@ fn a_poisoned_settings_lock_still_resolves() {
     resolver.update(settings("[todo]\nmax_todos = 9\n"));
     let poisoned = resolver.settings.clone();
     thread::spawn(move || {
-        let _guard = write_through_poison(&poisoned);
+        let _guard = sync::write(&poisoned);
         panic!("poisoning the settings lock");
     })
     .join()

@@ -26,6 +26,7 @@ use super::*;
 
 mod legacy;
 mod teleport;
+pub use teleport::TeleportEvents;
 mod unified;
 
 use legacy::LegacySessions;
@@ -56,6 +57,14 @@ trait SessionBackend {
     /// The session as the server holds it, its history the one the backend
     /// published.
     fn view(&mut self, session_id: &str) -> Result<SessionView, ClientError>;
+
+    /// The session's accounting and its context window, reference
+    /// `runtime.stats`.
+    fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError>;
+
+    /// One field of the state the session last published to this client, as
+    /// the wire spells it (reference `ClientState`), when it publishes one.
+    fn published(&mut self, session_id: &str, field: &str) -> Option<Value>;
 
     /// Starts `turn`, its images already prepared, and answers the turn it
     /// reserved.
@@ -285,6 +294,8 @@ where
                 link,
                 server: &self.client.server,
             }),
+            // Not `self.legacy_sessions()`: the link the other arm returns
+            // stays borrowed here, so this arm borrows the other fields only.
             None => Box::new(LegacySessions {
                 client: &mut self.client,
                 driver: &self.driver,
@@ -372,7 +383,9 @@ where
         }
     }
 
-    /// Whether the Unified Harness serves `session_id`.
+    /// Whether the Unified Harness serves `session_id`, which answers the
+    /// reference's session methods (`session/fork`, `session/history/list`,
+    /// ...) where a legacy session answers this port's `internal/` ones.
     #[must_use]
     pub fn is_unified(&self, session_id: &str) -> bool {
         self.unified
@@ -380,29 +393,22 @@ where
             .is_some_and(|link| link.holds(session_id))
     }
 
-    /// The accounting the Unified Harness last published for `session_id`,
-    /// with its context window.
-    #[must_use]
-    pub fn unified_accounting(&self, session_id: &str) -> Option<(Value, u64)> {
-        self.unified.as_ref()?.accounting(session_id)
-    }
-
-    /// The state the Unified Harness last published for `session_id`.
-    #[must_use]
-    pub fn unified_state(&self, session_id: &str) -> Option<Value> {
-        self.unified.as_ref()?.state(session_id)
-    }
-
-    /// The child sessions the Unified Harness last published for `session_id`.
-    #[must_use]
-    pub fn unified_children(&self, session_id: &str) -> Option<Value> {
-        self.unified
-            .as_ref()?
-            .state_field(session_id, "childSessions")
-    }
-
     pub fn session(&mut self, session_id: &str) -> Result<SessionView, ClientError> {
         self.backend(session_id).view(session_id)
+    }
+
+    /// The accounting of `session_id` and its context window, reference
+    /// `runtime.stats`: what `stats/read` answers for a legacy session, and
+    /// what a unified session last published.
+    pub fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError> {
+        self.backend(session_id).stats(session_id)
+    }
+
+    /// One field of the state `session_id` last published to this client, as
+    /// the wire spells it: a unified session's `session`, `history` or
+    /// `childSessions`. A legacy session publishes none.
+    pub fn published_state(&mut self, session_id: &str, field: &str) -> Option<Value> {
+        self.backend(session_id).published(session_id, field)
     }
 
     /// Opens a saved session on the Unified Harness, when it is selected and
@@ -473,13 +479,13 @@ where
     }
 
     /// The observer a turn's engine reports to, and the updates a client
-    /// reads the turn through. It only reads the session, so it reaches the
-    /// backend without borrowing the service.
-    pub fn interactive_update_channel_after(
+    /// reads the turn through. A legacy session's turn counts as started
+    /// once its reader is there, as the transport announces it; a unified
+    /// session publishes its own turn. Neither needs the service borrowed.
+    pub fn turn_updates(
         &self,
         session_id: &str,
         turn_id: &str,
-        _event_id: u64,
     ) -> Result<TurnUpdates, ClientError> {
         match self.unified.as_ref().filter(|link| link.holds(session_id)) {
             Some(link) => unified::turn_updates(link, turn_id),
@@ -502,14 +508,15 @@ where
 
     /// The callbacks raised since the last drain: the questions the
     /// interactive tools asked, then those the unified sessions asked.
-    pub fn drain_callbacks(&mut self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
-        let unified = match self.unified.as_ref() {
-            Some(link) => link.drain_callbacks()?,
-            None => Vec::new(),
-        };
+    pub fn drain_callbacks(&mut self) -> Vec<PublicHistoryEntry> {
+        let unified = self
+            .unified
+            .as_ref()
+            .map(super::unified::UnifiedLink::drain_callbacks)
+            .unwrap_or_default();
         let mut entries = self.legacy_sessions().raise_callbacks();
         entries.extend(unified);
-        Ok(entries)
+        entries
     }
 
     pub fn respond_callback(
@@ -660,17 +667,18 @@ where
         self.run_prompt(session_id, prompt, observer).await
     }
 
-    /// Runs a turn of `prompt` on the driver, `observer` hearing its events,
-    /// and settles it.
+    /// Runs a turn of `prompt` where `session_id` runs, `observer` hearing
+    /// its events, and settles it.
     async fn run_prompt(
         &mut self,
         session_id: &str,
         prompt: &str,
         observer: Arc<dyn EventObserver>,
     ) -> Result<ProgrammaticTurn, ClientError> {
-        self.client.configure_pending_mcp(session_id).await?;
-        let reservation = self.client.reserve_turn(session_id, prompt)?;
-        match self.driver.run_observed(&reservation, observer).await {
+        let reservation = self
+            .reserve_prompt(session_id, &TurnRequest::text(prompt))
+            .await?;
+        match self.turn_runner().run(&reservation, observer).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
                 self.fail_reserved_with(&reservation, public_driver_error(&error))?;
@@ -741,8 +749,7 @@ where
 }
 
 /// Starts the background title a completed model step makes due, beside the
-/// rest of the turn. The title lands in the store and the session's state; a
-/// process with no runtime to run it on makes the next step due instead.
+/// rest of the turn.
 struct TitleScheduler<D> {
     server: AppServer,
     driver: Arc<D>,
@@ -753,33 +760,17 @@ where
     D: TurnDriver + 'static,
 {
     fn observe(&self, event: &vibe_core::events::EventEnvelope) -> Result<(), String> {
-        let vibe_core::events::EngineEvent::StepCompleted { turn_completing } = event.event else {
-            return Ok(());
-        };
-        let Some(periodic) = self.driver.title_model_is_fast() else {
-            return Ok(());
-        };
-        let Some((job, _)) = self
-            .server
-            .title_job(&event.session_id, periodic, turn_completing)
-        else {
-            return Ok(());
-        };
-        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            self.server.land_title(job, None);
-            return Ok(());
-        };
-        let title = self.driver.generate_title(
-            job.session_id.clone(),
-            job.messages.clone(),
-            job.previous_title.clone(),
-            self.server.client_telemetry(),
-        );
-        let server = self.server.clone();
-        runtime.spawn(async move {
-            let title = title.await;
-            server.land_title(job, title);
-        });
+        if let vibe_core::events::EngineEvent::StepCompleted { turn_completing } = event.event {
+            // No wire carries this client's frames: the title lands in the
+            // store and the session's state alone.
+            super::schedule_title(
+                &self.server,
+                self.driver.as_ref(),
+                &event.session_id,
+                turn_completing,
+                drop,
+            );
+        }
         Ok(())
     }
 }
