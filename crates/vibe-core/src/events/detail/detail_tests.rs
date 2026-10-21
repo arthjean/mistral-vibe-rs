@@ -1,6 +1,7 @@
 use serde_json::json;
 
 use super::*;
+use crate::policy::PermissionRequirement;
 
 #[test]
 fn every_tool_maps_to_the_kind_it_presents_as() {

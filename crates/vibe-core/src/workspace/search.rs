@@ -21,7 +21,7 @@
 //!   comparable, and it is what the oracle now records on both sides.
 
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use grep_regex::RegexMatcherBuilder;
 use grep_searcher::sinks::UTF8;
@@ -29,7 +29,62 @@ use grep_searcher::{BinaryDetection, SearcherBuilder};
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
 
-use super::{SearchOptions, Workspace, WorkspaceError, path_display};
+use super::{Workspace, WorkspaceError, path_display};
+use crate::tools::config::{GrepConfig, ToolConfigResolver};
+
+/// What one search reads off the `grep` configuration.
+///
+/// Reference `GrepConfig` carries all five: how many matches a call returns
+/// when it names none, which globs never enter the walk, which ignore file adds
+/// to them, and how long the search may take. [`Self::from_config`] is where
+/// they arrive, so a handler never spells a limit itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchOptions {
+    pub limit: usize,
+    pub use_default_ignore: bool,
+    pub exclude_patterns: Vec<String>,
+    pub codeignore_file: String,
+    /// [`None`] runs without a deadline, which is what a caller with no
+    /// configured timeout asks for.
+    pub timeout: Option<Duration>,
+    /// The budget the joined match list is clipped to.
+    pub max_output_bytes: usize,
+    /// The patterns naming a file whose matches are dropped from the answer.
+    pub sensitive_patterns: Vec<String>,
+}
+
+impl SearchOptions {
+    /// The options a resolved `grep` configuration composes, with `limit`
+    /// taken from the call when it named one.
+    ///
+    /// The reference reads `max_matches or default_max_matches`, so a null and
+    /// a zero both fall back to the configured cap.
+    #[must_use]
+    pub fn from_config(
+        config: &GrepConfig,
+        requested_limit: Option<usize>,
+        use_default_ignore: bool,
+    ) -> Self {
+        Self {
+            limit: requested_limit
+                .filter(|limit| *limit > 0)
+                .unwrap_or(config.default_max_matches),
+            use_default_ignore,
+            exclude_patterns: config.exclude_patterns.clone(),
+            codeignore_file: config.codeignore_file.clone(),
+            timeout: (config.default_timeout > 0)
+                .then(|| Duration::from_secs(config.default_timeout)),
+            max_output_bytes: config.max_output_bytes,
+            sensitive_patterns: config.shared.sensitive_patterns.clone(),
+        }
+    }
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self::from_config(&ToolConfigResolver::new().view("grep"), None, true)
+    }
+}
 
 /// What one `grep` call answers, in the shape the reference publishes.
 #[derive(Debug, Clone, PartialEq, Eq)]

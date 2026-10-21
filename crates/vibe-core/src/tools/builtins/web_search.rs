@@ -14,9 +14,10 @@ use serde_json::{Value, json};
 use super::{SEARCH_USER_AGENT, WebSearchAccess, declared_document};
 use crate::schema::{ObjectSchema, Property};
 use crate::tools::config::{ToolConfigResolver, WebSearchConfig};
+use crate::tools::document::Document;
 use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
-    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolSource, ToolSpec, reference_text,
+    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolSource, ToolSpec,
 };
 
 /// Directive coverage for `web_search`.
@@ -128,32 +129,19 @@ pub(super) async fn run_web_search(
     // loop renders one field per line from it. `sources` is a list of models,
     // so it reaches the model as Python's repr of a list of dictionaries, empty
     // list included.
-    let rendered_sources = sources
-        .iter()
+    let sources = sources
+        .into_iter()
         .map(|source| {
-            vec![
-                (
-                    "title",
-                    crate::pycompat::repr_str(source["title"].as_str().unwrap_or_default()),
-                ),
-                (
-                    "url",
-                    crate::pycompat::repr_str(source["url"].as_str().unwrap_or_default()),
-                ),
-            ]
+            Document::new()
+                .field("title", source["title"].clone())
+                .field("url", source["url"].clone())
         })
-        .collect::<Vec<_>>();
-    let model_text = reference_text::joined(&[
-        ("query", query.to_owned()),
-        ("answer", answer.clone()),
-        (
-            "sources",
-            reference_text::dictionary_list(&rendered_sources),
-        ),
-    ]);
-    Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "webSearch", "query": query}))
-        .typed(json!({"query": query, "answer": answer, "sources": sources})))
+        .collect();
+    Ok(Document::new()
+        .field("query", query)
+        .field("answer", answer)
+        .nested_list("sources", sources)
+        .into_output(json!({"kind": "webSearch", "query": query})))
 }
 
 /// The request metadata reference `build_request_metadata` attaches, with the

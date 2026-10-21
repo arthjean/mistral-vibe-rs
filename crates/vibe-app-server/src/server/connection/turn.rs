@@ -163,7 +163,7 @@ impl ServerConnection {
         if let Some(review) = &session.review {
             let message_index = review_message_index(&self.server.workspace, session)?;
             review
-                .begin_turn_at(&turn_id, message_index)
+                .begin_turn_at(message_index)
                 .map_err(|error| ProtocolFault::from(ServerError::Resource(error.to_string())))?;
         }
         session.active_turn = Some(turn_id.clone());

@@ -10,27 +10,32 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use serde_json::{Value, json};
+use serde_json::{Number, Value, json};
 
-use super::review::{self, ReviewManager};
+use super::context::INSTRUCTION_FILE;
+use super::edit::{EditOperation, apply_edit_operations};
+use super::review::ReviewManager;
 use super::tool_path;
 use super::{
-    BoundedRead, EditOperation, EditResult, INSTRUCTION_FILE, MutationResult, ReadFileResult,
-    SearchOptions, WARNING_TAG, Workspace, WriteFileResult, path_display, unified_diff,
+    BoundedRead, EditResult, MutationResult, ReadFileResult, SearchOptions, WARNING_TAG, Workspace,
+    WriteFileResult, path_display, unified_diff,
 };
 use crate::policy::{
     PolicyGuardedTool, RequirementResolver, ToolGuard, resolve_file_tool_permission,
 };
 use crate::process::ClientToolIo;
-use crate::schema::{ObjectSchema, Property};
 use crate::tools::config::SharedToolConfig;
-use crate::tools::config::{
-    GrepConfig, ReadFileConfig, ToolConfigResolver, WriteFileConfig, declared_document,
-};
+use crate::tools::config::{GrepConfig, ReadFileConfig, ToolConfigResolver, WriteFileConfig};
 use crate::tools::{
-    OwnedToolHandlerFuture, RegistrationOutcome, ToolAvailability, ToolError, ToolExecutionOutput,
-    ToolHandler, ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource,
-    ToolSpec, reference_text,
+    OwnedToolHandlerFuture, RegistrationOutcome, ToolError, ToolExecutionOutput, ToolHandler,
+    ToolInvocation, ToolOutputSink, ToolRegistry, ToolSpec, reference_text,
+};
+
+mod specs;
+
+use specs::{
+    EditArgs, GrepArgs, ReadFileArgs, WriteFileArgs, edit_spec, grep_spec, parsed, read_file_spec,
+    write_file_spec,
 };
 
 pub struct WorkspaceTools {
@@ -151,17 +156,14 @@ fn read_handler(
             // The budget is read per call, so an operator who raises it
             // between two turns is obeyed on the second one.
             let settings: ReadFileConfig = config.view("read_file");
-            let path = tool_argument(invocation, "file_path");
-            // `offset` is nullable and defaults to null, so an absent or
-            // explicitly null offset both mean "start at line one".
-            let offset = invocation.arguments["offset"]
-                .as_u64()
-                .and_then(|value| usize::try_from(value).ok());
-            let limit = invocation.arguments["limit"]
-                .as_u64()
-                .and_then(|value| usize::try_from(value).ok())
-                .unwrap_or(DEFAULT_READ_LINE_LIMIT);
+            let args = parsed::<ReadFileArgs>(invocation);
             Box::pin(async move {
+                let ReadFileArgs {
+                    file_path,
+                    offset,
+                    limit,
+                } = args?;
+                let path = tool_path_argument("file_path", file_path);
                 let result = match delegated_read(&workspace, client.as_ref(), &path, offset, limit)
                     .await?
                 {
@@ -223,22 +225,19 @@ fn grep_handler(workspace: Arc<Workspace>, config: ToolConfigResolver) -> Arc<dy
         move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
             let workspace = workspace.clone();
             let settings: GrepConfig = config.view("grep");
-            let pattern = invocation.arguments["pattern"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            let path = if invocation.arguments["path"].is_string() {
-                tool_argument(invocation, "path")
-            } else {
-                ".".to_owned()
-            };
-            let requested = invocation.arguments["max_matches"]
-                .as_u64()
-                .and_then(|limit| usize::try_from(limit).ok());
-            let use_default_ignore = invocation.arguments["use_default_ignore"]
-                .as_bool()
-                .unwrap_or(true);
+            let args = parsed::<GrepArgs>(invocation);
             Box::pin(async move {
+                let GrepArgs {
+                    pattern,
+                    path,
+                    max_matches,
+                    use_default_ignore,
+                } = args?;
+                let path = tool_path_argument("path", path);
+                let requested = max_matches
+                    .as_ref()
+                    .and_then(Number::as_u64)
+                    .and_then(|limit| usize::try_from(limit).ok());
                 let options = SearchOptions::from_config(&settings, requested, use_default_ignore);
                 let outcome = workspace
                     .search(&pattern, &path, &options)
@@ -348,19 +347,15 @@ fn edit_handler(
             let review = review.clone();
             let client = client.clone();
             let workspace = workspace.clone();
-            let path = tool_argument(invocation, "file_path");
-            let old_text = invocation.arguments["old_string"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            let new_text = invocation.arguments["new_string"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            let replace_all = invocation.arguments["replace_all"]
-                .as_bool()
-                .unwrap_or(false);
+            let args = parsed::<EditArgs>(invocation);
             Box::pin(async move {
+                let EditArgs {
+                    file_path,
+                    old_string: old_text,
+                    new_string: new_text,
+                    replace_all,
+                } = args?;
+                let path = tool_path_argument("file_path", file_path);
                 // The three refusals the reference raises before it opens
                 // anything, each naming its own cause.
                 if path.trim().is_empty() {
@@ -462,12 +457,10 @@ fn write_handler(
             let client = client.clone();
             let workspace = workspace.clone();
             let settings: WriteFileConfig = config.view("write_file");
-            let path = tool_argument(invocation, "file_path");
-            let content = invocation.arguments["content"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
+            let args = parsed::<WriteFileArgs>(invocation);
             Box::pin(async move {
+                let WriteFileArgs { file_path, content } = args?;
+                let path = tool_path_argument("file_path", file_path);
                 if path.trim().is_empty() {
                     return Err(ToolError::Execution(
                         "write_file file_path cannot be empty".to_owned(),
@@ -577,9 +570,8 @@ fn file_tool_permission(
 /// A path argument as the tool reads it, after the permission chain accepted
 /// it. The chain already refused one that does not normalize, so the argument
 /// as written is only the fallback for a handler invoked without it.
-fn tool_argument(invocation: &ToolInvocation, argument: &str) -> String {
-    let raw = invocation.arguments[argument].as_str().unwrap_or_default();
-    tool_path::normalized(argument, raw).unwrap_or_else(|_| raw.to_owned())
+fn tool_path_argument(argument: &str, raw: String) -> String {
+    tool_path::normalized(argument, &raw).unwrap_or(raw)
 }
 
 /// The parent directory `path` needs and does not have, or [`None`] when it
@@ -730,7 +722,7 @@ async fn delegated_edit(
         .read_text_file(&absolute, None, None)
         .await
         .map_err(|error| ToolError::Execution(error.to_string()))?;
-    let edited = review::apply_edit_operations(Path::new(&display), &original, operations)
+    let edited = apply_edit_operations(Path::new(&display), &original, operations)
         .map_err(|error| ToolError::Execution(error.to_string()))?;
     let updated = edited.text;
     if updated != original {
@@ -864,168 +856,5 @@ fn edit_message(replace_all: bool) -> String {
         "the file was updated and every occurrence was replaced".to_owned()
     } else {
         "the file was updated".to_owned()
-    }
-}
-
-/// Reference `ReadFileArgs.limit` default.
-/// Reference `ReadFileArgs.limit` default.
-const DEFAULT_READ_LINE_LIMIT: usize = 2000;
-
-fn read_file_spec() -> ToolSpec {
-    ToolSpec {
-        name: "read_file".to_owned(),
-        description: "Read one file from an absolute path. Page through a long file with \
-                      `offset` and `limit` instead of reading it whole, reach for `grep` when \
-                      looking for specific content, and leave binary and model-weight files \
-                      (.bin, .safetensors, .pt, .gguf) alone."
-            .to_owned(),
-        input_schema: ObjectSchema::new()
-            .required(
-                "file_path",
-                Property::string().described("The absolute path of the file to read"),
-            )
-            .optional(
-                "offset",
-                Property::integer()
-                    .constrained("minimum", 1)
-                    .described("The 1-indexed line the read starts at")
-                    .with_default(Value::Null)
-                    .nullable(),
-            )
-            .optional(
-                "limit",
-                Property::integer()
-                    .constrained("exclusiveMinimum", 0)
-                    .described("How many lines to read at most")
-                    .with_default(json!(DEFAULT_READ_LINE_LIMIT)),
-            )
-            .build(),
-        output_schema: None,
-        config: declared_document("read_file"),
-        state: Value::Null,
-        availability: ToolAvailability::Available,
-        presentation: ToolPresentationKind::Read,
-        source: ToolSource::BuiltIn,
-        selection_priority: 100,
-    }
-}
-
-fn grep_spec() -> ToolSpec {
-    ToolSpec {
-        name: "grep".to_owned(),
-        description: "Search file contents against a regular expression, reporting the path, \
-                      the line number and the matching line. Narrow the walk with `path`."
-            .to_owned(),
-        input_schema: ObjectSchema::new()
-            .required(
-                "pattern",
-                Property::string().described("The regular expression matched against file contents"),
-            )
-            .optional(
-                "path",
-                Property::string()
-                    .described(
-                        "The file or directory the search walks. Defaults to the working directory.",
-                    )
-                    .with_default("."),
-            )
-            .optional(
-                "max_matches",
-                Property::integer()
-                    .described("Raises or lowers the default cap on returned matches.")
-                    .with_default(Value::Null)
-                    .nullable(),
-            )
-            .optional(
-                "use_default_ignore",
-                Property::boolean()
-                    .described("Whether .gitignore and .ignore entries are honored.")
-                    .with_default(true),
-            )
-            .build(),
-        output_schema: None,
-        config: declared_document("grep"),
-        state: Value::Null,
-        availability: ToolAvailability::Available,
-        presentation: ToolPresentationKind::Search,
-        source: ToolSource::BuiltIn,
-        selection_priority: 100,
-    }
-}
-
-fn edit_spec() -> ToolSpec {
-    ToolSpec {
-        name: "edit".to_owned(),
-        description: "Replace an exact string in a file. Call `read_file` first, and never carry \
-                      any part of its line-number prefix into `old_string` or `new_string`. When \
-                      `old_string` is absent or matches more than once, add surrounding context \
-                      until it is unique or set `replace_all`. Re-read the file before retrying a \
-                      failed edit."
-            .to_owned(),
-        input_schema: ObjectSchema::new()
-            .required(
-                "file_path",
-                Property::string().described("The absolute path of the file to modify"),
-            )
-            .required(
-                "old_string",
-                Property::string().described("The text being replaced"),
-            )
-            .required(
-                "new_string",
-                Property::string()
-                    .described("The replacement text, which must differ from old_string"),
-            )
-            .optional(
-                "replace_all",
-                Property::boolean()
-                    .described("Replace every occurrence of old_string instead of a single one")
-                    .with_default(false),
-            )
-            .build(),
-        output_schema: None,
-        config: declared_document("edit"),
-        state: Value::Null,
-        availability: ToolAvailability::Available,
-        presentation: ToolPresentationKind::Diff,
-        source: ToolSource::BuiltIn,
-        selection_priority: 100,
-    }
-}
-
-/// Directive coverage for `write_file`, whose reference description this port
-/// must cover without reproducing (`NOTICE`).
-///
-/// | Reference directive | Covered by |
-/// |---|---|
-/// | The path is absolute | "absolute path" in the `file_path` description |
-/// | An existing file is not overwritten; `edit` modifies it | "never overwrites an existing file: reach for `edit`" |
-/// | Missing parent directories are created | "Missing parent directories are created" |
-/// | The content replaces the whole file | "the whole file content" in the `content` description |
-fn write_file_spec() -> ToolSpec {
-    ToolSpec {
-        name: "write_file".to_owned(),
-        description: "Create a file at an absolute path and write it whole. It never overwrites \
-                      an existing file: reach for `edit` to change one. Missing parent \
-                      directories are created."
-            .to_owned(),
-        input_schema: ObjectSchema::new()
-            .required(
-                "file_path",
-                Property::string()
-                    .described("The absolute path of the file to write, which must not exist yet"),
-            )
-            .required(
-                "content",
-                Property::string().described("The whole file content to write"),
-            )
-            .build(),
-        output_schema: None,
-        config: declared_document("write_file"),
-        state: Value::Null,
-        availability: ToolAvailability::Available,
-        presentation: ToolPresentationKind::Diff,
-        source: ToolSource::BuiltIn,
-        selection_priority: 100,
     }
 }

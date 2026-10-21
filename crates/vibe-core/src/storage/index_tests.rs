@@ -1,5 +1,6 @@
 //! The listing cache (`.session_index.json`) and the first-user-message label.
 
+use std::fs::File;
 use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::json;

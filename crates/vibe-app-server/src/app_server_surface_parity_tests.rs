@@ -1373,7 +1373,7 @@ async fn workspace_effect_probes() -> Vec<EffectProbe> {
     let review = Arc::new(ReviewManager::new(workspace.clone()));
     // A mutating tool snapshots what it is about to change, which this port
     // only allows inside a turn.
-    review.begin_turn("turn-1").expect("a turn opens");
+    review.begin_turn_at(0).expect("a turn opens");
     let policy = PermissionStore::default();
     policy
         .set_trust(

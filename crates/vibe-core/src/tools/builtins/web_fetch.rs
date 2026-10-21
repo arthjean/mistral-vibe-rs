@@ -20,9 +20,10 @@ mod numeric;
 use super::{MAX_FETCH_REDIRECTS, declared_document};
 use crate::schema::{ObjectSchema, Property};
 use crate::tools::config::{ToolConfigResolver, WebFetchConfig};
+use crate::tools::document::Document;
 use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
-    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolSource, ToolSpec, reference_text,
+    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolSource, ToolSpec,
 };
 
 /// Directive coverage for `web_fetch`.
@@ -301,23 +302,12 @@ pub(super) async fn run_web_fetch(
     // `was_truncated` in that order, and the agent loop renders one field per
     // line from it, so both the typed result and the text the model reads
     // follow the declaration rather than the body alone.
-    let model_text = reference_text::joined(&[
-        ("url", shown.clone()),
-        ("content", content.clone()),
-        ("content_type", content_type.clone()),
-        (
-            "was_truncated",
-            reference_text::boolean(truncated).to_owned(),
-        ),
-    ]);
-    Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "webFetch", "url": shown}))
-        .typed(json!({
-            "url": shown,
-            "content": content,
-            "content_type": content_type,
-            "was_truncated": truncated,
-        })))
+    Ok(Document::new()
+        .field("url", shown.clone())
+        .field("content", content)
+        .field("content_type", content_type)
+        .field("was_truncated", truncated)
+        .into_output(json!({"kind": "webFetch", "url": shown})))
 }
 
 /// The encodings the request offers, which are the ones httpx decodes with

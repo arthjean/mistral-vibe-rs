@@ -1,4 +1,5 @@
-//! Checking one call's arguments against the tool's declared schema.
+//! Checking one call's arguments against the tool's declared schema, and a
+//! spec's own schemas before it registers.
 //!
 //! The reference validates with Pydantic, which does more than reject a wrong
 //! type: it coerces the spellings Python accepts, fills declared defaults, and
@@ -9,11 +10,13 @@
 //!
 //! Both passes are bounded by [`MAX_SCHEMA_DEPTH`]: a schema is data a remote
 //! server can supply, so a cyclic `$ref` must cost a diagnostic rather than the
-//! stack.
+//! stack. For the same reason a spec is checked before it registers: its input
+//! schema has to be an object schema whose every `$ref` resolves, so a broken
+//! declaration fails at registration rather than at the first call.
 
 use serde_json::{Map, Value};
 
-use super::{ToolError, resolve_reference};
+use super::ToolError;
 use crate::pycompat::pydantic;
 
 /// One place a call's arguments failed the tool's declared schema.
@@ -613,4 +616,124 @@ fn validate_type(value: &Value, expected: &str, path: &str) -> Result<(), Vec<Sc
     } else {
         Err(violation(path, format!("expected {expected}")))
     }
+}
+
+pub(super) fn validate_tool_name(name: &str) -> Result<(), ToolError> {
+    if name.is_empty()
+        || name.len() > 128
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+    {
+        return Err(ToolError::InvalidName(name.to_owned()));
+    }
+    Ok(())
+}
+
+pub(super) fn validate_schema_object(schema: &Value, kind: &'static str) -> Result<(), ToolError> {
+    let object = schema.as_object().ok_or_else(|| ToolError::InvalidSchema {
+        kind,
+        message: "schema must be an object".to_owned(),
+    })?;
+    if object.get("type").and_then(Value::as_str) != Some("object") {
+        return Err(ToolError::InvalidSchema {
+            kind,
+            message: "root type must be object".to_owned(),
+        });
+    }
+    let properties = match object.get("properties") {
+        None => Map::new(),
+        Some(Value::Object(properties)) => properties.clone(),
+        Some(_) => {
+            return Err(ToolError::InvalidSchema {
+                kind,
+                message: "properties must be an object".to_owned(),
+            });
+        }
+    };
+    if let Some(required) = object.get("required") {
+        let names = required
+            .as_array()
+            .ok_or_else(|| ToolError::InvalidSchema {
+                kind,
+                message: "required must be an array of strings".to_owned(),
+            })?;
+        for name in names {
+            let name = name.as_str().ok_or_else(|| ToolError::InvalidSchema {
+                kind,
+                message: "required must be an array of strings".to_owned(),
+            })?;
+            if !properties.contains_key(name) {
+                return Err(ToolError::InvalidSchema {
+                    kind,
+                    message: format!("required property `{name}` is absent from properties"),
+                });
+            }
+        }
+    }
+    if let Some(defs) = object.get("$defs")
+        && !defs.is_object()
+    {
+        return Err(ToolError::InvalidSchema {
+            kind,
+            message: "$defs must be an object".to_owned(),
+        });
+    }
+    validate_references(schema, schema, "", kind)
+}
+
+/// Rejects a `$ref` that no `$defs` entry resolves, so a broken pointer fails at
+/// registration instead of reaching the model as a schema nothing can satisfy.
+fn validate_references(
+    node: &Value,
+    root: &Value,
+    pointer: &str,
+    kind: &'static str,
+) -> Result<(), ToolError> {
+    match node {
+        Value::Object(object) => {
+            if let Some(reference) = object.get("$ref") {
+                let target = reference.as_str().ok_or_else(|| ToolError::InvalidSchema {
+                    kind,
+                    message: format!("$ref at {pointer} must be a string"),
+                })?;
+                if resolve_reference(target, root).is_none() {
+                    return Err(ToolError::InvalidSchema {
+                        kind,
+                        message: format!("unresolved $ref `{target}` at {pointer}/$ref"),
+                    });
+                }
+            }
+            for (key, value) in object {
+                validate_references(value, root, &format!("{pointer}/{key}"), kind)?;
+            }
+            Ok(())
+        }
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                validate_references(item, root, &format!("{pointer}/{index}"), kind)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn resolve_reference<'a>(target: &str, root: &'a Value) -> Option<&'a Value> {
+    let name = target.strip_prefix("#/$defs/")?;
+    root.get("$defs")?.get(name)
+}
+
+pub(super) fn validate_output_schema(schema: &Value) -> Result<(), ToolError> {
+    let object = schema.as_object().ok_or_else(|| ToolError::InvalidSchema {
+        kind: "output",
+        message: "schema must be an object".to_owned(),
+    })?;
+    if object.get("type").and_then(Value::as_str).is_none() {
+        return Err(ToolError::InvalidSchema {
+            kind: "output",
+            message: "root type must be declared".to_owned(),
+        });
+    }
+    Ok(())
 }

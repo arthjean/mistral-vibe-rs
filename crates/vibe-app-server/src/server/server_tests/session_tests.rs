@@ -715,7 +715,7 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
         .get("source-session")
         .and_then(|session| session.review.clone())
         .expect("live review manager");
-    review.begin_turn_at("turn-1", 1).expect("begin turn");
+    review.begin_turn_at(1).expect("begin turn");
     review
         .edit(
             "main.txt",
@@ -849,7 +849,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
         .get("review-session")
         .and_then(|session| session.review.clone())
         .expect("review manager");
-    review.begin_turn_at("turn-1", 1).expect("begin turn");
+    review.begin_turn_at(1).expect("begin turn");
     review
         .edit(
             "main.txt",
@@ -973,7 +973,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
     );
 
     // A second turn, reverted whole, is written back to disk.
-    review.begin_turn_at("turn-2", 2).expect("begin turn");
+    review.begin_turn_at(2).expect("begin turn");
     review
         .edit(
             "main.txt",

@@ -17,7 +17,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::prompt::library::{PromptFileError, UtilityPrompt};
+use crate::prompt::library::{PromptFileError, UtilityPrompt, resolve_prompt, with_md_suffix};
 
 pub mod project_context;
 pub mod template;
@@ -116,11 +116,10 @@ fn bundled_file(file_name: &str) -> Option<&'static str> {
 /// The text `prompt_id` names, searching `directories` (the project prompt
 /// directories, then the user one) before the builtins.
 ///
-/// Reference `load_system_prompt` over `load_prompt`. A file in a directory
-/// wins, found under the identifier with its suffix replaced by `.md` as
-/// `Path.with_suffix` replaces it. Then a bundled file of exactly that name,
-/// then a builtin matched case-insensitively. An identifier that answers to
-/// none of them is an error naming the five builtins and the directories.
+/// Reference `load_system_prompt` over `load_prompt`: the builtins are the
+/// five [`SystemPrompt`] members and, behind them, a bundled file of exactly
+/// the name the identifier gives. An identifier that answers to none of them
+/// is an error naming the five builtins and the directories.
 ///
 /// # Errors
 ///
@@ -130,43 +129,17 @@ pub fn load_system_prompt(
     prompt_id: &str,
     directories: &[PathBuf],
 ) -> Result<String, PromptFileError> {
-    crate::prompt::library::validate_prompt_id(prompt_id, SYSTEM_PROMPT_SETTING)?;
-    let file_name = crate::prompt::library::with_md_suffix(prompt_id);
-    for directory in directories {
-        let candidate = directory.join(&file_name);
-        if candidate.is_file()
-            && let Some(text) = read_prompt_file(&candidate)
-        {
-            return Ok(text);
-        }
-    }
-    let lowered = prompt_id.to_lowercase();
-    if let Some(builtin) = SystemPrompt::ALL
+    let mut builtins = SystemPrompt::ALL
         .into_iter()
-        .find(|prompt| prompt.id() == lowered)
-    {
-        return Ok(builtin.text().to_owned());
+        .map(|prompt| (prompt.id(), prompt.text()))
+        .collect::<Vec<_>>();
+    // Reference `load_system_prompt` keys the bundled file under the lowercase
+    // identifier with `setdefault`, so a member of the same name wins.
+    let lowered = prompt_id.to_lowercase();
+    if let Some(text) = bundled_file(&with_md_suffix(prompt_id)) {
+        builtins.push((&lowered, text));
     }
-    if let Some(text) = bundled_file(&file_name) {
-        return Ok(text.to_owned());
-    }
-    Err(PromptFileError::Missing {
-        setting_name: SYSTEM_PROMPT_SETTING.to_owned(),
-        prompt_id: prompt_id.to_owned(),
-        builtins: SystemPrompt::ALL
-            .into_iter()
-            .map(|prompt| prompt.id().to_owned())
-            .collect(),
-        directories: directories.to_vec(),
-        available: crate::prompt::library::available_ids(directories),
-    })
-}
-
-/// A prompt file decoded as the reference's `read_safe` decodes it, stripped.
-fn read_prompt_file(path: &Path) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    let decoded = crate::workspace::text_file::decode(&bytes);
-    Some(crate::pycompat::strip(&decoded.text).to_owned())
+    resolve_prompt(prompt_id, SYSTEM_PROMPT_SETTING, directories, &builtins)
 }
 
 /// Today's date as the base prompt's `$current_date` spells it:

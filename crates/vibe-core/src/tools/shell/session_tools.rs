@@ -16,15 +16,17 @@ use base64::Engine as _;
 use serde_json::{Value, json};
 
 use crate::platform::resolve_lenient;
+use crate::tools::document::Document;
 use crate::tools::{ToolError, ToolExecutionOutput, ToolOutputSink};
 
 use super::decode::{read_file_window, skip_utf8_continuation_prefix};
-use super::document::Document;
 use super::host::ShellFamily;
 use super::policy::{byte_limit, string_argument};
 use super::session::{
-    ManagedSession, SessionHandle, SessionLimits, SessionShell, SessionStatus,
-    kill_managed_session, managed_session, session_document, session_handle, session_poll_document,
+    ManagedSession, SessionLimits, SessionShell, SessionStatus, kill_managed_session,
+};
+use super::session_info::{
+    SessionHandle, SessionInfo, SessionWindow, managed_session, session_handle,
 };
 use super::specs::CONTROL_KEYS;
 use super::{PUMP_INTERVAL, process_error};
@@ -67,8 +69,8 @@ pub(super) async fn run_output(
             tokio::time::sleep(PUMP_INTERVAL).await;
         }
     }
-    let (document, display) = session_poll_document(&handle, cursor, limit)?;
-    Ok(document.into_output(display))
+    let window = SessionWindow::read(&handle, cursor, limit)?;
+    Ok(window.poll_document().into_output(window.display()))
 }
 
 pub(super) fn log_size(path: &Path) -> u64 {
@@ -209,19 +211,21 @@ pub(super) async fn run_sessions(
                 .collect::<Vec<_>>();
             // Reference `list_sessions` appends the orphans a live session does
             // not shadow, so a client that restarted still sees what it left.
-            infos.extend(shell.orphans().into_iter().filter(|manifest| {
-                manifest
-                    .get("session_id")
-                    .and_then(Value::as_str)
-                    .is_none_or(|id| !sessions.contains_key(id))
-            }));
+            for (id, manifest) in shell.orphans() {
+                if !sessions.contains_key(&id) {
+                    infos.push(SessionInfo::from_manifest(&id, &manifest)?);
+                }
+            }
+            // Reference `list_sessions` sorts on `SessionInfo.created_at`, the
+            // ISO-8601 string itself, and a fixed-width UTC instant orders
+            // lexically the way it orders chronologically.
             infos.sort_by(|left, right| {
-                created_at(left)
-                    .cmp(created_at(right))
-                    .then_with(|| session_id_of(left).cmp(session_id_of(right)))
+                left.created_at
+                    .cmp(&right.created_at)
+                    .then_with(|| left.session_id.cmp(&right.session_id))
             });
             Ok(SessionsResult {
-                sessions: infos.iter().map(session_document).collect(),
+                sessions: infos.iter().map(SessionInfo::document).collect(),
                 ..SessionsResult::default()
             }
             .document("list")
@@ -243,20 +247,15 @@ pub(super) async fn run_sessions(
             );
             let (output, next_cursor, truncated) =
                 read_file_window(&log_path, cursor, limit, handle.is_running())?;
-            let command = info
-                .get("command")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned();
             Ok(SessionsResult {
-                session: Some(session_document(&info)),
+                session: Some(info.document()),
                 output: Some(output),
                 next_cursor: Some(next_cursor),
                 truncated: Some(truncated),
                 ..SessionsResult::default()
             }
             .document("inspect")
-            .into_output(json!({"kind": "shell", "command": command})))
+            .into_output(json!({"kind": "shell", "command": info.command})))
         }
         "kill" => {
             // A session is owned by the Vibe session, not by the turn that
@@ -269,7 +268,7 @@ pub(super) async fn run_sessions(
             kill_managed_session(&shell, &session, SessionStatus::Killed).await?;
             let display = json!({"kind": "shell", "command": session.command});
             Ok(SessionsResult {
-                session: Some(session_document(&session.info())),
+                session: Some(session.info().document()),
                 message: Some(format!("Killed session {}", session.id)),
                 ..SessionsResult::default()
             }
@@ -319,7 +318,7 @@ pub(super) async fn run_sessions(
             }
             let message = format!("Stopped {} {} sessions", killed.len(), shell.family.name());
             Ok(SessionsResult {
-                sessions: killed.iter().map(session_document).collect(),
+                sessions: killed.iter().map(SessionInfo::document).collect(),
                 message: Some(message),
                 ..SessionsResult::default()
             }
@@ -363,19 +362,6 @@ fn required_session_id<'a>(arguments: &'a Value, action: &str) -> Result<&'a str
         path: "/session_id".to_owned(),
         message: format!("is required by the `{action}` action"),
     })
-}
-
-/// When a listed session was created, which is the order the reference lists
-/// them in. Reference `list_sessions` sorts on `SessionInfo.created_at`, the
-/// ISO-8601 string itself, and a fixed-width UTC instant orders lexically the
-/// way it orders chronologically. A manifest that lost the field sorts first
-/// rather than failing.
-fn created_at(info: &Value) -> &str {
-    info.get("created_at").and_then(Value::as_str).unwrap_or("")
-}
-
-fn session_id_of(info: &Value) -> &str {
-    info.get("session_id").and_then(Value::as_str).unwrap_or("")
 }
 
 pub(super) async fn run_log_file(

@@ -14,9 +14,9 @@ use serde_json::{Value, json};
 use super::{MAX_LISTED_SKILL_FILES, MAX_LISTED_SKILLS, declared_document};
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::schema::{ObjectSchema, Property};
+use crate::tools::document::Document;
 use crate::tools::{
     ToolAvailability, ToolError, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
-    reference_text,
 };
 
 /// Directive coverage for `skill`.
@@ -138,20 +138,11 @@ pub(super) fn skill_output(
         render_skill(skill, directory)
     };
     let directory_field = directory.map(|path| path.to_string_lossy().replace('\\', "/"));
-    ToolExecutionOutput::new(reference_text::joined(&[
-        ("name", skill.name.clone()),
-        ("content", content.clone()),
-        (
-            "skill_dir",
-            reference_text::optional(directory_field.clone()),
-        ),
-    ]))
-    .displayed_as(json!({"kind": "skill", "name": skill.name}))
-    .typed(json!({
-        "name": skill.name,
-        "content": content,
-        "skill_dir": directory_field,
-    }))
+    Document::new()
+        .field("name", skill.name.clone())
+        .field("content", content)
+        .field("skill_dir", directory_field)
+        .into_output(json!({"kind": "skill", "name": skill.name}))
 }
 
 /// Resolves a slash invocation against the same catalog and loaded ledger the

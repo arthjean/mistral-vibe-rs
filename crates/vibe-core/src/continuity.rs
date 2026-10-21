@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::events::ModelMessage;
@@ -32,16 +32,41 @@ pub struct ContinuitySnapshot {
     pub statistics: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ContinuityState {
-    snapshot: ContinuitySnapshot,
+/// The part of a snapshot a session's metadata carries under
+/// [`CONTINUITY_KEY`]; the rest is the session's own metadata and log.
+///
+/// Every field defaults, so a session saved before anything was attached to it
+/// reads as fresh state. A value that does not read as this shape reads the
+/// same way rather than failing the session it belongs to.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct PersistedContinuity {
+    watermark: u64,
+    completed_operations: BTreeSet<String>,
+    child_session_ids: BTreeSet<String>,
     aliases: BTreeSet<String>,
+    callback_routes: BTreeMap<String, CallbackRoute>,
+    resources: BTreeSet<String>,
+}
+
+impl PersistedContinuity {
+    /// The value `snapshot` persists under [`CONTINUITY_KEY`].
+    fn value(snapshot: &ContinuitySnapshot) -> Result<Value, ContinuityError> {
+        Ok(serde_json::to_value(Self {
+            watermark: snapshot.watermark,
+            completed_operations: snapshot.completed_operations.clone(),
+            child_session_ids: snapshot.child_session_ids.clone(),
+            aliases: snapshot.aliases.clone(),
+            callback_routes: snapshot.callback_routes.clone(),
+            resources: snapshot.resources.clone(),
+        })?)
+    }
 }
 
 #[derive(Clone)]
 pub struct SessionContinuity {
     store: SessionStore,
-    sessions: Arc<Mutex<BTreeMap<String, ContinuityState>>>,
+    sessions: Arc<Mutex<BTreeMap<String, ContinuitySnapshot>>>,
 }
 
 impl SessionContinuity {
@@ -59,13 +84,7 @@ impl SessionContinuity {
         if sessions.contains_key(&snapshot.session_id) {
             return Err(ContinuityError::SessionConflict(snapshot.session_id));
         }
-        sessions.insert(
-            snapshot.session_id.clone(),
-            ContinuityState {
-                snapshot: snapshot.clone(),
-                aliases: snapshot.aliases.clone(),
-            },
-        );
+        sessions.insert(snapshot.session_id.clone(), snapshot.clone());
         Ok(snapshot)
     }
 
@@ -75,29 +94,23 @@ impl SessionContinuity {
     ) -> Result<ContinuitySnapshot, ContinuityError> {
         let incoming = snapshot_from_hydrated(hydrated);
         let mut sessions = self.lock_sessions()?;
-        if let Some(state) = find_state_mut(&mut sessions, &incoming.session_id) {
-            state.snapshot.parent_session_id = incoming.parent_session_id;
-            state.snapshot.messages = incoming.messages;
-            state.snapshot.statistics = incoming.statistics;
-            return Ok(state.snapshot.clone());
+        if let Some(snapshot) =
+            snapshot_key(&sessions, &incoming.session_id).and_then(|key| sessions.get_mut(&key))
+        {
+            snapshot.parent_session_id = incoming.parent_session_id;
+            snapshot.messages = incoming.messages;
+            snapshot.statistics = incoming.statistics;
+            return Ok(snapshot.clone());
         }
-        sessions.insert(
-            incoming.session_id.clone(),
-            ContinuityState {
-                aliases: incoming.aliases.clone(),
-                snapshot: incoming.clone(),
-            },
-        );
+        sessions.insert(incoming.session_id.clone(), incoming.clone());
         Ok(incoming)
     }
 
     pub fn remove(&self, selector: &str) -> Result<bool, ContinuityError> {
         let mut sessions = self.lock_sessions()?;
-        let Some(key) = state_key(&sessions, selector) else {
-            return Ok(false);
-        };
-        sessions.remove(&key);
-        Ok(true)
+        Ok(snapshot_key(&sessions, selector)
+            .and_then(|key| sessions.remove(&key))
+            .is_some())
     }
 
     pub fn reconnect(&self, selector: &str) -> Result<ContinuitySnapshot, ContinuityError> {
@@ -124,36 +137,29 @@ impl SessionContinuity {
         callback: CallbackRoute,
     ) -> Result<(), ContinuityError> {
         let mut sessions = self.lock_sessions()?;
-        let state = find_state_mut(&mut sessions, selector)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        if state
-            .snapshot
+        let snapshot = attached_mut(&mut sessions, selector)?;
+        if snapshot
             .callback_routes
             .insert(callback.callback_id.clone(), callback)
             .is_some()
         {
             return Err(ContinuityError::CallbackConflict);
         }
-        persist_continuity_state(&self.store, state)?;
-        Ok(())
+        self.persist(snapshot)
     }
 
     pub fn add_child(&self, selector: &str, child_id: &str) -> Result<(), ContinuityError> {
         let mut sessions = self.lock_sessions()?;
-        let state = find_state_mut(&mut sessions, selector)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        state.snapshot.child_session_ids.insert(child_id.to_owned());
-        persist_continuity_state(&self.store, state)?;
-        Ok(())
+        let snapshot = attached_mut(&mut sessions, selector)?;
+        snapshot.child_session_ids.insert(child_id.to_owned());
+        self.persist(snapshot)
     }
 
     pub fn add_resource(&self, selector: &str, resource: &str) -> Result<(), ContinuityError> {
         let mut sessions = self.lock_sessions()?;
-        let state = find_state_mut(&mut sessions, selector)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        state.snapshot.resources.insert(resource.to_owned());
-        persist_continuity_state(&self.store, state)?;
-        Ok(())
+        let snapshot = attached_mut(&mut sessions, selector)?;
+        snapshot.resources.insert(resource.to_owned());
+        self.persist(snapshot)
     }
 
     pub fn handoff(
@@ -168,68 +174,42 @@ impl SessionContinuity {
         if sessions.contains_key(new_session_id) {
             return Err(ContinuityError::SessionConflict(new_session_id.to_owned()));
         }
-        let source_key = state_key(&sessions, selector)
+        let (source_key, source) = snapshot_key(&sessions, selector)
+            .and_then(|key| sessions.remove_entry(&key))
             .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        let source = sessions
-            .get(&source_key)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?
-            .snapshot
-            .clone();
-        let mut state = sessions
-            .remove(&source_key)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        let original_state = state.clone();
-        state.aliases.insert(source.session_id.clone());
-        state.aliases.insert(selector.to_owned());
-        let mut messages = Vec::with_capacity(source.messages.len().saturating_add(1));
-        messages.push(ModelMessage::System {
-            content: current_system_prompt.to_owned(),
+        // The new session carries everything the old one held and answers
+        // every name it did, plus the old identifier and the selector it was
+        // reached by.
+        let mut handed_off = source.clone();
+        handed_off.session_id = new_session_id.to_owned();
+        handed_off.aliases.insert(source.session_id.clone());
+        handed_off.aliases.insert(selector.to_owned());
+        handed_off.parent_session_id = Some(source.session_id.clone());
+        let forked = PersistedContinuity::value(&handed_off).and_then(|persisted| {
+            self.store
+                .fork_with_config_overlay(
+                    &source.session_id,
+                    new_session_id,
+                    current_system_prompt,
+                    current_config,
+                    BTreeMap::from([(CONTINUITY_KEY.to_owned(), persisted)]),
+                    now_ms,
+                )
+                .map_err(ContinuityError::from)
         });
-        messages.extend(source.messages.clone());
-        let prospective = ContinuitySnapshot {
-            session_id: new_session_id.to_owned(),
-            aliases: state.aliases.clone(),
-            parent_session_id: Some(source.session_id.clone()),
-            child_session_ids: source.child_session_ids.clone(),
-            callback_routes: source.callback_routes.clone(),
-            resources: source.resources.clone(),
-            watermark: source.watermark,
-            completed_operations: source.completed_operations.clone(),
-            messages,
-            statistics: source.statistics.clone(),
-        };
-        let hydrated = match self.store.fork_with_config_overlay(
-            &source.session_id,
-            new_session_id,
-            current_system_prompt,
-            current_config,
-            BTreeMap::from([(
-                CONTINUITY_KEY.to_owned(),
-                continuity_value(&prospective, &state.aliases),
-            )]),
-            now_ms,
-        ) {
+        let hydrated = match forked {
             Ok(hydrated) => hydrated,
             Err(error) => {
-                sessions.insert(source_key, original_state);
-                return Err(error.into());
+                sessions.insert(source_key, source);
+                return Err(error);
             }
         };
-        state.snapshot = ContinuitySnapshot {
-            session_id: new_session_id.to_owned(),
-            aliases: state.aliases.clone(),
-            parent_session_id: Some(source.session_id),
-            child_session_ids: source.child_session_ids,
-            callback_routes: source.callback_routes,
-            resources: source.resources,
-            watermark: source.watermark,
-            completed_operations: source.completed_operations,
-            messages: hydrated.messages.clone(),
-            statistics: hydrated.metadata.statistics.clone(),
-        };
-        let snapshot = state.snapshot.clone();
-        sessions.insert(new_session_id.to_owned(), state);
-        Ok(snapshot)
+        // The fork opened the new log with the current system prompt, so the
+        // log and the statistics are read back from what it wrote.
+        handed_off.messages = hydrated.messages;
+        handed_off.statistics = hydrated.metadata.statistics;
+        sessions.insert(new_session_id.to_owned(), handed_off.clone());
+        Ok(handed_off)
     }
 
     pub fn accept_operation(
@@ -239,29 +219,23 @@ impl SessionContinuity {
         event_id: u64,
     ) -> Result<bool, ContinuityError> {
         let mut sessions = self.lock_sessions()?;
-        let state = find_state_mut(&mut sessions, selector)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        if state.snapshot.completed_operations.contains(operation_id) {
+        let snapshot = attached_mut(&mut sessions, selector)?;
+        if snapshot.completed_operations.contains(operation_id) {
             return Ok(false);
         }
-        if event_id != state.snapshot.watermark.saturating_add(1) {
+        if event_id != snapshot.watermark.saturating_add(1) {
             return Err(ContinuityError::EventGap {
-                expected: state.snapshot.watermark.saturating_add(1),
+                expected: snapshot.watermark.saturating_add(1),
                 actual: event_id,
             });
         }
-        let mut hydrated = self.store.open(&state.snapshot.session_id)?;
-        let mut persisted = state.snapshot.clone();
-        persisted.watermark = event_id;
-        persisted
+        let mut accepted = snapshot.clone();
+        accepted.watermark = event_id;
+        accepted
             .completed_operations
             .insert(operation_id.to_owned());
-        hydrated.metadata.config.insert(
-            CONTINUITY_KEY.to_owned(),
-            continuity_value(&persisted, &state.aliases),
-        );
-        self.store.update_metadata(&hydrated.metadata)?;
-        state.snapshot = persisted;
+        self.persist(&accepted)?;
+        *snapshot = accepted;
         Ok(true)
     }
 
@@ -277,11 +251,10 @@ impl SessionContinuity {
             .store
             .rewind(&current.session_id, keep_messages, statistics, now_ms)?;
         let mut sessions = self.lock_sessions()?;
-        let state = find_state_mut(&mut sessions, selector)
-            .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))?;
-        state.snapshot.messages = hydrated.messages;
-        state.snapshot.statistics = hydrated.metadata.statistics;
-        Ok(state.snapshot.clone())
+        let snapshot = attached_mut(&mut sessions, selector)?;
+        snapshot.messages = hydrated.messages;
+        snapshot.statistics = hydrated.metadata.statistics;
+        Ok(snapshot.clone())
     }
 
     pub fn clear_history(
@@ -292,14 +265,28 @@ impl SessionContinuity {
         self.rewind(selector, 0, BTreeMap::new(), now_ms)
     }
 
+    /// Writes `snapshot`'s continuity into its session's saved metadata.
+    fn persist(&self, snapshot: &ContinuitySnapshot) -> Result<(), ContinuityError> {
+        let mut hydrated = self.store.open(&snapshot.session_id)?;
+        hydrated.metadata.config.insert(
+            CONTINUITY_KEY.to_owned(),
+            PersistedContinuity::value(snapshot)?,
+        );
+        self.store.update_metadata(&hydrated.metadata)?;
+        Ok(())
+    }
+
     fn find_snapshot(&self, selector: &str) -> Result<Option<ContinuitySnapshot>, ContinuityError> {
         let sessions = self.lock_sessions()?;
-        Ok(find_state(&sessions, selector).map(|state| state.snapshot.clone()))
+        Ok(snapshot_key(&sessions, selector)
+            .and_then(|key| sessions.get(&key))
+            .cloned())
     }
 
     fn lock_sessions(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, ContinuityState>>, ContinuityError> {
+    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, ContinuitySnapshot>>, ContinuityError>
+    {
         self.sessions
             .lock()
             .map_err(|_| ContinuityError::StatePoisoned)
@@ -311,102 +298,42 @@ fn snapshot_from_hydrated(hydrated: HydratedSession) -> ContinuitySnapshot {
         .metadata
         .config
         .get(CONTINUITY_KEY)
-        .cloned()
-        .unwrap_or(Value::Null);
-    let watermark = persisted
-        .get("watermark")
-        .and_then(Value::as_u64)
+        .and_then(|value| PersistedContinuity::deserialize(value).ok())
         .unwrap_or_default();
-    let completed_operations = string_set(persisted.get("completedOperations"));
-    let child_session_ids = string_set(persisted.get("childSessionIds"));
-    let aliases = string_set(persisted.get("aliases"));
-    let callback_routes = persisted
-        .get("callbackRoutes")
-        .cloned()
-        .and_then(|value| serde_json::from_value(value).ok())
-        .unwrap_or_default();
-    let resources = string_set(persisted.get("resources"));
     ContinuitySnapshot {
         session_id: hydrated.metadata.id,
-        aliases,
+        aliases: persisted.aliases,
         parent_session_id: hydrated.metadata.parent_session_id,
-        child_session_ids,
-        callback_routes,
-        resources,
-        watermark,
-        completed_operations,
+        child_session_ids: persisted.child_session_ids,
+        callback_routes: persisted.callback_routes,
+        resources: persisted.resources,
+        watermark: persisted.watermark,
+        completed_operations: persisted.completed_operations,
         messages: hydrated.messages,
         statistics: hydrated.metadata.statistics,
     }
 }
 
-fn string_set(value: Option<&Value>) -> BTreeSet<String> {
-    value
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
-fn continuity_value(snapshot: &ContinuitySnapshot, aliases: &BTreeSet<String>) -> Value {
-    json!({
-        "watermark": snapshot.watermark,
-        "completedOperations": snapshot.completed_operations,
-        "childSessionIds": snapshot.child_session_ids,
-        "aliases": aliases,
-        "callbackRoutes": snapshot.callback_routes,
-        "resources": snapshot.resources,
-    })
-}
-
-fn persist_continuity_state(
-    store: &SessionStore,
-    state: &ContinuityState,
-) -> Result<(), ContinuityError> {
-    let mut hydrated = store.open(&state.snapshot.session_id)?;
-    hydrated.metadata.config.insert(
-        CONTINUITY_KEY.to_owned(),
-        continuity_value(&state.snapshot, &state.aliases),
-    );
-    store.update_metadata(&hydrated.metadata)?;
-    Ok(())
-}
-
-fn state_key(sessions: &BTreeMap<String, ContinuityState>, selector: &str) -> Option<String> {
+/// The key a selector resolves under: the session's own identifier, or any
+/// alias it answers to.
+fn snapshot_key(sessions: &BTreeMap<String, ContinuitySnapshot>, selector: &str) -> Option<String> {
     if sessions.contains_key(selector) {
-        Some(selector.to_owned())
-    } else {
-        sessions
-            .iter()
-            .find(|(_, state)| state.aliases.contains(selector))
-            .map(|(key, _)| key.clone())
+        return Some(selector.to_owned());
     }
+    sessions
+        .iter()
+        .find(|(_, snapshot)| snapshot.aliases.contains(selector))
+        .map(|(key, _)| key.clone())
 }
 
-fn find_state<'a>(
-    sessions: &'a BTreeMap<String, ContinuityState>,
+/// The attached session `selector` names, or the error saying it is not.
+fn attached_mut<'a>(
+    sessions: &'a mut BTreeMap<String, ContinuitySnapshot>,
     selector: &str,
-) -> Option<&'a ContinuityState> {
-    sessions.get(selector).or_else(|| {
-        sessions
-            .values()
-            .find(|state| state.aliases.contains(selector))
-    })
-}
-
-fn find_state_mut<'a>(
-    sessions: &'a mut BTreeMap<String, ContinuityState>,
-    selector: &str,
-) -> Option<&'a mut ContinuityState> {
-    if sessions.contains_key(selector) {
-        sessions.get_mut(selector)
-    } else {
-        sessions
-            .values_mut()
-            .find(|state| state.aliases.contains(selector))
-    }
+) -> Result<&'a mut ContinuitySnapshot, ContinuityError> {
+    snapshot_key(sessions, selector)
+        .and_then(move |key| sessions.get_mut(&key))
+        .ok_or_else(|| ContinuityError::SessionNotAttached(selector.to_owned()))
 }
 
 #[derive(Debug, Error)]
@@ -421,6 +348,8 @@ pub enum ContinuityError {
     CallbackConflict,
     #[error("event gap: expected {expected}, received {actual}")]
     EventGap { expected: u64, actual: u64 },
+    #[error("continuity state cannot be encoded: {0}")]
+    Encoding(#[from] serde_json::Error),
     #[error(transparent)]
     Storage(#[from] StorageError),
 }

@@ -1,10 +1,14 @@
 //! The session store: lazy persistence, directory naming, metadata rewrites,
 //! lookup, lifecycle, handoff, and migration.
 
+use std::fs::{File, OpenOptions};
+use std::io::Write as _;
 use std::time::{Duration, UNIX_EPOCH};
 
 use serde_json::json;
 
+use super::handoff::HandoffJournal;
+use super::time::format_iso_timestamp;
 use super::*;
 
 const WORKSPACE: &str = "/workspace";
@@ -1198,7 +1202,7 @@ fn stage_handoff(
         .record_pointer("parent")
         .expect("pointer names the parent");
     let staging_directory = format!(".handoff-crash-{id}");
-    let destination_directory = session_directory_name(store.prefix(), 2_000, id);
+    let destination_directory = session_directory_name(&store.prefix(), 2_000, id);
     let mut staged = store.compose_session(id, WORKSPACE, Some("parent".to_owned()), 2_000);
     staged.directory.clone_from(&staging_directory);
     store

@@ -322,3 +322,31 @@ pub(crate) enum TerminationError {
     )]
     Console(String),
 }
+
+/// Waits for a synchronous `child` up to `limit`, polling every `poll`, and
+/// kills and reaps it once the deadline passes, answering [`None`] then.
+///
+/// A blocking wait cannot be bounded, so the wait polls; reaping right after
+/// the kill is what keeps a timed-out child from lingering as a zombie.
+///
+/// # Errors
+///
+/// Fails when the child's status cannot be read, leaving it as it is.
+pub(crate) fn wait_with_deadline(
+    child: &mut std::process::Child,
+    limit: Duration,
+    poll: Duration,
+) -> std::io::Result<Option<ExitStatus>> {
+    let deadline = std::time::Instant::now() + limit;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(Some(status));
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(None);
+        }
+        std::thread::sleep(poll);
+    }
+}

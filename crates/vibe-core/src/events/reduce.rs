@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 
 use super::detail::{
     CallbackDetail, CallbackOutput, EffectDetail, EffectResultDisplay, NoticeDetail,
-    RemoteSettlement, has_output_model, project_output, shell_transcript,
+    RemoteSettlement, has_output_model, project_output, shell_transcript, tagged_text,
 };
 use super::*;
 
@@ -59,15 +59,15 @@ fn compaction_handoff_details(
     })
 }
 
+/// The tool whose settlement ends a plan review.
+const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+
 /// Folds one event into the projection.
 ///
 /// Every arm answers its refusals first: no arm may mutate `state` and then
 /// fail. [`ProjectionReducer::apply`] reduces in place and relies on that, so
 /// an arm that grows a check after a mutation silently makes a rejected event
 /// leave debris behind.
-/// The tool whose settlement ends a plan review.
-const EXIT_PLAN_MODE: &str = "exit_plan_mode";
-
 pub(super) fn reduce_event(
     state: &mut ProjectionSnapshot,
     event_id: u64,
@@ -82,8 +82,7 @@ pub(super) fn reduce_event(
             attachments,
             user_display_content,
         } => {
-            require_lifecycle(
-                state,
+            state.lifecycle.require_one_of(
                 &[LifecycleState::Idle, LifecycleState::Completed],
                 "user_message",
             )?;
@@ -111,7 +110,9 @@ pub(super) fn reduce_event(
             content,
             message_id,
         } => {
-            require_lifecycle(state, &[LifecycleState::Running], "user_steer")?;
+            state
+                .lifecycle
+                .require_one_of(&[LifecycleState::Running], "user_steer")?;
             // Reference `_project_user_message` leaves a reply still streaming
             // open: its text keeps landing on its own entry.
             let mut entry = user_message(
@@ -128,7 +129,7 @@ pub(super) fn reduce_event(
             content,
             as_message,
         } => {
-            require_active(state, "context_injected")?;
+            state.lifecycle.require_active("context_injected")?;
             complete_streaming_entries(state, emitted_at);
             let entry = if *as_message {
                 user_message(
@@ -154,7 +155,7 @@ pub(super) fn reduce_event(
             state.history.push(entry);
         }
         EngineEvent::ModelText { text, message_id } => {
-            require_active(state, "model_text")?;
+            state.lifecycle.require_active("model_text")?;
             // Reference `_project_assistant` keys the reply on its identity, so
             // a steer published while it streams does not split it.
             let streaming = match message_id {
@@ -198,7 +199,7 @@ pub(super) fn reduce_event(
             }
         }
         EngineEvent::ModelReasoning { text, message_id } => {
-            require_active(state, "model_reasoning")?;
+            state.lifecycle.require_active("model_reasoning")?;
             let streaming = match message_id {
                 Some(id) => state.history.iter_mut().rev().find(|entry| {
                     let metadata = entry.metadata();
@@ -239,7 +240,7 @@ pub(super) fn reduce_event(
             name,
             remote,
         } => {
-            require_active(state, "tool_call")?;
+            state.lifecycle.require_active("tool_call")?;
             complete_streaming_entries(state, emitted_at);
             state.history.push(PublicHistoryEntry::Effect {
                 metadata: effect_metadata(state, call_id, event_id, emitted_at),
@@ -252,7 +253,7 @@ pub(super) fn reduce_event(
             });
         }
         EngineEvent::ToolCallUnresolved { call_id, name } => {
-            require_active(state, "tool_call")?;
+            state.lifecycle.require_active("tool_call")?;
             complete_streaming_entries(state, emitted_at);
             state.history.push(PublicHistoryEntry::Effect {
                 metadata: effect_metadata(state, call_id, event_id, emitted_at),
@@ -270,7 +271,7 @@ pub(super) fn reduce_event(
             arguments,
             remote,
         } => {
-            require_active(state, "tool_call")?;
+            state.lifecycle.require_active("tool_call")?;
             let resolved = match remote {
                 Some(remote) => EffectDetail::for_proxied_call(name, arguments, remote),
                 None => EffectDetail::for_encoded_call_at(name, arguments, working_directory),
@@ -297,7 +298,7 @@ pub(super) fn reduce_event(
             });
         }
         EngineEvent::ToolStream { call_id, chunk } => {
-            require_active(state, "tool_stream")?;
+            state.lifecycle.require_active("tool_stream")?;
             let entry = effect_entry(state, call_id, "tool_stream_without_call")?;
             if let PublicHistoryEntry::Effect {
                 metadata,
@@ -313,7 +314,7 @@ pub(super) fn reduce_event(
             call_id,
             child_session_id,
         } => {
-            require_active(state, "tool_child_session")?;
+            state.lifecycle.require_active("tool_child_session")?;
             let entry = effect_entry(state, call_id, "tool_child_session_without_call")?;
             if let PublicHistoryEntry::Effect {
                 metadata, detail, ..
@@ -335,7 +336,7 @@ pub(super) fn reduce_event(
             skipped,
             approval,
         } => {
-            require_active(state, "tool_result")?;
+            state.lifecycle.require_active("tool_result")?;
             // Reference `_execute_tool_call` yields an interrupted call's
             // result from a generator its consumer has already left, so no
             // client reads it: the effect stays open until the turn's
@@ -390,7 +391,7 @@ pub(super) fn reduce_event(
                 // otherwise, its header the reason with its tags removed.
                 let declined = || EffectResultDisplay {
                     success: false,
-                    message: untagged(content),
+                    message: tagged_text(content).1,
                     ..EffectResultDisplay::default()
                 };
                 *current_state = if *skipped && *cancelled {
@@ -424,7 +425,7 @@ pub(super) fn reduce_event(
                     // result's message with its tags removed, and nothing else.
                     PublicEffectState::Failed {
                         error: PublicError {
-                            message: untagged(content),
+                            message: tagged_text(content).1,
                             code: None,
                             details: Value::Null,
                         },
@@ -490,7 +491,7 @@ pub(super) fn reduce_event(
             }
         }
         EngineEvent::AgentChanged { agent_name } => {
-            require_active(state, "agent_changed")?;
+            state.lifecycle.require_active("agent_changed")?;
             state.history.push(PublicHistoryEntry::Notice {
                 metadata: entry_metadata(
                     state,
@@ -510,7 +511,9 @@ pub(super) fn reduce_event(
             kind,
             prompt,
         } => {
-            require_lifecycle(state, &[LifecycleState::Running], "callback_requested")?;
+            state
+                .lifecycle
+                .require_one_of(&[LifecycleState::Running], "callback_requested")?;
             complete_streaming_entries(state, emitted_at);
             state.lifecycle = LifecycleState::WaitingCallback;
             state.history.push(PublicHistoryEntry::Callback {
@@ -522,7 +525,7 @@ pub(super) fn reduce_event(
                 ),
                 callback_id: callback_id.clone(),
                 title: prompt.clone(),
-                detail: engine_callback_detail(*kind, prompt),
+                detail: CallbackDetail::for_engine(*kind, prompt),
                 state: PublicCallbackState::Open,
             });
         }
@@ -531,11 +534,9 @@ pub(super) fn reduce_event(
             accepted,
             value,
         } => {
-            require_lifecycle(
-                state,
-                &[LifecycleState::WaitingCallback],
-                "callback_resolved",
-            )?;
+            state
+                .lifecycle
+                .require_one_of(&[LifecycleState::WaitingCallback], "callback_resolved")?;
             let callback = state
                 .history
                 .iter_mut()
@@ -560,7 +561,7 @@ pub(super) fn reduce_event(
                         // The answer's type must match the callback that is
                         // open, which is what a reference client validates the
                         // answered state against.
-                        output: accepted_callback_output(detail, value.as_deref()),
+                        output: CallbackOutput::accepted(detail, value.as_deref()),
                     }
                 } else {
                     PublicCallbackState::Cancelled {
@@ -579,8 +580,8 @@ pub(super) fn reduce_event(
             };
         }
         EngineEvent::Hook { event } => {
-            require_active(state, "hook")?;
-            let (message, detail) = hook_notice(event);
+            state.lifecycle.require_active("hook")?;
+            let (message, detail) = NoticeDetail::for_hook(event);
             state.history.push(PublicHistoryEntry::Notice {
                 metadata: entry_metadata(
                     state,
@@ -594,7 +595,7 @@ pub(super) fn reduce_event(
             });
         }
         EngineEvent::Compaction { summary } => {
-            require_active(state, "compaction")?;
+            state.lifecycle.require_active("compaction")?;
             complete_streaming_entries(state, emitted_at);
             state.history.push(PublicHistoryEntry::Checkpoint {
                 metadata: entry_metadata(
@@ -613,7 +614,7 @@ pub(super) fn reduce_event(
             threshold,
             ..
         } => {
-            require_active(state, "compaction_started")?;
+            state.lifecycle.require_active("compaction_started")?;
             complete_streaming_entries(state, emitted_at);
             state.history.push(PublicHistoryEntry::Checkpoint {
                 metadata: entry_metadata(
@@ -633,7 +634,7 @@ pub(super) fn reduce_event(
             new_session_id,
             ..
         } => {
-            require_active(state, "compaction_completed")?;
+            state.lifecycle.require_active("compaction_completed")?;
             // The entry the start created is the one that is patched. A late
             // subscriber that never saw the start still gets a coherent entry,
             // which is why a missing one is created here rather than refused.
@@ -677,7 +678,7 @@ pub(super) fn reduce_event(
             }
         }
         EngineEvent::Title { title } => {
-            require_active(state, "title")?;
+            state.lifecycle.require_active("title")?;
             state.title = Some(title.clone());
             state.history.push(PublicHistoryEntry::Notice {
                 metadata: entry_metadata(
@@ -701,7 +702,7 @@ pub(super) fn reduce_event(
             // same either way.
             cause,
         } => {
-            require_active(state, "session_handoff")?;
+            state.lifecycle.require_active("session_handoff")?;
             if from_session_id != &state.session_id {
                 return Err(ProjectionError::InvalidHandoff {
                     expected: state.session_id.clone(),
@@ -744,7 +745,7 @@ pub(super) fn reduce_event(
             state: next,
             message,
         } => {
-            validate_lifecycle_transition(state.lifecycle, *next)?;
+            state.lifecycle.transition_to(*next)?;
             state.lifecycle = *next;
             if matches!(
                 next,
@@ -799,7 +800,7 @@ fn user_message(
 fn failure_display(error: &str) -> EffectResultDisplay {
     EffectResultDisplay {
         success: false,
-        message: untagged(error),
+        message: tagged_text(error).1,
         ..EffectResultDisplay::default()
     }
 }
@@ -897,69 +898,6 @@ fn subagent_child_session(display: &Value) -> Option<String> {
         .map(str::to_owned)
 }
 
-/// The callback detail an engine-raised callback publishes.
-///
-/// The engine names a kind and a prompt; the wire union wants a typed body, so
-/// an approval borrows the generic effect shape and a question becomes a
-/// single-question request.
-fn engine_callback_detail(kind: CallbackKind, prompt: &str) -> CallbackDetail {
-    match kind {
-        CallbackKind::UserInput => CallbackDetail::UserInput {
-            request: UserQuestionRequest {
-                questions: vec![UserQuestion {
-                    question: prompt.to_owned(),
-                    header: String::new(),
-                    options: Vec::new(),
-                    multi_select: false,
-                    hide_other: false,
-                }],
-                footer_note: None,
-            },
-            related_entry_id: None,
-        },
-        // A connector-authorization callback has no reference variant, and the
-        // app-server refuses to raise one. It is projected as the approval it
-        // behaves like rather than as an invented kind.
-        CallbackKind::Approval | CallbackKind::ConnectorAuth => CallbackDetail::Approval {
-            effect: Box::new(EffectDetail::for_call("callback", &json!({}))),
-            required_permissions: Vec::new(),
-            choices: ApprovalDecisionType::ALL.to_vec(),
-            path_scope_choices: Vec::new(),
-            related_entry_id: None,
-            reason: None,
-        },
-    }
-}
-
-/// The answer an engine-resolved callback records, in the form its own kind
-/// declares. A mismatched pair never reaches here: the app-server rejects an
-/// output whose type is not the open callback's.
-fn accepted_callback_output(detail: &CallbackDetail, value: Option<&str>) -> CallbackOutput {
-    match detail {
-        CallbackDetail::Approval { .. } => CallbackOutput::Approval {
-            decision: ApprovalDecision {
-                decision: ApprovalDecisionType::Approve,
-                path_scope: None,
-            },
-            feedback: value.map(str::to_owned),
-        },
-        CallbackDetail::UserInput { request, .. } => CallbackOutput::UserInput {
-            result: UserQuestionResult {
-                answers: request
-                    .questions
-                    .iter()
-                    .map(|question| UserAnswer {
-                        question: question.question.clone(),
-                        answer: value.unwrap_or_default().to_owned(),
-                        is_other: false,
-                    })
-                    .collect(),
-                cancelled: false,
-            },
-        },
-    }
-}
-
 fn entry_metadata(
     state: &ProjectionSnapshot,
     event_id: u64,
@@ -999,94 +937,6 @@ fn claim_identity(state: &ProjectionSnapshot, entry: &mut PublicHistoryEntry, id
     entry.metadata_mut().id = id.to_owned();
 }
 
-/// The notice a hook event publishes. Reference `_project_hook`.
-fn hook_notice(event: &crate::hooks::HookEvent) -> (String, NoticeDetail) {
-    use crate::hooks::HookEvent;
-    match event {
-        HookEvent::RunStarted {
-            scope,
-            tool_name,
-            tool_call_id,
-        } => (
-            "Running hooks".to_owned(),
-            NoticeDetail::HookRunStarted(HookNotice {
-                scope: (*scope).into(),
-                tool_name: tool_name.clone(),
-                tool_call_id: tool_call_id.clone(),
-                ..HookNotice::default()
-            }),
-        ),
-        HookEvent::RunCompleted {
-            scope,
-            tool_call_id,
-        } => (
-            "Hooks completed".to_owned(),
-            NoticeDetail::HookRunCompleted(HookNotice {
-                scope: (*scope).into(),
-                tool_call_id: tool_call_id.clone(),
-                ..HookNotice::default()
-            }),
-        ),
-        HookEvent::Started {
-            hook_name,
-            scope,
-            tool_call_id,
-        } => (
-            format!("Running hook {hook_name}"),
-            NoticeDetail::HookStarted(HookNotice {
-                scope: (*scope).into(),
-                tool_call_id: tool_call_id.clone(),
-                hook_name: Some(hook_name.clone()),
-                ..HookNotice::default()
-            }),
-        ),
-        HookEvent::Completed {
-            hook_name,
-            status,
-            content,
-            scope,
-            tool_call_id,
-        } => (
-            content
-                .clone()
-                .filter(|content| !content.is_empty())
-                .unwrap_or_else(|| format!("Hook {hook_name} completed")),
-            NoticeDetail::HookCompleted(HookNotice {
-                scope: (*scope).into(),
-                tool_name: None,
-                tool_call_id: tool_call_id.clone(),
-                hook_name: Some(hook_name.clone()),
-                status: Some(*status),
-                content: content.clone(),
-            }),
-        ),
-    }
-}
-
-/// Reference `TaggedText.from_string(...).message`: the text with every known
-/// tag pair replaced by its content, and nothing trimmed, so a hook denial
-/// with an empty reason keeps the space after its colon.
-fn untagged(text: &str) -> String {
-    const TAGS: [&str; 4] = [
-        "user_cancellation",
-        "tool_error",
-        "vibe_stop_event",
-        "vibe_warning",
-    ];
-    let mut result = text.to_owned();
-    for tag in TAGS {
-        let (open, close) = (format!("<{tag}>"), format!("</{tag}>"));
-        while let Some(start) = result.find(&open) {
-            let Some(end) = result[start + open.len()..].find(&close) else {
-                break;
-            };
-            let inner = result[start + open.len()..start + open.len() + end].to_owned();
-            result.replace_range(start..start + open.len() + end + close.len(), &inner);
-        }
-    }
-    result
-}
-
 /// The metadata of an effect, which the reference keys on its tool call
 /// (`EventProjector.start_effect`) rather than on the event that raised it.
 fn effect_metadata(
@@ -1124,56 +974,5 @@ fn complete_streaming_entries(state: &mut ProjectionSnapshot, emitted_at: u64) {
         }
         metadata.generation_status = PublicEntryGenerationStatus::Completed;
         metadata.updated_at = emitted_at;
-    }
-}
-
-fn require_active(state: &ProjectionSnapshot, event: &'static str) -> Result<(), ProjectionError> {
-    if state.lifecycle.is_active() {
-        Ok(())
-    } else {
-        Err(ProjectionError::IllegalTransition {
-            from: state.lifecycle,
-            event,
-        })
-    }
-}
-
-fn require_lifecycle(
-    state: &ProjectionSnapshot,
-    allowed: &[LifecycleState],
-    event: &'static str,
-) -> Result<(), ProjectionError> {
-    if allowed.contains(&state.lifecycle) {
-        Ok(())
-    } else {
-        Err(ProjectionError::IllegalTransition {
-            from: state.lifecycle,
-            event,
-        })
-    }
-}
-
-fn validate_lifecycle_transition(
-    from: LifecycleState,
-    to: LifecycleState,
-) -> Result<(), ProjectionError> {
-    let valid = matches!(
-        (from, to),
-        (LifecycleState::Idle, LifecycleState::Running)
-            | (LifecycleState::Running, LifecycleState::WaitingCallback)
-            | (LifecycleState::WaitingCallback, LifecycleState::Running)
-            | (
-                LifecycleState::Running | LifecycleState::WaitingCallback,
-                LifecycleState::Completed | LifecycleState::Failed | LifecycleState::Cancelled
-            )
-            | (LifecycleState::Completed, LifecycleState::Running)
-    );
-    if valid {
-        Ok(())
-    } else {
-        Err(ProjectionError::IllegalTransition {
-            from,
-            event: "lifecycle",
-        })
     }
 }

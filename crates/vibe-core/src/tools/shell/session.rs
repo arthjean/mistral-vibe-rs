@@ -7,11 +7,8 @@
 //! later process can describe a session this one left running, and an in-memory
 //! entry while the terminal is still open.
 //!
-//! [`SessionHandle`] is what keeps the two lives of a session from drifting.
-//! Reference answers `read_output`, `inspect_session`, `info` and
-//! `list_sessions` from one `SessionInfo`, built from the live session or
-//! validated from the manifest, so every tool that describes a session here
-//! reads the same value whichever life it is in.
+//! What the tools say about a session, in either life, is
+//! [`super::session_info`]'s.
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -19,7 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Instant;
 
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tokio::sync::Mutex;
 
 use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
@@ -35,9 +33,9 @@ use crate::tools::{
 };
 
 use super::decode::read_file_window;
-use super::document::Document;
 use super::host::{ShellFamily, resolve_session_shell};
-use super::policy::{is_hard_timeout, render_seconds, timeout_argument};
+use super::policy::{environment_overrides, is_hard_timeout, render_seconds, timeout_argument};
+use super::session_info::{SessionHandle, SessionInfo, SessionWindow};
 use super::{
     PUMP_INTERVAL, SESSIONS_DIRECTORY, command_argument, exit_status, is_family_session_id,
     process_error, process_spec, string_argument,
@@ -126,10 +124,16 @@ impl SessionShell {
             .and_then(|store| store.get(session_id).cloned())
     }
 
-    pub(super) fn orphans(&self) -> Vec<Value> {
+    /// Every orphan's manifest, by session id.
+    pub(super) fn orphans(&self) -> Vec<(String, Value)> {
         self.orphaned
             .lock()
-            .map(|store| store.values().cloned().collect())
+            .map(|store| {
+                store
+                    .iter()
+                    .map(|(id, manifest)| (id.clone(), manifest.clone()))
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -149,7 +153,8 @@ impl SessionShell {
 pub(super) const DROPPED_OUTPUT: &str = "output was dropped while the session outran its buffer";
 
 /// Reference `Status`, the states a managed session reports.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(super) enum SessionStatus {
     Running,
     Completed,
@@ -210,10 +215,8 @@ impl ManagedSession {
             })
     }
 
-    /// Reference `SessionInfo`: eleven snake_case fields, the two stamps
-    /// rendered as ISO-8601 instants in UTC, and the two optional ones present
-    /// and null rather than omitted.
-    pub(super) fn info(&self) -> Value {
+    /// Reference `_session_info_locked`.
+    pub(super) fn info(&self) -> SessionInfo {
         let (status, exit_code, dropped) = self.snapshot();
         let updated_at = self.state.lock().map_or_else(
             |_| self.created_at.clone(),
@@ -227,19 +230,19 @@ impl ManagedSession {
             .reader_error
             .clone()
             .or_else(|| dropped.then(|| DROPPED_OUTPUT.to_owned()));
-        json!({
-            "session_id": self.id,
-            "command": self.command,
-            "cwd": self.working_directory,
-            "shell": self.shell,
-            "pty_backend": self.pty_backend,
-            "status": status.as_str(),
-            "exit_code": exit_code,
-            "output_path": self.log_path.to_string_lossy(),
-            "created_at": self.created_at,
-            "updated_at": updated_at,
-            "reader_error": reader_error,
-        })
+        SessionInfo {
+            session_id: self.id.clone(),
+            command: self.command.clone(),
+            cwd: self.working_directory.clone(),
+            shell: self.shell.clone(),
+            pty_backend: self.pty_backend.map(str::to_owned),
+            status,
+            exit_code: exit_code.map(i64::from),
+            output_path: self.log_path.to_string_lossy().into_owned(),
+            created_at: self.created_at.clone(),
+            updated_at,
+            reader_error,
+        }
     }
 
     pub(super) fn is_running(&self) -> bool {
@@ -294,8 +297,8 @@ impl ManagedSession {
 /// one difference is escaping: Python's default `ensure_ascii` writes a
 /// non-ASCII character as `\uXXXX` where this writes it as UTF-8, and both
 /// parse back to the same string.
-fn write_manifest(path: &Path, metadata: &Value) -> Result<(), String> {
-    let mut sorted = metadata.clone();
+fn write_manifest(path: &Path, metadata: &impl Serialize) -> Result<(), String> {
+    let mut sorted = serde_json::to_value(metadata).map_err(|error| error.to_string())?;
     if let Value::Object(fields) = &mut sorted {
         fields.sort_keys();
     }
@@ -335,7 +338,7 @@ pub(super) async fn run_managed_command(
         &config,
         &requested_directory,
         &command,
-        arguments.get("env"),
+        &environment_overrides(arguments),
         settings.max_output_bytes,
     )
     .await?;
@@ -351,8 +354,8 @@ pub(super) async fn run_managed_command(
     let handle = SessionHandle::Live(session.clone());
     let background = arguments["background"].as_bool().unwrap_or(false);
     if background {
-        let (document, display) = managed_command_document(&handle, true, limit)?;
-        return Ok(document.into_output(display));
+        let window = SessionWindow::read(&handle, 0, limit)?;
+        return Ok(window.command_document(true).into_output(window.display()));
     }
     let hard_timeout = is_hard_timeout(arguments);
     let timeout = timeout_argument(arguments, settings);
@@ -373,51 +376,42 @@ pub(super) async fn run_managed_command(
             // reports it as a backgrounded one: the model polls it with the
             // family's output tool instead of losing the work.
             abort.disarm();
-            let (document, display) = managed_command_document(&handle, true, limit)?;
-            return Ok(document.into_output(display));
+            let window = SessionWindow::read(&handle, 0, limit)?;
+            return Ok(window.command_document(true).into_output(window.display()));
         }
         kill_managed_session(shell, &session, SessionStatus::TimedOut).await?;
         abort.disarm();
         // The kill can push out a last line after the drain above.
         stream.pump(&session, output);
-        let (document, _) = managed_command_document(&handle, false, limit)?;
+        let window = SessionWindow::read(&handle, 0, limit)?;
         return Err(ToolError::Execution(format!(
             "the command timed out after {}s and its process group was terminated: \
              `{command}`\nsession_id: {}\noutput:\n{}",
             render_seconds(timeout),
             session.id,
-            document.model_text()
+            window.command_document(false).model_text()
         )));
     }
     abort.disarm();
-    let (document, display) = managed_command_document(&handle, false, limit)?;
-    let code = document
-        .get("returncode")
-        .and_then(Value::as_i64)
-        .unwrap_or(0);
+    let window = SessionWindow::read(&handle, 0, limit)?;
+    let document = window.command_document(false);
+    let code = window.returncode();
     // Reference `_result_from_session` succeeds only when both halves agree:
     // the session reached `completed` and its return code is zero. A session
     // that was killed on its way out carries whatever code the kill produced,
     // which is zero often enough that the code alone would report it as a
     // success.
-    let settled = document
-        .get("status")
-        .and_then(Value::as_str)
-        .is_some_and(|status| status == SessionStatus::Completed.as_str());
-    if !settled || code != 0 {
-        let reported = document
-            .get("status")
-            .and_then(Value::as_str)
-            .unwrap_or(SessionStatus::Running.as_str())
-            .to_owned();
+    let status = window.info.status;
+    if status != SessionStatus::Completed || code != 0 {
         return Err(ToolError::Execution(format!(
             "the command failed with exit status {code}: `{command}`\nsession_id: {}\nstatus: \
-             {reported}\noutput:\n{}",
+             {}\noutput:\n{}",
             session.id,
+            status.as_str(),
             document.model_text()
         )));
     }
-    Ok(document.into_output(display))
+    Ok(document.into_output(window.display()))
 }
 
 /// Reference `_ForegroundStream`: while a foreground command runs, what it
@@ -524,7 +518,7 @@ pub(super) async fn start_managed_session(
     config: &ShellConfig,
     working_directory: &Path,
     command: &str,
-    environment: Option<&Value>,
+    environment: &[(String, String)],
     max_output_bytes: usize,
 ) -> Result<Arc<ManagedSession>, ToolError> {
     if !working_directory.is_dir() {
@@ -704,8 +698,6 @@ fn compact_stamp(instant: UtcTimestamp) -> String {
     )
 }
 
-/// Wraps one managed-family handler, which all share the same shape: a session
-/// store, the call arguments, and the turn's output budget.
 /// What a session tool reads off its own `tools.<name>` entry.
 ///
 /// The four session tools declare different subsets: `_stdin` declares neither
@@ -730,6 +722,8 @@ impl SessionLimits {
     }
 }
 
+/// Wraps one managed-family handler, which all share the same shape: a session
+/// store, the call arguments, and the turn's output budget.
 pub(super) fn session_handler<F, Fut>(
     shell: Arc<SessionShell>,
     config: ToolConfigResolver,
@@ -765,212 +759,6 @@ pub(super) fn guarded_session(
         Arc::new(|_invocation| Ok(PermissionContext::deferred())),
         inner,
     ))
-}
-
-/// The session `session_id` names, live or left behind.
-///
-/// Reference `_live_session` separates the two: a live session is driven, an
-/// orphaned one is only described, and an id that is neither is unknown. The
-/// three answers are distinct here for the same reason, so a tool that needs a
-/// process says so rather than reporting the id as missing.
-pub(super) enum SessionHandle {
-    Live(Arc<ManagedSession>),
-    Orphaned(Value),
-}
-
-impl SessionHandle {
-    /// The manifest shape both sides publish.
-    ///
-    /// Reference `read_output`, `inspect_session`, `info` and `list_sessions`
-    /// all answer with one `SessionInfo`, built from the live session by
-    /// `_session_info_locked` and from the manifest by `_info_from_manifest`,
-    /// which validates it verbatim. So an orphan reports the status its own
-    /// process last recorded rather than one this side invents, and every tool
-    /// that describes a session reads the same value.
-    pub(super) fn info(&self) -> Value {
-        match self {
-            Self::Live(session) => session.info(),
-            Self::Orphaned(manifest) => manifest.clone(),
-        }
-    }
-
-    /// The log the session wrote, which outlives the process that wrote it.
-    pub(super) fn log_path(&self) -> PathBuf {
-        match self {
-            Self::Live(session) => session.log_path.clone(),
-            Self::Orphaned(manifest) => PathBuf::from(
-                manifest
-                    .get("output_path")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default(),
-            ),
-        }
-    }
-
-    /// Whether more bytes are still coming, which is what decides a cut
-    /// character is held back. An orphan's terminal is gone, and
-    /// [`SessionShell::load_orphaned_manifests`] already rewrote any manifest
-    /// that still said `running`, so it never answers `true`.
-    pub(super) fn is_running(&self) -> bool {
-        matches!(self, Self::Live(session) if session.is_running())
-    }
-}
-
-pub(super) async fn session_handle(
-    shell: &SessionShell,
-    session_id: &str,
-) -> Result<SessionHandle, ToolError> {
-    let sessions = shell.managed.lock().await;
-    if let Some(session) = sessions.get(session_id) {
-        return Ok(SessionHandle::Live(session.clone()));
-    }
-    drop(sessions);
-    if let Some(manifest) = shell.orphan(session_id) {
-        return Ok(SessionHandle::Orphaned(manifest));
-    }
-    let active = shell
-        .managed
-        .lock()
-        .await
-        .keys()
-        .cloned()
-        .collect::<Vec<_>>();
-    let listed = if active.is_empty() {
-        "none".to_owned()
-    } else {
-        active.join(", ")
-    };
-    Err(ToolError::Execution(format!(
-        "unknown session `{session_id}`; active sessions: {listed}"
-    )))
-}
-
-pub(super) async fn managed_session(
-    shell: &SessionShell,
-    session_id: &str,
-) -> Result<Arc<ManagedSession>, ToolError> {
-    match session_handle(shell, session_id).await? {
-        SessionHandle::Live(session) => Ok(session),
-        SessionHandle::Orphaned(_) => Err(ToolError::Execution(format!(
-            "session `{session_id}` was left running by a previous process and has no live \
-             terminal; read its log instead"
-        ))),
-    }
-}
-
-/// One session's identity and state, in the order reference `SessionInfo`
-/// declares its fields.
-///
-/// A live session and one a previous process left behind are described from the
-/// same [`SessionHandle::info`], so the two cannot drift apart, and the order is
-/// applied here rather than at each of the tools that embed a session.
-pub(super) fn session_document(info: &Value) -> Document {
-    let field = |key: &str| info.get(key).cloned().unwrap_or(Value::Null);
-    Document::new()
-        .field("session_id", field("session_id"))
-        .field("command", field("command"))
-        .field("cwd", field("cwd"))
-        .field("shell", field("shell"))
-        .field("pty_backend", field("pty_backend"))
-        .field("status", field("status"))
-        .field("exit_code", field("exit_code"))
-        .field("output_path", field("output_path"))
-        .field("created_at", field("created_at"))
-        .field("updated_at", field("updated_at"))
-        .field("reader_error", field("reader_error"))
-}
-
-/// One read of a session's log, and the session it was read from.
-struct SessionWindow {
-    info: Value,
-    log_path: PathBuf,
-    output: String,
-    next_cursor: u64,
-    truncated: bool,
-}
-
-impl SessionWindow {
-    fn read(handle: &SessionHandle, cursor: u64, limit: usize) -> Result<Self, ToolError> {
-        let log_path = handle.log_path();
-        let (output, next_cursor, truncated) =
-            read_file_window(&log_path, cursor, limit, handle.is_running())?;
-        Ok(Self {
-            info: handle.info(),
-            log_path,
-            output,
-            next_cursor,
-            truncated,
-        })
-    }
-
-    fn field(&self, key: &str) -> Value {
-        self.info.get(key).cloned().unwrap_or(Value::Null)
-    }
-
-    fn command(&self) -> String {
-        self.field("command")
-            .as_str()
-            .unwrap_or_default()
-            .to_owned()
-    }
-
-    fn display(&self) -> Value {
-        json!({"kind": "shell", "command": self.command()})
-    }
-}
-
-/// What the family's command tool answers once a session has been started.
-///
-/// Reference `_result_from_session` reads the session once and fills the whole
-/// result from that one read: `output` is what the log held, both streams
-/// interleaved by the terminal, so there is no separate `stdout` or `stderr`,
-/// and the computed `returncode` falls back to zero while `exit_code` stays
-/// null for a session that has not exited.
-pub(super) fn managed_command_document(
-    handle: &SessionHandle,
-    background: bool,
-    limit: usize,
-) -> Result<(Document, Value), ToolError> {
-    let window = SessionWindow::read(handle, 0, limit)?;
-    let exit_code = window.field("exit_code");
-    let document = Document::new()
-        .field("command", window.command())
-        .field("session_id", window.field("session_id"))
-        .field("status", window.field("status"))
-        .field("exit_code", exit_code.clone())
-        .field("shell", window.field("shell"))
-        .field("background", background)
-        .field("output", window.output.clone())
-        .field("next_cursor", window.next_cursor)
-        .field("truncated", window.truncated)
-        .field(
-            "output_path",
-            window.log_path.to_string_lossy().into_owned(),
-        )
-        .field("returncode", exit_code.as_i64().unwrap_or(0));
-    Ok((document, window.display()))
-}
-
-/// What the family's output tool answers, which is the session's state and the
-/// window it just read rather than anything about the call that started it.
-pub(super) fn session_poll_document(
-    handle: &SessionHandle,
-    cursor: u64,
-    limit: usize,
-) -> Result<(Document, Value), ToolError> {
-    let window = SessionWindow::read(handle, cursor, limit)?;
-    let document = Document::new()
-        .field("session_id", window.field("session_id"))
-        .field("status", window.field("status"))
-        .field("exit_code", window.field("exit_code"))
-        .field("output", window.output.clone())
-        .field("next_cursor", window.next_cursor)
-        .field("truncated", window.truncated)
-        .field(
-            "output_path",
-            window.log_path.to_string_lossy().into_owned(),
-        );
-    Ok((document, window.display()))
 }
 
 pub(super) async fn kill_managed_session(

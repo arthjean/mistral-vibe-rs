@@ -13,9 +13,9 @@ use serde_json::{Value, json};
 use super::{TodoItem, declared_document};
 use crate::schema::{ObjectSchema, Property};
 use crate::tools::config::TodoConfig;
+use crate::tools::document::Document;
 use crate::tools::{
     ToolAvailability, ToolError, ToolExecutionOutput, ToolPresentationKind, ToolSource, ToolSpec,
-    reference_text,
 };
 
 /// Directive coverage for `todo`, whose reference description this port must
@@ -148,25 +148,14 @@ pub(super) fn run_todo(
     // Reference `TodoResult.message` is a computed field, so it is rendered
     // from the verb and the count rather than stored.
     let message = format!("{verb} {total} todos");
-    let rendered = items
-        .iter()
-        .map(TodoItem::rendered_fields)
-        .collect::<Vec<_>>();
-    Ok(ToolExecutionOutput::new(reference_text::joined(&[
-        ("verb", verb.to_owned()),
-        ("todos", reference_text::dictionary_list(&rendered)),
-        ("total_count", total.to_string()),
-        ("message", message.clone()),
-    ]))
-    .displayed_as(json!({"kind": "todo", "count": total}))
     // The transcript renders the todo widget from the typed result, so the
     // items travel there rather than in the display metadata.
-    .typed(json!({
-        "verb": verb,
-        "todos": items,
-        "total_count": total,
-        "message": message,
-    })))
+    Ok(Document::new()
+        .field("verb", verb)
+        .nested_list("todos", items.iter().map(TodoItem::document).collect())
+        .field("total_count", total)
+        .field("message", message)
+        .into_output(json!({"kind": "todo", "count": total})))
 }
 
 pub(super) fn parse_todo_items(value: &Value) -> Result<Vec<TodoItem>, ToolError> {

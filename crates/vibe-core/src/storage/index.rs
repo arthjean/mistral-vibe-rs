@@ -44,7 +44,12 @@ pub struct SessionInfo {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// One cached record, written as its info with the stamp beside it.
+///
+/// It is read back by [`entry_from_payload`] rather than a derived
+/// `Deserialize`: the reference reads each field on its own, so one of the
+/// wrong type is dropped rather than discarding the whole cache.
+#[derive(Debug, Clone, Serialize)]
 struct Entry {
     mtime_ns: u64,
     #[serde(flatten)]

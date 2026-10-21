@@ -2,6 +2,7 @@
 
 use super::lease::{ACTIVE_DIRECTORY, LeaseError, SessionLease};
 use super::*;
+use crate::time::parse_iso_millis;
 
 fn lock_paths(root: &Path, id: &str) -> (PathBuf, PathBuf) {
     let active = root.join(ACTIVE_DIRECTORY);

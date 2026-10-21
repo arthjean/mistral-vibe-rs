@@ -812,7 +812,7 @@ impl Scenario {
     /// session info the family reports, which is what the corpus holds.
     async fn session_state(&self, identifier: &str) -> Value {
         let info = match self.managed(identifier).await {
-            Some(session) => session.info(),
+            Some(session) => json!(session.info()),
             None => self.shell.orphan(identifier).unwrap_or(Value::Null),
         };
         let manifest =
@@ -872,7 +872,7 @@ impl Scenario {
     /// it orders chronologically.
     async fn created_at(&self, identifier: &str) -> String {
         let record = match self.managed(identifier).await {
-            Some(session) => session.info(),
+            Some(session) => json!(session.info()),
             None => {
                 fs::read_to_string(self.sessions_directory().join(format!("{identifier}.json")))
                     .ok()
@@ -898,7 +898,7 @@ impl Scenario {
                 let _ = kill_managed_session(&self.shell, &session, SessionStatus::Killed).await;
             }
             if session.is_running() {
-                survivors.push(session.info()["session_id"].to_string());
+                survivors.push(json!(session.info().session_id).to_string());
             }
         }
         survivors

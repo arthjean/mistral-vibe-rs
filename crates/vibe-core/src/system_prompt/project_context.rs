@@ -18,8 +18,9 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
+use crate::child::wait_with_deadline;
 use crate::platform::BackgroundCommand as _;
 
 /// The ceiling reference `_fetch_git_status` puts on every call, whatever
@@ -276,21 +277,15 @@ fn run_git(git: &Path, root: &Path, arguments: &[&str], timeout: Duration) -> Ca
         let _ = stdout.read_to_end(&mut bytes);
         bytes
     });
-    let deadline = Instant::now() + timeout;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let _ = reader.join();
-                return CallOutcome::TimedOut;
-            }
-            Ok(None) => std::thread::sleep(POLL_INTERVAL),
-            Err(error) => {
-                let _ = child.kill();
-                return CallOutcome::Broken(error.to_string());
-            }
+    let status = match wait_with_deadline(&mut child, timeout, POLL_INTERVAL) {
+        Ok(Some(status)) => status,
+        Ok(None) => {
+            let _ = reader.join();
+            return CallOutcome::TimedOut;
+        }
+        Err(error) => {
+            let _ = child.kill();
+            return CallOutcome::Broken(error.to_string());
         }
     };
     let bytes = reader.join().unwrap_or_default();

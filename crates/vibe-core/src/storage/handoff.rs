@@ -16,16 +16,114 @@ use std::path::{Path, PathBuf};
 use std::fs;
 use std::sync::atomic::Ordering;
 
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+use super::metadata::default_title_source;
+use super::time::format_iso_timestamp;
 use super::{
-    FileLock, HANDOFF_JOURNAL_PREFIX, HANDOFF_LOCK_PREFIX, HandoffJournal, HandoffPlan,
-    HydratedSession, LAST_SESSION_DIRECTORY, SessionMetadata, SessionStore, StorageError,
-    TEMP_SEQUENCE, ensure_private_directory, is_safe_handoff_component, sync_directory,
-    validate_session_id,
+    FileLock, HANDOFF_JOURNAL_PREFIX, HANDOFF_LOCK_PREFIX, HydratedSession, LAST_SESSION_DIRECTORY,
+    SessionMetadata, SessionStore, StorageError, TEMP_SEQUENCE, ensure_private_directory,
+    is_safe_handoff_component, sync_directory, validate_session_id,
 };
 use crate::atomic_file::{FileMode, write_atomically};
 use crate::events::ModelMessage;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct HandoffJournal {
+    pub(super) session_id: String,
+    pub(super) staging_directory: String,
+    pub(super) destination_directory: String,
+}
+
+/// What a handoff writes onto the session it publishes, beyond the messages.
+pub(super) struct HandoffPlan {
+    current_config: BTreeMap<String, Value>,
+    config_overlay: BTreeMap<String, Value>,
+    /// The reference's `keep_parent`: whether the session being replaced is
+    /// recorded as the parent of the one being published.
+    retain_parent: bool,
+}
+
 impl SessionStore {
+    pub fn fork(
+        &self,
+        selector: &str,
+        new_id: &str,
+        current_system_prompt: &str,
+        current_config: BTreeMap<String, Value>,
+        now_ms: u64,
+    ) -> Result<HydratedSession, StorageError> {
+        self.fork_with_config_overlay(
+            selector,
+            new_id,
+            current_system_prompt,
+            current_config,
+            BTreeMap::new(),
+            now_ms,
+        )
+    }
+
+    pub fn fork_with_config_overlay(
+        &self,
+        selector: &str,
+        new_id: &str,
+        current_system_prompt: &str,
+        current_config: BTreeMap<String, Value>,
+        config_overlay: BTreeMap<String, Value>,
+        now_ms: u64,
+    ) -> Result<HydratedSession, StorageError> {
+        let parent = self.load(selector)?;
+        let mut messages = Vec::with_capacity(parent.messages.len().saturating_add(1));
+        messages.push(ModelMessage::System {
+            content: current_system_prompt.to_owned(),
+        });
+        messages.extend(parent.messages);
+        self.publish_handoff(
+            &parent.metadata,
+            new_id,
+            messages,
+            HandoffPlan {
+                current_config,
+                config_overlay,
+                retain_parent: true,
+            },
+            now_ms,
+        )
+    }
+
+    pub fn fork_rewound(
+        &self,
+        selector: &str,
+        new_id: &str,
+        keep_messages: usize,
+        statistics: BTreeMap<String, Value>,
+        now_ms: u64,
+    ) -> Result<HydratedSession, StorageError> {
+        let mut parent = self.load(selector)?;
+        if keep_messages > parent.messages.len() {
+            return Err(StorageError::InvalidRewind {
+                requested: keep_messages,
+                available: parent.messages.len(),
+            });
+        }
+        let mut messages = parent.messages.clone();
+        messages.truncate(keep_messages);
+        parent.metadata.statistics = statistics;
+        self.publish_handoff(
+            &parent.metadata,
+            new_id,
+            messages,
+            HandoffPlan {
+                current_config: parent.metadata.config.clone(),
+                config_overlay: BTreeMap::new(),
+                retain_parent: true,
+            },
+            now_ms,
+        )
+    }
+
     /// Publishes `messages` under `new_id`, continuing `parent`.
     ///
     /// `retain_parent` is the reference's `keep_parent`: a compaction records
@@ -77,12 +175,12 @@ impl SessionStore {
         let mut metadata = parent.metadata.clone();
         new_id.clone_into(&mut metadata.id);
         metadata.directory = String::new();
-        metadata.start_time = super::format_iso_timestamp(now_ms);
+        metadata.start_time = format_iso_timestamp(now_ms);
         metadata.end_time = None;
         metadata.child_sessions = Vec::new();
         metadata.loops = Vec::new();
         metadata.title = None;
-        metadata.title_source = super::default_title_source();
+        metadata.title_source = default_title_source();
         metadata.message_count = 0;
         metadata.last_message_fingerprint = None;
         metadata.statistics = statistics;
@@ -265,7 +363,7 @@ impl SessionStore {
         if !is_safe_handoff_component(&journal.staging_directory, ".handoff-")
             || !is_safe_handoff_component(
                 &journal.destination_directory,
-                &format!("{}_", self.prefix),
+                &format!("{}_", self.prefix()),
             )
         {
             return Err(StorageError::InvalidHandoffJournal(path.to_path_buf()));

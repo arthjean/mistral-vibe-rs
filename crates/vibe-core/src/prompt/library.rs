@@ -15,7 +15,7 @@
 //! Reference: `vibe/core/prompts/__init__.py` at the pinned commit.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A prompt this crate ships, addressable by the identifier a setting carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -196,30 +196,59 @@ pub fn load_prompt(
     directories: &[PathBuf],
     builtins: &[UtilityPrompt],
 ) -> Result<String, PromptFileError> {
+    let builtins = builtins
+        .iter()
+        .map(|builtin| (builtin.id(), builtin.text()))
+        .collect::<Vec<_>>();
+    resolve_prompt(prompt_id, setting_name, directories, &builtins)
+}
+
+/// Reference `load_prompt` over its `builtins` mapping, given as the lowercase
+/// identifiers it is keyed by and the texts they answer with, the first entry
+/// of an identifier winning.
+///
+/// A file in a directory wins, found under the identifier with its suffix
+/// replaced by `.md` as `Path.with_suffix` replaces it and read the way
+/// `read_safe` reads it. Then a builtin, matched case-insensitively.
+///
+/// # Errors
+///
+/// [`PromptFileError::InvalidId`] for an identifier that is not a bare file
+/// name, [`PromptFileError::Missing`] for one nothing answers to.
+pub(crate) fn resolve_prompt(
+    prompt_id: &str,
+    setting_name: &str,
+    directories: &[PathBuf],
+    builtins: &[(&str, &str)],
+) -> Result<String, PromptFileError> {
     validate_prompt_id(prompt_id, setting_name)?;
     let file_name = with_md_suffix(prompt_id);
     for directory in directories {
         let candidate = directory.join(&file_name);
         if candidate.is_file()
-            && let Ok(text) = fs::read_to_string(&candidate)
+            && let Some(text) = read_prompt_file(&candidate)
         {
-            return Ok(text.trim().to_owned());
+            return Ok(text);
         }
     }
     let lowered = prompt_id.to_lowercase();
-    if let Some(builtin) = builtins.iter().find(|builtin| builtin.id() == lowered) {
-        return Ok(builtin.text().to_owned());
+    if let Some((_, text)) = builtins.iter().find(|(id, _)| *id == lowered) {
+        return Ok((*text).to_owned());
     }
     Err(PromptFileError::Missing {
         setting_name: setting_name.to_owned(),
         prompt_id: prompt_id.to_owned(),
-        builtins: builtins
-            .iter()
-            .map(|builtin| builtin.id().to_owned())
-            .collect(),
+        builtins: builtins.iter().map(|(id, _)| (*id).to_owned()).collect(),
         directories: directories.to_vec(),
         available: available_ids(directories),
     })
+}
+
+/// A prompt file decoded as the reference's `read_safe` decodes it, stripped.
+fn read_prompt_file(path: &Path) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    let decoded = crate::workspace::text_file::decode(&bytes);
+    Some(crate::pycompat::strip(&decoded.text).to_owned())
 }
 
 /// Reference `_validate_prompt_id`: a prompt identifier is a bare file name.
@@ -228,10 +257,7 @@ pub fn load_prompt(
 ///
 /// [`PromptFileError::InvalidId`] for an empty value, `.`, `..`, or a value
 /// holding a path separator.
-pub(crate) fn validate_prompt_id(
-    prompt_id: &str,
-    setting_name: &str,
-) -> Result<(), PromptFileError> {
+fn validate_prompt_id(prompt_id: &str, setting_name: &str) -> Result<(), PromptFileError> {
     if prompt_id.is_empty()
         || prompt_id == "."
         || prompt_id == ".."
@@ -270,7 +296,7 @@ fn python_stem(name: &str) -> &str {
 
 /// Every identifier the searched directories do carry, sorted and deduplicated,
 /// so the error can list what the operator could have typed instead.
-pub(crate) fn available_ids(directories: &[PathBuf]) -> Vec<String> {
+fn available_ids(directories: &[PathBuf]) -> Vec<String> {
     let mut found: Vec<String> = directories
         .iter()
         .filter_map(|directory| fs::read_dir(directory).ok())

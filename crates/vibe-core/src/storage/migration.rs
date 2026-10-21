@@ -14,16 +14,107 @@ use std::io::Write as _;
 use std::path::Path;
 use std::sync::atomic::Ordering;
 
+use serde::Deserialize;
 use serde_json::Value;
 
+use super::log::LogAppend;
+use super::time::format_iso_timestamp;
 use super::{
-    LegacySession, MESSAGES_FILE, METADATA_FILE, MIGRATION_SUFFIX, MigrationOutcome,
-    SessionMetadata, SessionStore, StorageError, TEMP_SEQUENCE, create_private_directory,
-    format_iso_timestamp, session_directory_name, sync_directory, validate_session_id,
+    FileLock, MESSAGES_FILE, METADATA_FILE, MIGRATION_LOCK_FILE, MIGRATION_SUFFIX, MigrationIssue,
+    MigrationReport, SessionMetadata, SessionStore, StorageError, TEMP_SEQUENCE,
+    create_private_directory, session_directory_name, sync_directory, validate_session_id,
 };
 use crate::atomic_file::create_private_file;
+use crate::events::ModelMessage;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct LegacySession {
+    session_id: String,
+    #[serde(default)]
+    working_directory: Option<String>,
+    #[serde(default)]
+    parent_session_id: Option<String>,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    messages: Vec<ModelMessage>,
+    #[serde(default)]
+    statistics: BTreeMap<String, Value>,
+    #[serde(default)]
+    experiments: Value,
+    #[serde(default)]
+    config: BTreeMap<String, Value>,
+    #[serde(default)]
+    created_at_ms: u64,
+    #[serde(default)]
+    updated_at_ms: u64,
+}
+
+pub(super) enum MigrationOutcome {
+    Migrated,
+    Skipped,
+}
 
 impl SessionStore {
+    /// Brings sessions saved by an earlier format into directories: the
+    /// reference's single-file `<prefix>_*.json` sessions
+    /// (`session_migration.py`), and this port's own earlier files.
+    pub fn migrate_legacy(&self) -> Result<MigrationReport, StorageError> {
+        let mut report = MigrationReport {
+            migrated: 0,
+            skipped: 0,
+            issues: Vec::new(),
+        };
+        if !self.root.is_dir() {
+            return Ok(report);
+        }
+        let entries = fs::read_dir(&self.root).map_err(|source| StorageError::Io {
+            path: self.root.clone(),
+            source,
+        })?;
+        let mut interrupted = false;
+        let mut candidates = Vec::new();
+        for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if name.starts_with(".migrating-") {
+                interrupted = true;
+            } else if path.is_file()
+                && path.extension().and_then(|extension| extension.to_str()) == Some("json")
+                && !name.starts_with('.')
+            {
+                candidates.push(path);
+            }
+        }
+        // A store with nothing to move is left exactly as it is: the reference
+        // writes no lock file into a save directory it only reads.
+        if candidates.is_empty() && !interrupted {
+            return Ok(report);
+        }
+        let lock_path = self.root.join(MIGRATION_LOCK_FILE);
+        let _lock = FileLock::try_acquire(&lock_path, StorageError::MigrationInProgress)?;
+        self.recover_migration_directories()?;
+        candidates.retain(|path| path.is_file());
+        candidates.sort();
+        for path in candidates {
+            match self.migrate_legacy_file(&path) {
+                Ok(MigrationOutcome::Migrated) => {
+                    report.migrated = report.migrated.saturating_add(1);
+                }
+                Ok(MigrationOutcome::Skipped) => {
+                    report.skipped = report.skipped.saturating_add(1);
+                }
+                Err(error) => report.issues.push(MigrationIssue {
+                    path,
+                    message: error.to_string(),
+                }),
+            }
+        }
+        Ok(report)
+    }
+
     pub(super) fn recover_migration_directories(&self) -> Result<(), StorageError> {
         let entries = fs::read_dir(&self.root).map_err(|source| StorageError::Io {
             path: self.root.clone(),
@@ -77,7 +168,7 @@ impl SessionStore {
         }
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let directory =
-            session_directory_name(&self.prefix, legacy.created_at_ms, &legacy.session_id);
+            session_directory_name(&self.prefix(), legacy.created_at_ms, &legacy.session_id);
         let staging = self
             .root
             .join(format!(".migrating-{sequence}-{}", legacy.session_id));
@@ -131,9 +222,8 @@ impl SessionStore {
             path: staging.join(MESSAGES_FILE),
             source,
         })?;
-        for message in &legacy.messages {
-            self.append_message_to_path(&staging.join(MESSAGES_FILE), &mut metadata, message)?;
-        }
+        LogAppend::encode(&legacy.messages, &mut metadata)?
+            .write(&staging.join(MESSAGES_FILE), &mut metadata)?;
         let metadata_path = staging.join(METADATA_FILE);
         let encoded = serde_json::to_vec_pretty(&metadata).map_err(StorageError::Json)?;
         let mut metadata_file =
@@ -185,7 +275,7 @@ impl SessionStore {
         let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
             return Ok(MigrationOutcome::Skipped);
         };
-        if !stem.starts_with(&format!("{}_", self.prefix)) {
+        if !stem.starts_with(&format!("{}_", self.prefix())) {
             return Ok(MigrationOutcome::Skipped);
         }
         let destination = self.root.join(stem);

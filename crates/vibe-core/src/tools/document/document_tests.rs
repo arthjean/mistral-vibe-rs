@@ -49,7 +49,7 @@ fn a_nested_string_carrying_a_quote_switches_delimiter() {
 }
 
 #[test]
-fn a_document_keeps_its_field_order_in_the_text_and_answers_json_by_name() {
+fn a_document_keeps_its_field_order_in_the_text_and_the_typed_result() {
     let document = Document::new()
         .field("zulu", 1)
         .field("alpha", 2)
@@ -58,7 +58,6 @@ fn a_document_keeps_its_field_order_in_the_text_and_answers_json_by_name() {
         document.model_text(),
         "zulu: 1\nalpha: 2\nsessions: [{'id': 's0'}]"
     );
-    assert_eq!(document.get("alpha"), Some(&json!(2)));
     assert_eq!(
         document.typed(),
         json!({"zulu": 1, "alpha": 2, "sessions": [{"id": "s0"}]})

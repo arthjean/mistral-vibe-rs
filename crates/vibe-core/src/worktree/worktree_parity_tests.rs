@@ -47,11 +47,13 @@ use sha2::{Digest, Sha256};
 
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
+use super::paths::{
+    managed_worktree_root, target_cwd, validate_branch_name, validate_worktree_name,
+};
 use super::{
     ManagedRoot, ManagedWorktree, PreparedWorktree, SNAPSHOT_REF_PREFIX, WorktreeRecord,
     WorktreeRepository, auto_worktree_name, inspect_worktree_for_cleanup,
-    is_portable_worktree_name, list_linked_worktrees, managed_worktree_root, prepare_worktree,
-    target_cwd, validate_branch_name, validate_worktree_name, worktree_name_from_text,
+    is_portable_worktree_name, list_linked_worktrees, prepare_worktree, worktree_name_from_text,
     worktree_name_with_suffix,
 };
 

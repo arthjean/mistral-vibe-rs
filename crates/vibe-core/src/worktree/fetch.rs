@@ -23,12 +23,13 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use regex::Regex;
 
 use super::WorktreeError;
 use super::git::{GitRepo, NO_HOOKS_PATH, search_trusted_path};
+use crate::child::wait_with_deadline;
 use crate::platform::BackgroundCommand as _;
 
 /// How long a refresh may take before it is abandoned, which the reference
@@ -198,21 +199,13 @@ fn run_bounded(mut command: Command, limit: Duration) -> Result<(bool, String), 
             text
         })
     });
-    let deadline = Instant::now() + limit;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                if let Some(reader) = reader {
-                    let _ = reader.join();
-                }
-                return Err(Bounded::TimedOut);
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
-            Err(error) => return Err(Bounded::Spawn(error)),
+    let Some(status) =
+        wait_with_deadline(&mut child, limit, Duration::from_millis(20)).map_err(Bounded::Spawn)?
+    else {
+        if let Some(reader) = reader {
+            let _ = reader.join();
         }
+        return Err(Bounded::TimedOut);
     };
     let stderr = reader
         .and_then(|reader| reader.join().ok())
@@ -616,19 +609,7 @@ fn run_capturing(mut command: Command, limit: Duration) -> Option<std::process::
             bytes
         })
     });
-    let deadline = Instant::now() + limit;
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if Instant::now() >= deadline => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return None;
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
-            Err(_) => return None,
-        }
-    };
+    let status = wait_with_deadline(&mut child, limit, Duration::from_millis(10)).ok()??;
     let stdout = reader
         .and_then(|reader| reader.join().ok())
         .unwrap_or_default();

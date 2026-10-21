@@ -50,7 +50,7 @@ fn symlink(target: &Path, link: &Path) {
 /// The managed root this port reaches for, so a test can assert on what a run
 /// left there.
 fn managed_directory(vibe_home: &Path, checkout: &Path) -> PathBuf {
-    super::managed_worktree_root(vibe_home, checkout, &checkout.join(".git"))
+    super::paths::managed_worktree_root(vibe_home, checkout, &checkout.join(".git"))
         .expect("the managed root stays under the vibe home")
 }
 
@@ -459,8 +459,8 @@ fn the_branch_gate_judges_the_branch_it_is_given() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, None);
 
-    super::validate_branch_name(&checkout, "review").expect("a plain branch passes");
-    let error = super::validate_branch_name(&checkout, "foo.lock")
+    super::paths::validate_branch_name(&checkout, "review").expect("a plain branch passes");
+    let error = super::paths::validate_branch_name(&checkout, "foo.lock")
         .expect_err("a branch git refuses is refused");
     assert!(
         matches!(&error, WorktreeError::InvalidBranch { branch } if branch == "foo.lock"),
@@ -524,8 +524,12 @@ fn a_link_below_the_anchor_is_a_linked_component() {
     let alias = root.join("alias");
     symlink(&real, &alias);
 
-    assert!(super::has_linked_path_component(&alias.join("inner")));
-    assert!(!super::has_linked_path_component(&real.join("inner")));
+    assert!(super::paths::has_linked_path_component(
+        &alias.join("inner")
+    ));
+    assert!(!super::paths::has_linked_path_component(
+        &real.join("inner")
+    ));
 }
 
 /// The first component under the anchor is the operating system's business:
@@ -539,7 +543,7 @@ fn a_root_level_alias_alone_is_not_a_linked_component() {
     // to observe.
     let alias = Path::new("/bin");
     if alias.is_symlink() {
-        assert!(!super::has_linked_path_component(alias));
+        assert!(!super::paths::has_linked_path_component(alias));
     }
 }
 
@@ -553,10 +557,11 @@ fn a_root_level_alias_alone_is_not_a_linked_component() {
 fn the_verbatim_prefix_is_stripped_before_the_digest() {
     let home = Path::new("/synthetic/home");
     let repo_root = Path::new("/synthetic/repo");
-    let plain = super::managed_worktree_root(home, repo_root, Path::new(r"C:\dev\repo\.git"))
-        .expect("the plain spelling stays under the vibe home");
+    let plain =
+        super::paths::managed_worktree_root(home, repo_root, Path::new(r"C:\dev\repo\.git"))
+            .expect("the plain spelling stays under the vibe home");
     let verbatim =
-        super::managed_worktree_root(home, repo_root, Path::new(r"\\?\C:\dev\repo\.git"))
+        super::paths::managed_worktree_root(home, repo_root, Path::new(r"\\?\C:\dev\repo\.git"))
             .expect("the verbatim spelling stays under the vibe home");
 
     assert_eq!(plain, verbatim);
@@ -575,7 +580,7 @@ fn a_repository_directory_outside_the_managed_root_is_refused() {
     let vibe_home = root.join("home");
     let checkout = root.join("repo");
     let common_git_dir = checkout.join(".git");
-    let expected = super::managed_worktree_root(&vibe_home, &checkout, &common_git_dir)
+    let expected = super::paths::managed_worktree_root(&vibe_home, &checkout, &common_git_dir)
         .expect("the managed root resolves before it is diverted");
     let name = expected
         .file_name()
@@ -588,7 +593,7 @@ fn a_repository_directory_outside_the_managed_root_is_refused() {
     fs::create_dir_all(&outside).expect("the outside directory is writable");
     symlink(&outside, &managed_root.join(&name));
 
-    let error = super::managed_worktree_root(&vibe_home, &checkout, &common_git_dir)
+    let error = super::paths::managed_worktree_root(&vibe_home, &checkout, &common_git_dir)
         .expect_err("a diverted repository directory is refused");
     let WorktreeError::ManagedRootEscape {
         target,

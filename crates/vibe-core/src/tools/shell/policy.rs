@@ -33,6 +33,7 @@ use crate::tools::{ToolError, ToolHandler, ToolHandlerFuture, ToolInvocation, To
 use super::command_handler;
 use super::host::ShellFamily;
 use super::session::SessionShell;
+use super::session_info::SessionInfo;
 
 // --------------------------------------------------------------------------
 // Policy
@@ -81,18 +82,7 @@ impl ShellCallPolicy {
         let overrides = self.overrides.then(|| CallOverrides {
             cwd: string_argument(arguments, "cwd").map(ToOwned::to_owned),
             requirements: context_requirements(arguments),
-            environment: arguments
-                .get("env")
-                .and_then(Value::as_object)
-                .map(|overrides| {
-                    overrides
-                        .iter()
-                        .filter_map(|(key, value)| {
-                            value.as_str().map(|value| (key.clone(), value.to_owned()))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default(),
+            environment: environment_overrides(arguments),
         });
         Ok(analyze(
             self.flavor,
@@ -344,11 +334,12 @@ pub(super) fn stdin_requirements(
             .map(|session| session.command.clone())
     });
     let command = live.or_else(|| {
+        // A manifest that does not validate refuses the call itself, so it
+        // contributes no command to the decision made before it.
         shell.orphan(session_id).and_then(|manifest| {
-            manifest
-                .get("command")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
+            SessionInfo::from_manifest(session_id, &manifest)
+                .ok()
+                .map(|info| info.command)
         })
     });
     pager_input_permission(flavor, session_id, command.as_deref())
@@ -374,6 +365,19 @@ pub(super) fn command_argument(arguments: &Value) -> Result<String, ToolError> {
 
 pub(super) fn string_argument<'a>(arguments: &'a Value, name: &str) -> Option<&'a str> {
     arguments.get(name).and_then(Value::as_str)
+}
+
+/// The variables the call's `env` override sets: every one it names with a
+/// string value, in the order it names them. A value of any other type sets
+/// nothing.
+pub(super) fn environment_overrides(arguments: &Value) -> Vec<(String, String)> {
+    arguments
+        .get("env")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_owned())))
+        .collect()
 }
 
 /// The foreground wait of a managed command, bounded by the configured

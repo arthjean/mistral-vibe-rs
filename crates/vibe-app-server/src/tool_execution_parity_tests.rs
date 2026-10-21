@@ -1270,7 +1270,7 @@ async fn harness_for(
     // only allows inside a turn. A real session always has one open, so the
     // oracle opens one too: without it every write would report the turn guard
     // instead of the tool body.
-    review.begin_turn("turn-1").expect("a turn opens");
+    review.begin_turn_at(0).expect("a turn opens");
 
     let registry = ToolRegistry::default();
     let guard = ToolGuard::new(policy, Arc::new(GrantApproval));

@@ -34,26 +34,26 @@ use tokio::sync::Mutex;
 
 use crate::policy::{PolicyGuardedTool, ToolGuard};
 use crate::process::{
-    ClientShellRequest, ClientToolIo, ProcessError, ProcessSpec, ProcessStream, TerminalManager,
-    TerminalState,
+    ClientShellRequest, ClientToolIo, ProcessError, ProcessRead, ProcessSpec, ProcessStream,
+    TerminalManager, TerminalState,
 };
 use crate::shell::ShellConfig;
 use crate::tools::config::{ShellCommandConfig, ToolConfigResolver};
+use crate::tools::document::Document;
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolCondition, ToolError, ToolExecutionOutput,
     ToolHandler, ToolInvocation, ToolOutputSink, ToolRegistry,
 };
 
 mod decode;
-mod document;
 mod host;
 mod policy;
 mod session;
+mod session_info;
 mod session_tools;
 mod specs;
 
 use decode::{render_stream_bytes, render_stream_chars};
-use document::Document;
 pub use host::{CommandEnvironment, HostShells, ShellRollout, is_cmd};
 
 /// The shell reference `resolve_windows_shell` settles on for the legacy
@@ -80,8 +80,8 @@ pub fn resolve_windows_shell() -> WindowsShell {
 }
 use host::{ShellFamily, family_config, published_family};
 use policy::{
-    CommandWiring, command_argument, guarded_command, log_file_requirements, render_seconds,
-    stdin_requirements, string_argument, timeout_argument,
+    CommandWiring, command_argument, environment_overrides, guarded_command, log_file_requirements,
+    render_seconds, stdin_requirements, string_argument, timeout_argument,
 };
 use session::{
     SessionShell, SessionStatus, guarded_session, kill_managed_session, run_managed_command,
@@ -102,11 +102,6 @@ const LEGACY_SELECTION_PRIORITY: i32 = 0;
 /// managed variant win the family name when both are registered.
 const MANAGED_SELECTION_PRIORITY: i32 = 10;
 
-/// The shell tools, and the terminals and sessions they keep per Vibe session.
-///
-/// One instance serves every session, like [`crate::tools::builtins`]: the
-/// managed sessions are keyed by session id so a re-registration after an agent
-/// switch finds the sessions it left running.
 /// What the host offers, re-read on demand.
 ///
 /// The reference availability predicates probe the machine on every
@@ -117,6 +112,11 @@ pub type HostResolver = Arc<dyn Fn() -> HostShells + Send + Sync>;
 /// The variables one session's commands start from, shared with its shell.
 type BaseEnvironment = Arc<StdMutex<BTreeMap<String, String>>>;
 
+/// The shell tools, and the terminals and sessions they keep per Vibe session.
+///
+/// One instance serves every session, like [`crate::tools::builtins`]: the
+/// managed sessions are keyed by session id so a re-registration after an agent
+/// switch finds the sessions it left running.
 #[derive(Clone)]
 pub struct ShellTools {
     vibe_home: PathBuf,
@@ -585,8 +585,9 @@ async fn delegated_command(
     let limit = settings
         .max_output_bytes
         .min(output.remaining_bytes().max(1));
-    let result = client
-        .run_shell(ClientShellRequest {
+    let (stdout, stderr, status) = run_on_client(
+        client,
+        ClientShellRequest {
             tool_call_id: Some(call_id.to_owned()),
             command: command.clone(),
             args: None,
@@ -594,24 +595,66 @@ async fn delegated_command(
             cwd: working_directory.to_string_lossy().into_owned(),
             output_byte_limit: u64::try_from(limit).unwrap_or(u64::MAX),
             timeout: Duration::from_secs(timeout),
-        })
-        .await
-        .map_err(|error| {
-            ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
-        })?;
-    // Reference `Bash.run` slices the client's two strings to
-    // `max_output_bytes` characters, as it slices its own.
+        },
+        &command,
+        limit,
+    )
+    .await?;
+    command_output(&command, stdout, stderr, status).map(Some)
+}
+
+/// Runs `request` on the client's terminal and answers its standard output,
+/// its standard error and its status, each stream cut to `limit` characters:
+/// reference `Bash.run` slices the client's two strings to `max_output_bytes`
+/// characters, as it slices its own.
+async fn run_on_client(
+    client: &ClientToolIo,
+    request: ClientShellRequest,
+    command: &str,
+    limit: usize,
+) -> Result<(String, String, i32), ToolError> {
+    let result = client.run_shell(request).await.map_err(|error| {
+        ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
+    })?;
     let cut = |text: String| match text.char_indices().nth(limit) {
         Some((end, _)) => text[..end].to_owned(),
         None => text,
     };
-    command_output(
-        &command,
-        cut(result.stdout),
-        cut(result.stderr),
-        result.returncode,
-    )
-    .map(Some)
+    Ok((cut(result.stdout), cut(result.stderr), result.returncode))
+}
+
+/// Runs `spec` to completion on a terminal this call owns, `None` when
+/// `timeout` elapsed first, once the process group was interrupted and the
+/// terminal released.
+///
+/// Nothing feeds the command, so its standard input is closed before the wait:
+/// it reads EOF rather than blocking forever on a prompt no one answers.
+async fn run_to_completion(
+    shell: &SessionShell,
+    spec: ProcessSpec,
+    timeout: Duration,
+) -> Result<Option<ProcessRead>, ToolError> {
+    let terminal_id = shell.terminals.run(spec).await.map_err(process_error)?;
+    let mut guard = TerminalGuard::new(shell.terminals.clone(), terminal_id.clone());
+    shell
+        .terminals
+        .close_stdin(&terminal_id)
+        .await
+        .map_err(process_error)?;
+    let Ok(read) = tokio::time::timeout(timeout, shell.terminals.wait(&terminal_id)).await else {
+        shell
+            .terminals
+            .interrupt(&terminal_id)
+            .await
+            .map_err(process_error)?;
+        let _ = shell.terminals.release(&terminal_id).await;
+        guard.disarm();
+        return Ok(None);
+    };
+    let read = read.map_err(process_error)?;
+    guard.disarm();
+    let _ = shell.terminals.release(&terminal_id).await;
+    Ok(Some(read))
 }
 
 async fn run_legacy_command(
@@ -633,48 +676,21 @@ async fn run_legacy_command(
     // characters, so the reader keeps enough bytes for that many characters of
     // the widest encoding.
     let limit = settings.max_output_bytes;
-    let terminal_id = shell
-        .terminals
-        .run(process_spec(
-            shell,
-            &config,
-            working_directory,
-            &command,
-            None,
-            limit.saturating_mul(4),
-            false,
-        ))
-        .await
-        .map_err(process_error)?;
-    let mut guard = TerminalGuard::new(shell.terminals.clone(), terminal_id.clone());
-    // Nothing feeds this command, so its standard input reads EOF rather than
-    // blocking forever on a prompt no one answers.
-    shell
-        .terminals
-        .close_stdin(&terminal_id)
-        .await
-        .map_err(process_error)?;
-    let waited = tokio::time::timeout(
-        Duration::from_secs(timeout),
-        shell.terminals.wait(&terminal_id),
-    )
-    .await;
-    let Ok(read) = waited else {
-        shell
-            .terminals
-            .interrupt(&terminal_id)
-            .await
-            .map_err(process_error)?;
-        let _ = shell.terminals.release(&terminal_id).await;
-        guard.disarm();
+    let spec = process_spec(
+        shell,
+        &config,
+        working_directory,
+        &command,
+        &[],
+        limit.saturating_mul(4),
+        false,
+    );
+    let Some(read) = run_to_completion(shell, spec, Duration::from_secs(timeout)).await? else {
         return Err(ToolError::Execution(format!(
             "the command timed out after {timeout}s and its process group was terminated: \
              `{command}`"
         )));
     };
-    let read = read.map_err(process_error)?;
-    guard.disarm();
-    let _ = shell.terminals.release(&terminal_id).await;
 
     // Reference `_run_command` cuts each stream to the window and publishes no
     // field saying so, so a truncated result is silent here too.
@@ -719,27 +735,17 @@ async fn run_windows_fallback(
     )?;
     let executable = resolved.executable.to_string_lossy().into_owned();
     let limit = settings.max_output_bytes;
-    let timed_out = || {
-        ToolError::Execution(format!(
-            "the command timed out after {}s: `{command}`",
-            render_seconds(timeout)
-        ))
-    };
+    let overrides = environment_overrides(arguments);
     if let Some(client) = client.filter(|client| client.supports_terminal()) {
         let mut environment = shell
             .family
             .environment(false)
             .into_iter()
-            .collect::<std::collections::BTreeMap<_, _>>();
-        if let Some(Value::Object(overrides)) = arguments.get("env") {
-            for (key, value) in overrides {
-                if let Some(value) = value.as_str() {
-                    environment.insert(key.clone(), value.to_owned());
-                }
-            }
-        }
-        let result = client
-            .run_shell(ClientShellRequest {
+            .collect::<BTreeMap<_, _>>();
+        environment.extend(overrides);
+        let (stdout, stderr, status) = run_on_client(
+            client,
+            ClientShellRequest {
                 tool_call_id: Some(call_id.to_owned()),
                 command: executable.clone(),
                 args: Some(
@@ -754,55 +760,20 @@ async fn run_windows_fallback(
                 cwd: cwd.to_string_lossy().into_owned(),
                 output_byte_limit: u64::try_from(limit).unwrap_or(u64::MAX),
                 timeout,
-            })
-            .await
-            .map_err(|error| {
-                ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
-            })?;
-        let cut = |text: String| match text.char_indices().nth(limit) {
-            Some((end, _)) => text[..end].to_owned(),
-            None => text,
-        };
-        return command_output_with_shell(
+            },
             &command,
-            &executable,
-            cut(result.stdout),
-            cut(result.stderr),
-            result.returncode,
-        );
-    }
-    let terminal_id = shell
-        .terminals
-        .run(process_spec(
-            shell,
-            &resolved,
-            &cwd,
-            &command,
-            arguments.get("env"),
             limit,
-            false,
-        ))
-        .await
-        .map_err(process_error)?;
-    let mut guard = TerminalGuard::new(shell.terminals.clone(), terminal_id.clone());
-    shell
-        .terminals
-        .close_stdin(&terminal_id)
-        .await
-        .map_err(process_error)?;
-    let Ok(read) = tokio::time::timeout(timeout, shell.terminals.wait(&terminal_id)).await else {
-        shell
-            .terminals
-            .interrupt(&terminal_id)
-            .await
-            .map_err(process_error)?;
-        let _ = shell.terminals.release(&terminal_id).await;
-        guard.disarm();
-        return Err(timed_out());
+        )
+        .await?;
+        return command_output_with_shell(&command, &executable, stdout, stderr, status);
+    }
+    let spec = process_spec(shell, &resolved, &cwd, &command, &overrides, limit, false);
+    let Some(read) = run_to_completion(shell, spec, timeout).await? else {
+        return Err(ToolError::Execution(format!(
+            "the command timed out after {}s: `{command}`",
+            render_seconds(timeout)
+        )));
     };
-    let read = read.map_err(process_error)?;
-    guard.disarm();
-    let _ = shell.terminals.release(&terminal_id).await;
     let stdout = render_stream_bytes(&read.chunks, ProcessStream::Stdout, limit);
     let stderr = render_stream_bytes(&read.chunks, ProcessStream::Stderr, limit);
     command_output_with_shell(
@@ -871,7 +842,7 @@ fn process_spec(
     config: &ShellConfig,
     working_directory: &Path,
     command: &str,
-    environment: Option<&Value>,
+    overrides: &[(String, String)],
     max_output_bytes: usize,
     managed: bool,
 ) -> ProcessSpec {
@@ -908,13 +879,7 @@ fn process_spec(
     for (key, value) in family.environment(managed) {
         spec.environment.insert(key, value);
     }
-    if let Some(Value::Object(overrides)) = environment {
-        for (key, value) in overrides {
-            if let Some(value) = value.as_str() {
-                spec.environment.insert(key.clone(), value.to_owned());
-            }
-        }
-    }
+    spec.environment.extend(overrides.iter().cloned());
     spec
 }
 
