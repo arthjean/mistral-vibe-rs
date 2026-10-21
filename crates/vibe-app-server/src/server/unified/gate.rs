@@ -3,17 +3,20 @@
 //! Reference `_rust_tool_modes` (`vibe/app_server/_runtime.py`) and
 //! `UnifiedPermissionResolver` (`vibe/app_server/_unified_permissions.py`):
 //! a session that bypasses approvals runs every call; otherwise each builtin
-//! call is decided by the per-call rules of the session's own tools, the same
-//! rules and session grants the legacy backend reads, and a call those rules
-//! leave asking becomes an approval callback.
+//! call is decided by the per-call rules of every session tool it stands for,
+//! the same rules and session grants the legacy backend reads, and a call
+//! those rules leave asking becomes one approval callback whose answer every
+//! one of those tools records.
 
 use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode, PolicyError,
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PathGrantScope,
+    PermissionContext, PermissionMode, PermissionRequirement, PolicyError, approval_path_scope,
+    available_path_scopes, wildcard_match,
 };
-use vibe_core::tools::{ToolApproval, ToolApprovalSource, ToolInvocation, ToolRegistry};
+use vibe_core::tools::{ToolInvocation, ToolRegistry};
 use vibe_harness::engine::SessionCore;
 use vibe_harness::gate::{
     Approver, CallbackAnswer, GateFuture, GateVerdict, ToolGate, approval_record,
@@ -21,23 +24,11 @@ use vibe_harness::gate::{
 use vibe_harness::smart::{self, ClassificationRequest, Classifier, SmartState, Verdict};
 use vibe_harness::state::ToolAction;
 
+use super::lock;
 use super::provided::ProvidedRoutes;
 
 const DENIED_BY_POLICY: &str = "Tool execution denied by approval policy";
 const DENIED_BY_CALLBACK: &str = "Tool execution denied by approval callback";
-
-/// Reference `RUST_BUILTIN_TOOL_SOURCES`: the session tools a builtin stands
-/// for, whose rules decide its calls.
-fn sources(builtin: &str) -> &'static [&'static str] {
-    match builtin {
-        "file_system.read_file" => &["read_file"],
-        "file_system.write_file" => &["write_file"],
-        "file_system.search_replace" => &["edit"],
-        "file_system.bash" | "process.start" | "process.write" => &["bash"],
-        "skill.read" => &["skill"],
-        _ => &[],
-    }
-}
 
 /// Reference `_ARGUMENT_TRANSLATORS`: the arguments a session tool reads for
 /// the call a builtin makes, only what its permission rules need.
@@ -103,12 +94,20 @@ pub(crate) struct SmartGate {
 enum Resolved {
     Allow,
     Refuse(GateVerdict),
-    /// The rules ask: through the tool's rules with these requirements, or,
-    /// when no rule reads the call, through its configured permission.
-    Ask {
-        ruled: bool,
-        required: Vec<Value>,
+    /// The rules ask about these requirements, none when nothing scopes the
+    /// call and an approval that outlasts it grants the tools themselves.
+    Ask(Vec<PermissionRequirement>),
+}
+
+/// How the person answered an approval.
+enum Answer {
+    /// The call runs, and `remembered` when the approval outlasts it.
+    Approved {
+        remembered: bool,
     },
+    Declined,
+    /// The answer ends the turn instead.
+    Ended(GateVerdict),
 }
 
 impl ToolGate for UnifiedGate {
@@ -135,40 +134,23 @@ impl ToolGate for UnifiedGate {
             if let Some(name) = self.provided.published(builtin) {
                 return self.provided_gate(name, action, approver).await;
             }
-            let names = sources(builtin);
-            if names.is_empty() {
+            let Some(sources) = gated_sources(builtin) else {
                 // A provided tool: `ui.ask_user_question` is never gated, and
-                // Vibe's own tools run under their configured permission.
+                // Vibe's own tools run under their configured permission. So
+                // does a process call the start gate already settled.
                 return GateVerdict::Run {
                     approval: approval_record("execute", "always", "config"),
                 };
+            };
+            let names = vibe_tool_names(sources, &self.available);
+            if names.is_empty() {
+                return refused_by_policy(None);
             }
-            let Some(tools) = &self.tools else {
-                return refused_by_policy(None);
-            };
-            let Some(name) = names
-                .iter()
-                .find(|name| self.available.iter().any(|known| known == *name))
-            else {
-                return refused_by_policy(None);
-            };
             let invocation = ToolInvocation {
                 call_id: String::new(),
                 arguments: translated_arguments(builtin, &action.arguments),
             };
-            if let Some(smart) = &self.smart {
-                return self
-                    .classify_gate(smart, action, name, invocation, approver)
-                    .await;
-            }
-            let agent = CallbackAgent::new(approver, None);
-            match tools.authorize(name, invocation, &agent).await {
-                Some(Ok(approval)) => GateVerdict::Run {
-                    approval: unified_record(approval),
-                },
-                Some(Err(error)) => verdict_of(error),
-                None => self.configured(name, approver).await,
-            }
+            self.decide(&names, invocation, action, approver).await
         })
     }
 }
@@ -186,25 +168,47 @@ impl UnifiedGate {
         if self.permission(name) == PermissionMode::Never {
             return refused_by_policy(Some(format!("Tool '{name}' is permanently disabled")));
         }
-        let Some(tools) = &self.tools else {
-            return refused_by_policy(None);
-        };
         let invocation = ToolInvocation {
             call_id: String::new(),
             arguments: action.arguments.clone(),
         };
+        self.decide(&[name], invocation, action, approver).await
+    }
+
+    /// The session tools `names` decide the call together: smart approve
+    /// classifies what their rules leave asking, and otherwise the person is
+    /// asked once about it.
+    async fn decide(
+        &self,
+        names: &[&str],
+        invocation: ToolInvocation,
+        action: &ToolAction,
+        approver: &dyn Approver,
+    ) -> GateVerdict {
+        let Some(tools) = &self.tools else {
+            return refused_by_policy(None);
+        };
+        let resolved = self.resolve(tools, names, invocation, action).await;
         if let Some(smart) = &self.smart {
-            return self
-                .classify_gate(smart, action, name, invocation, approver)
+            return smart
+                .classify_gate(tools, names, resolved, action, approver)
                 .await;
         }
-        let agent = CallbackAgent::new(approver, None);
-        match tools.authorize(name, invocation, &agent).await {
-            Some(Ok(approval)) => GateVerdict::Run {
-                approval: unified_record(approval),
+        let requirements = match resolved {
+            Resolved::Allow => {
+                return GateVerdict::Run {
+                    approval: approval_record("execute", "always", "config"),
+                };
+            }
+            Resolved::Refuse(verdict) => return verdict,
+            Resolved::Ask(requirements) => requirements,
+        };
+        match ask(tools, names, requirements, None, action, approver).await {
+            Answer::Approved { .. } => GateVerdict::Run {
+                approval: approval_record("execute", "ask", "user"),
             },
-            Some(Err(error)) => verdict_of(error),
-            None => self.configured(name, approver).await,
+            Answer::Declined => refused_by_callback(),
+            Answer::Ended(verdict) => verdict,
         }
     }
 
@@ -218,31 +222,86 @@ impl UnifiedGate {
             })
     }
 
+    /// Reference `UnifiedPermissionResolver.resolve`: what the rules of every
+    /// tool in `names` make of the call, and no one asked.
+    ///
+    /// A refusal from any of them refuses it. Otherwise whatever any of them
+    /// leaves uncovered is asked about at once, so a scope one tool reads
+    /// survives a sibling that reads nothing. A tool with nothing to say about
+    /// the call leaves it to its siblings, and when none of them clears or
+    /// scopes it either, it is asked about under its fallback scope, which
+    /// keeps an approval from granting the tools themselves.
+    async fn resolve(
+        &self,
+        tools: &ToolRegistry,
+        names: &[&str],
+        invocation: ToolInvocation,
+        action: &ToolAction,
+    ) -> Resolved {
+        let mut uncovered = Vec::new();
+        let (mut cleared, mut scoped, mut unscoped) = (false, false, false);
+        for name in names {
+            let probe = ProbeAgent::default();
+            match tools.authorize(name, invocation.clone(), &probe).await {
+                // The rules let the call run outright, or a stored grant
+                // covers every requirement they raised.
+                Some(Ok(_)) => cleared = true,
+                Some(Err(error)) => match probe.asked() {
+                    None => return Resolved::Refuse(verdict_of(error)),
+                    Some(requirements) if requirements.is_empty() => unscoped = true,
+                    Some(requirements) => {
+                        scoped = true;
+                        uncovered.extend(requirements);
+                    }
+                },
+                // No rule reads the call, so its configured permission does.
+                None => match self.permission(name) {
+                    PermissionMode::Always => cleared = true,
+                    PermissionMode::Never => return Resolved::Refuse(refused_by_policy(None)),
+                    PermissionMode::Ask => unscoped = true,
+                },
+            }
+        }
+        if unscoped && !scoped && !cleared {
+            let Some(fallback) = fallback_scope(&action.tool_name, &action.arguments) else {
+                return Resolved::Ask(Vec::new());
+            };
+            for name in names {
+                if !granted(tools, name, &fallback).await {
+                    uncovered.push(fallback);
+                    break;
+                }
+            }
+        }
+        if uncovered.is_empty() {
+            Resolved::Allow
+        } else {
+            Resolved::Ask(uncovered)
+        }
+    }
+}
+
+impl SmartGate {
     /// Reference `_classify_gate`: the session's rules first, then the
     /// classifier for what they leave asking.
     async fn classify_gate(
         &self,
-        smart: &SmartGate,
+        tools: &ToolRegistry,
+        names: &[&str],
+        resolved: Resolved,
         action: &ToolAction,
-        name: &str,
-        invocation: ToolInvocation,
         approver: &dyn Approver,
     ) -> GateVerdict {
-        let resolved = self.resolve(name, invocation.clone()).await;
-        let (ruled, required) = match resolved {
+        let requirements = match resolved {
             Resolved::Refuse(verdict) => return verdict,
             Resolved::Allow => {
-                if let Ok(mut state) = smart.state.lock() {
-                    state.proceed();
-                }
+                lock(&self.state).proceed();
                 return smart_run(smart::RULES_NOTE.to_owned().into());
             }
-            Resolved::Ask { ruled, required } => (ruled, required),
+            Resolved::Ask(requirements) => requirements,
         };
         let (request, message_id) = {
-            let Ok(core) = smart.core.lock() else {
-                return refused_by_policy(None);
-            };
+            let core = lock(&self.core);
             let message_id = core
                 .projector
                 .state
@@ -254,23 +313,22 @@ impl UnifiedGate {
                     &action.tool_name,
                     &action.arguments,
                     &core.conversation,
-                    &smart.roots,
+                    &self.roots,
                 ),
                 message_id,
             )
         };
         let key = request.key();
-        let remembered = smart.state.lock().is_ok_and(|mut state| {
+        let remembered = {
+            let mut state = lock(&self.state);
             state.enter_turn(&action.turn_id);
             state.approved(&key)
-        });
+        };
         if remembered {
-            if let Ok(mut state) = smart.state.lock() {
-                state.proceed();
-            }
+            lock(&self.state).proceed();
             return smart_run(smart::SESSION_NOTE.to_owned().into());
         }
-        let mut classification = smart
+        let mut classification = self
             .classifier
             .classify(&request, message_id.as_deref())
             .await;
@@ -282,9 +340,7 @@ impl UnifiedGate {
             classification.reason = smart::protected_reason(target);
         }
         if classification.verdict == Verdict::Allow {
-            if let Ok(mut state) = smart.state.lock() {
-                state.proceed();
-            }
+            lock(&self.state).proceed();
             let note = (!classification.reason.is_empty())
                 .then(|| format!("Auto-approved: {}", classification.reason));
             return smart_run(note);
@@ -295,13 +351,11 @@ impl UnifiedGate {
             classification.reason.clone()
         };
         let escalate = classification.verdict == Verdict::Error
-            || smart.state.lock().is_ok_and(|mut state| {
-                state.deny(
-                    key.clone(),
-                    protected.is_some(),
-                    classification.user_authorized,
-                )
-            });
+            || lock(&self.state).deny(
+                key.clone(),
+                protected.is_some(),
+                classification.user_authorized,
+            );
         if !escalate {
             return GateVerdict::Refuse {
                 approval: approval_record("skip", "never", "smart"),
@@ -310,54 +364,30 @@ impl UnifiedGate {
         }
         // Reference `_smart_escalate`: the person settles it, under the scope
         // the rules would have asked with.
-        let agent = CallbackAgent::new(approver, Some(reason.clone()));
-        let answered = if ruled {
-            match self.tools.as_ref() {
-                Some(tools) => match tools.authorize(name, invocation, &agent).await {
-                    Some(Ok(_)) => Ok(()),
-                    Some(Err(PolicyError::TurnCancelled)) => return GateVerdict::CancelTurn,
-                    Some(Err(PolicyError::TurnFailed(message))) => {
-                        return GateVerdict::FailTurn { message };
-                    }
-                    _ => Err(()),
-                },
-                None => Err(()),
-            }
-        } else {
-            match agent
-                .request(ApprovalRequest {
-                    tool: name.to_owned(),
-                    input: Value::Null,
-                    requirements: Vec::new(),
-                    rationale: String::new(),
-                    call_id: None,
-                })
-                .await
-            {
-                Ok(ApprovalDecision::CancelTurn) => return GateVerdict::CancelTurn,
-                Ok(ApprovalDecision::Fail(message)) | Err(PolicyError::TurnFailed(message)) => {
-                    return GateVerdict::FailTurn { message };
+        match ask(
+            tools,
+            names,
+            requirements,
+            Some(reason.clone()),
+            action,
+            approver,
+        )
+        .await
+        {
+            Answer::Approved { remembered } => {
+                let mut state = lock(&self.state);
+                if remembered {
+                    state.remember(key);
                 }
-                Ok(
-                    ApprovalDecision::ApproveOnce
-                    | ApprovalDecision::ApproveForSession(_)
-                    | ApprovalDecision::ApprovePermanently(_),
-                ) => Ok(()),
-                _ => Err(()),
+                state.proceed();
             }
-        };
-        let _ = required;
-        if answered.is_err() {
-            return GateVerdict::Refuse {
-                approval: approval_record("skip", "ask", "user"),
-                message: reason,
-            };
-        }
-        if let Ok(mut state) = smart.state.lock() {
-            if agent.remembered() {
-                state.remember(key);
+            Answer::Declined => {
+                return GateVerdict::Refuse {
+                    approval: approval_record("skip", "ask", "user"),
+                    message: reason,
+                };
             }
-            state.proceed();
+            Answer::Ended(verdict) => return verdict,
         }
         GateVerdict::Run {
             approval: smart::noted(
@@ -366,73 +396,139 @@ impl UnifiedGate {
             ),
         }
     }
+}
 
-    /// Reference `UnifiedPermissionResolver.resolve`: the rules' decision
-    /// alone, with what an ask would require, and no one asked.
-    async fn resolve(&self, name: &str, invocation: ToolInvocation) -> Resolved {
-        let Some(tools) = &self.tools else {
-            return Resolved::Refuse(refused_by_policy(None));
-        };
-        let probe = ProbeAgent::default();
-        match tools.authorize(name, invocation, &probe).await {
-            Some(Ok(_)) => Resolved::Allow,
-            Some(Err(_)) if probe.asked() => Resolved::Ask {
-                ruled: true,
-                required: probe.required(),
-            },
-            Some(Err(error)) => Resolved::Refuse(verdict_of(error)),
-            None => match self.permission(name) {
-                PermissionMode::Always => Resolved::Allow,
-                PermissionMode::Never => Resolved::Refuse(refused_by_policy(None)),
-                PermissionMode::Ask => Resolved::Ask {
-                    ruled: false,
-                    required: Vec::new(),
-                },
-            },
-        }
-    }
-
-    /// A call no rule could read: the tool's configured permission decides,
-    /// and an `ask` asks without a scope.
-    async fn configured(&self, name: &str, approver: &dyn Approver) -> GateVerdict {
-        let permission = self.permission(name);
-        match permission {
-            PermissionMode::Always => GateVerdict::Run {
-                approval: approval_record("execute", "always", "config"),
-            },
-            PermissionMode::Never => refused_by_policy(None),
-            PermissionMode::Ask => match approver.ask(Vec::new(), None).await {
-                CallbackAnswer::Output(output) => {
-                    match crate::client::interactive::approval_decision_from_output(&output) {
-                        Ok(ApprovalDecision::CancelTurn) => GateVerdict::CancelTurn,
-                        Ok(
-                            ApprovalDecision::ApproveOnce
-                            | ApprovalDecision::ApproveForSession(_)
-                            | ApprovalDecision::ApprovePermanently(_),
-                        ) => GateVerdict::Run {
-                            approval: approval_record("execute", "ask", "user"),
-                        },
-                        Ok(_) | Err(_) => refused_by_callback(),
-                    }
+/// Asks the person once about `requirements`, with the reason they are asked
+/// when there is one, and has every tool in `names` record an approval that
+/// outlasts the call.
+async fn ask(
+    tools: &ToolRegistry,
+    names: &[&str],
+    requirements: Vec<PermissionRequirement>,
+    reason: Option<String>,
+    action: &ToolAction,
+    approver: &dyn Approver,
+) -> Answer {
+    let required = requirements
+        .iter()
+        .filter_map(|requirement| serde_json::to_value(requirement).ok())
+        .collect();
+    let decision = match approver.ask(required, reason).await {
+        CallbackAnswer::Output(output) => {
+            match crate::client::interactive::approval_decision_from_output(&output) {
+                Ok(decision) => decision,
+                Err(error) => {
+                    return Answer::Ended(GateVerdict::FailTurn {
+                        message: error.to_string(),
+                    });
                 }
-                CallbackAnswer::Closed(_) => refused_by_callback(),
-            },
+            }
         }
+        CallbackAnswer::Closed(_) => return Answer::Declined,
+    };
+    let (selected, permanent) = match decision {
+        ApprovalDecision::ApproveOnce => return Answer::Approved { remembered: false },
+        ApprovalDecision::ApproveForSession(selected) => (selected, false),
+        ApprovalDecision::ApprovePermanently(selected) => (selected, true),
+        ApprovalDecision::Deny | ApprovalDecision::Reject(_) => return Answer::Declined,
+        ApprovalDecision::CancelTurn => return Answer::Ended(GateVerdict::CancelTurn),
+        ApprovalDecision::Fail(message) => {
+            return Answer::Ended(GateVerdict::FailTurn { message });
+        }
+    };
+    // Reference `approval_grant_permissions`: the scope the person chose has
+    // to be one the approval offered, and a choice it did not offer fails the
+    // turn, as the store fails it for an approval of its own.
+    match approval_path_scope(&requirements, selected) {
+        Ok(scope) => {
+            grant(
+                tools,
+                names,
+                &action.tool_name,
+                &requirements,
+                scope,
+                permanent,
+            )
+            .await;
+            Answer::Approved { remembered: true }
+        }
+        Err(refusal) => Answer::Ended(GateVerdict::FailTurn {
+            message: refusal.to_string(),
+        }),
     }
 }
 
-/// The record of a call the session's rules let through. A stored grant the
-/// legacy backend credits to its classifier is the resolver's own allow here.
-fn unified_record(approval: ToolApproval) -> Value {
-    let approval = if approval.approval_source == ToolApprovalSource::Smart {
-        ToolApproval {
-            approval_source: ToolApprovalSource::Config,
-            ..approval
-        }
-    } else {
-        approval
+/// Reference `UnifiedPermissionResolver.grant`: every tool in `names` records
+/// the approval of `requirements` under `scope`.
+///
+/// Each records it through the session's store, which keeps what the tool
+/// already covers and writes the rest as an approval of its own would be
+/// written, permanent ones into the tool's allowlist included.
+async fn grant(
+    tools: &ToolRegistry,
+    names: &[&str],
+    route: &str,
+    requirements: &[PermissionRequirement],
+    scope: PathGrantScope,
+    permanent: bool,
+) {
+    // A builtin that scopes every call it can read has no honest grant of
+    // the tool itself: an approval carrying nothing releases that call alone.
+    if requirements.is_empty() && fallback_argument(route).is_some() {
+        return;
+    }
+    let Some(guard) = tools.guard() else {
+        return;
     };
-    serde_json::to_value(approval).unwrap_or(Value::Null)
+    // Reference `_PROCESS_SESSION_GRANT_BUILTINS`: a process dies with the
+    // session, so nothing about it is kept. And reference `_persist` writes
+    // no blank pattern, which a prefix-matched allowlist reads as every
+    // command.
+    let replay = ReplayAgent {
+        scope,
+        permanent: permanent
+            && route != "process.write"
+            && (requirements.is_empty()
+                || requirements
+                    .iter()
+                    .any(|requirement| !requirement.session_pattern.trim().is_empty())),
+    };
+    for name in names {
+        // A tool that refuses the requirements, or already covers them,
+        // records nothing.
+        let _recorded = guard
+            .policy
+            .authorize(
+                name,
+                Value::Null,
+                PermissionContext::asking(requirements.to_vec()),
+                &replay,
+            )
+            .await;
+    }
+}
+
+/// Reference `_covered`: whether `name` already granted the fallback scope,
+/// through a stored approval or, for a command, through the allowlist a
+/// permanent one wrote. The tool's own rules never read that entry back:
+/// they match a parsed command, and this call parsed to nothing.
+async fn granted(tools: &ToolRegistry, name: &str, fallback: &PermissionRequirement) -> bool {
+    let Some(guard) = tools.guard() else {
+        return false;
+    };
+    let stored = guard
+        .policy
+        .resolve(name, &PermissionContext::asking(vec![fallback.clone()]))
+        .await
+        .is_ok_and(|resolution| resolution.mode == PermissionMode::Always);
+    stored
+        || (!is_process_id(&fallback.invocation_pattern)
+            && guard
+                .policy
+                .tool_settings(name)
+                .allowlist
+                .iter()
+                .any(|pattern| wildcard_match(&fallback.invocation_pattern, pattern)))
 }
 
 fn refused_by_policy(reason: Option<String>) -> GateVerdict {
@@ -471,92 +567,48 @@ fn smart_run(note: Option<String>) -> GateVerdict {
     }
 }
 
-/// Answers the session's rules by asking the person through a callback,
-/// with the reason they are asked when there is one.
-struct CallbackAgent<'a> {
-    approver: &'a dyn Approver,
-    reason: Option<String>,
-    /// Whether the answer granted more than this one call.
-    remembered: std::sync::atomic::AtomicBool,
-}
-
-impl<'a> CallbackAgent<'a> {
-    fn new(approver: &'a dyn Approver, reason: Option<String>) -> Self {
-        Self {
-            approver,
-            reason,
-            remembered: std::sync::atomic::AtomicBool::new(false),
-        }
-    }
-
-    fn remembered(&self) -> bool {
-        self.remembered.load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
-impl ApprovalAgent for CallbackAgent<'_> {
-    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async move {
-            let required = request
-                .requirements
-                .iter()
-                .filter_map(|requirement| serde_json::to_value(requirement).ok())
-                .collect();
-            match self.approver.ask(required, self.reason.clone()).await {
-                CallbackAnswer::Output(output) => {
-                    let decision =
-                        crate::client::interactive::approval_decision_from_output(&output)
-                            .map_err(|error| PolicyError::TurnFailed(error.to_string()))?;
-                    if matches!(
-                        decision,
-                        ApprovalDecision::ApproveForSession(_)
-                            | ApprovalDecision::ApprovePermanently(_)
-                    ) {
-                        self.remembered
-                            .store(true, std::sync::atomic::Ordering::SeqCst);
-                    }
-                    Ok(decision)
-                }
-                CallbackAnswer::Closed(_) => Ok(ApprovalDecision::Deny),
-            }
-        })
-    }
-}
-
-/// Records what the rules would ask instead of asking it.
+/// Records what the rules would ask about instead of asking.
 #[derive(Default)]
 struct ProbeAgent {
-    asked: Mutex<Option<Vec<Value>>>,
+    asked: Mutex<Option<Vec<PermissionRequirement>>>,
 }
 
 impl ProbeAgent {
-    fn asked(&self) -> bool {
-        self.asked.lock().is_ok_and(|asked| asked.is_some())
-    }
-
-    fn required(&self) -> Vec<Value> {
-        self.asked
-            .lock()
-            .ok()
-            .and_then(|asked| asked.clone())
-            .unwrap_or_default()
+    /// The requirements the rules asked about, or `None` when they did not
+    /// ask.
+    fn asked(&self) -> Option<Vec<PermissionRequirement>> {
+        lock(&self.asked).take()
     }
 }
 
 impl ApprovalAgent for ProbeAgent {
     fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async move {
-            if let Ok(mut asked) = self.asked.lock() {
-                *asked = Some(
-                    request
-                        .requirements
-                        .iter()
-                        .filter_map(|requirement| serde_json::to_value(requirement).ok())
-                        .collect(),
-                );
-            }
-            Ok(ApprovalDecision::Deny)
-        })
+        *lock(&self.asked) = Some(request.requirements);
+        Box::pin(async { Ok(ApprovalDecision::Deny) })
+    }
+}
+
+/// Gives the store the answer the person already gave, so another tool
+/// records the approval as the store records one of its own.
+struct ReplayAgent {
+    scope: PathGrantScope,
+    permanent: bool,
+}
+
+impl ApprovalAgent for ReplayAgent {
+    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
+        // The store hands over what this tool still lacks, which offers the
+        // recursive scope whenever the whole approval did, or no path at all,
+        // and it reads no choice as the exact scope.
+        let selected = (self.scope == PathGrantScope::DirectoryRecursive
+            && !available_path_scopes(&request.requirements).is_empty())
+        .then_some(self.scope);
+        let decision = if self.permanent {
+            ApprovalDecision::ApprovePermanently(selected)
+        } else {
+            ApprovalDecision::ApproveForSession(selected)
+        };
+        Box::pin(async move { Ok(decision) })
     }
 }
 
@@ -683,6 +735,73 @@ const BUILTINS: [(&str, &[&str]); 10] = [
 /// Reference `_SHELL_TOOL_SOURCES`.
 const SHELLS: &[&str] = &["bash", "powershell", "git_bash"];
 
+/// Reference `_PROCESS_UNGATED_BUILTINS`: the reads and the stop of a process
+/// the `process.start` gate already let run, which widen nothing.
+const UNGATED: [&str; 3] = ["process.output", "process.list", "process.stop"];
+
+/// The session tools whose rules decide a call to `builtin`, or `None` for a
+/// call that is not theirs to decide: an ungated process call, or a tool the
+/// session provides.
+fn gated_sources(builtin: &str) -> Option<&'static [&'static str]> {
+    if UNGATED.contains(&builtin) {
+        return None;
+    }
+    BUILTINS
+        .iter()
+        .find(|(name, _)| *name == builtin)
+        .map(|(_, sources)| *sources)
+}
+
+/// Reference `vibe_tool_names`: the tools of `sources` the session
+/// publishes, sorted.
+fn vibe_tool_names<'a>(sources: &[&'a str], available: &[String]) -> Vec<&'a str> {
+    let mut names: Vec<&str> = sources
+        .iter()
+        .copied()
+        .filter(|source| available.iter().any(|name| name == source))
+        .collect();
+    names.sort_unstable();
+    names
+}
+
+/// Reference `_FALLBACK_SCOPES`: the argument a call to `builtin` is scoped
+/// to when no session tool could read it, the command as written for a shell
+/// call or a start and the process for a write.
+fn fallback_argument(builtin: &str) -> Option<&'static str> {
+    match builtin {
+        "file_system.bash" | "process.start" => Some("command"),
+        "process.write" => Some("processId"),
+        _ => None,
+    }
+}
+
+/// The exact scope a call no session tool could read is asked about under,
+/// or `None` when its arguments carry nothing to scope it to: no command at
+/// all, or a process id the harness never minted.
+fn fallback_scope(builtin: &str, arguments: &Value) -> Option<PermissionRequirement> {
+    let key = fallback_argument(builtin)?;
+    let scope = arguments.get(key)?.as_str()?;
+    if key == "processId" && !is_process_id(scope) {
+        return None;
+    }
+    Some(PermissionRequirement::exact_command(scope))
+}
+
+/// Reference `_PROCESS_ID`: an id as the harness mints one,
+/// `process-<hex>-<hex>` (`vibe_harness::processes::process_id`), which
+/// matches itself and nothing else.
+fn is_process_id(text: &str) -> bool {
+    let hex = |part: &str| {
+        !part.is_empty()
+            && part
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    };
+    text.strip_prefix("process-")
+        .and_then(|rest| rest.split_once('-'))
+        .is_some_and(|(session, call)| hex(session) && hex(call))
+}
+
 /// The gate a session opened with these settings runs.
 pub(crate) fn session_gate(
     bypass: bool,
@@ -701,3 +820,6 @@ pub(crate) fn session_gate(
         provided,
     })
 }
+
+#[cfg(test)]
+mod gate_tests;

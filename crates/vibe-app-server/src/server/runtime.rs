@@ -227,6 +227,34 @@ impl SessionRuntime {
             session_id.clone_into(&mut turn.session_id);
         }
     }
+
+    /// The session's projection, opened empty when nothing was projected yet.
+    pub(crate) fn projection(&mut self) -> &mut ProjectionSnapshot {
+        let session_id = self.id.clone();
+        self.snapshot.get_or_insert_with(|| ProjectionSnapshot {
+            session_id,
+            turn_id: None,
+            handoff_cause: None,
+            watermark: 0,
+            lifecycle: LifecycleState::Completed,
+            title: None,
+            history: Vec::new(),
+        })
+    }
+
+    /// Reference `replace_idle_with_history`: the projection holds `history`
+    /// under the session's identifier and runs no turn, and the turns start
+    /// over.
+    pub(crate) fn replace_idle(&mut self, history: Vec<PublicHistoryEntry>) {
+        let session_id = self.id.clone();
+        let snapshot = self.projection();
+        snapshot.session_id = session_id;
+        snapshot.turn_id = None;
+        snapshot.lifecycle = LifecycleState::Idle;
+        snapshot.history = history;
+        self.turns.clear();
+        self.latest_turn = None;
+    }
 }
 
 /// The token and tool accounting one session publishes.

@@ -338,9 +338,18 @@ impl AppServer {
         }
     }
 
+    /// [`Self::reset_vibe_code`] off the request loop, when a runtime runs one.
+    pub(crate) fn spawn_vibe_code_reset(&self, session_id: &str) {
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let server = self.clone();
+            let session_id = session_id.to_owned();
+            runtime.spawn(async move { server.reset_vibe_code(&session_id).await });
+        }
+    }
+
     /// Reference `VibeCodeController.reset`, for a session that is going
     /// away: its runs stop and its picker is dropped.
-    pub(crate) async fn reset_vibe_code(&self, session_id: &str) {
+    async fn reset_vibe_code(&self, session_id: &str) {
         let controller = self.lock_sessions().ok().and_then(|sessions| {
             sessions
                 .get(session_id)

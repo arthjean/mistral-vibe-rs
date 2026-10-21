@@ -194,21 +194,7 @@ impl ServerConnection {
                 "inplace": params.inplace,
             }),
         ));
-        let snapshot = session.snapshot.get_or_insert_with(|| ProjectionSnapshot {
-            session_id: session_id.clone(),
-            turn_id: None,
-            handoff_cause: None,
-            watermark: 0,
-            lifecycle: LifecycleState::Idle,
-            title: None,
-            history: Vec::new(),
-        });
-        snapshot.session_id.clone_from(&session_id);
-        snapshot.turn_id = None;
-        snapshot.lifecycle = LifecycleState::Idle;
-        snapshot.history = kept;
-        session.turns.clear();
-        session.latest_turn = None;
+        session.replace_idle(kept);
         session.status = SessionStatus::Idle;
         session.updated_at = now;
         let state = public_session_state(session);

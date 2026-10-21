@@ -8,6 +8,9 @@
 
 use super::*;
 
+mod deferred;
+mod runtime_view;
+
 pub(super) fn apply_persisted_session_settings(
     intent: &mut SessionIntent,
     hydrated: &HydratedSession,
@@ -40,6 +43,16 @@ pub(super) fn apply_persisted_session_settings(
     }
 }
 
+/// Whether a session publishes a tool by its name, under the session's
+/// enabled and disabled lists.
+pub(super) fn publishes(enabled: &[String], disabled: &[String]) -> impl Fn(&str) -> bool {
+    let enabled = (!enabled.is_empty()).then(|| NameFilter::new(enabled));
+    let disabled = NameFilter::new(disabled);
+    move |name| {
+        enabled.as_ref().is_none_or(|enabled| enabled.matches(name)) && !disabled.matches(name)
+    }
+}
+
 /// Narrows a `runtime/read` tool list to what the session publishes.
 ///
 /// Reference `project_tools` reads `ToolManager.available_tools`, which the
@@ -51,23 +64,43 @@ pub(super) fn publish_session_tools(
     enabled: &[String],
     disabled: &[String],
 ) {
-    let enabled = (!enabled.is_empty()).then(|| NameFilter::new(enabled));
-    let disabled = NameFilter::new(disabled);
-    let published = |name: &str| {
-        enabled.as_ref().is_none_or(|enabled| enabled.matches(name)) && !disabled.matches(name)
-    };
-    let name_of = |tool: &Value| tool.get("name").and_then(Value::as_str).map(str::to_owned);
-    if !tools
-        .iter()
-        .any(|tool| name_of(tool).as_deref() == Some("task"))
-    {
+    publish_named(
+        tools,
+        |tool| tool.get("name").and_then(Value::as_str),
+        || json!({"name": "task", "isCustom": false}),
+        &publishes(enabled, disabled),
+    );
+}
+
+/// [`publish_session_tools`] over bare tool names.
+pub(super) fn published_tool_names(
+    mut names: Vec<String>,
+    enabled: &[String],
+    disabled: &[String],
+) -> Vec<String> {
+    publish_named(
+        &mut names,
+        |name| Some(name.as_str()),
+        || "task".to_owned(),
+        &publishes(enabled, disabled),
+    );
+    names
+}
+
+fn publish_named<T>(
+    tools: &mut Vec<T>,
+    name_of: impl Fn(&T) -> Option<&str>,
+    task: impl FnOnce() -> T,
+    published: &impl Fn(&str) -> bool,
+) {
+    if !tools.iter().any(|tool| name_of(tool) == Some("task")) {
         let at = tools
             .iter()
-            .position(|tool| name_of(tool).is_some_and(|name| name.as_str() > "task"))
+            .position(|tool| name_of(tool).is_some_and(|name| name > "task"))
             .unwrap_or(tools.len());
-        tools.insert(at, json!({"name": "task", "isCustom": false}));
+        tools.insert(at, task());
     }
-    tools.retain(|tool| name_of(tool).is_none_or(|name| published(&name)));
+    tools.retain(|tool| name_of(tool).is_none_or(published));
 }
 
 pub(super) fn apply_agent_profile_settings(intent: &mut SessionIntent, profile: &AgentProfile) {
@@ -211,618 +244,6 @@ impl AppServer {
         Ok(event_id)
     }
 
-    pub async fn invoke_tool(
-        &self,
-        session_id: &str,
-        name: &str,
-        invocation: ToolInvocation,
-    ) -> Result<ToolExecutionOutput, ServerError> {
-        self.tool_registry(session_id)?
-            .invoke(name, invocation)
-            .await
-            .map_err(|error| ServerError::Tool(error.to_string()))
-    }
-
-    pub async fn execute_resource_request(
-        &self,
-        request_id: RequestId,
-        session_id: String,
-        command: ResourceBackendCommand,
-    ) -> DispatchBatch {
-        let Some(backend) = &self.resource_backend else {
-            return error_batch(
-                request_id,
-                ProtocolErrorCode::Conflict,
-                "Operational resource backend is not attached",
-            );
-        };
-        let request = ResourceBackendRequest {
-            session_id,
-            command,
-        };
-        let session_id = request.session_id.clone();
-        resource_result_batch(
-            request_id,
-            self,
-            &session_id,
-            backend.dispatch(request).await,
-        )
-    }
-
-    /// Runs one MCP catalog call and answers it: the requirements its
-    /// convergence raised, the answer with the runtime a mutation declares,
-    /// and the `runtime/updated` that follows a session's.
-    pub async fn execute_mcp_catalog(
-        &self,
-        request_id: RequestId,
-        call: McpCatalogCall,
-        target: McpCatalogTarget,
-        notify: McpCatalogNotify,
-    ) -> DispatchBatch {
-        let answers_runtime = call.answers_runtime();
-        let session_id = match &target {
-            McpCatalogTarget::Session(session_id) => Some(session_id.clone()),
-            McpCatalogTarget::Sessionless => None,
-        };
-        let outcome = match &self.resource_backend {
-            Some(backend) => backend.mcp_catalog(call, target, notify).await,
-            None => match (&call, &session_id) {
-                // With no backend nothing but the recorded state is known, so
-                // a read answers it and anything else is refused.
-                (McpCatalogCall::Read { .. }, Some(session_id)) => self
-                    .resources
-                    .lock()
-                    .ok()
-                    .and_then(|resources| resources.runtime(session_id).ok())
-                    .and_then(|mut runtime| runtime.remove("mcp"))
-                    .map(|mcp| McpCatalogOutcome {
-                        result: BTreeMap::from([("mcp".to_owned(), mcp)]),
-                        runtime_updated: false,
-                        integrations: None,
-                        auth_required: Vec::new(),
-                    })
-                    .ok_or_else(|| {
-                        McpCatalogError::refused(
-                            ProtocolErrorCode::InternalError,
-                            "Resource state is unavailable",
-                        )
-                    }),
-                _ => Err(McpCatalogError::refused(
-                    ProtocolErrorCode::NotImplemented,
-                    "The MCP catalog is not available on this server",
-                )),
-            },
-        };
-        let mut outcome = match outcome {
-            Ok(outcome) => outcome,
-            Err(error) => return catalog_error_batch(request_id, error),
-        };
-        if let (Some(session_id), Some(state)) = (&session_id, outcome.integrations.take())
-            && let Ok(mut resources) = self.resources.lock()
-        {
-            resources.record_integrations(session_id, state);
-        }
-        if let Some(session_id) = &session_id {
-            self.overlay_session_connectors(session_id, outcome.result.get_mut("mcp"));
-        }
-        let mut outbound = session_id
-            .as_deref()
-            .map(|session_id| auth_required_frames(self, session_id, &outcome.auth_required))
-            .unwrap_or_default();
-        if answers_runtime {
-            let runtime = session_id
-                .as_deref()
-                .and_then(|session_id| self.runtime_snapshot(session_id))
-                .unwrap_or(Value::Null);
-            outcome.result.insert("runtime".to_owned(), runtime);
-        }
-        outbound.push(success_bytes(request_id, outcome.result));
-        if outcome.runtime_updated
-            && let Some(session_id) = &session_id
-            && let Some(runtime) = self.runtime_snapshot(session_id)
-        {
-            outbound.push(encode_notification(
-                "runtime/updated",
-                BTreeMap::from([
-                    ("sessionId".to_owned(), json!(session_id)),
-                    ("runtime".to_owned(), runtime),
-                ]),
-            ));
-        }
-        DispatchBatch {
-            outbound,
-            deferred: Vec::new(),
-            close_after_flush: false,
-        }
-    }
-
-    pub async fn execute_cloud_request(
-        &self,
-        request_id: RequestId,
-        method: String,
-        params: BTreeMap<String, Value>,
-    ) -> DispatchBatch {
-        if method == "account/read" {
-            let account = self.workspace.read_account().await;
-            return success_batch(request_id, result_map([("account", account)]));
-        }
-        if method.starts_with("connector_catalog/") || method.starts_with("connectors/") {
-            let mut params = params;
-            let root = params
-                .remove(CONNECTION_ROOT_PARAM)
-                .and_then(|root| root.as_str().map(str::to_owned));
-            return self
-                .execute_connector_call(request_id, &method, &params, root)
-                .await;
-        }
-        if method == "skills/catalog" {
-            let catalog = self.workspace.skills_catalog().await;
-            return success_batch(
-                request_id,
-                catalog
-                    .as_object()
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
-            );
-        }
-        if method == "skills/updates" {
-            let updates = self.workspace.skills_updates().await;
-            return success_batch(
-                request_id,
-                updates
-                    .as_object()
-                    .cloned()
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect(),
-            );
-        }
-        if method == "skills/versions" {
-            let skill_id = params
-                .get("skillId")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let versions = self.workspace.skills_versions(skill_id).await;
-            return success_batch(request_id, object(versions));
-        }
-        if method == "skills/detail" {
-            let skill_id = params
-                .get("skillId")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let version = params.get("version").and_then(Value::as_i64);
-            let detail = self.workspace.skills_detail(skill_id, version).await;
-            return success_batch(request_id, object(detail));
-        }
-        if crate::server::connection::SKILLS_MUTATIONS.contains(&method.as_str()) {
-            return self
-                .skills_mutation_batch(request_id, &method, params)
-                .await;
-        }
-        if method == "narration/summarize" {
-            return self.narrate(request_id, params).await;
-        }
-        if method == "identity/read" {
-            let identity = self.workspace.read_identity().await;
-            return success_batch(request_id, result_map([("identity", identity)]));
-        }
-        if method.starts_with("projectLinks/") {
-            return match crate::projects::links::dispatch(&self.workspace, &method, &params).await {
-                Ok(result) => success_batch(request_id, object(result)),
-                Err(failure) => plain_error_batch(request_id, failure.code(), failure.message()),
-            };
-        }
-        match self.projects.dispatch(&method, &params) {
-            Ok(dispatch) => projects_dispatch_batch(request_id, dispatch),
-            Err(error) => projects_error_batch(request_id, error),
-        }
-    }
-
-    /// Reference `NarrationService.summarize`, against the configuration as
-    /// it stands. A summary that cannot be made answers `null`.
-    async fn narrate(
-        &self,
-        request_id: RequestId,
-        mut params: BTreeMap<String, Value>,
-    ) -> DispatchBatch {
-        let launch = params
-            .remove(CONNECTION_LAUNCH_PARAM)
-            .and_then(|launch| serde_json::from_value(launch).ok());
-        let text = |key: &str| params.get(key).and_then(Value::as_str);
-        let session_id = text("sessionId").unwrap_or_default();
-        let metadata = vibe_core::telemetry::TelemetryContext {
-            launch,
-            ..Default::default()
-        }
-        .request_metadata(
-            Some(session_id),
-            vibe_core::telemetry::TelemetryCallType::SecondaryCall,
-            text("messageId").map(ToOwned::to_owned),
-        )
-        .properties();
-        let effective = self
-            .workspace
-            .layered_config()
-            .load()
-            .map(|snapshot| snapshot.effective.clone())
-            .unwrap_or_default();
-        let providers =
-            vibe_core::provider::config::ModelRouting::from_effective(&effective, None).providers;
-        let context = vibe_core::llm::BackendContext::ambient(
-            vibe_core::provider::config::ApiSettings::from_table(&effective),
-            self.workspace.credentials(),
-        );
-        let input = vibe_core::narration::TurnSummaryInput {
-            user_message: text("userMessage").unwrap_or_default(),
-            assistant_text: text("assistantText").unwrap_or_default(),
-            error: text("error"),
-        };
-        let summary =
-            vibe_core::narration::summarize(&providers, &context, &input, &metadata).await;
-        success_batch(request_id, result_map([("summary", json!(summary))]))
-    }
-
-    /// A skills mutation answered with the runtime it produced, then
-    /// published as `runtime/updated` (reference `SkillsController`).
-    async fn skills_mutation_batch(
-        &self,
-        request_id: RequestId,
-        method: &str,
-        mut params: BTreeMap<String, Value>,
-    ) -> DispatchBatch {
-        let root = params
-            .remove(CONNECTION_ROOT_PARAM)
-            .and_then(|root| root.as_str().map(str::to_owned))
-            .unwrap_or_default();
-        let params = params.into_iter().collect::<serde_json::Map<_, _>>();
-        let converted = match self.workspace.skills_mutation(method, &params).await {
-            Ok(converted) => converted,
-            Err((code, message)) => {
-                return ProtocolFault::plain(code, message).into_batch(request_id);
-            }
-        };
-        // Reference `_refreshed` rebuilds the runtime with `reload_hooks=True`.
-        if !root.is_empty() {
-            let _ = self.reload_session_hooks(&root);
-        }
-        let runtime = self.runtime_snapshot(&root);
-        let mut result = result_map([("runtime", json!(runtime)), ("status", json!("applied"))]);
-        if let Some(converted) = converted {
-            result.insert("converted".to_owned(), json!(converted));
-        }
-        let mut outbound = vec![success_bytes(request_id, result)];
-        if let Some(runtime) = runtime {
-            outbound.push(encode_notification(
-                "runtime/updated",
-                result_map([("sessionId", json!(root)), ("runtime", runtime)]),
-            ));
-        }
-        DispatchBatch {
-            outbound,
-            deferred: Vec::new(),
-            close_after_flush: false,
-        }
-    }
-
-    pub async fn close_resource_session(
-        &self,
-        session_id: &str,
-        generation: u64,
-    ) -> Result<(), ServerError> {
-        // A managed shell session outlives the call that started it, so this is
-        // the only place left that can stop one. The same holds for a terminal
-        // the client opened on our behalf. A failure in either must not skip the
-        // backend teardown, so all three run and the first failure is reported.
-        let shell = self
-            .shell_tools
-            .close_session(session_id)
-            .await
-            .map_err(|error| ServerError::Resource(error.to_string()));
-        let delegated = self
-            .client_tools
-            .close_session(session_id)
-            .await
-            .map_err(|error| ServerError::Resource(error.to_string()));
-        let backend = match &self.resource_backend {
-            Some(backend) => backend
-                .close_session(session_id, generation)
-                .await
-                .map_err(|error| ServerError::Resource(error.to_string())),
-            None => Ok(()),
-        };
-        shell.and(delegated).and(backend)
-    }
-
-    /// Configures a session's MCP sources and publishes what changed.
-    ///
-    /// Discovery is best-effort: a source that will not start is reported as a
-    /// `warning` rather than failing the session, which is why this answers with
-    /// frames instead of a result.
-    pub async fn configure_mcp_servers(
-        &self,
-        session_id: &str,
-        configs: Vec<McpServerConfig>,
-    ) -> Vec<Vec<u8>> {
-        let warning = |message: String| ResourceSignals {
-            runtime_updated: false,
-            warnings: vec![message],
-            auth_required: Vec::new(),
-            integrations: None,
-        };
-        let mut signals = match &self.resource_backend {
-            None => warning("MCP transport backend is not configured".to_owned()),
-            Some(backend) => match backend.configure_mcp(session_id, configs).await {
-                Ok(dispatch) => dispatch.signals,
-                Err(error) => warning(redact(&error.to_string())),
-            },
-        };
-        if let Some(state) = signals.integrations.take()
-            && let Ok(mut resources) = self.resources.lock()
-        {
-            resources.record_integrations(session_id, state);
-        }
-        signal_frames(self, session_id, &signals)
-    }
-
-    /// The session's runtime as `runtime/read` answers and `runtime/updated`
-    /// publishes it, or `None` when the resource state cannot be read.
-    ///
-    /// Three owners contribute: the resource service holds the tool surface and
-    /// the integrations, the workspace service holds the configuration and the
-    /// catalogs, and the session itself holds its accounting. Composing here is
-    /// what makes the answer live rather than a fixed payload, and it is the
-    /// same composition the notification publishes.
-    /// The workspace as `session` sees its agents: its directory, trust and
-    /// roots, and the profiles its start forced.
-    pub(crate) fn agent_workspace(&self, session: &SessionRuntime) -> WorkspaceService {
-        self.workspace
-            .scoped_to_agents(
-                PathBuf::from(&session.working_directory),
-                session.intent.trusted,
-                &session.intent.add_directories,
-                session.intent.project_file_trust,
-                &session.intent.forced_agents,
-            )
-            .with_seeded_skills(self.plugin_skill_seed_of(session))
-    }
-
-    /// Replaces the connector rows of `mcp` with the ones the session's
-    /// accepted catalog, or the configuration alone, publishes (reference
-    /// `_project_mcp_connectors`), answering the session's connector counts.
-    pub(crate) fn overlay_session_connectors(
-        &self,
-        session_id: &str,
-        mcp: Option<&mut Value>,
-    ) -> Option<Value> {
-        let settings = self
-            .workspace
-            .config_snapshot()
-            .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
-            .unwrap_or_default();
-        let unified = self.unified_session(session_id).is_some();
-        let (connector_sources, counts, load_error) = {
-            let sessions = self.lock_sessions().ok()?;
-            let session = sessions.get(session_id)?;
-            let (sources, counts) = if unified {
-                session.connectors.unified_sources()
-            } else {
-                (
-                    session.connectors.mcp_sources(&settings),
-                    session.connectors.runtime_counts(),
-                )
-            };
-            (sources, counts, session.connectors.load_error.clone())
-        };
-        if let Some(Value::Object(mcp)) = mcp {
-            if let Some(error) = load_error {
-                mcp.insert("connectorError".to_owned(), Value::String(error));
-            }
-            let mut replaced = Vec::new();
-            if let Some(Value::Array(sources)) = mcp.get_mut("sources") {
-                sources.retain(|source| {
-                    let connector = source["kind"] == "connector";
-                    if connector && let Some(name) = source["name"].as_str() {
-                        replaced.push(name.to_owned());
-                    }
-                    !connector
-                });
-                sources.extend(connector_sources);
-            }
-            if let Some(Value::Object(errors)) = mcp.get_mut("discoveryErrors") {
-                errors.retain(|name, _| !replaced.contains(name));
-            }
-        }
-        Some(counts)
-    }
-
-    /// What a unified session's runtime lists differently: its servers' and
-    /// connectors' tools run inside the core, so the session's own tool rows
-    /// leave them out, and a server lists its tools in the order it published
-    /// them (reference `project_mcp_sources` over the harness runtime's
-    /// `SessionMCPSourceState`, where the legacy projection sorts them).
-    fn unified_tool_rows(&self, session_id: &str, snapshot: &mut serde_json::Map<String, Value>) {
-        let Some(registry) = self
-            .resources
-            .lock()
-            .ok()
-            .and_then(|resources| resources.session_tool_registry(session_id))
-        else {
-            return;
-        };
-        let specs = registry.list().unwrap_or_default();
-        if let Some(Value::Array(tools)) = snapshot.get_mut("tools") {
-            tools.retain(|tool| {
-                specs
-                    .iter()
-                    .find(|spec| tool["name"] == spec.name.as_str())
-                    .is_none_or(|spec| spec.source == vibe_core::tools::ToolSource::BuiltIn)
-            });
-        }
-        let published: Vec<(String, String)> = specs
-            .iter()
-            .filter(|spec| spec.source == vibe_core::tools::ToolSource::Mcp)
-            .filter_map(|spec| registry.remote_origin(&spec.name))
-            .map(|origin| (origin.provider, origin.remote_name))
-            .collect();
-        let Some(Value::Array(sources)) = snapshot
-            .get_mut("mcp")
-            .and_then(|mcp| mcp.get_mut("sources"))
-        else {
-            return;
-        };
-        for source in sources
-            .iter_mut()
-            .filter(|source| source["kind"] == "server" && source["pluginName"].is_null())
-        {
-            let name = source["name"].as_str().unwrap_or_default().to_owned();
-            if let Some(Value::Array(rows)) = source.get_mut("tools") {
-                rows.sort_by_key(|row| {
-                    published
-                        .iter()
-                        .position(|(provider, remote)| {
-                            *provider == name && row["name"] == remote.as_str()
-                        })
-                        .unwrap_or(usize::MAX)
-                });
-            }
-        }
-    }
-
-    pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
-        let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
-        let (agents, active_agent, stats, context_window, pinned, hooks, plugins, tool_filters) =
-            match self.lock_sessions() {
-                Ok(sessions) => {
-                    let session = sessions.get(session_id);
-                    (
-                        session.map(|session| self.agent_workspace(session)),
-                        session.and_then(|session| session.intent.agent.clone()),
-                        public_stats(session),
-                        session.map_or(0, |session| session.context_window),
-                        session.is_some_and(|session| session.pinned_model.is_some()),
-                        session
-                            .map(|session| session.hooks.clone())
-                            .unwrap_or_default(),
-                        session.and_then(|session| self.plugins_of(session)),
-                        session.map(|session| {
-                            (
-                                session.intent.enabled_tools.clone(),
-                                session.intent.disabled_tools.clone(),
-                            )
-                        }),
-                    )
-                }
-                Err(_) => (
-                    None,
-                    None,
-                    public_stats(None),
-                    0,
-                    false,
-                    Default::default(),
-                    None,
-                    None,
-                ),
-            };
-        if let (Some((enabled, disabled)), Some(Value::Array(tools))) =
-            (&tool_filters, snapshot.get_mut("tools"))
-        {
-            publish_session_tools(tools, enabled, disabled);
-        }
-        if let (Some(plugins), Some(mcp)) = (&plugins, snapshot.get_mut("mcp")) {
-            crate::resources::overlay_plugin_sources(mcp, &plugins.mcp_sources);
-        }
-        if self.unified_session(session_id).is_some() {
-            self.unified_tool_rows(session_id, &mut snapshot);
-        }
-        if let Some(counts) = self.overlay_session_connectors(session_id, snapshot.get_mut("mcp")) {
-            snapshot.insert("connectors".to_owned(), counts);
-        }
-        let stats = priced(stats, self.workspace.active_model_pricing());
-        let projection = agents
-            .as_ref()
-            .unwrap_or(&self.workspace)
-            .runtime_projection(active_agent.as_deref());
-        // Discovery issues and configuration diagnostics are the same fact to a
-        // client: a file the session could not read cleanly.
-        // Reference `project_diagnostics` lists the hook issues first.
-        if let Some(Value::Array(issues)) = snapshot.get_mut("issues") {
-            // A unified session lists the plugin issues first and the hook
-            // issues last (`vibe/app_server/_runtime.py`, the unified
-            // derivation's `issues`).
-            if let Some(plugins) = &plugins {
-                let mut ordered = crate::plugins::runtime_plugin_issues(plugins);
-                ordered.append(issues);
-                ordered.extend(projection.issues);
-                ordered.extend(hooks.issues());
-                *issues = ordered;
-            } else {
-                let mut hook_issues: Vec<Value> = hooks.issues();
-                hook_issues.append(issues);
-                *issues = hook_issues;
-                issues.extend(projection.issues);
-            }
-        }
-        let mut config = projection.config;
-        // Reference `active_model_is_pinned`: a session that pinned its model
-        // holds it in its overrides.
-        if pinned && let Some(fields) = config.as_object_mut() {
-            fields.insert("activeModelPinned".to_owned(), json!(true));
-        }
-        snapshot.insert("config".to_owned(), config);
-        snapshot.insert(
-            "bypassToolPermissions".to_owned(),
-            json!(projection.bypass_tool_permissions),
-        );
-        snapshot.insert(
-            "experimentalHarness".to_owned(),
-            json!(self.harness_selection().use_unified),
-        );
-        snapshot.insert("activeAgent".to_owned(), projection.active_agent);
-        snapshot.insert("agents".to_owned(), Value::Array(projection.agents));
-        let skills = match &plugins {
-            Some(plugins) => crate::plugins::order_skill_rows(plugins, projection.skills),
-            None => projection.skills,
-        };
-        snapshot.insert("skills".to_owned(), Value::Array(skills));
-        snapshot.insert("hooksCount".to_owned(), json!(hooks.count()));
-        snapshot.insert("stats".to_owned(), stats);
-        snapshot.insert("contextWindow".to_owned(), json!(context_window));
-        Some(Value::Object(snapshot))
-    }
-
-    /// How many images in the session's history the active model cannot read.
-    ///
-    /// A client shows this after a configuration change so the operator learns
-    /// that switching model dropped what the transcript already carries. A model
-    /// that reads images strips nothing, so the count is zero without walking
-    /// the history.
-    pub(crate) fn stripped_history_images(&self, session_id: &str) -> usize {
-        if self.workspace.active_model_supports_images() {
-            return 0;
-        }
-        let Ok(sessions) = self.lock_sessions() else {
-            return 0;
-        };
-        sessions
-            .get(session_id)
-            .and_then(|session| session.snapshot.as_ref())
-            .map(|snapshot| {
-                snapshot
-                    .history
-                    .iter()
-                    .filter_map(|entry| match entry {
-                        PublicHistoryEntry::Message { content, .. } => Some(content),
-                        _ => None,
-                    })
-                    .flatten()
-                    .filter(|block| matches!(block, PublicContentBlock::Image { .. }))
-                    .count()
-            })
-            .unwrap_or(0)
-    }
-
     /// Publishes the warning a full checkpoint log raised, once.
     ///
     /// A log with no room left refuses to capture rather than dropping what it
@@ -838,55 +259,6 @@ impl AppServer {
         if let Ok(mut resources) = self.resources.lock() {
             resources.record_diagnostic(FILE_HISTORY_LABEL, &notice);
         }
-    }
-
-    /// The session's logging state as `SessionLogSummary` declares it
-    /// (reference `_session_log_summary`): a session is persisted once its
-    /// record is on disk, which is also when it has a path.
-    pub(crate) fn session_log_summary(&self, session_id: &str) -> Value {
-        let enabled = self.workspace.session_logging_enabled();
-        if let Some(unified) = self.unified_session(session_id) {
-            return unified.session_log(enabled);
-        }
-        let store = self.workspace.session_store();
-        let (held, snapshot_title) = self
-            .lock_sessions()
-            .ok()
-            .and_then(|sessions| {
-                sessions.get(session_id).map(|session| {
-                    (
-                        session.persisted.clone(),
-                        session
-                            .snapshot
-                            .as_ref()
-                            .and_then(|snapshot| snapshot.title.clone()),
-                    )
-                })
-            })
-            .unwrap_or_default();
-        let metadata = store
-            .open(session_id)
-            .ok()
-            .or(held)
-            .map(|hydrated| hydrated.metadata);
-        let written = metadata.as_ref().filter(|metadata| {
-            !self.workspace.is_draft(&metadata.id) && metadata.is_persisted(&store)
-        });
-        let title = metadata
-            .as_ref()
-            .and_then(|metadata| metadata.title.clone())
-            .or(snapshot_title);
-        json!({
-            "enabled": enabled,
-            "sessionId": metadata.as_ref().map_or(session_id, |metadata| metadata.id.as_str()),
-            "persisted": written.is_some(),
-            "path": written
-                .map(|metadata| metadata.directory.as_str())
-                .filter(|directory| !directory.is_empty())
-                .map(|directory| self.workspace.session_path(directory)),
-            "title": title,
-            "needsInitialAutoTitle": title.is_none(),
-        })
     }
 
     pub(crate) fn orphaned_resource_generation(

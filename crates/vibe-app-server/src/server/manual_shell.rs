@@ -597,7 +597,7 @@ impl AppServer {
             },
             tool_call_id: String::new(),
         };
-        session_snapshot(session).history.push(entry.clone());
+        session.projection().history.push(entry.clone());
         let frame = shell_frame(session, "history/entryAdded", [("entry", json!(entry))]);
         Ok((frame, interrupted))
     }
@@ -763,20 +763,6 @@ impl AppServer {
             .map_err(storage)?;
         Ok(true)
     }
-}
-
-/// The session's projection, opened empty when nothing was projected yet.
-pub(super) fn session_snapshot(session: &mut SessionRuntime) -> &mut ProjectionSnapshot {
-    let session_id = session.id.clone();
-    session.snapshot.get_or_insert_with(|| ProjectionSnapshot {
-        session_id,
-        turn_id: None,
-        handoff_cause: None,
-        watermark: 0,
-        lifecycle: LifecycleState::Completed,
-        title: None,
-        history: Vec::new(),
-    })
 }
 
 fn shell_entry<'a>(

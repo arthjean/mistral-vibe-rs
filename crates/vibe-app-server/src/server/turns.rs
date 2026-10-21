@@ -224,7 +224,7 @@ impl AppServer {
             .key(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
             .to_owned();
-        let (was_closed, started_at, active_scheduled_loop, review, queue_item_id, rejection) = {
+        let (started_at, active_scheduled_loop, review, queue_item_id, rejection) = {
             let session = sessions
                 .get(&source_key)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -232,7 +232,6 @@ impl AppServer {
                 return Err(ServerError::StaleTurn(turn_id.to_owned()));
             }
             (
-                session.status == SessionStatus::Closed,
                 session.active_turn_started_at.unwrap_or_default(),
                 session.active_scheduled_loop.clone(),
                 session.review.clone(),
@@ -269,17 +268,11 @@ impl AppServer {
             _ => error,
         };
         let completed_at = now_millis();
-        if let Some(loop_id) = &active_scheduled_loop {
-            self.projects
-                .finish_loop_fire(loop_id, completed_at / 1_000)
-                .map_err(|error| ServerError::Projects(error.to_string()))?;
-        }
-        if let Some(review) = &review {
-            review
-                .seal_turn()
-                .map_err(|error| ServerError::Resource(error.to_string()))?;
-            self.publish_retention_notice(review);
-        }
+        self.release_turn_holds(
+            active_scheduled_loop.as_deref(),
+            review.as_deref(),
+            completed_at,
+        )?;
         let turn = PublicTurn {
             input_entry_id: None,
             id: turn_id.to_owned(),
@@ -304,37 +297,17 @@ impl AppServer {
         // the session is idle whatever the turn's outcome.
         let cancelled = status == PublicTurnStatus::Interrupted;
         let mut frames = finalize_turn_entries(session, turn_id, cancelled);
-        cancel_pending_callback(session, "Turn completed before callback was answered");
-        session.callback_rejection = None;
-        session.active_turn = None;
-        session.active_turn_started_at = None;
-        session.active_scheduled_loop = None;
-        session.status = if was_closed {
-            SessionStatus::Closed
-        } else {
-            SessionStatus::Idle
-        };
+        end_active_turn(session, "Turn completed before callback was answered");
         session.snapshot = Some(merge_server_callback_history(
             session.snapshot.as_ref(),
             snapshot.clone(),
         ));
         // The terminal snapshot closes the same entries, unpublished.
         finalize_turn_entries(session, turn_id, cancelled);
-        session.record_turn(turn.clone());
-        session.updated_at = completed_at;
-        session.stats.finish_turn(cancelled);
-        frames.push(stats_updated_frame(session));
-        session.stats.count_deferred_tool_calls();
-        frames.push(session_updated_frame(session));
-        let event_id = next_event_id(session);
-        frames.push(encode_notification(
-            "turn/completed",
-            result_map([
-                ("eventId", json!(event_id)),
-                ("sessionId", json!(target_session_id)),
-                ("turn", json!(turn)),
-                ("emittedAt", json!(now_millis())),
-            ]),
+        frames.extend(publish_settled_turn(
+            session,
+            turn,
+            Accounting::Finished { cancelled },
         ));
         drop(sessions);
         frames.extend(self.converge_connectors(&target_session_id));
@@ -371,61 +344,53 @@ impl AppServer {
             Some(rejection) => public_turn_failure(TurnErrorCode::InternalError, &rejection),
             None => error,
         };
-        let message = error.message.as_str();
-        let was_closed = session.status == SessionStatus::Closed;
         let started_at = session.active_turn_started_at.unwrap_or_default();
         let queue_item_id = queued_turn_item(session, turn_id);
-        if let Some(loop_id) = &session.active_scheduled_loop {
-            self.projects
-                .finish_loop_fire(loop_id, now_millis() / 1_000)
-                .map_err(|error| ServerError::Projects(error.to_string()))?;
-        }
-        if let Some(review) = &session.review {
-            review
-                .seal_turn()
-                .map_err(|error| ServerError::Resource(error.to_string()))?;
-            self.publish_retention_notice(review);
-        }
+        let completed_at = now_millis();
+        self.release_turn_holds(
+            session.active_scheduled_loop.as_deref(),
+            session.review.as_deref(),
+            completed_at,
+        )?;
         let mut frames = finalize_turn_entries(session, turn_id, false);
-        session.active_turn = None;
-        session.active_turn_started_at = None;
-        session.active_scheduled_loop = None;
-        cancel_pending_callback(session, message);
-        session.callback_rejection = None;
-        session.status = if was_closed {
-            SessionStatus::Closed
-        } else {
-            SessionStatus::Idle
-        };
+        end_active_turn(session, &error.message);
         let turn = PublicTurn {
             input_entry_id: None,
             id: turn_id.to_owned(),
             session_id: session_id.to_owned(),
             status: PublicTurnStatus::Failed,
             started_at,
-            completed_at: Some(now_millis()),
-            error: Some(error.clone()),
+            completed_at: Some(completed_at),
+            error: Some(error),
             stop_reason: None,
             queue_item_id,
         };
-        session.record_turn(turn.clone());
-        session.updated_at = turn.completed_at.unwrap_or(started_at);
-        session.stats.abandon_turn();
-        frames.push(stats_updated_frame(session));
-        frames.push(session_updated_frame(session));
-        let event_id = next_event_id(session);
-        frames.push(encode_notification(
-            "turn/completed",
-            result_map([
-                ("eventId", json!(event_id)),
-                ("sessionId", json!(session_id)),
-                ("turn", json!(turn)),
-                ("emittedAt", json!(now_millis())),
-            ]),
-        ));
+        frames.extend(publish_settled_turn(session, turn, Accounting::Abandoned));
         drop(sessions);
         frames.extend(self.converge_connectors(session_id));
         Ok(frames)
+    }
+
+    /// The server's half of reference `_finalize_turn`: the scheduled loop
+    /// the turn fired is done, and the review seals what the turn edited.
+    fn release_turn_holds(
+        &self,
+        scheduled_loop: Option<&str>,
+        review: Option<&ReviewManager>,
+        completed_at: u64,
+    ) -> Result<(), ServerError> {
+        if let Some(loop_id) = scheduled_loop {
+            self.projects
+                .finish_loop_fire(loop_id, completed_at / 1_000)
+                .map_err(|error| ServerError::Projects(error.to_string()))?;
+        }
+        if let Some(review) = review {
+            review
+                .seal_turn()
+                .map_err(|error| ServerError::Resource(error.to_string()))?;
+            self.publish_retention_notice(review);
+        }
+        Ok(())
     }
 
     /// Records the usage one provider round trip reported. The accounting is
@@ -863,4 +828,63 @@ pub(super) fn preview_updated_frame(session: &mut SessionRuntime, text: &str) ->
             ("emittedAt", json!(now_millis())),
         ]),
     )
+}
+
+/// How a settled turn counts in its session's accounting.
+enum Accounting {
+    /// The turn ran to an end, interrupted or not, and the tool calls it
+    /// deferred are counted.
+    Finished { cancelled: bool },
+    /// The turn failed before it could account for itself.
+    Abandoned,
+}
+
+/// The session's half of reference `_finalize_turn`: the callback the turn
+/// left open is cancelled with `reason`, and the session is idle again, or
+/// still closed.
+fn end_active_turn(session: &mut SessionRuntime, reason: &str) {
+    cancel_pending_callback(session, reason);
+    session.callback_rejection = None;
+    session.active_turn = None;
+    session.active_turn_started_at = None;
+    session.active_scheduled_loop = None;
+    if session.status != SessionStatus::Closed {
+        session.status = SessionStatus::Idle;
+    }
+}
+
+/// Records the settled `turn` on its session and answers the frames that
+/// publish it: the accounting, the session, then the turn's own terminal
+/// notification.
+fn publish_settled_turn(
+    session: &mut SessionRuntime,
+    turn: PublicTurn,
+    accounting: Accounting,
+) -> Vec<Vec<u8>> {
+    session.updated_at = turn.completed_at.unwrap_or(turn.started_at);
+    session.record_turn(turn.clone());
+    let mut frames = Vec::new();
+    match accounting {
+        Accounting::Finished { cancelled } => {
+            session.stats.finish_turn(cancelled);
+            frames.push(stats_updated_frame(session));
+            session.stats.count_deferred_tool_calls();
+        }
+        Accounting::Abandoned => {
+            session.stats.abandon_turn();
+            frames.push(stats_updated_frame(session));
+        }
+    }
+    frames.push(session_updated_frame(session));
+    let event_id = next_event_id(session);
+    frames.push(encode_notification(
+        "turn/completed",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(turn.session_id)),
+            ("turn", json!(turn)),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    ));
+    frames
 }

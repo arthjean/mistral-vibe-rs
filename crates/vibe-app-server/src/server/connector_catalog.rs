@@ -623,12 +623,12 @@ impl AppServer {
             }
         }
         let broker_id = vibe_core::session_id::uuid_v4();
-        let required = json!({
-            "sessionId": session_id,
-            "alias": alias,
-            "acceptedCatalogRevision": revision,
-            "reason": status,
-        });
+        let required = result_map([
+            ("sessionId", json!(session_id)),
+            ("alias", json!(alias)),
+            ("acceptedCatalogRevision", json!(revision)),
+            ("reason", json!(status)),
+        ]);
         let mut outbound = vec![success_bytes(
             request_id,
             result_map([
@@ -640,14 +640,14 @@ impl AppServer {
         )];
         outbound.push(encode_notification(
             "connector_catalog/authRequired",
-            object_map(&required),
+            required.clone(),
         ));
         let still_accepted = self.connector_auth_target(session_id, alias).is_ok_and(
             |(current_id, current_revision, _, _)| {
                 current_id == raw_id && current_revision == revision
             },
         );
-        let mut settled = object_map(&required);
+        let mut settled = required;
         settled.insert("requestId".to_owned(), json!(broker_id));
         if !still_accepted {
             settled.insert("code".to_owned(), json!("stale_request"));
@@ -785,18 +785,6 @@ fn mutation_result(
         ("runtime", json!(runtime)),
         ("pendingSelection", json!(pending_selection)),
     ])
-}
-
-fn object_map(value: &Value) -> BTreeMap<String, Value> {
-    value
-        .as_object()
-        .map(|object| {
-            object
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 /// Seconds since the epoch, the cache's clock.

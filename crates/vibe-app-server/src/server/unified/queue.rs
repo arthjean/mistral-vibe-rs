@@ -13,9 +13,11 @@ use serde_json::{Value, json};
 use vibe_harness::engine::TurnRequest;
 use vibe_harness::invocation;
 
+use super::params::{QueueInputParams, QueueItemParams, QueueSteerParams};
 use super::{
-    AppServer, DispatchBatch, ProtocolErrorCode, ProtocolFault, ServerConnection, ServerRequest,
-    TurnOrigin, UnifiedSession, now_millis, result_map, success_batch, success_bytes,
+    AppServer, BegunTurn, DispatchBatch, ProtocolErrorCode, ProtocolFault, ServerConnection,
+    ServerRequest, TurnOrigin, UnifiedSession, from_params, now_millis, result_map, success_batch,
+    success_bytes,
 };
 
 /// Reference `TURN_QUEUE_MAX_ITEMS`.
@@ -204,12 +206,9 @@ impl AppServer {
 
     /// Reference `_drain_turn_queue`: an idle session starts its next queued
     /// turn.
-    pub(crate) fn drain_unified_queue(
-        &self,
-        session: &Arc<UnifiedSession>,
-    ) -> Option<super::BegunTurn> {
+    pub(crate) fn drain_unified_queue(&self, session: &Arc<UnifiedSession>) -> Option<BegunTurn> {
         let record = {
-            let mut host = session.host.lock().ok()?;
+            let mut host = session.host();
             if host.running.is_some() {
                 return None;
             }
@@ -253,14 +252,12 @@ impl AppServer {
 
 /// Mirrors the queue into the session state and publishes the change.
 pub(crate) fn publish_queue(session: &UnifiedSession) -> Vec<Vec<u8>> {
-    let (items, paused) = match session.host.lock() {
-        Ok(host) => (host.queue.public_items(), host.queue.paused),
-        Err(_) => return Vec::new(),
+    let (items, paused) = {
+        let host = session.host();
+        (host.queue.public_items(), host.queue.paused)
     };
     let publication = {
-        let Ok(mut core) = session.core.lock() else {
-            return Vec::new();
-        };
+        let mut core = session.core();
         core.projector.state.queue_items = items;
         core.projector.state.queue_paused = paused;
         core.publication(vibe_harness::state::Advance::Provisional, None)
@@ -276,66 +273,45 @@ impl ServerConnection {
         request: ServerRequest,
         unified: Arc<UnifiedSession>,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let text = |key: &str| {
-            request
-                .params
-                .get(key)
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned()
-        };
         match request.method.as_str() {
             "session/turn/queue/read" => {
-                let items = unified
-                    .host
-                    .lock()
-                    .map(|host| (host.queue.public_items(), host.queue.paused))
-                    .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+                let (items, paused) = {
+                    let host = unified.host();
+                    (host.queue.public_items(), host.queue.paused)
+                };
                 Ok(success_batch(
                     request.id,
                     result_map([(
                         "queue",
-                        json!({"items": items.0, "maxItems": MAX_ITEMS, "paused": items.1}),
+                        json!({"items": items, "maxItems": MAX_ITEMS, "paused": paused}),
                     )]),
                 ))
             }
             "session/turn/enqueue" | "session/turn/queue/replace" => {
-                let replacing = request.method == "session/turn/queue/replace";
-                let entries = request
-                    .params
-                    .get("entries")
-                    .and_then(Value::as_array)
-                    .cloned()
-                    .unwrap_or_default();
+                let QueueInputParams {
+                    entries,
+                    idempotency_key: key,
+                    queue_item_id,
+                } = from_params(&request.params)?;
+                let target = (request.method == "session/turn/queue/replace")
+                    .then(|| queue_item_id.unwrap_or_default());
                 let prepared = self.server.prepare_queue_entries(&unified, &entries)?;
-                let key = request
-                    .params
-                    .get("idempotencyKey")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned);
                 let mut params = Value::Object(request.params.clone().into_iter().collect());
                 if let Some(object) = params.as_object_mut() {
                     object.remove("queueItemId");
                 }
                 let (id, duplicate) = {
-                    let mut host = unified
-                        .host
-                        .lock()
-                        .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
-                    let target = text("queueItemId");
-                    let index = if replacing {
-                        Some(
-                            host.queue
-                                .position(&target)
-                                .ok_or_else(|| not_found(&target))?,
-                        )
-                    } else {
-                        None
-                    };
+                    let mut host = unified.host();
+                    let index = target
+                        .as_deref()
+                        .map(|target| host.queue.position(target).ok_or_else(|| not_found(target)))
+                        .transpose()?;
                     if let Some(key) = &key
                         && let Some(existing) = host.queue.idempotency.get(key)
                     {
-                        if existing.params != params || (replacing && existing.id != target) {
+                        if existing.params != params
+                            || target.as_ref().is_some_and(|target| existing.id != *target)
+                        {
                             return Err(ProtocolFault::with_data(
                                 ProtocolErrorCode::Conflict,
                                 format!(
@@ -393,19 +369,21 @@ impl ServerConnection {
                 })
             }
             "session/turn/queue/remove" | "session/turn/queue/resume" => {
+                let removed = (request.method == "session/turn/queue/remove")
+                    .then(|| from_params::<QueueItemParams>(&request.params))
+                    .transpose()?;
                 let changed = {
-                    let mut host = unified
-                        .host
-                        .lock()
-                        .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
-                    if request.method == "session/turn/queue/resume" {
-                        host.queue.resume()
-                    } else if let Some(index) = host.queue.position(&text("queueItemId")) {
-                        host.queue.items.remove(index);
-                        host.queue.reset_pause_if_empty();
-                        true
-                    } else {
-                        false
+                    let mut host = unified.host();
+                    match removed {
+                        None => host.queue.resume(),
+                        Some(removed) => match host.queue.position(&removed.queue_item_id) {
+                            Some(index) => {
+                                host.queue.items.remove(index);
+                                host.queue.reset_pause_if_empty();
+                                true
+                            }
+                            None => false,
+                        },
                     }
                 };
                 let mut outbound = vec![success_bytes(request.id, result_map::<0>([]))];
@@ -434,20 +412,12 @@ impl ServerConnection {
         request: &ServerRequest,
         unified: &Arc<UnifiedSession>,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let field = |key: &str| {
-            request
-                .params
-                .get(key)
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned()
-        };
-        let (item_id, expected) = (field("queueItemId"), field("expectedTurnId"));
+        let QueueSteerParams {
+            queue_item_id: item_id,
+            expected_turn_id: expected,
+        } = from_params(&request.params)?;
         let record = {
-            let host = unified
-                .host
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+            let host = unified.host();
             if let Some(turn) = host.queue.steered.get(&item_id) {
                 if *turn != expected {
                     return Err(ProtocolFault::with_data(
@@ -465,22 +435,7 @@ impl ServerConnection {
                     ]),
                 ));
             }
-            match host.running.as_deref() {
-                None => {
-                    return Err(ProtocolFault::plain(
-                        ProtocolErrorCode::Conflict,
-                        "No active turn",
-                    ));
-                }
-                Some(active) if active != expected => {
-                    return Err(ProtocolFault::with_data(
-                        ProtocolErrorCode::StaleTurn,
-                        "No matching active turn",
-                        json!({"activeTurnId": active}),
-                    ));
-                }
-                Some(_) => {}
-            }
+            host.require_turn(&expected, "No matching active turn")?;
             let index = host
                 .queue
                 .position(&item_id)
@@ -502,10 +457,7 @@ impl ServerConnection {
             ));
         };
         let publication = {
-            let mut core = unified
-                .core
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+            let mut core = unified.core();
             let advance = core.steer(
                 &expected,
                 &TurnRequest {
@@ -521,19 +473,16 @@ impl ServerConnection {
             core.publication(advance, None)
         };
         let mut outbound = unified.publish(&publication);
-        if let Ok(mut host) = unified.host.lock()
-            && let Some(index) = host.queue.position(&item_id)
         {
-            host.queue.items.remove(index);
-            host.queue.reset_pause_if_empty();
-            host.queue.steered.insert(item_id.clone(), expected.clone());
+            let mut host = unified.host();
+            if let Some(index) = host.queue.position(&item_id) {
+                host.queue.items.remove(index);
+                host.queue.reset_pause_if_empty();
+                host.queue.steered.insert(item_id.clone(), expected.clone());
+            }
         }
         outbound.extend(publish_queue(unified));
-        let last_event_id = unified
-            .host
-            .lock()
-            .map(|host| host.translator.event_id)
-            .unwrap_or_default();
+        let last_event_id = unified.host().translator.event_id;
         outbound.push(success_bytes(
             request.id.clone(),
             result_map([

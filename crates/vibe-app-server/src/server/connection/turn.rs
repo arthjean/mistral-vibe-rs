@@ -14,6 +14,15 @@ use crate::server::session_callbacks::{
 };
 use crate::server::turns::preview_updated_frame;
 
+/// What an accepted steer answers.
+#[derive(Clone, Copy)]
+pub(super) enum SteerAnswer {
+    /// The turn steered, as this port's adapters read it.
+    Turn,
+    /// Reference `turn/steer`: the event the steer follows.
+    LastEvent,
+}
+
 impl ServerConnection {
     pub(super) fn turn_start(&mut self, request: ServerRequest) -> DispatchBatch {
         let id = request.id.clone();
@@ -254,6 +263,16 @@ impl ServerConnection {
     }
 
     pub(super) fn turn_steer(&mut self, request: ServerRequest) -> DispatchBatch {
+        self.steer_turn(request, SteerAnswer::Turn)
+    }
+
+    /// Folds the request's input into the active turn, answered as `answer`
+    /// says.
+    pub(super) fn steer_turn(
+        &mut self,
+        request: ServerRequest,
+        answer: SteerAnswer,
+    ) -> DispatchBatch {
         let params = match from_params::<TurnSteerParams>(&request.params) {
             Ok(params) => params,
             Err(rejection) => {
@@ -275,8 +294,14 @@ impl ServerConnection {
             }
             session.steering.push(content.clone());
             session.updated_at = now_millis();
+            let result = match answer {
+                SteerAnswer::Turn => result_map([("turnId", json!(turn_id))]),
+                SteerAnswer::LastEvent => {
+                    result_map([("lastEventId", json!(session.event_watermark))])
+                }
+            };
             Ok((
-                result_map([("turnId", json!(turn_id))]),
+                result,
                 vec![DeferredWork::SteerTurn {
                     session_id,
                     turn_id: expected_turn_id,
@@ -365,19 +390,7 @@ impl ServerConnection {
             .map(|snapshot| snapshot.history.clone())
             .unwrap_or_default();
         let had_preview = !session_preview(session, &history).is_empty();
-        session
-            .snapshot
-            .get_or_insert_with(|| ProjectionSnapshot {
-                session_id: session.id.clone(),
-                turn_id: None,
-                handoff_cause: None,
-                watermark: 0,
-                lifecycle: LifecycleState::Completed,
-                title: None,
-                history: Vec::new(),
-            })
-            .history
-            .push(entry.clone());
+        session.projection().history.push(entry.clone());
         let mut outbound = vec![entry_added_frame(session, &turn_id, &entry)];
         if !had_preview {
             outbound.push(preview_updated_frame(session, &content));
@@ -575,50 +588,23 @@ impl ServerConnection {
                 "Callback answer has the wrong type",
             ));
         }
-        let turn_id = session.active_turn.clone().unwrap_or_default();
         let public = serde_json::from_value::<CallbackOutput>(output.clone())
             .map_err(|error| ProtocolFault::invalid_params(error.to_string()))?;
-        let cancel_turn = callback_requests_turn_cancel(&output);
-        let value = serde_json::to_string(&output).ok();
-        settle_pending_callback(
-            session,
-            callback_id,
-            PublicCallbackState::Answered { output: public },
-        );
-        session.pending_callback = None;
-        session
-            .resolved_callbacks
-            .insert(callback_id.to_owned(), ResolvedCallback { kind, output });
-        // Reference `answer_callback`: the callback settles, the effect it
-        // gated runs again, and so does the session.
-        let mut frames = Vec::new();
-        frames.extend(settled_callback_frame(session, &turn_id, callback_id));
-        let effect_id = callback_effect_id(session, callback_id);
-        frames.extend(set_effect_state(
-            session,
-            &turn_id,
-            effect_id.as_deref(),
-            |output_text| PublicEffectState::Running { output_text },
-        ));
-        session.status = SessionStatus::Running;
-        session.updated_at = now_millis();
-        frames.push(session_updated_frame(session));
-        let mut deferred = vec![DeferredWork::ResolveCallback {
+        let route = CallbackRoute {
             session_id: session.id.clone(),
-            turn_id: turn_id.clone(),
+            turn_id: session.active_turn.clone().unwrap_or_default(),
             callback_id: callback_id.to_owned(),
-            accepted: true,
-            value,
-        }];
-        if cancel_turn {
-            deferred.push(DeferredWork::InterruptTurn {
-                session_id: session.id.clone(),
-                turn_id,
-            });
-        }
+            answered: true,
+        };
+        let answer = CheckedAnswer {
+            kind,
+            output,
+            public,
+        };
+        let settled = settle_answer(session, &route, answer, true);
         drop(sessions);
         self.mark_callback_answered(session_id, callback_id);
-        Ok((frames, deferred))
+        Ok(settled)
     }
 
     /// Reference `TurnController.reject_callback`, for a callback the client
@@ -738,46 +724,27 @@ impl ServerConnection {
             serde_json::from_value::<CallbackOutput>(params.output.clone()).map_err(|_| {
                 ProtocolFault::invalid_params("Callback output does not match the protocol union")
             })?;
-        let cancel_turn = callback_requests_turn_cancel(&params.output);
-        let value = serde_json::to_string(&params.output).ok();
-        settle_pending_callback(
-            session,
-            &params.callback_id,
-            PublicCallbackState::Answered { output },
-        );
-        session.pending_callback = None;
-        session.resolved_callbacks.insert(
-            params.callback_id.clone(),
-            ResolvedCallback {
-                kind,
-                output: params.output.clone(),
-            },
-        );
-        session.status = SessionStatus::Running;
-        session.updated_at = now_millis();
-        let status = session_updated_frame(session);
-        let result = result_map([("status", json!("accepted"))]);
-        let mut deferred = vec![DeferredWork::ResolveCallback {
+        let route = CallbackRoute {
             session_id: params.session_id.clone(),
-            turn_id: turn_id.clone(),
+            turn_id,
             callback_id: params.callback_id.clone(),
-            accepted: true,
-            value,
-        }];
-        if cancel_turn {
-            deferred.push(DeferredWork::InterruptTurn {
-                session_id: params.session_id.clone(),
-                turn_id,
-            });
-        }
+            answered: true,
+        };
+        let answer = CheckedAnswer {
+            kind,
+            output: params.output,
+            public: output,
+        };
+        let (frames, deferred) = settle_answer(session, &route, answer, false);
         drop(sessions);
-        for route in self.pending_server_requests.values_mut() {
-            if route.session_id == params.session_id && route.callback_id == params.callback_id {
-                route.answered = true;
-            }
-        }
+        self.mark_callback_answered(&params.session_id, &params.callback_id);
+        let mut outbound = vec![success_bytes(
+            request.id,
+            result_map([("status", json!("accepted"))]),
+        )];
+        outbound.extend(frames);
         Ok(DispatchBatch {
-            outbound: vec![success_bytes(request.id, result), status],
+            outbound,
             deferred,
             close_after_flush: false,
         })
@@ -869,4 +836,71 @@ pub(crate) fn bump_session(
             ("emittedAt", json!(now_millis())),
         ]),
     )))
+}
+
+/// A callback answer that passed its checks: its kind, the output as sent,
+/// which a repeated answer is compared against, and its public form.
+struct CheckedAnswer {
+    kind: EngineCallbackKind,
+    output: Value,
+    public: CallbackOutput,
+}
+
+/// Reference `answer_callback`: the pending callback `route` names settles
+/// with `answer`, the session runs again, and the turn resumes with the
+/// answer, or stops when the answer cancels it. `publish_entries` also
+/// publishes the settled callback entry and the effect it gated running
+/// again, which a stdio client reads and the port's adapters do not.
+/// Answers the frames, then the work, both addressed to `route`'s session.
+fn settle_answer(
+    session: &mut SessionRuntime,
+    route: &CallbackRoute,
+    answer: CheckedAnswer,
+    publish_entries: bool,
+) -> (Vec<Vec<u8>>, Vec<DeferredWork>) {
+    let CheckedAnswer {
+        kind,
+        output,
+        public,
+    } = answer;
+    let callback_id = route.callback_id.as_str();
+    let cancel_turn = callback_requests_turn_cancel(&output);
+    let value = serde_json::to_string(&output).ok();
+    settle_pending_callback(
+        session,
+        callback_id,
+        PublicCallbackState::Answered { output: public },
+    );
+    session.pending_callback = None;
+    session
+        .resolved_callbacks
+        .insert(callback_id.to_owned(), ResolvedCallback { kind, output });
+    let mut frames = Vec::new();
+    if publish_entries {
+        frames.extend(settled_callback_frame(session, &route.turn_id, callback_id));
+        let effect_id = callback_effect_id(session, callback_id);
+        frames.extend(set_effect_state(
+            session,
+            &route.turn_id,
+            effect_id.as_deref(),
+            |output_text| PublicEffectState::Running { output_text },
+        ));
+    }
+    session.status = SessionStatus::Running;
+    session.updated_at = now_millis();
+    frames.push(session_updated_frame(session));
+    let mut deferred = vec![DeferredWork::ResolveCallback {
+        session_id: route.session_id.clone(),
+        turn_id: route.turn_id.clone(),
+        callback_id: callback_id.to_owned(),
+        accepted: true,
+        value,
+    }];
+    if cancel_turn {
+        deferred.push(DeferredWork::InterruptTurn {
+            session_id: route.session_id.clone(),
+            turn_id: route.turn_id.clone(),
+        });
+    }
+    (frames, deferred)
 }

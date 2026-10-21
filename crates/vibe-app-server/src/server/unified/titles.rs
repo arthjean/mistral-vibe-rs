@@ -28,9 +28,7 @@ impl UnifiedSession {
             return;
         };
         let job = {
-            let Ok(mut titles) = self.titles.lock() else {
-                return;
-            };
+            let mut titles = lock(&self.titles);
             let Some(route) = titles.route.clone() else {
                 return;
             };
@@ -71,21 +69,15 @@ impl UnifiedSession {
             if let Some(title) = title {
                 session.land_title(&title);
             }
-            if let Ok(mut titles) = session.titles.lock() {
-                titles.running = false;
-            }
+            lock(&session.titles).running = false;
         });
     }
 
     /// Reference `_generate_title` once the model answered.
     fn land_title(&self, title: &str) {
         let publication = {
-            let Ok(mut titles) = self.titles.lock() else {
-                return;
-            };
-            let Ok(mut core) = self.core.lock() else {
-                return;
-            };
+            let mut titles = lock(&self.titles);
+            let mut core = self.core();
             if titles
                 .cadence
                 .is_manual(core.projector.state.session.title.as_deref())

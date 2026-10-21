@@ -78,15 +78,40 @@ fn plan(method: &str) -> MethodPlan {
     }
 }
 
+/// What a workspace method answered: its result, and the frames that follow
+/// the response.
+pub(super) struct Answered {
+    pub(super) result: BTreeMap<String, Value>,
+    pub(super) then: Vec<Vec<u8>>,
+}
+
 pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest) -> DispatchBatch {
-    let target_session_id = target_session_id(&request);
-    if let Some(conflict) = mutation_conflict(connection, &request, target_session_id.as_deref()) {
-        return conflict;
-    }
     // Deleting is the one method that does not answer from a dispatch: it runs
     // a transaction across two stores and reports what the transaction did.
     if request.method == "session/delete" {
+        let target_session_id = target_session_id(&request);
         return delete_session(connection, request, target_session_id.as_deref());
+    }
+    let id = request.id.clone();
+    match answer(connection, request) {
+        Ok(answered) => {
+            let mut batch = success_batch(id, answered.result);
+            batch.outbound.extend(answered.then);
+            batch
+        }
+        Err(refused) => refused,
+    }
+}
+
+/// Serves a workspace method other than `session/delete`, answering the
+/// batch that refuses it when it is refused.
+pub(super) fn answer(
+    connection: &mut ServerConnection,
+    request: ServerRequest,
+) -> Result<Answered, DispatchBatch> {
+    let target_session_id = target_session_id(&request);
+    if let Some(conflict) = mutation_conflict(connection, &request, target_session_id.as_deref()) {
+        return Err(conflict);
     }
     if request.method == "session/agent/update"
         && let Some(session_id) = target_session_id.as_deref()
@@ -96,18 +121,14 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
     }
     let plan = plan(&request.method);
     let dispatched = dispatch_workspace(connection, &request, plan, target_session_id.as_deref());
-    let mut dispatch = match dispatched {
-        Ok(dispatch) => dispatch,
-        Err(error) => return workspace_error_batch(request.id, error),
-    };
+    let mut dispatch =
+        dispatched.map_err(|error| workspace_error_batch(request.id.clone(), error))?;
     let result_session_id = dispatch
         .attachment
         .as_ref()
         .map(|attachment| attachment.id.clone());
-    let newly_attached = match attach_runtime(connection, &dispatch, None) {
-        Ok(newly_attached) => newly_attached,
-        Err(error) => return internal_error_batch(request.id, &error),
-    };
+    let newly_attached = attach_runtime(connection, &dispatch, None)
+        .map_err(|error| internal_error_batch(request.id.clone(), &error))?;
     for step in plan.after {
         let session_id = match step {
             // A clear continues under a new identifier, whose log starts empty;
@@ -118,9 +139,8 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
         let Some(session_id) = session_id else {
             continue;
         };
-        if let Err(error) = apply_after(connection, *step, session_id, &request, &mut dispatch) {
-            return internal_error_batch(request.id, &error);
-        }
+        apply_after(connection, *step, session_id, &request, &mut dispatch)
+            .map_err(|error| internal_error_batch(request.id.clone(), &error))?;
     }
     // A read with no session is the host's, which also reports how the
     // harness was chosen (`_read_config` in `vibe/app_server/_host.py`); the
@@ -183,9 +203,10 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
         _ => false,
     };
     if reload_hooks && let Some(session_id) = target_session_id.as_deref() {
-        if let Err(error) = connection.server.reload_session_hooks(session_id) {
-            return internal_error_batch(request.id, &error);
-        }
+        connection
+            .server
+            .reload_session_hooks(session_id)
+            .map_err(|error| internal_error_batch(request.id.clone(), &error))?;
         // The answer carries the runtime the reload produced.
         if dispatch.result.contains_key("runtime")
             && let Some(snapshot) = connection.server.runtime_snapshot(session_id)
@@ -193,21 +214,20 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             dispatch.result.insert("runtime".to_owned(), snapshot);
         }
     }
-    let mut batch = success_batch(request.id, dispatch.result);
+    let mut then = Vec::new();
     if runtime_updated && let Some(session_id) = target_session_id.as_deref() {
-        batch
-            .outbound
-            .extend(connection.runtime_updated_frame(session_id));
+        then.extend(connection.runtime_updated_frame(session_id));
     }
     // The snapshot follows the answer rather than preceding it: the reference
     // flushes what attachment buffered once the response is on the wire, so the
     // client reads its state after the call it made.
     if let Some(session_id) = newly_attached {
-        batch
-            .outbound
-            .extend(connection.attachment_frames(&session_id));
+        then.extend(connection.attachment_frames(&session_id));
     }
-    batch
+    Ok(Answered {
+        result: dispatch.result,
+        then,
+    })
 }
 
 /// Runs the method through the entry point its plan names.
@@ -498,14 +518,14 @@ fn switch_unified_agent(
     connection: &ServerConnection,
     request: ServerRequest,
     session_id: &str,
-) -> DispatchBatch {
+) -> Result<Answered, DispatchBatch> {
     let Some(name) = request
         .params
         .get("agentName")
         .or_else(|| request.params.get("name"))
         .and_then(Value::as_str)
     else {
-        return ProtocolFault::invalid_params("agentName is required").into_batch(request.id);
+        return Err(ProtocolFault::invalid_params("agentName is required").into_batch(request.id));
     };
     let switched = connection
         .server
@@ -533,11 +553,11 @@ fn switch_unified_agent(
             Ok(session.agent_summary.clone())
         });
     match switched {
-        Ok(agent) => success_batch(
-            request.id,
-            result_map([("agent", agent.unwrap_or(Value::Null))]),
-        ),
-        Err(fault) => fault.into_batch(request.id),
+        Ok(agent) => Ok(Answered {
+            result: result_map([("agent", agent.unwrap_or(Value::Null))]),
+            then: Vec::new(),
+        }),
+        Err(fault) => Err(fault.into_batch(request.id)),
     }
 }
 

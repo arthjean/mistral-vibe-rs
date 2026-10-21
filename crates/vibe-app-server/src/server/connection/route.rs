@@ -12,8 +12,10 @@
 //! dispatch ([`ServerConnection::port_request`]).
 
 use super::saved::{NO_ROOT, reopen_start_params};
+use super::turn::SteerAnswer;
 use super::*;
 use crate::params::object_of;
+use crate::server::session_management;
 use crate::wire_validation::{self, Json};
 
 /// How the reference reaches a method.
@@ -22,8 +24,8 @@ pub(crate) enum Route {
     /// `events/read`, which answers an empty batch (`_events_read`).
     Events,
     /// A catalog service the server holds whatever session is attached: the
-    /// MCP and connector catalogs. A session the parameters name has to be the
-    /// root.
+    /// MCP and connector catalogs, and a unified session's plugin catalog. A
+    /// session the parameters name has to be the root.
     Catalog,
     /// The plugin catalog, which checks the session it is given and then
     /// declines: the legacy backend has no plugins.
@@ -56,7 +58,6 @@ pub(crate) const SKILLS_MUTATIONS: &[&str] = &[
     "skills/setVersion",
 ];
 
-/// The route the reference gives `method`, a name it declares.
 /// The methods reference `ConnectorCatalogService` answers.
 pub(crate) fn is_connector_method(method: &str) -> bool {
     method.starts_with("connector_catalog/")
@@ -66,16 +67,27 @@ pub(crate) fn is_connector_method(method: &str) -> bool {
         )
 }
 
-/// The methods a unified session's plugins answer.
-fn is_plugin_method(method: &str) -> bool {
-    matches!(
-        method,
-        "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload"
-    )
-}
-
-pub(crate) fn route(method: &str) -> Route {
+/// The route the reference gives `method`, a name it declares, on the
+/// unified host when `unified` and on the legacy one otherwise.
+pub(crate) fn route(method: &str, unified: bool) -> Route {
     match method {
+        // A unified session serves its plugins and the provider view the
+        // legacy one declines, folds a queued turn into the running one, and
+        // runs background processes.
+        "plugin_catalog/read" | "plugins/read" if unified => Route::Catalog,
+        "plugin/info"
+        | "plugin/reload"
+        | "providerAuth/read"
+        | "session/turn/queue/steer"
+        | "session/backgroundProcess/output"
+        | "session/backgroundProcess/stop"
+            if unified =>
+        {
+            Route::Root
+        }
+        // The marks a unified host keeps beside each session are its own
+        // methods, served for any session it stores.
+        "session/pin" | "session/archive" | "session/markAsSeen" if unified => Route::Host,
         "events/read" => Route::Events,
         "plugin_catalog/read" | "plugins/read" => Route::DeclinedCatalog,
         // The onboarding wizard runs before any session, so the setup methods
@@ -167,60 +179,8 @@ impl ServerConnection {
         let method = method.as_str();
         let rooted = self.root_key().is_some();
         let unified = self.server.harness_selection().use_unified;
-        let unified_plugins = unified && is_plugin_method(method);
-        if unified_plugins && method.starts_with("plugin/") && !rooted {
-            return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
-        }
-        // A unified session serves the provider view its legacy counterpart
-        // declines below; it is addressed to the root like any root method.
-        if unified && method == "providerAuth/read" {
-            if !rooted {
-                return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
-            }
-            let validated = wire_validation::validate_method(method, params)
-                .map_err(|issues| self.rejected(method, &issues))?;
-            let named = validated
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned);
-            self.require_named_root(named.as_deref())?;
-            return Ok(self.provider_auth_request(ServerRequest {
-                params: object_of_value(validated),
-                ..request
-            }));
-        }
-        // A unified root serves its background processes.
-        if unified && method.starts_with("session/backgroundProcess/") {
-            if !rooted {
-                return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
-            }
-            let validated = wire_validation::validate_method(method, params)
-                .map_err(|issues| self.rejected(method, &issues))?;
-            let named = validated
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned);
-            self.require_named_root(named.as_deref())?;
-            return self.unified_background_process(method, request.id, &validated);
-        }
-        // The marks a unified host keeps beside each session are its own
-        // methods, served for any session it stores.
-        let routed = match route(method) {
-            Route::Unserved
-                if unified
-                    && matches!(
-                        method,
-                        "session/pin" | "session/archive" | "session/markAsSeen"
-                    ) =>
-            {
-                Route::Host
-            }
-            // A unified session folds a queued turn into the running one.
-            Route::RootDeclined if unified && method == "session/turn/queue/steer" => Route::Root,
-            routed => routed,
-        };
+        let routed = route(method, unified);
         match routed {
-            _ if unified_plugins => {}
             Route::Unserved => return Err(method_not_found(method)),
             Route::RootUnserved | Route::RootDeclined | Route::Root if !rooted => {
                 return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
@@ -256,13 +216,6 @@ impl ServerConnection {
             .get("sessionId")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned);
-        if unified_plugins {
-            let request = ServerRequest {
-                params: object_of_value(validated),
-                ..request
-            };
-            return Ok(self.plugin_request(request));
-        }
         match routed {
             Route::Events => {
                 return Ok(success_batch(
@@ -297,15 +250,7 @@ impl ServerConnection {
             _ => {}
         }
         let mut request = ServerRequest {
-            params: validated
-                .as_object()
-                .map(|object| {
-                    object
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.clone()))
-                        .collect()
-                })
-                .unwrap_or_default(),
+            params: object(validated),
             ..request
         };
         // The attached session asks the worktree removal questions, and its own
@@ -320,55 +265,30 @@ impl ServerConnection {
         if method == "session/start" {
             return self.reference_session_start(request);
         }
-        if (method == "session/rewind" || method == "session/rewind/read")
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
+        // A unified root serves its turns, their queue, its loops, its
+        // compactions and its rewinds itself.
+        if let Some(root) = self
+            .root_id()
+            .and_then(|root| self.server.unified_session(&root))
         {
-            return if method == "session/rewind" {
-                self.unified_rewind(&request, unified)
-            } else {
-                self.unified_rewind_read(&request, &unified)
-            };
-        }
-        if method == "session/compact"
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
-        {
-            return self.unified_compact(&request, unified);
-        }
-        if (method == "session/turn/enqueue" || method.starts_with("session/turn/queue/"))
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
-        {
-            return self.unified_queue(request, unified);
-        }
-        if method.starts_with("loops/")
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
-        {
-            return self.unified_loops(&request, &unified);
-        }
-        if method == "session/context/inject"
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
-        {
-            return self.unified_context_inject(&request, &unified);
-        }
-        if matches!(method, "turn/interrupt" | "turn/steer" | "callback/result")
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
-        {
-            return match method {
-                "turn/interrupt" => self.unified_turn_interrupt(request, unified),
-                "turn/steer" => self.unified_turn_steer(request, unified),
-                _ => self.unified_callback_result(request, unified),
-            };
+            match method {
+                "turn/start" => return self.unified_turn_start(request, root),
+                "turn/interrupt" => return self.unified_turn_interrupt(request, root),
+                "turn/steer" => return self.unified_turn_steer(request, root),
+                "callback/result" => return self.unified_callback_result(request, root),
+                "session/context/inject" => return self.unified_context_inject(&request, &root),
+                "session/compact" => return self.unified_compact(&request, root),
+                "session/rewind" => return self.unified_rewind(&request, root),
+                "session/rewind/read" => return self.unified_rewind_read(&request, &root),
+                "session/turn/enqueue" => return self.unified_queue(request, root),
+                method if method.starts_with("session/turn/queue/") => {
+                    return self.unified_queue(request, root);
+                }
+                method if method.starts_with("loops/") => {
+                    return self.unified_loops(&request, &root);
+                }
+                _ => {}
+            }
         }
         if matches!(method, "turn/interrupt" | "turn/steer") {
             let expected = request
@@ -382,7 +302,7 @@ impl ServerConnection {
             return self.reference_turn_interrupt(request);
         }
         if method == "turn/steer" {
-            return self.reference_turn_steer(request);
+            return Ok(self.steer_turn(request, SteerAnswer::LastEvent));
         }
         if method == "callback/result" {
             return self.reference_callback_result(request);
@@ -398,7 +318,7 @@ impl ServerConnection {
         }
         if method == "skills/installed" {
             let result = self.server.workspace.skills_installed();
-            return Ok(success_batch(request.id, object_of_value(result)));
+            return Ok(success_batch(request.id, object(result)));
         }
         // Reference `SkillsController._begin_mutation`: a skills mutation
         // waits for the session to be idle.
@@ -438,14 +358,7 @@ impl ServerConnection {
             method,
             "session/agent/update" | "agents/install" | "agents/uninstall"
         ) {
-            return self.reference_runtime_mutation(request);
-        }
-        if method == "turn/start"
-            && let Some(unified) = self
-                .root_id()
-                .and_then(|root| self.server.unified_session(&root))
-        {
-            return self.unified_turn_start(request, unified);
+            return Ok(self.reference_runtime_mutation(request));
         }
         // Reference `dispatch_extension` on a Unified Harness session serves
         // no review: the edits a turn made are not tracked there.
@@ -458,13 +371,21 @@ impl ServerConnection {
         {
             return Err(method_not_found(method));
         }
-        if self.server.harness_selection().use_unified {
+        if unified {
             match method {
+                "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload" => {
+                    return Ok(self.plugin_request(request));
+                }
+                "providerAuth/read" => return Ok(self.provider_auth_request(request)),
+                "session/backgroundProcess/output" | "session/backgroundProcess/stop" => {
+                    return self.unified_background_process(&request);
+                }
                 "session/list" => return self.unified_list(&request),
                 "session/resume" => return self.unified_resume(request),
                 "session/continue" => return self.unified_continue(request),
                 "session/read" => return self.unified_read(&request),
-                "session/rename" | "session/pin" | "session/archive" | "session/markAsSeen" => {
+                "session/rename" => return self.unified_rename(&request),
+                "session/pin" | "session/archive" | "session/markAsSeen" => {
                     return self.unified_mark(&request);
                 }
                 _ => {}
@@ -547,29 +468,6 @@ impl ServerConnection {
             session_id,
             turn_id,
         });
-        Ok(batch)
-    }
-
-    /// Reference `turn/steer`, which answers the event the steer follows.
-    fn reference_turn_steer(
-        &mut self,
-        request: ServerRequest,
-    ) -> Result<DispatchBatch, ProtocolFault> {
-        let root = self.root_id().unwrap_or_default();
-        let mut batch = self.port_request(request);
-        let last_event_id = self
-            .server
-            .lock_sessions()?
-            .get(&root)
-            .map_or(0, |session| session.event_watermark);
-        if let Some(response) = batch.outbound.first_mut()
-            && let Ok(mut frame) = serde_json::from_slice::<Value>(response)
-            && frame.get("result").is_some()
-        {
-            frame["result"] = json!({"lastEventId": last_event_id});
-            *response = serde_json::to_vec(&frame)
-                .map_err(|error| ProtocolFault::internal(error.to_string()))?;
-        }
         Ok(batch)
     }
 
@@ -764,42 +662,31 @@ impl ServerConnection {
     /// publishes as `runtime/updated`: the agent switch answers the runtime
     /// itself (`RuntimeMutationResponse`), the agent catalog edits the
     /// catalog.
-    fn reference_runtime_mutation(
-        &mut self,
-        request: ServerRequest,
-    ) -> Result<DispatchBatch, ProtocolFault> {
+    fn reference_runtime_mutation(&mut self, request: ServerRequest) -> DispatchBatch {
         let root = self.root_id().unwrap_or_default();
+        let id = request.id.clone();
         let switch = request.method == "session/agent/update";
-        let mut batch = self.port_request(request);
-        let Some(Ok(mut response)) = batch
-            .outbound
-            .first()
-            .map(|frame| serde_json::from_slice::<Value>(frame))
-        else {
-            return Ok(batch);
+        let answered = match session_management::answer(self, request) {
+            Ok(answered) => answered,
+            Err(refused) => return refused,
         };
-        if response.get("result").is_none() {
-            return Ok(batch);
-        }
         let runtime = self.server.runtime_snapshot(&root);
-        if switch {
-            response["result"] = json!({"runtime": runtime, "status": "applied"});
-            batch.outbound[0] = serde_json::to_vec(&response)
-                .map_err(|error| ProtocolFault::internal(error.to_string()))?;
-        }
-        batch.outbound.retain(|frame| {
-            serde_json::from_slice::<Value>(frame)
-                .ok()
-                .and_then(|frame| frame.get("method").cloned())
-                != Some(json!("runtime/updated"))
-        });
+        let result = if switch {
+            result_map([("runtime", json!(runtime)), ("status", json!("applied"))])
+        } else {
+            answered.result
+        };
+        // None of these methods publishes a runtime of its own, so the one
+        // pushed here is the only one the client reads.
+        let mut batch = success_batch(id, result);
+        batch.outbound.extend(answered.then);
         if let Some(runtime) = runtime {
             batch.outbound.push(encode_notification(
                 "runtime/updated",
                 result_map([("sessionId", json!(root)), ("runtime", runtime)]),
             ));
         }
-        Ok(batch)
+        batch
     }
 
     /// Reference `_dispatch_narration`: the summary is a model call, so it is
@@ -922,12 +809,4 @@ pub(super) fn method_not_found(method: &str) -> ProtocolFault {
         ProtocolErrorCode::MethodNotFound,
         format!("Method not found: {method}"),
     )
-}
-
-/// A JSON object as a result map; anything else answers an empty one.
-fn object_of_value(value: Value) -> BTreeMap<String, Value> {
-    match value {
-        Value::Object(map) => map.into_iter().collect(),
-        _ => BTreeMap::new(),
-    }
 }

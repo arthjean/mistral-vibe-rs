@@ -51,12 +51,13 @@ impl AppServer {
         } else {
             Vec::new()
         };
-        let scratchpad = unified.core.lock().ok().and_then(|core| {
+        let scratchpad = {
+            let core = unified.core();
             vibe_harness::tools::vibe::scratchpad_block_to_restate(
                 &core.vibe.scratchpad,
                 &core.projector.state.entries,
             )
-        });
+        };
         let mut content = content;
         content.extend(
             mentioned_file_blocks(&text, Path::new(&unified.cwd)).map_err(|message| {
@@ -205,10 +206,10 @@ impl AppServer {
                 .unwrap_or_else(|_| PathBuf::from(&unified.cwd)),
         ];
         if let Some(dir) = unified
-            .host
-            .lock()
-            .ok()
-            .and_then(|host| host.store.as_ref().map(|store| store.dir().to_path_buf()))
+            .host()
+            .store
+            .as_ref()
+            .map(|store| store.dir().to_path_buf())
         {
             roots.push(dir);
         }
@@ -223,6 +224,7 @@ impl AppServer {
             .collect()
     }
 
+    /// Reference `_invoked_skill_blocks`: each skill the prompt invokes, as its
     /// body or, when the conversation already carries it, the note saying so.
     fn invoked_skill_blocks(&self, unified: &UnifiedSession, text: &str) -> Vec<(String, String)> {
         let resolved = self.resolved_invoked_skills(unified, text);
@@ -230,17 +232,13 @@ impl AppServer {
             return resolved;
         }
         let history: Vec<Value> = unified
-            .core
-            .lock()
-            .map(|core| {
-                core.projector
-                    .state
-                    .entries
-                    .iter()
-                    .flat_map(vibe_harness::wire::wire_entries)
-                    .collect()
-            })
-            .unwrap_or_default();
+            .core()
+            .projector
+            .state
+            .entries
+            .iter()
+            .flat_map(vibe_harness::wire::wire_entries)
+            .collect();
         resolved
             .into_iter()
             .map(|(name, body)| {

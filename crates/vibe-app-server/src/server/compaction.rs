@@ -84,12 +84,9 @@ impl AppServer {
             );
             // A session no turn has run yet holds no snapshot, and the
             // checkpoint opens its history.
-            let snapshot = super::manual_shell::session_snapshot(session);
-            snapshot.turn_id = None;
-            snapshot.lifecycle = LifecycleState::Idle;
-            snapshot.history.push(checkpoint);
-            session.turns.clear();
-            session.latest_turn = None;
+            let mut history = std::mem::take(&mut session.projection().history);
+            history.push(checkpoint);
+            session.replace_idle(history);
             (public_session_state(session), session.id.clone())
         };
         let result = result_map([

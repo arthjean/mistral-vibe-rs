@@ -35,11 +35,7 @@ impl ServerConnection {
         let params = rewind_params(&request.params, false)?;
         require_root(unified, &params)?;
         anchor(unified, &params.entry_id)?;
-        let paths = unified
-            .host
-            .lock()
-            .map(|host| host.rewind.restorable_paths(&params.entry_id))
-            .unwrap_or_default();
+        let paths = unified.host().rewind.restorable_paths(&params.entry_id);
         Ok(success_batch(
             request.id.clone(),
             result_map([
@@ -74,10 +70,7 @@ impl ServerConnection {
         anchor: Anchor,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let publication = {
-            let mut core = unified
-                .core
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+            let mut core = unified.core();
             let advance = core
                 .rewind(&params.entry_id, now_millis())
                 .map_err(|message| {
@@ -88,10 +81,7 @@ impl ServerConnection {
         let mut outbound = unified.publish(&publication);
         unified.settle();
         let restored = {
-            let mut host = unified
-                .host
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+            let mut host = unified.host();
             let restored = if params.restore_files {
                 host.rewind.restore(&params.entry_id)
             } else {
@@ -137,10 +127,7 @@ impl ServerConnection {
         let now = now_millis();
         let scratchpad = vibe_harness::tools::vibe::scratchpad_dir(&root, &session_id);
         let core = {
-            let source = unified
-                .core
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+            let source = unified.core();
             vibe_harness::engine::fork_core_before(
                 &source,
                 &session_id,
@@ -170,10 +157,7 @@ impl ServerConnection {
             |error| ProtocolFault::internal(format!("the fork cannot be saved: {error}")),
         )?;
         let (restored, source_snapshots) = {
-            let host = unified
-                .host
-                .lock()
-                .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
+            let host = unified.host();
             let restored = if params.restore_files {
                 host.rewind.restore(&params.entry_id)
             } else {
@@ -191,10 +175,8 @@ impl ServerConnection {
             .zip(forked_users.iter().rev())
             .map(|(source, fork)| (source.clone(), fork.clone()))
             .collect();
-        if let Some(fork) = self.server.unified_session(&session_id)
-            && let Ok(mut host) = fork.host.lock()
-        {
-            host.rewind = source_snapshots.forked(&params.entry_id, &renamed);
+        if let Some(fork) = self.server.unified_session(&session_id) {
+            fork.host().rewind = source_snapshots.forked(&params.entry_id, &renamed);
         }
         let checkpoint = json!({
             "type": "checkpoint",
@@ -238,19 +220,12 @@ fn require_root(unified: &UnifiedSession, params: &RewindParams) -> Result<(), P
     if unified.id == params.session_id {
         return Ok(());
     }
-    Err(ProtocolFault::plain(
-        ProtocolErrorCode::NotFound,
-        format!("Session not found: {}", params.session_id),
-    ))
+    Err(unknown_session(&params.session_id))
 }
 
 /// Reference `_require_settled`.
 fn require_settled(unified: &UnifiedSession) -> Result<(), ProtocolFault> {
-    let host = unified
-        .host
-        .lock()
-        .map_err(|_| ProtocolFault::internal("the session lock is poisoned"))?;
-    match host.running.as_deref() {
+    match unified.host().running.as_deref() {
         None => Ok(()),
         Some("") => Err(ProtocolFault::plain(
             ProtocolErrorCode::Conflict,

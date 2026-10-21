@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod approvals;
 mod attachment;
 mod batch;
 
@@ -12,12 +13,14 @@ mod compaction;
 mod connection;
 mod connector_catalog;
 mod manual_shell;
+mod methods;
 mod projection;
 mod registry;
 mod review;
 mod runtime;
 mod session_callbacks;
 mod session_management;
+mod session_plugins;
 mod titles;
 mod turn_queue;
 mod turns;
@@ -25,13 +28,19 @@ mod unified;
 mod vibe_code_host;
 mod wire;
 
+pub use approvals::{ApprovalAgentFactory, SessionToolFactory};
 pub(crate) use manual_shell::ShellOperation;
+pub use methods::EMITTED_NOTIFICATIONS;
+pub(crate) use methods::notification_method;
+#[cfg(test)]
+pub(crate) use methods::{routed_methods, stdio_routed_methods};
 pub use runtime::SessionView;
 pub(crate) use runtime::*;
 pub use unified::{UnifiedTurnWork, drive_unified_turn};
 pub use wire::SessionIntent;
 pub(crate) use wire::*;
 
+use approvals::{ChainedSessionToolFactory, DefaultApprovalFactory, NoAdditionalTools};
 use turns::scheduled_loop_turn;
 
 use batch::*;
@@ -114,104 +123,6 @@ const MAX_CALLBACK_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_CALLBACK_ANSWERS: usize = 16;
 const MAX_CALLBACK_OPTIONS: usize = 32;
 const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
-/// Every notification name this build emits, sorted and unique.
-///
-/// [`notification_method`] gates each outbound name against this list, so it is
-/// what the server actually sends rather than a hand-kept description of it. The
-/// app-server surface replay reads it to report notification conformance, and
-/// `docs/parity.md` records the names here that the reference does not declare.
-pub const EMITTED_NOTIFICATIONS: &[&str] = &[
-    "connector_catalog/authFailed",
-    "connector_catalog/authRequired",
-    "connector_catalog/authUrl",
-    "error",
-    "history/entryAdded",
-    "history/entryUpdated",
-    "mcp/authUrl",
-    "mcp_catalog/authRequired",
-    "mcp_catalog/authUrl",
-    "runtime/updated",
-    "session/childSessionUpdated",
-    "session/compacted",
-    "session/contextCleared",
-    "session/snapshot",
-    "session/statsUpdated",
-    "session/updated",
-    "turn/completed",
-    "turn/queueUpdated",
-    "turn/retrying",
-    "turn/started",
-    "vibeCode/teleport/event",
-    "warning",
-];
-
-/// Which handoff notification a session rotation publishes, with the one field
-/// that name adds to the shared handoff body.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum HandoffNotice {
-    Compacted { summary_length: usize },
-    ContextCleared { plan_file_path: Option<String> },
-}
-
-/// A brokered connector authorization: session, connector, accepted revision
-/// and action.
-type ConnectorAuthRequest = (String, String, String, String);
-
-/// The parameter a routed connector call carries the connection's root in,
-/// which no client can send: the parameters were validated before it is added.
-pub(crate) const CONNECTION_ROOT_PARAM: &str = "\u{0}connectionRoot";
-
-/// The parameter a routed narration call carries the client's launch context
-/// in, on the same terms as [`CONNECTION_ROOT_PARAM`].
-pub(crate) const CONNECTION_LAUNCH_PARAM: &str = "\u{0}connectionLaunch";
-
-/// Every method this build routes, sorted and unique, whether or not the
-/// reference declares it.
-#[cfg(test)]
-pub(crate) fn routed_methods() -> BTreeSet<&'static str> {
-    IMPLEMENTED_METHODS
-        .iter()
-        .chain(WORKSPACE_METHODS)
-        .chain(PROJECTS_METHODS)
-        .chain(RESOURCE_METHODS)
-        .copied()
-        .collect()
-}
-
-/// Every reference method a stdio client reaches an answer for: the ones a
-/// handler of this port serves, and the ones the reference routing answers by
-/// itself, as the reference does (`connection::route`).
-#[cfg(test)]
-pub(crate) fn stdio_routed_methods() -> BTreeSet<&'static str> {
-    let served = routed_methods();
-    vibe_protocol::SERVER_METHODS
-        .iter()
-        .copied()
-        .filter(|method| {
-            served.contains(method)
-                || !matches!(
-                    connection::route(method),
-                    connection::Route::Host
-                        | connection::Route::SessionOptional
-                        | connection::Route::Root
-                        | connection::Route::Catalog
-                )
-        })
-        .collect()
-}
-
-/// Gates a notification name on [`EMITTED_NOTIFICATIONS`] as it leaves.
-///
-/// Both notification funnels pass through here: the frames a dispatch batch
-/// encodes and the frames the live projection builds. A name emitted without
-/// being declared is a surface the conformance replay would never see.
-pub(crate) fn notification_method(method: &str) -> &str {
-    debug_assert!(
-        EMITTED_NOTIFICATIONS.contains(&method),
-        "{method} is emitted but absent from EMITTED_NOTIFICATIONS"
-    );
-    method
-}
 
 /// The namespace this port's own in-process clients address the session
 /// shapes they predate the reference surface with (`workspace/internal.rs`).
@@ -241,205 +152,25 @@ pub(crate) fn internal_method(transport: TransportKind, method: &str) -> Option<
     (transport == TransportKind::InProcess && INTERNAL_METHODS.contains(&method)).then_some(method)
 }
 
-/// The methods this port's own handlers answer, beside the service lists.
-#[cfg(test)]
-const IMPLEMENTED_METHODS: &[&str] = &[
-    "account/read",
-    "callback/respond",
-    "callback/result",
-    "connector_catalog/auth/request",
-    "connector_catalog/read",
-    "connector_catalog/refresh",
-    "connector_catalog/toggle",
-    "connectors/auth/read",
-    "connectors/read",
-    "connectors/refresh",
-    "diagnostics/list",
-    "diagnostics/logs/read",
-    "feedback/record",
-    "feedback/shouldShow",
-    "mcp/add",
-    "mcp/login",
-    "mcp/logout",
-    "mcp/read",
-    "mcp/refresh",
-    "mcp/toggle",
-    "mcp_catalog/add",
-    "mcp_catalog/login",
-    "mcp_catalog/logout",
-    "mcp_catalog/read",
-    "mcp_catalog/refresh",
-    "mcp_catalog/remove",
-    "mcp_catalog/toggle",
-    "narration/summarize",
-    "providerAuth/read",
-    "review/approve",
-    "review/baseline",
-    "review/hunks",
-    "review/revert",
-    "review/state",
-    "review/turnDiff",
-    "runtime/read",
-    "session/close",
-    "session/compact",
-    "session/compact/start",
-    "session/context/inject",
-    "session/continue",
-    "session/delete",
-    "session/fork",
-    "session/history/clear",
-    "session/history/get",
-    "session/history/list",
-    "session/list",
-    "session/log/read",
-    "session/overrides/write",
-    "session/pin",
-    "session/read",
-    "session/ready/read",
-    "session/ready/wait",
-    "session/relocate",
-    "session/rename",
-    "session/resume",
-    "session/rewind",
-    "session/rewind/read",
-    "session/settings/update",
-    "session/shellCommand",
-    "session/start",
-    "session/stop",
-    "session/title/update",
-    "session/turn/enqueue",
-    "session/turn/queue/read",
-    "session/turn/queue/remove",
-    "session/turn/queue/replace",
-    "session/turn/queue/resume",
-    "session/turns/list",
-    "shell/interrupt",
-    "shell/run",
-    "skills/catalog",
-    "skills/convertLocal",
-    "skills/detail",
-    "skills/import",
-    "skills/installed",
-    "skills/remove",
-    "skills/setAlias",
-    "skills/setEnabled",
-    "skills/setLatest",
-    "skills/setVersion",
-    "skills/updates",
-    "skills/versions",
-    "stats/read",
-    "telemetry/record",
-    "tools/list",
-    "turn/interrupt",
-    "turn/start",
-    "turn/steer",
-    "workspace/trust/decision",
-    "workspace/trust/status",
-    "workspace/trust/untrustedConfig",
-];
-
-struct DenyApproval;
-
-impl ApprovalAgent for DenyApproval {
-    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async { Ok(ApprovalDecision::Deny) })
-    }
+/// Which handoff notification a session rotation publishes, with the one field
+/// that name adds to the shared handoff body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HandoffNotice {
+    Compacted { summary_length: usize },
+    ContextCleared { plan_file_path: Option<String> },
 }
 
-struct ApproveOnce;
+/// A brokered connector authorization: session, connector, accepted revision
+/// and action.
+type ConnectorAuthRequest = (String, String, String, String);
 
-impl ApprovalAgent for ApproveOnce {
-    fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
-    }
+/// The parameter a routed connector call carries the connection's root in,
+/// which no client can send: the parameters were validated before it is added.
+pub(crate) const CONNECTION_ROOT_PARAM: &str = "\u{0}connectionRoot";
 
-    /// Reference `bypass_tool_permissions`: an auto-approving session never
-    /// consults the gate at all.
-    fn attribution(&self, _tool: &str) -> vibe_core::tools::ToolApprovalSource {
-        vibe_core::tools::ToolApprovalSource::Bypass
-    }
-}
-
-pub trait ApprovalAgentFactory: Send + Sync {
-    fn for_session(&self, session_id: &str, auto_approve: bool) -> Arc<dyn ApprovalAgent>;
-
-    fn for_agent(
-        &self,
-        session_id: &str,
-        approval: AgentApproval,
-        auto_approve: bool,
-    ) -> Arc<dyn ApprovalAgent> {
-        let fallback = self.for_session(session_id, auto_approve || approval == AgentApproval::All);
-        match approval {
-            AgentApproval::Edits => Arc::new(ApproveEdits { fallback }),
-            AgentApproval::Prompt | AgentApproval::All => fallback,
-        }
-    }
-}
-
-struct ApproveEdits {
-    fallback: Arc<dyn ApprovalAgent>,
-}
-
-impl ApprovalAgent for ApproveEdits {
-    fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
-        if is_edit_tool(&request.tool) {
-            Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
-        } else {
-            self.fallback.request(request)
-        }
-    }
-
-    /// The reference's `accept-edits` profile sets the edit tools' permission
-    /// to `always`, so an edit it lets through is the configuration's call.
-    fn attribution(&self, tool: &str) -> vibe_core::tools::ToolApprovalSource {
-        if is_edit_tool(tool) {
-            vibe_core::tools::ToolApprovalSource::Config
-        } else {
-            self.fallback.attribution(tool)
-        }
-    }
-}
-
-fn is_edit_tool(tool: &str) -> bool {
-    matches!(tool, "edit" | "write" | "write_file")
-}
-
-pub trait SessionToolFactory: Send + Sync {
-    fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String>;
-}
-
-struct NoAdditionalTools;
-
-impl SessionToolFactory for NoAdditionalTools {
-    fn register(&self, _session_id: &str, _tools: &ToolRegistry) -> Result<(), String> {
-        Ok(())
-    }
-}
-
-struct ChainedSessionToolFactory {
-    existing: Arc<dyn SessionToolFactory>,
-    additional: Arc<dyn SessionToolFactory>,
-}
-
-impl SessionToolFactory for ChainedSessionToolFactory {
-    fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
-        self.existing.register(session_id, tools)?;
-        self.additional.register(session_id, tools)
-    }
-}
-
-struct DefaultApprovalFactory;
-
-impl ApprovalAgentFactory for DefaultApprovalFactory {
-    fn for_session(&self, _session_id: &str, auto_approve: bool) -> Arc<dyn ApprovalAgent> {
-        if auto_approve {
-            Arc::new(ApproveOnce)
-        } else {
-            Arc::new(DenyApproval)
-        }
-    }
-}
+/// The parameter a routed narration call carries the client's launch context
+/// in, on the same terms as [`CONNECTION_ROOT_PARAM`].
+pub(crate) const CONNECTION_LAUNCH_PARAM: &str = "\u{0}connectionLaunch";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionState {
@@ -805,208 +536,6 @@ impl AppServer {
         &self.harness
     }
 
-    /// The plugins a unified session runs, or `None` for a legacy session.
-    ///
-    /// The table is keyed by the identifier the session opened under, which
-    /// stays its registry key across renames, so a later identifier resolves
-    /// through the registry. A caller already holding the session lock reads
-    /// [`Self::plugins_of`] instead.
-    #[must_use]
-    pub fn session_plugins(&self, session_id: &str) -> Option<Arc<crate::plugins::SessionPlugins>> {
-        let table = self.session_plugins.lock().ok()?;
-        if let Some(plugins) = table.get(session_id) {
-            return Some(plugins.clone());
-        }
-        drop(table);
-        let key = self.lock_sessions().ok()?.key(session_id)?.to_owned();
-        self.session_plugins.lock().ok()?.get(&key).cloned()
-    }
-
-    /// The plugins `session` runs, found through any identifier it carried.
-    pub(crate) fn plugins_of(
-        &self,
-        session: &SessionRuntime,
-    ) -> Option<Arc<crate::plugins::SessionPlugins>> {
-        let table = self.session_plugins.lock().ok()?;
-        std::iter::once(&session.id)
-            .chain(session.aliases.iter())
-            .find_map(|id| table.get(id).cloned())
-    }
-
-    pub(crate) fn set_session_plugins(
-        &self,
-        session_id: &str,
-        plugins: crate::plugins::SessionPlugins,
-    ) {
-        if let Ok(mut map) = self.session_plugins.lock() {
-            map.insert(session_id.to_owned(), Arc::new(plugins));
-        }
-    }
-
-    /// Resolves, pins and binds the plugins a unified session opens with. A
-    /// legacy session resolves none, as the reference's legacy backend does.
-    /// No discovery port is handed in: the tool catalog a plugin MCP server
-    /// publishes is filled in once the deferred MCP connect answers.
-    pub(crate) fn open_session_plugins(
-        &self,
-        session_id: &str,
-        working_directory: &std::path::Path,
-        project_trusted: bool,
-        add_directories: &[String],
-        mcp_configs: &[vibe_core::mcp::McpServerConfig],
-    ) {
-        if !self.harness_selection().use_unified
-            || self
-                .pluginless
-                .lock()
-                .is_ok_and(|pluginless| pluginless.contains(session_id))
-        {
-            return;
-        }
-        let sources = self.workspace.plugin_sources(
-            working_directory,
-            project_trusted,
-            add_directories,
-            mcp_configs
-                .iter()
-                .map(|config| config.alias.clone())
-                .collect(),
-        );
-        if let Some(plugins) = crate::plugins::start_discovering(&sources, session_id) {
-            self.set_session_plugins(session_id, plugins);
-        }
-    }
-
-    /// Marks `session_id` as a session that opens with no plugins.
-    pub(crate) fn bind_no_plugins(&self, session_id: &str) {
-        if let Ok(mut pluginless) = self.pluginless.lock() {
-            pluginless.insert(session_id.to_owned());
-        }
-    }
-
-    /// Rescans and re-pins the plugins of `session_id`, files the new set in
-    /// place of `previous`, and derives the session's skills and prompt again.
-    pub(crate) fn reload_session_plugins(
-        &self,
-        session_id: &str,
-        previous: &crate::plugins::SessionPlugins,
-    ) -> Result<Arc<crate::plugins::SessionPlugins>, ServerError> {
-        let (key, working_directory, trusted, add_directories) = {
-            let sessions = self.lock_sessions()?;
-            let key = sessions
-                .key(session_id)
-                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
-                .to_owned();
-            let session = sessions
-                .get(&key)
-                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
-            (
-                key,
-                PathBuf::from(&session.working_directory),
-                session.intent.trusted,
-                session.intent.add_directories.clone(),
-            )
-        };
-        let configured = self
-            .workspace
-            .mcp_servers_for_session(&working_directory, trusted, &[])
-            .unwrap_or_default();
-        let sources = self.workspace.plugin_sources(
-            &working_directory,
-            trusted,
-            &add_directories,
-            configured
-                .iter()
-                .map(|config| config.alias.clone())
-                .collect(),
-        );
-        let reloaded = crate::plugins::reload_discovering(&sources, &key, previous)
-            .ok_or_else(|| ServerError::Resource("the plugin rescan could not run".to_owned()))?;
-        let reloaded = Arc::new(reloaded);
-        {
-            let mut sessions = self.lock_sessions()?;
-            if let Some(session) = sessions.get_mut(&key) {
-                if let Ok(mut map) = self.session_plugins.lock() {
-                    map.insert(key.clone(), reloaded.clone());
-                    map.insert(session.id.clone(), reloaded.clone());
-                }
-                session.system_prompt = None;
-            }
-        }
-        self.bind_plugin_mcp(&key);
-        self.refresh_session_workspace_tools(session_id)?;
-        Ok(reloaded)
-    }
-
-    /// Hands the resource backend the MCP servers `session_id`'s plugins
-    /// declare, which `/mcp` lists after the configured ones, and the shell
-    /// the library search paths its commands start from.
-    ///
-    /// `session_id` is the registry key, read off the table alone, so a caller
-    /// holding the session lock can ask.
-    pub(crate) fn bind_plugin_mcp(&self, session_id: &str) {
-        let sources = self.session_plugins.lock().ok().and_then(|table| {
-            table
-                .get(session_id)
-                .map(|plugins| plugins.mcp_sources.clone())
-        });
-        if let (Some(sources), Some(backend)) = (sources, &self.resource_backend) {
-            backend.set_plugin_mcp(session_id, sources);
-        }
-        let environment = self.session_plugins.lock().ok().and_then(|table| {
-            table
-                .get(session_id)
-                .map(|plugins| plugins.runtime_environment.clone())
-        });
-        if let Some(environment) = environment {
-            self.shell_tools
-                .set_session_environment(session_id, environment);
-        }
-    }
-
-    /// Drops the plugins `session` ran under every identifier it carried.
-    pub(crate) fn forget_session_plugins(&self, session: &SessionRuntime) {
-        if let Ok(mut map) = self.session_plugins.lock() {
-            map.remove(&session.id);
-            for alias in &session.aliases {
-                map.remove(alias);
-            }
-        }
-    }
-
-    /// Files the plugins `session` runs under its current identifier as well,
-    /// for the lookups that key on it without the session lock.
-    pub(crate) fn rekey_session_plugins(&self, session: &SessionRuntime) {
-        let Some(plugins) = self.plugins_of(session) else {
-            return;
-        };
-        if let Ok(mut map) = self.session_plugins.lock() {
-            map.entry(session.id.clone()).or_insert(plugins);
-        }
-    }
-
-    /// The skills a unified session's plugins publish, by alias, which seed its
-    /// skill catalog in place of the legacy builtins: those reach a unified
-    /// session as skills of the shipped `vibe` plugin.
-    ///
-    /// Reads the table alone, never the session lock, so a registration that
-    /// holds it can ask.
-    pub(crate) fn plugin_skill_seed(
-        &self,
-        session_id: &str,
-    ) -> Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>> {
-        let plugins = self.session_plugins.lock().ok()?.get(session_id).cloned()?;
-        Some(skill_seed(&plugins))
-    }
-
-    /// [`Self::plugin_skill_seed`] for a caller holding the session lock.
-    pub(crate) fn plugin_skill_seed_of(
-        &self,
-        session: &SessionRuntime,
-    ) -> Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>> {
-        self.plugins_of(session).map(|plugins| skill_seed(&plugins))
-    }
-
     /// Installs the model utility completions run on, which names the
     /// worktrees `auto` requests raise.
     #[must_use]
@@ -1351,16 +880,12 @@ fn rejection_frames(status: Vec<u8>) -> Vec<Vec<u8>> {
     }
 }
 
+/// A JSON object as a result map; anything else answers an empty one.
 fn object(value: Value) -> BTreeMap<String, Value> {
-    value
-        .as_object()
-        .map(|object| {
-            object
-                .iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect()
-        })
-        .unwrap_or_default()
+    match value {
+        Value::Object(map) => map.into_iter().collect(),
+        _ => BTreeMap::new(),
+    }
 }
 
 impl AppServer {
@@ -1387,17 +912,3 @@ fn generated_session_id(_sequence: u64) -> String {
 
 #[cfg(test)]
 mod server_tests;
-
-fn skill_seed(
-    plugins: &crate::plugins::SessionPlugins,
-) -> Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>> {
-    Arc::new(
-        plugins
-            .materialized
-            .resolution
-            .skills
-            .iter()
-            .map(|(alias, skill)| (alias.clone(), skill.clone()))
-            .collect(),
-    )
-}

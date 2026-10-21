@@ -77,14 +77,28 @@ impl ServerConnection {
     /// session runs under, and the registration that makes it addressable.
     fn start_session(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let mut params = from_params::<SessionStartParams>(&request.params)?;
-        let mut resolution = self.resolve_worktree(&mut params)?;
-        match self.start_resolved_session(request, &params, &mut resolution) {
-            Ok(batch) => Ok(batch),
-            Err(error) => {
-                self.undo_worktree(&resolution);
-                Err(error)
-            }
+        let (session_id, state, mcp_configs) = self.start_in_worktree(&mut params)?;
+        let mut batch = success_batch(request.id, result_map([("state", state)]));
+        batch.outbound.extend(self.attachment_frames(&session_id));
+        if !mcp_configs.is_empty() {
+            batch.deferred.push(DeferredWork::ConfigureMcp {
+                session_id,
+                configs: mcp_configs,
+            });
         }
+        Ok(batch)
+    }
+
+    /// Opens the session a start asks for in the directory its `worktree`
+    /// resolves to, taking back what the resolution did when the start
+    /// fails. Answers what [`Self::open_resolved_session`] does.
+    pub(in crate::server) fn start_in_worktree(
+        &mut self,
+        params: &mut SessionStartParams,
+    ) -> Result<(String, Value, Vec<McpServerConfig>), ProtocolFault> {
+        let mut resolution = self.resolve_worktree(params)?;
+        self.open_resolved_session(params, &mut resolution)
+            .inspect_err(|_| self.undo_worktree(&resolution))
     }
 
     /// The worktree lifecycle over the managed root this server's vibe home
@@ -151,7 +165,7 @@ impl ServerConnection {
     /// A removal that fails is published on `diagnostics/list` rather than
     /// replacing the error the client is owed, which is the one that failed the
     /// start (`vibe/core/session/worktrees.py:153-181`).
-    pub(in crate::server) fn undo_worktree(&self, resolution: &WorktreeResolution) {
+    fn undo_worktree(&self, resolution: &WorktreeResolution) {
         let Some(note) = self.session_worktrees().cleanup(
             resolution.prepared.as_ref(),
             resolution.pending_hold.as_ref(),
@@ -163,28 +177,10 @@ impl ServerConnection {
         }
     }
 
-    fn start_resolved_session(
-        &mut self,
-        request: ServerRequest,
-        params: &SessionStartParams,
-        resolution: &mut WorktreeResolution,
-    ) -> Result<DispatchBatch, ProtocolFault> {
-        let (session_id, state, mcp_configs) = self.open_resolved_session(params, resolution)?;
-        let mut batch = success_batch(request.id, result_map([("state", state)]));
-        batch.outbound.extend(self.attachment_frames(&session_id));
-        if !mcp_configs.is_empty() {
-            batch.deferred.push(DeferredWork::ConfigureMcp {
-                session_id,
-                configs: mcp_configs,
-            });
-        }
-        Ok(batch)
-    }
-
     /// Registers the session a start resolved, and answers its identifier, its
     /// state and the MCP servers it still has to connect. The first session a
     /// connection opens becomes its root.
-    pub(in crate::server) fn open_resolved_session(
+    fn open_resolved_session(
         &mut self,
         params: &SessionStartParams,
         resolution: &mut WorktreeResolution,
@@ -657,11 +653,7 @@ impl ServerConnection {
             .close_saved_session(&canonical_session_id, now_millis())?;
         // Reference `SessionHandler.close`: the session's Teleport runs stop
         // and its project picker is dropped.
-        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-            let server = self.server.clone();
-            let session = canonical_session_id.clone();
-            runtime.spawn(async move { server.reset_vibe_code(&session).await });
-        }
+        self.server.spawn_vibe_code_reset(&canonical_session_id);
         let active_turn = session.active_turn.clone();
         session.status = SessionStatus::Closed;
         session.updated_at = now_millis();
