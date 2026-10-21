@@ -328,19 +328,10 @@ impl WorkspaceService {
         let console = self.read_config(DEFAULT_CONSOLE_BASE_URL.to_owned(), |snapshot| {
             effective_text(snapshot, "console_base_url", DEFAULT_CONSOLE_BASE_URL)
         });
-        let encoded = share_context
-            .bytes()
-            .map(|byte| {
-                if byte.is_ascii_alphanumeric() || b"_.-~".contains(&byte) {
-                    char::from(byte).to_string()
-                } else {
-                    format!("%{byte:02X}")
-                }
-            })
-            .collect::<String>();
         Some(format!(
-            "{}/build/connectors?shareContext={encoded}",
-            console.trim_end_matches('/')
+            "{}/build/connectors?shareContext={}",
+            console.trim_end_matches('/'),
+            vibe_core::pyurl::quote(&share_context, "")
         ))
     }
 }

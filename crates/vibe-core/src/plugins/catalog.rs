@@ -23,6 +23,7 @@ use super::naming::{
 };
 use super::native::{PluginDescriptor, PluginMcpServerDefinition, ResolvedPluginSet};
 use super::redaction::redact_failure;
+use super::snapshot::PluginSourceKind;
 use crate::mcp::RemoteTool;
 use crate::pycompat::{self, Dumps};
 
@@ -60,26 +61,9 @@ pub trait PluginConnectorCatalog: Send + Sync {
     fn tools(&self, source_id: &str) -> Option<Vec<ConnectorTool>>;
 }
 
-/// What a plugin tool is routed to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SourceKind {
-    Mcp,
-    Connector,
-}
-
-impl SourceKind {
-    /// The `source_kind` a route records.
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::Mcp => "mcp",
-            Self::Connector => "connector",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 struct Candidate {
-    kind: SourceKind,
+    kind: PluginSourceKind,
     plugin_name: String,
     group_name: String,
     function_name: String,
@@ -170,7 +154,7 @@ pub async fn build_tool_catalog(
                     plugin_name: plugin_name.clone(),
                     group_name: group_name.clone(),
                     function_name: candidate.function_name,
-                    source_kind: candidate.kind.as_str().to_owned(),
+                    source_kind: candidate.kind,
                     source_id: candidate.source_id,
                     source_tool_name: candidate.source_tool_name,
                     execution_name: candidate.execution_name,
@@ -269,7 +253,7 @@ fn mcp_candidates(
                 .tool_overrides
                 .get(&format!("{}/{}", definition.source_id, tool.name));
             candidates.push(Candidate {
-                kind: SourceKind::Mcp,
+                kind: PluginSourceKind::Mcp,
                 plugin_name: plugin.name.clone(),
                 group_name: plugin_mcp_group_name(
                     &definition.plugin_namespace,
@@ -381,7 +365,7 @@ fn connector_candidates(
                 .tool_overrides
                 .get(&format!("{}/{source_tool_name}", definition.source_id));
             candidates.push(Candidate {
-                kind: SourceKind::Connector,
+                kind: PluginSourceKind::Connector,
                 plugin_name: plugin.name.clone(),
                 group_name: plugin.namespace.clone(),
                 function_name: tool_function_name(
@@ -421,7 +405,7 @@ fn apply_group_names(candidates: Vec<Candidate>, resolution: &ResolvedPluginSet)
     let mut identities: BTreeMap<(String, String), ToolGroupIdentity> = BTreeMap::new();
     for candidate in candidates
         .iter()
-        .filter(|candidate| candidate.kind == SourceKind::Mcp)
+        .filter(|candidate| candidate.kind == PluginSourceKind::Mcp)
     {
         identities.insert(
             candidate.source(),
@@ -442,7 +426,7 @@ fn apply_group_names(candidates: Vec<Candidate>, resolution: &ResolvedPluginSet)
     candidates
         .into_iter()
         .map(|mut candidate| {
-            if candidate.kind == SourceKind::Mcp
+            if candidate.kind == PluginSourceKind::Mcp
                 && let Some(name) = identities
                     .get(&candidate.source())
                     .and_then(|identity| resolved.get(identity))

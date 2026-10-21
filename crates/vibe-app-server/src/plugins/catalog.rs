@@ -14,6 +14,7 @@ use vibe_core::plugins::compatibility::{PluginMcpHttpAuth, PluginMcpServer};
 use vibe_core::plugins::native::PLUGIN_AGENT_TYPE;
 use vibe_core::plugins::paths::{PluginPathRef, resolve_plugin_path};
 use vibe_core::plugins::redaction::{redact_argv, redact_names, redact_url};
+use vibe_core::plugins::snapshot::PluginSourceKind;
 
 use super::SessionPlugins;
 use super::issues::plugin_issues;
@@ -95,7 +96,7 @@ pub fn plugin_components_by_owner(plugins: &SessionPlugins) -> Vec<(String, Vec<
             .snapshot
             .tool_routes
             .iter()
-            .filter(|route| route.source_kind == "mcp")
+            .filter(|route| route.source_kind == PluginSourceKind::Mcp)
             .map(|route| (route.plugin_name.clone(), route.source_id.clone())),
     );
     let mut mcp_servers: Vec<_> = resolution

@@ -126,3 +126,28 @@ fn a_refused_startup_carries_the_exit_code_the_cleanup_gate_reads() {
         );
     }
 }
+
+#[test]
+fn an_untrusted_config_warning_is_due_once_per_new_folder() {
+    let root = tempfile::tempdir().expect("root");
+    let cache = CacheStore::new(&root.path().join("vibe-home"));
+    let first = vec!["/work/.vibe".to_owned()];
+    assert!(!untrusted_config_warning_due(&cache, &[]));
+    assert!(untrusted_config_warning_due(&cache, &first));
+    assert!(
+        !untrusted_config_warning_due(&cache, &first),
+        "already warned"
+    );
+    let both = vec!["/work/.agents".to_owned(), "/work/.vibe".to_owned()];
+    assert!(
+        untrusted_config_warning_due(&cache, &both),
+        "a new folder warns again"
+    );
+    assert_eq!(
+        cache.read_section("untrusted_config_warning")["dirs"],
+        toml::Value::Array(vec![
+            toml::Value::String("/work/.agents".to_owned()),
+            toml::Value::String("/work/.vibe".to_owned()),
+        ])
+    );
+}

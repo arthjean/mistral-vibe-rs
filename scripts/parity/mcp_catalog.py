@@ -58,6 +58,7 @@ import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/mcp-catalog/corpus.json"
@@ -268,7 +269,7 @@ class Run:
         self.quiet = quiet
         self.root = Path(tempfile.mkdtemp(prefix="vibe-mcp-catalog-oracle-")).resolve()
         self.world = blackbox.World(self.root)
-        self.backend = blackbox.Backend()
+        self.backend = stand_in.Backend()
         self.fixtures: dict[str, Fixture] = {}
         self.redirects: dict[str, int] = {}
         self.browser = Browser()

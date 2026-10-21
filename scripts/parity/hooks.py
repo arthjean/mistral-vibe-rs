@@ -2,7 +2,7 @@
 """Black-box capture of the hooks the app server runs around tool calls and turns.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in of ``subagent_client.py``, writes the
+scripted chat-completions stand-in of ``stand_in.py``, writes the
 ``hooks.toml`` files it declares (the workspace's ``.vibe/hooks.toml`` and the
 user's ``$VIBE_HOME/hooks.toml``), and drives real turns whose tool calls the
 hooks guard. Each hook is one command running the small recorder of
@@ -62,7 +62,8 @@ from hook_recorder import (  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
-from subagent_client import Backend, Normalizer, transcript  # noqa: E402
+import stand_in  # noqa: E402
+from subagent_client import Normalizer, transcript  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/hooks-parity/corpus.json"
@@ -80,7 +81,7 @@ ID_KEYS = app_server_client.ID_KEYS | {"tool_call_id", "session_id", "parent_ses
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = Backend()
+    backend = stand_in.Backend()
     root = Path(tempfile.mkdtemp(prefix="vibe-hooks-oracle-")).resolve()
     session = app_server_client.Session(root)
     world = session.world
@@ -187,7 +188,7 @@ def run_steps(
     scenario: dict[str, Any],
     server: app_server_client.Server,
     session: app_server_client.Session,
-    backend: app_server_client.RecordingBackend,
+    backend: stand_in.Backend,
     steps: list[dict[str, Any]],
     quiet: float,
 ) -> None:

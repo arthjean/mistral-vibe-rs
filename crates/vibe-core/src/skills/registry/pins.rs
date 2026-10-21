@@ -15,6 +15,7 @@ use super::manifest::{self, ManifestEntry, ManifestVersion, REGISTRY_LATEST_ALIA
 use super::models::SkillVersionInfo;
 use super::service::{RegistryEndpoint, open_client};
 use super::store;
+use crate::cache_store::CacheStore;
 use crate::platform::resolve_lenient;
 
 /// The `cache.toml` section recording what each custom alias resolved to.
@@ -209,7 +210,10 @@ pub async fn import_skill(
     if let ManifestVersion::Alias(alias) = &pin
         && alias != REGISTRY_LATEST_ALIAS
     {
-        record_resolved(target.vibe_home, skill_id, alias, item.version);
+        record_resolved(
+            target.vibe_home,
+            &[(skill_id.to_owned(), alias.clone(), item.version)],
+        );
     }
     let path = target.manifest_for_scope(scope)?;
     let mut manifest = manifest::load(&path).manifest;
@@ -345,39 +349,34 @@ fn within_roots(path: &Path, roots: &[PathBuf]) -> bool {
         .any(|root| resolved.starts_with(resolve_lenient(root)))
 }
 
-fn cache_path(vibe_home: &Path) -> PathBuf {
-    vibe_home.join("cache.toml")
-}
-
 /// Reference `_resolved.get`: the version a custom alias last resolved to.
 pub(crate) fn resolved_alias(vibe_home: &Path, skill_id: &str, alias: &str) -> Option<i64> {
-    let text = std::fs::read_to_string(cache_path(vibe_home)).ok()?;
-    let document = text.parse::<toml::Table>().ok()?;
-    document
-        .get(RESOLVED_SECTION)?
-        .get(format!("{skill_id}@{alias}"))?
+    CacheStore::new(vibe_home)
+        .read_section(RESOLVED_SECTION)
+        .get(&resolved_key(skill_id, alias))?
         .as_integer()
 }
 
-/// Reference `_resolved.record`: merged into the section, a write that fails
-/// dropped as the reference logs and drops it.
-pub(crate) fn record_resolved(vibe_home: &Path, skill_id: &str, alias: &str, version: i64) {
-    let path = cache_path(vibe_home);
-    let mut document = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|text| text.parse::<toml::Table>().ok())
-        .unwrap_or_default();
-    let section = document
-        .entry(RESOLVED_SECTION)
-        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
-    if !section.is_table() {
-        *section = toml::Value::Table(toml::Table::new());
+/// Reference `_resolved.record`: every `(skill_id, alias, version)` merged into
+/// the section in one write, a write that fails dropped as the reference logs
+/// and drops it.
+pub(crate) fn record_resolved(vibe_home: &Path, resolved: &[(String, String, i64)]) {
+    if resolved.is_empty() {
+        return;
     }
-    if let Some(section) = section.as_table_mut() {
-        section.insert(format!("{skill_id}@{alias}"), toml::Value::Integer(version));
-    }
-    if let Ok(encoded) = toml::to_string(&document) {
-        let _ = std::fs::create_dir_all(vibe_home);
-        let _ = std::fs::write(&path, encoded);
-    }
+    let section = resolved
+        .iter()
+        .map(|(skill_id, alias, version)| {
+            (
+                resolved_key(skill_id, alias),
+                toml::Value::Integer(*version),
+            )
+        })
+        .collect();
+    CacheStore::new(vibe_home).write_section(RESOLVED_SECTION, section);
+}
+
+/// Reference `_key`.
+fn resolved_key(skill_id: &str, alias: &str) -> String {
+    format!("{skill_id}@{alias}")
 }

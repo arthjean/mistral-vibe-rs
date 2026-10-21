@@ -1,4 +1,4 @@
-use super::{InvalidUrl, PyUrl, normalize_url_origin};
+use super::{InvalidUrl, PyUrl, normalize_url_origin, quote, quote_plus};
 
 #[test]
 fn a_split_keeps_the_path_its_encoding_and_its_dot_segments() {
@@ -75,4 +75,13 @@ fn an_origin_fills_in_the_default_port() {
         normalize_url_origin(&PyUrl::split("https://host:bad")),
         Err(InvalidUrl)
     );
+}
+
+#[test]
+fn quoting_escapes_every_byte_outside_the_unreserved_and_safe_sets() {
+    let text = "a b/c?d=\u{e9}~_.-";
+    assert_eq!(quote(text, ""), "a%20b%2Fc%3Fd%3D%C3%A9~_.-");
+    assert_eq!(quote(text, "/"), "a%20b/c%3Fd%3D%C3%A9~_.-");
+    assert_eq!(quote_plus(text), "a+b%2Fc%3Fd%3D%C3%A9~_.-");
+    assert_eq!(quote("", "/"), "");
 }

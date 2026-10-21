@@ -1,90 +1,20 @@
 """What a black-box capture of subagents and callbacks drives the app server with.
 
-It builds on :mod:`app_server_client`: a stand-in that also answers a
-non-streaming request with the tool calls it scripted, since the reference runs
-a subagent's loop without streaming (:class:`Backend`); a server whose
-callbacks a scenario answers from a script (:class:`Server`); a session that
-also learns the child sessions a parent linked (:class:`Session`); the
-conversation a request sent (:func:`transcript`); and a normalizer that also
-maps the identifiers a hook invocation carries and a subagent's log directory
-(:class:`Normalizer`). Nothing here imports the reference.
+It builds on :mod:`app_server_client`: a server whose callbacks a scenario
+answers from a script (:class:`Server`); a session that also learns the child
+sessions a parent linked (:class:`Session`); the conversation a request sent
+(:func:`transcript`); and a normalizer that also maps the identifiers a hook
+invocation carries and a subagent's log directory (:class:`Normalizer`).
+Nothing here imports the reference.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import re
 from typing import Any
 
 import app_server_client
-
-
-# --------------------------------------------------------------------------
-# The chat-completions stand-in, answering a subagent's tool calls
-# --------------------------------------------------------------------------
-
-
-class Backend(app_server_client.RecordingBackend):
-    """The recording stand-in, also answering a non-streaming request with the
-    tool calls its scripted response holds.
-
-    The reference runs a subagent's loop without streaming, and the shared
-    stand-in serves only text that way, so a child could never call a tool.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        handler = self.server.RequestHandlerClass
-        backend = self
-        streaming = handler.do_POST
-
-        def do_post(self: Any) -> None:
-            length = int(self.headers.get("content-length") or 0)
-            raw = self.rfile.read(length) if length else b""
-            try:
-                body = json.loads(raw or b"{}")
-            except json.JSONDecodeError:
-                body = {}
-            with backend.lock:
-                scripted = backend.responses[0] if backend.responses else {}
-                answers = not body.get("stream") and bool(scripted.get("toolCalls"))
-                if answers:
-                    backend.responses.pop(0)
-                    backend.requests += 1
-                    backend.conversations.append(app_server_client.conversation(body.get("messages", [])))
-                    backend.bodies.append(body)
-            if not answers:
-                # The body is handed back, and the socket after it.
-                stream = self.rfile
-                self.rfile = app_server_client.Replay(raw, stream)
-                try:
-                    streaming(self)
-                finally:
-                    self.rfile = stream
-                return
-            message = {
-                "role": "assistant",
-                "content": scripted.get("text") or "",
-                "tool_calls": [
-                    {
-                        "id": call.get("id", f"call_{index}"),
-                        "type": "function",
-                        "function": {"name": call["name"], "arguments": json.dumps(call.get("arguments", {}))},
-                    }
-                    for index, call in enumerate(scripted["toolCalls"])
-                ],
-            }
-            self.reply(200, {
-                "id": "cmpl-oracle",
-                "object": "chat.completion",
-                "created": 1_700_000_000,
-                "model": str(body.get("model", "model")),
-                "choices": [{"index": 0, "message": message, "finish_reason": "tool_calls"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-            })
-
-        handler.do_POST = do_post
 
 
 # --------------------------------------------------------------------------

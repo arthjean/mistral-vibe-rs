@@ -73,7 +73,7 @@ pub fn search_paths(inputs: &SearchInputs<'_>) -> Vec<PathBuf> {
     let mut candidates: Vec<PathBuf> = inputs
         .configured
         .iter()
-        .map(|entry| anchor(entry, inputs.user_home, inputs.working_directory))
+        .map(|entry| crate::skills::anchor(entry, inputs.user_home, inputs.working_directory))
         .collect();
     candidates.extend(inputs.projects.iter().cloned());
     candidates.extend(inputs.user.iter().cloned());
@@ -86,22 +86,6 @@ pub fn search_paths(inputs: &SearchInputs<'_>) -> Vec<PathBuf> {
         }
     }
     unique
-}
-
-/// Reference `_expand_paths`: a leading `~` becomes the home directory and a
-/// relative entry is anchored, so both spellings name one directory rather than
-/// one directory per process that reads them.
-fn anchor(entry: &str, home: Option<&Path>, working_directory: &Path) -> PathBuf {
-    let path = Path::new(entry);
-    let expanded = path.strip_prefix("~").map_or_else(
-        |_| path.to_path_buf(),
-        |rest| home.map_or_else(|| path.to_path_buf(), |home| home.join(rest)),
-    );
-    if expanded.is_absolute() {
-        expanded
-    } else {
-        working_directory.join(expanded)
-    }
 }
 
 /// The `prompts` directory a search path entry contributes, or [`None`] when it

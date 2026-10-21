@@ -36,7 +36,6 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
-import http.server
 import json
 import os
 from pathlib import Path
@@ -45,7 +44,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from typing import Any
 
@@ -55,6 +53,7 @@ import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/programmatic-parity/corpus.json"
@@ -82,94 +81,31 @@ UUID = blackbox.UUID
 # --------------------------------------------------------------------------
 
 
-class Backend:
-    """Serves scripted completions in order, then a fixed closing answer, and
-    records what each request asked for."""
+class Backend(stand_in.Backend):
+    """The stand-in, streaming every answer, and also playing the console's
+    account answer, which teleport reads first."""
 
     def __init__(self, responses: list[dict[str, Any]]) -> None:
-        self.responses = list(responses)
-        self.requests: list[dict[str, Any]] = []
+        super().__init__(responses, stream=stand_in.always)
         self.whoami: dict[str, Any] | None = None
-        self.lock = threading.Lock()
-        backend = self
 
-        class Handler(http.server.BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
+    def get(self, handler: stand_in.Handler, path: str) -> None:
+        whoami = self.whoami
+        if path.endswith("/api/vibe/whoami") and whoami:
+            handler.reply(whoami.get("status", 200), whoami.get("body", {}))
+            return
+        super().get(handler, path)
 
-            def log_message(self, *_: Any) -> None:
-                return
 
-            def do_GET(self) -> None:  # noqa: N802
-                # The console's account answer, which teleport reads first.
-                whoami = backend.whoami
-                if self.path.rstrip("/").endswith("/api/vibe/whoami") and whoami:
-                    self.reply(whoami.get("status", 200), whoami.get("body", {}))
-                    return
-                self.reply(404, {"error": "not found"})
+def request_view(body: dict[str, Any]) -> dict[str, Any]:
+    """What a request to the stand-in asked for."""
 
-            def do_POST(self) -> None:  # noqa: N802
-                length = int(self.headers.get("content-length") or 0)
-                raw = self.rfile.read(length) if length else b""
-                try:
-                    body = json.loads(raw or b"{}")
-                except json.JSONDecodeError:
-                    body = {}
-                if not self.path.rstrip("/").endswith("/chat/completions"):
-                    self.reply(404, {"error": "not found"})
-                    return
-                with backend.lock:
-                    backend.requests.append(
-                        {
-                            "model": body.get("model"),
-                            "maxTokens": body.get("max_tokens"),
-                            "roles": [message.get("role") for message in body.get("messages") or []],
-                            "tools": sorted(
-                                tool.get("function", {}).get("name", "")
-                                for tool in body.get("tools") or []
-                            ),
-                        }
-                    )
-                    response = backend.responses.pop(0) if backend.responses else {"text": "Done."}
-                if response.get("delay"):
-                    time.sleep(float(response["delay"]))
-                if response.get("status"):
-                    self.reply(response["status"], response.get("body", {}))
-                    return
-                model = str(body.get("model", "model"))
-                payload = b"".join(
-                    b"data: " + json.dumps(item).encode() + b"\n\n"
-                    for item in blackbox.completion_chunks(response, model)
-                ) + b"data: [DONE]\n\n"
-                self.send_response(200)
-                self.send_header("content-type", "text/event-stream")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-            def reply(self, status: int, body: Any) -> None:
-                payload = json.dumps(body).encode()
-                self.send_response(status)
-                self.send_header("content-type", "application/json")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-        class Server(http.server.ThreadingHTTPServer):
-            def handle_error(self, request: Any, client_address: Any) -> None:
-                # A client interrupted mid-answer hangs up; that is the scenario.
-                return
-
-        self.server = Server(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def base(self) -> str:
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
+    return {
+        "model": body.get("model"),
+        "maxTokens": body.get("max_tokens"),
+        "roles": [message.get("role") for message in body.get("messages") or []],
+        "tools": sorted(tool.get("function", {}).get("name", "") for tool in body.get("tools") or []),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -607,7 +543,7 @@ def run_once(
 ) -> dict[str, Any]:
     args = [arg.replace("$SESSION", session or "") for arg in step["args"]]
     backend.responses = copy.deepcopy(step.get("backend", []))
-    backend.requests = []
+    backend.bodies = []
     before = workspace_files(world.workspace)
     process = subprocess.Popen(
         [*command, *args],
@@ -622,7 +558,7 @@ def run_once(
         assert process.stdin is not None
         process.stdin.close()
         deadline = time.monotonic() + RUN_TIMEOUT
-        while not backend.requests and time.monotonic() < deadline and process.poll() is None:
+        while not backend.bodies and time.monotonic() < deadline and process.poll() is None:
             time.sleep(0.05)
         # The request is in flight; the turn is running.
         time.sleep(0.5)
@@ -641,7 +577,7 @@ def run_once(
         "exit": process.returncode,
         "stdout": stdout.decode("utf-8", errors="replace"),
         "stderr": stderr.decode("utf-8", errors="replace"),
-        "requests": list(backend.requests),
+        "requests": [request_view(body) for body in backend.bodies],
         "created": sorted(set(after) - set(before)),
     }
 

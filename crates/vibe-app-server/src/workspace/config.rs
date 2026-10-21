@@ -5,6 +5,7 @@
 //! shape, the parameter parsing, and the target a write applies to.
 
 use super::*;
+use vibe_core::provider::config::ThinkingLevel;
 
 impl WorkspaceService {
     /// `ConfigReadResponse`: the configuration view and the counts a settings
@@ -207,12 +208,12 @@ impl WorkspaceService {
             .get("level")
             .and_then(Value::as_str)
             .ok_or_else(|| WorkspaceServiceError::InvalidParams("level is required".to_owned()))?;
-        if !THINKING_LEVELS.contains(&level) {
-            return Err(WorkspaceServiceError::InvalidParams(format!(
+        let level = ThinkingLevel::parse(level).ok_or_else(|| {
+            WorkspaceServiceError::InvalidParams(format!(
                 "level must be one of {}",
-                THINKING_LEVELS.join(", ")
-            )));
-        }
+                ThinkingLevel::NAMES.join(", ")
+            ))
+        })?;
         let target = parse_target(
             params
                 .get("target")
@@ -231,7 +232,7 @@ impl WorkspaceService {
                 expected_fingerprint,
                 mutations: vec![ConfigMutation::set(
                     ["thinking"],
-                    TomlValue::String(level.to_owned()),
+                    TomlValue::String(level.as_str().to_owned()),
                 )],
             }])
             .map_err(config_error)?;

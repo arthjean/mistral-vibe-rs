@@ -44,7 +44,6 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 import host_env  # noqa: E402
 from blackbox import (  # noqa: E402
     Agent,
-    Backend,
     Normalizer,
     RESPONSE_TIMEOUT,
     World,
@@ -54,6 +53,7 @@ from blackbox import (  # noqa: E402
 )
 from acp_scenarios import scenarios  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/corpus.json"
@@ -76,7 +76,7 @@ ASYNC_UPDATES = {"usage_update", "available_commands_update"}
 def run_scenario(
     scenario: dict[str, Any], command: list[str], quiet: float
 ) -> dict[str, Any]:
-    backend = Backend()
+    backend = stand_in.Backend()
     root = Path(tempfile.mkdtemp(prefix="vibe-acp-oracle-")).resolve()
     world = World(root)
     try:
@@ -145,7 +145,7 @@ def run_scenario(
         return {
             "steps": steps,
             "exit": exit_code,
-            "backendRequests": backend.requests,
+            "backendRequests": len(backend.bodies),
             "paths": {
                 "workspace": str(world.workspace),
                 "vibeHome": str(world.vibe_home),

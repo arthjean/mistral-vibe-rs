@@ -327,9 +327,7 @@ fn migrate_agent_file(path: &Path) {
     if !migrate_agent_table(&mut table) {
         return;
     }
-    let Ok(encoded) = toml::to_string(&table) else {
-        return;
-    };
+    let encoded = crate::config::encode_document(&table);
     // The migration is best effort, as the reference's is: a profile that
     // cannot be rewritten is still read through the same migration.
     let _ = write_atomically(path, "agent", encoded.as_bytes(), FileMode::Private);
@@ -671,8 +669,6 @@ fn title_from_name(name: &str) -> String {
 
 #[derive(Debug, Error)]
 pub enum ExtensionError {
-    #[error("extension state lock is poisoned")]
-    StatePoisoned,
     #[error("extension file exceeds the 2 MiB limit: `{0}`")]
     FileTooLarge(PathBuf),
     #[error("extension I/O failed at `{path}`: {source}")]

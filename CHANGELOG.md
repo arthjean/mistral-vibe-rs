@@ -77,11 +77,24 @@
   names its plugin, and a source that failed to bootstrap opens on its error
   instead of its tools or the sign-in.
 
+- An editor's thinking selector offers the levels the active model declares
+  in `thinking_levels`, as the reference does, instead of always offering all
+  five.
+
+- `cache.toml` and migrated agent profiles are written in the reference's
+  TOML layout, and the resolved skill alias cache is written atomically,
+  owner-only and under the cache lock.
+
 - Editor (ACP) requests read lax numbers and booleans as the reference
   validator does: `"12.0"` and `"1_000"` are integers, underscored numbers are
   floats, and a fractional number given for a boolean is a `bool_type` error.
   An untitled editor session's label also counts a message injected between
   turns and joins text blocks with one newline.
+
+- Manual `!` commands run through `session/shellCommand` on both harnesses,
+  as the reference terminal does: on the legacy harness their result is now
+  saved with the session and shown again on resume, stdout and stderr stay
+  apart in the finished entry, and a command killed by a signal reports it.
 
 - Output of a manual `!` command is cleaned as the reference cleans it: a
   carriage-return redraw keeps its last write and stray escape sequences and

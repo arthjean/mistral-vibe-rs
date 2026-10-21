@@ -295,5 +295,31 @@ pub fn normalize_url_origin(parsed: &PyUrl) -> Result<OriginKey, InvalidUrl> {
     Ok((scheme, parsed.hostname(), port))
 }
 
+/// `urllib.parse.quote(text, safe)`: every UTF-8 byte of `text` outside the
+/// unreserved set and the ASCII characters of `safe` written as an uppercase
+/// `%XX` escape. The reference's default `safe` is `"/"`.
+#[must_use]
+pub fn quote(text: &str, safe: &str) -> String {
+    let mut quoted = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric()
+            || b"_.-~".contains(&byte)
+            || (byte.is_ascii() && safe.as_bytes().contains(&byte))
+        {
+            quoted.push(char::from(byte));
+        } else {
+            let _ = write!(quoted, "%{byte:02X}");
+        }
+    }
+    quoted
+}
+
+/// `urllib.parse.quote_plus(text)`: [`quote`] with nothing safe, a space
+/// written as `+`.
+#[must_use]
+pub(crate) fn quote_plus(text: &str) -> String {
+    quote(text, " ").replace(' ', "+")
+}
+
 #[cfg(test)]
 mod pyurl_tests;

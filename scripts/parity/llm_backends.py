@@ -60,7 +60,6 @@ import asyncio
 import base64
 import copy
 import hashlib
-import http.server
 import json
 import os
 from pathlib import Path
@@ -76,6 +75,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
+from stand_in import Handler, Loopback  # noqa: E402
 
 SCHEMA_VERSION = 3
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/llm-backends/corpus.json")
@@ -131,7 +131,7 @@ def sse_body(events: list[dict[str, Any]], crlf: bool = False) -> bytes:
     return "".join(out).encode()
 
 
-class StandIn:
+class StandIn(Loopback):
     """Serves scripted responses in order and records every request."""
 
     def __init__(self, responses: list[dict[str, Any]]) -> None:
@@ -142,12 +142,7 @@ class StandIn:
         self.lock = threading.Lock()
         stand_in = self
 
-        class Handler(http.server.BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def log_message(self, *_: Any) -> None:
-                return
-
+        class Scripted(Handler):
             def do_GET(self) -> None:  # noqa: N802
                 self.handle_request("GET")
 
@@ -217,25 +212,7 @@ class StandIn:
                 self.end_headers()
                 self.wfile.write(payload)
 
-        class Server(http.server.ThreadingHTTPServer):
-            daemon_threads = True
-
-            def handle_error(self, request: Any, client_address: Any) -> None:
-                # A client that gave up on a delayed answer closes its end;
-                # that is the scenario, not a failure of the stand-in.
-                return
-
-        self.server = Server(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def base(self) -> str:
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
+        super().__init__(Scripted)
 
 
 def closed_port() -> int:

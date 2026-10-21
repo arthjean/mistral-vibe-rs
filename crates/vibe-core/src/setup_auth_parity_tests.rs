@@ -36,7 +36,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::future::Future;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -57,13 +56,21 @@ use crate::auth::{
 use crate::config::registry::default_document;
 use crate::config::{ConfigPaths, DotenvValues, LayeredConfig};
 use crate::identity::IdentityFuture;
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::{Capture, pinned_reference};
+use crate::pycompat::{Dumps, dumps};
 use crate::whoami::{
     WhoAmIFailure, WhoAmIGateway, WhoAmIResult, read_whoami_response, reconcile_tenant_domains,
     resolve_tenant_domains, sanitize_tenant_url, whoami_url,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/setup-auth/corpus.json";
+/// How a request is compared: with every object's keys in sorted order, as
+/// the capture writes it.
+const SORTED_KEYS: Dumps = Dumps {
+    sort_keys: true,
+    ..Dumps::DEFAULT
+};
 const CAPTURE_SCRIPT: &str = "scripts/parity/setup_auth.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
@@ -1290,7 +1297,7 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
         Err(error) => format!("error {}", error.code.as_str()),
     };
     // The capture writes each request with sorted keys.
-    let requests = sorted(Value::Array(gateway.into_client().requests));
+    let requests = dumps(&Value::Array(gateway.into_client().requests), SORTED_KEYS);
     let observed = format!("requests={requests} outcome={outcome_line}");
     let expected_outcome = if let Some(code) = &case.error_code {
         format!("error {code}")
@@ -1311,7 +1318,10 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
     } else {
         "<unrecorded>".to_owned()
     };
-    let expected_requests = sorted(Value::Array(case.requests.clone().unwrap_or_default()));
+    let expected_requests = dumps(
+        &Value::Array(case.requests.clone().unwrap_or_default()),
+        SORTED_KEYS,
+    );
     let expected = format!("requests={expected_requests} outcome={expected_outcome}");
     (expected, observed)
 }
@@ -1764,56 +1774,26 @@ fn the_committed_corpus_replays_against_this_port() {
 /// the pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "setup-auth") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("setup-auth") else {
         return;
-    }
-    let repository = repo_root();
-    let script = repository.join(CAPTURE_SCRIPT);
-    let recaptured = repository.join("target/setup-auth-corpus.json");
-    let output = Command::new("python3")
-        .arg(&script)
-        .args(["--reference".as_ref(), root.as_os_str()])
-        .arg("--output")
-        .arg(repository.join("target/setup-auth-full.json"))
-        .arg("--corpus")
-        .arg(&recaptured)
-        .current_dir(&repository)
-        .output()
-        .expect("the setup-auth capture script runs");
-    assert!(
-        output.status.success(),
-        "the setup-auth capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+    };
+    let target = repo_root().join("target");
+    let recaptured = target.join("setup-auth-corpus.json");
+    let full = target.join("setup-auth-full.json");
+    let capture = Capture {
+        script: CAPTURE_SCRIPT,
+        family: &[],
+        arguments: &[],
+    };
+    capture.recapture(
+        &root,
+        &[
+            "--output".as_ref(),
+            full.as_os_str(),
+            "--corpus".as_ref(),
+            recaptured.as_os_str(),
+        ],
+        &recaptured,
+        &repo_root().join(CORPUS_RELATIVE),
     );
-    let fresh = fs::read_to_string(&recaptured).expect("the recaptured corpus is readable");
-    let committed =
-        fs::read_to_string(repository.join(CORPUS_RELATIVE)).expect("the corpus is readable");
-    let fresh: Value = serde_json::from_str(&fresh).expect("the recaptured corpus parses");
-    let committed: Value = serde_json::from_str(&committed).expect("the corpus parses");
-    assert_eq!(
-        fresh, committed,
-        "the pinned reference no longer answers what the committed corpus records; regenerate \
-         it with `{CAPTURE_SCRIPT}`"
-    );
-}
-
-/// `value` with every object's keys in sorted order.
-fn sorted(value: Value) -> Value {
-    match value {
-        Value::Object(object) => {
-            let mut entries: Vec<(String, Value)> = object.into_iter().collect();
-            entries.sort_by(|left, right| left.0.cmp(&right.0));
-            Value::Object(
-                entries
-                    .into_iter()
-                    .map(|(key, value)| (key, sorted(value)))
-                    .collect(),
-            )
-        }
-        Value::Array(items) => Value::Array(items.into_iter().map(sorted).collect()),
-        other => other,
-    }
 }

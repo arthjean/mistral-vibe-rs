@@ -497,7 +497,11 @@ where
         {
             return sessions.begin_call(&session_id, method, params);
         }
-        self.client.begin_public_call(method, params)
+        let driver: Arc<dyn TurnDriver> = self.driver.clone();
+        Ok(self
+            .client
+            .begin_public_call(method, params)?
+            .with_driver(driver))
     }
 
     /// The observer a turn's engine reports to, and the updates a client

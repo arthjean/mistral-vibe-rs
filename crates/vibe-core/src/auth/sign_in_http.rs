@@ -14,6 +14,7 @@
 use serde_json::{Map, Value, json};
 use toml::Table;
 
+use crate::pycompat::path::posix_normpath;
 use crate::pyurl::{PyUrl, normalize_url_origin};
 
 use super::sign_in::{
@@ -201,39 +202,6 @@ fn percent_decode(value: &str) -> String {
         }
     }
     String::from_utf8_lossy(&decoded).into_owned()
-}
-
-/// `posixpath.normpath` semantics, including the preserved double leading
-/// slash and the `..` that cannot climb above the root.
-fn posix_normpath(path: &str) -> String {
-    if path.is_empty() {
-        return ".".to_owned();
-    }
-    let leading_slashes = if path.starts_with("//") && !path.starts_with("///") {
-        2
-    } else {
-        usize::from(path.starts_with('/'))
-    };
-    let mut segments: Vec<&str> = Vec::new();
-    for segment in path.split('/') {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                if segments.last().is_some_and(|last| *last != "..") {
-                    segments.pop();
-                } else if leading_slashes == 0 {
-                    segments.push(segment);
-                }
-            }
-            _ => segments.push(segment),
-        }
-    }
-    let joined = format!("{}{}", "/".repeat(leading_slashes), segments.join("/"));
-    if joined.is_empty() {
-        ".".to_owned()
-    } else {
-        joined
-    }
 }
 
 // --------------------------------------------------------------------------

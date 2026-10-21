@@ -76,6 +76,7 @@ import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/protocol-parity/corpus.json"
@@ -233,7 +234,7 @@ def start_params(world: blackbox.World, agent: str = "auto-approve") -> dict[str
     return {"agentConfig": {"cwd": str(world.workspace), "agent": agent}}
 
 
-def oracle_config(backend: blackbox.Backend, extra: str) -> str:
+def oracle_config(backend: stand_in.Backend, extra: str) -> str:
     """The shared app-server configuration, with every remote base URL the app
     server may reach pointed at the stand-in, so no probe leaves the host."""
     return (
@@ -249,20 +250,19 @@ def oracle_config(backend: blackbox.Backend, extra: str) -> str:
     )
 
 
-def serve_gets(backend: app_server_client.RecordingBackend, gets: dict[str, Any]) -> None:
-    """Answers a GET for one of `gets`' paths with its payload, and any
-    other with the stand-in's 404."""
-    handler = backend.server.RequestHandlerClass
-    original = handler.do_GET
+class Backend(stand_in.Backend):
+    """The stand-in, answering a GET for one of ``gets``' paths with its
+    payload, and any other with a 404."""
 
-    def do_get(self: Any) -> None:
-        path = self.path.split("?", 1)[0]
-        if path in gets:
-            self.reply(200, gets[path])
+    def __init__(self, gets: dict[str, Any]) -> None:
+        super().__init__()
+        self.gets = gets
+
+    def get(self, handler: stand_in.Handler, path: str) -> None:
+        if path in self.gets:
+            handler.reply(200, self.gets[path])
         else:
-            original(self)
-
-    handler.do_GET = do_get
+            super().get(handler, path)
 
 
 #: Where `flows/setup` stores a key through `setup/store-credential`: the
@@ -272,8 +272,7 @@ STORED_ACCOUNT = "OTHER_ORACLE_KEY"
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = app_server_client.RecordingBackend()
-    serve_gets(backend, scenario.get("gets", {}))
+    backend = Backend(scenario.get("gets", {}))
     root = Path(tempfile.mkdtemp(prefix="vibe-protocol-oracle-")).resolve()
     session = Session(root)
     world = session.world
@@ -315,7 +314,9 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         return {
             "steps": steps,
             "sessions": session.sessions,
-            "conversations": backend.conversations,
+            "conversations": [
+                app_server_client.conversation(body.get("messages", [])) for body in backend.bodies
+            ],
             "paths": {
                 "workspace": str(world.workspace),
                 "vibeHome": str(world.vibe_home),

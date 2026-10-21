@@ -608,7 +608,7 @@ fn validate_token_format(value: &str) -> Result<(), ConfigError> {
 
 /// The persisted form of `config`, carrying only what differs from the shipped
 /// default so a written entry stays as small as the reference writes it.
-pub(super) fn mcp_server_table(config: &McpServerConfig) -> Result<Table, ConfigError> {
+pub(super) fn mcp_server_table(config: &McpServerConfig) -> Table {
     let mut table = Table::new();
     table.insert("name".to_owned(), Value::String(config.alias.clone()));
     table.insert(
@@ -671,7 +671,7 @@ pub(super) fn mcp_server_table(config: &McpServerConfig) -> Result<Table, Config
             seconds(config.tool_timeout_ms),
         );
     }
-    Ok(table)
+    table
 }
 
 /// The `[auth]` block for a persisted entry, absent when nothing but defaults
@@ -833,7 +833,7 @@ pub(super) fn decide_mcp_add(
     // because the reference compares validated models rather than raw argv:
     // a field left at its default there is the same entry as one that spells
     // the default out.
-    let requested = decode_mcp_server(&mcp_server_table(config)?, working_directory)?;
+    let requested = decode_mcp_server(&mcp_server_table(config), working_directory)?;
     let requested_key =
         crate::mcp::transport_url(&requested.transport).map(|url| mcp_server_url_key(url.as_str()));
     for entry in entries {

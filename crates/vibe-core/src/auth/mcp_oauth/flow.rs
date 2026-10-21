@@ -11,8 +11,6 @@
 //! is read, which [`Provider::handle_refresh_response`] carries. What the
 //! flow discovers about the servers on its way is read in [`discovery`].
 
-use std::fmt::Write as _;
-
 use base64::Engine as _;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use reqwest::Method;
@@ -24,7 +22,7 @@ use super::{
     McpOAuthStore, OAUTH_INVALID_GRANT, OAuthClientConfig, OAuthToken,
 };
 use crate::clock::now_seconds_f64;
-use crate::pyurl::PyUrl;
+use crate::pyurl::{PyUrl, quote, quote_plus};
 
 pub(super) mod discovery;
 
@@ -430,7 +428,7 @@ impl<'a> Provider<'a> {
             (Some("client_secret_basic"), Some(id), Some(secret))
                 if !id.is_empty() && !secret.is_empty() =>
             {
-                let credentials = format!("{}:{}", quote(id), quote(secret));
+                let credentials = format!("{}:{}", quote(id, ""), quote(secret, ""));
                 headers.push((
                     "Authorization".to_owned(),
                     format!("Basic {}", STANDARD.encode(credentials)),
@@ -712,32 +710,6 @@ async fn classify_refresh_error(status: u16, response: reqwest::Response) -> (St
         if reason.is_empty() { fallback } else { reason },
         error == OAUTH_INVALID_GRANT,
     )
-}
-
-/// `urllib.parse.quote(text, safe="")`.
-fn quote(text: &str) -> String {
-    percent_encode(text, false)
-}
-
-/// `urllib.parse.quote_plus`.
-pub(crate) fn quote_plus(text: &str) -> String {
-    percent_encode(text, true)
-}
-
-fn percent_encode(text: &str, plus: bool) -> String {
-    let mut encoded = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-' | b'~' => {
-                encoded.push(char::from(byte));
-            }
-            b' ' if plus => encoded.push('+'),
-            other => {
-                let _ = write!(encoded, "%{other:02X}");
-            }
-        }
-    }
-    encoded
 }
 
 /// `urllib.parse.urlencode`, which also writes httpx's form body

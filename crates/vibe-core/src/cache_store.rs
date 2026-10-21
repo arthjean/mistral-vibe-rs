@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use crate::atomic_file::{FileMode, write_atomically};
+use crate::config::encode_document;
 use crate::observability::{self, LogLevel};
 use crate::sync::lock;
 
@@ -67,16 +68,16 @@ impl CacheStore {
         if let toml::Value::Table(merged) = slot {
             merged.extend(data);
         }
-        let written = toml::to_string_pretty(&toml::Value::Table(document))
+        let written = self
+            .path
+            .parent()
+            .map_or(Ok(()), fs::create_dir_all)
             .map_err(|error| error.to_string())
-            .and_then(|encoded| {
-                if let Some(parent) = self.path.parent() {
-                    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-                }
+            .and_then(|()| {
                 write_atomically(
                     &self.path,
                     "cache.toml",
-                    encoded.as_bytes(),
+                    encode_document(&document).as_bytes(),
                     FileMode::Private,
                 )
                 .map_err(|error| format!("{error:?}"))

@@ -22,8 +22,9 @@ use super::session_picker::{
     SessionDeleteState, SessionPickerEffect, reduce_key as reduce_session_picker_key,
 };
 use super::setup::{DetectedTheme, Theme, resolve_theme};
-use super::shell::{ActiveShell, ShellRead, apply_shell_read};
-use super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
+use super::shell::draw_entry;
+use super::shell::shell_tests::{cancelled, running};
+use super::state::TuiState;
 use super::submission::{Occupancy, Route, classify, route};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
@@ -379,8 +380,8 @@ struct Replay {
     plan_monitor: PlanReviewMonitor,
     plan_path: PathBuf,
     shell_id: Option<String>,
-    shell: Option<ActiveShell>,
-    shell_cursor: u64,
+    /// What the command published so far.
+    shell_output: String,
     /// Owns the directory `plan_path` lives in.
     _workspace: tempfile::TempDir,
 }
@@ -395,8 +396,7 @@ impl Replay {
             plan_monitor: PlanReviewMonitor::default(),
             plan_path,
             shell_id: None,
-            shell: None,
-            shell_cursor: 0,
+            shell_output: String::new(),
             _workspace: temporary,
         }
     }
@@ -577,40 +577,28 @@ impl Replay {
                 self.state.prompt_queue.resume();
                 format!("queue:resumed:{}", self.state.prompt_queue.len())
             }
+            // The command's entry as the session publishes it: running with
+            // what it wrote so far, then cancelled. A chunk published after
+            // the cancellation leaves the settled entry as it was.
             TraceEvent::ShellStart => {
-                let id = self.state.append_local(shell_entry(String::new()));
-                self.shell = Some(ActiveShell::new(
-                    "fixture",
-                    "operation",
-                    id.clone(),
-                    std::path::PathBuf::from("/workspace"),
-                ));
-                self.shell_id = Some(id);
-                "shell:streaming:".to_owned()
+                draw_entry(&mut self.state, &mut self.shell_id, running(""));
+                self.observe_shell()
             }
             TraceEvent::ShellChunk { text } => {
-                if let Some(shell) = self.shell.take() {
-                    apply_shell_read(
-                        "session",
-                        &mut self.shell,
-                        &mut self.state,
-                        shell,
-                        ShellRead::running(self.shell_cursor, text.as_bytes().to_vec()),
-                    );
-                    self.shell_cursor = self.shell_cursor.saturating_add(1);
-                }
+                self.shell_output.push_str(text);
+                draw_entry(
+                    &mut self.state,
+                    &mut self.shell_id,
+                    running(&self.shell_output),
+                );
                 self.observe_shell()
             }
             TraceEvent::ShellCancel => {
-                if let Some(shell) = self.shell.take() {
-                    apply_shell_read(
-                        "session",
-                        &mut self.shell,
-                        &mut self.state,
-                        shell,
-                        ShellRead::interrupted(),
-                    );
-                }
+                draw_entry(
+                    &mut self.state,
+                    &mut self.shell_id,
+                    cancelled(&self.shell_output),
+                );
                 self.observe_shell()
             }
         }
@@ -767,17 +755,6 @@ fn plan_review(path: PathBuf) -> PendingCallback {
         plan_path: path,
     };
     pending
-}
-
-fn shell_entry(text: String) -> TranscriptEntry {
-    TranscriptEntry {
-        id: String::new(),
-        revision: 1,
-        kind: TranscriptKind::Effect,
-        text,
-        status: EntryStatus::Streaming,
-        source: EntrySource::Restored,
-    }
 }
 
 #[tokio::test]

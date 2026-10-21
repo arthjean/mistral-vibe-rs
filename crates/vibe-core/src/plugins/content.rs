@@ -17,6 +17,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::canonical::normalize_nfc;
+use crate::pycompat::path::posix_normpath;
 use crate::text::sha256_hex;
 
 /// Digests a plugin tree, skipping every entry with a path component in
@@ -110,39 +111,6 @@ pub fn launched_executables(root: &Path) -> BTreeSet<PathBuf> {
         .filter_map(|command| files.get(&normalize_nfc(&posix_normpath(command))))
         .cloned()
         .collect()
-}
-
-/// Python `posixpath.normpath`.
-fn posix_normpath(path: &str) -> String {
-    if path.is_empty() {
-        return ".".to_owned();
-    }
-    let initial = if path.starts_with("//") && !path.starts_with("///") {
-        "//"
-    } else if path.starts_with('/') {
-        "/"
-    } else {
-        ""
-    };
-    let mut components: Vec<&str> = Vec::new();
-    for component in path.split('/') {
-        match component {
-            "" | "." => {}
-            ".." if initial.is_empty() && components.last().is_none_or(|last| *last == "..") => {
-                components.push(component);
-            }
-            ".." => {
-                components.pop();
-            }
-            _ => components.push(component),
-        }
-    }
-    let normalized = format!("{initial}{}", components.join("/"));
-    if normalized.is_empty() {
-        ".".to_owned()
-    } else {
-        normalized
-    }
 }
 
 /// The NFC POSIX spelling of a path relative to a plugin root.

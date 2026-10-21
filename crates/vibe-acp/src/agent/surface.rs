@@ -16,15 +16,6 @@ use crate::agent::AcpAgent;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
 
-/// The thinking levels a model can run at, in the order they are offered.
-const THINKING_LEVELS: [(&str, &str); 5] = [
-    ("off", "Off"),
-    ("low", "Low"),
-    ("medium", "Medium"),
-    ("high", "High"),
-    ("max", "Max"),
-];
-
 /// How long a new session waits before announcing its commands. Reference
 /// `INITIAL_AVAILABLE_COMMANDS_DELAY_SECONDS`.
 pub(crate) const INITIAL_COMMANDS_DELAY: std::time::Duration =
@@ -204,9 +195,15 @@ where
             "currentValue": field(&active, "thinking"),
             "category": "thinking",
             "type": "select",
-            "options": THINKING_LEVELS
-                .iter()
-                .map(|(value, name)| json!({"value": value, "name": name}))
+            // Reference `make_thinking_response`: the levels the active model
+            // offers, each named by `str.capitalize`.
+            "options": active
+                .get("thinkingLevels")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|level| json!({"value": level, "name": capitalize(level)}))
                 .collect::<Vec<_>>(),
         });
         Ok(vec![mode, model, thinking])
@@ -319,4 +316,15 @@ pub(crate) fn usage_update_of(stats: &AgentStatsSnapshot, context_window: u64) -
         update["cost"] = json!({"amount": cost, "currency": "USD"});
     }
     update
+}
+
+/// Python `str.capitalize` for the lowercase ASCII words a thinking level is.
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    chars.next().map_or_else(String::new, |first| {
+        first
+            .to_uppercase()
+            .chain(chars.flat_map(char::to_lowercase))
+            .collect()
+    })
 }

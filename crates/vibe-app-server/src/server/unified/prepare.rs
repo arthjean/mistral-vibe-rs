@@ -500,16 +500,8 @@ fn read_lines_bounded(path: &Path) -> std::io::Result<(Vec<String>, bool)> {
 /// `file:///C:` and keeps the rest, any other prefixed path (UNC) takes
 /// `file:`.
 fn file_uri(path: &Path) -> String {
-    let (mut uri, rest) = uri_parts(path);
-    for byte in rest.as_bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-' | b'~' | b'/' => {
-                uri.push(char::from(*byte));
-            }
-            other => uri.push_str(&format!("%{other:02X}")),
-        }
-    }
-    uri
+    let (prefix, rest) = uri_parts(path);
+    format!("{prefix}{}", vibe_core::pyurl::quote(&rest, "/"))
 }
 
 #[cfg(not(windows))]

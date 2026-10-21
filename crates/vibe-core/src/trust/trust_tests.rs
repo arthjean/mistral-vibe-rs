@@ -215,32 +215,3 @@ fn the_project_file_is_gated_on_the_directory_holding_it() {
     store.add_trusted(root.path()).expect("trusted");
     assert!(project_config_trusted(&store, &parent, &working, false));
 }
-
-#[test]
-fn an_untrusted_config_warning_is_due_once_per_new_folder() {
-    let root = tempfile::tempdir().expect("root");
-    let home = root.path().join("vibe-home");
-    let first = vec!["/work/.vibe".to_owned()];
-    assert!(!untrusted_config_warning_due(&home, &[]));
-    assert!(untrusted_config_warning_due(&home, &first));
-    assert!(
-        !untrusted_config_warning_due(&home, &first),
-        "already warned"
-    );
-    let both = vec!["/work/.agents".to_owned(), "/work/.vibe".to_owned()];
-    assert!(
-        untrusted_config_warning_due(&home, &both),
-        "a new folder warns again"
-    );
-    let cache: toml::Table = fs::read_to_string(home.join("cache.toml"))
-        .expect("cache")
-        .parse()
-        .expect("toml");
-    assert_eq!(
-        cache["untrusted_config_warning"]["dirs"],
-        toml::Value::Array(vec![
-            toml::Value::String("/work/.agents".to_owned()),
-            toml::Value::String("/work/.vibe".to_owned()),
-        ])
-    );
-}

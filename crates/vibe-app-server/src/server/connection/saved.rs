@@ -196,8 +196,8 @@ enum Reopen {
 /// The parameters of a method that names nothing but its session.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SessionParams {
-    session_id: String,
+pub(super) struct SessionParams {
+    pub(super) session_id: String,
 }
 
 /// The start parameters a reopening's `agentConfig` spells, in the names the

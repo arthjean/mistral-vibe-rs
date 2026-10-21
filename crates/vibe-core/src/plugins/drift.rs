@@ -9,7 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::materialize::MaterializedPluginSet;
 use super::snapshot::{
-    PluginToolGroupSnapshot, PluginToolRouteSnapshot, ResolvedPluginSnapshot, build_plugin_snapshot,
+    PluginSourceKind, PluginToolGroupSnapshot, PluginToolRouteSnapshot, ResolvedPluginSnapshot,
+    build_plugin_snapshot,
 };
 
 /// `live`, `stale` or `unavailable`.
@@ -23,12 +24,12 @@ pub fn reconcile_plugin_routes(
     pinned: &ResolvedPluginSnapshot,
     materialized: &MaterializedPluginSet,
 ) -> BTreeMap<PluginRouteKey, PluginRouteStatus> {
-    let mut answered: BTreeSet<(String, &str, String)> = BTreeSet::new();
+    let mut answered: BTreeSet<(String, PluginSourceKind, String)> = BTreeSet::new();
     for (plugin, source) in &materialized.connected_mcp_sources {
-        answered.insert((plugin.clone(), "mcp", source.clone()));
+        answered.insert((plugin.clone(), PluginSourceKind::Mcp, source.clone()));
     }
     for (plugin, source) in &materialized.connected_connector_sources {
-        answered.insert((plugin.clone(), "connector", source.clone()));
+        answered.insert((plugin.clone(), PluginSourceKind::Connector, source.clone()));
     }
     pinned
         .tool_routes
@@ -36,7 +37,7 @@ pub fn reconcile_plugin_routes(
         .map(|route| {
             let source = (
                 route.plugin_name.clone(),
-                route.source_kind.as_str(),
+                route.source_kind,
                 route.source_id.clone(),
             );
             let status = if !answered.contains(&source) {

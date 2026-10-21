@@ -69,10 +69,6 @@ use vibe_core::tools::descriptions::{
 /// [`crate::server::AppServer`] resolves it through.
 const MISTRAL_KEY: &str = "MISTRAL_API_KEY";
 
-/// The levels `config/thinking/write` accepts, as the wire literal declares
-/// them.
-const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
-
 pub const WORKSPACE_METHODS: &[&str] = &[
     "agents/install",
     "agents/list",

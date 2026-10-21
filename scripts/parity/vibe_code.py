@@ -24,6 +24,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import blackbox
 import host_env
+import stand_in
 import subagent_client
 
 
@@ -76,9 +77,9 @@ def started(url: str = "https://chat.mistral.ai/code/session-1",
     })
 
 
-class Backend(subagent_client.Backend):
-    """The hooks stand-in, also playing the account, the Vibe Code API and the
-    datalake, and logging every request they receive."""
+class Backend(stand_in.Backend):
+    """The chat-completions stand-in, also playing the account, the Vibe Code
+    API and the datalake, and logging every request they receive."""
 
     def __init__(self, code: dict[str, Any]) -> None:
         super().__init__()

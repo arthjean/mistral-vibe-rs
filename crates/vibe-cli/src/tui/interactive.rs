@@ -5,6 +5,7 @@
 //! that hand the terminal a key borrow one value instead of fourteen, and the
 //! loop body reads as the three phases it actually has.
 
+use std::collections::BTreeSet;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -15,6 +16,7 @@ use futures_util::StreamExt;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use serde_json::Value;
+use vibe_core::cache_store::CacheStore;
 
 use super::callback::{
     drain_callback_requests, hold_for_typing, sync_active_callbacks, sync_callback_presentation,
@@ -811,7 +813,7 @@ fn warn_about_untrusted_config(
         .into_iter()
         .map(|directory| directory.display().to_string())
         .collect::<Vec<_>>();
-    if !vibe_core::trust::untrusted_config_warning_due(vibe_home, &dirs) {
+    if !untrusted_config_warning_due(&CacheStore::new(vibe_home), &dirs) {
         return;
     }
     let folders = dirs
@@ -826,6 +828,41 @@ fn warn_about_untrusted_config(
         store.settings_path().display()
     );
     push_local_warning(state, message);
+}
+
+/// Reference `_UNTRUSTED_CONFIG_WARNING_SECTION`: the `cache.toml` section
+/// recording which untrusted configuration folders were already warned about.
+const UNTRUSTED_CONFIG_WARNING_SECTION: &str = "untrusted_config_warning";
+
+/// The bookkeeping of [`warn_about_untrusted_config`]: whether `dirs` holds a
+/// folder no earlier launch warned about, in which case all of them are
+/// recorded as warned and the caller shows the warning.
+fn untrusted_config_warning_due(cache: &CacheStore, dirs: &[String]) -> bool {
+    if dirs.is_empty() {
+        return false;
+    }
+    let mut acknowledged = cache
+        .read_section(UNTRUSTED_CONFIG_WARNING_SECTION)
+        .get("dirs")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_str)
+        .map(ToOwned::to_owned)
+        .collect::<BTreeSet<_>>();
+    if dirs
+        .iter()
+        .all(|directory| acknowledged.contains(directory))
+    {
+        return false;
+    }
+    acknowledged.extend(dirs.iter().cloned());
+    let dirs = acknowledged.into_iter().map(toml::Value::String).collect();
+    cache.write_section(
+        UNTRUSTED_CONFIG_WARNING_SECTION,
+        toml::Table::from_iter([("dirs".to_owned(), toml::Value::Array(dirs))]),
+    );
+    true
 }
 
 mod drain;

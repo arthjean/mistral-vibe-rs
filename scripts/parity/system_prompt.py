@@ -46,7 +46,6 @@ import asyncio
 import copy
 import datetime
 import hashlib
-import http.server
 import json
 import os
 from pathlib import Path
@@ -55,15 +54,14 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, reexecute_pinned, reference_interpreter, require_pin  # noqa: E402
-import blackbox  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/system-prompt-parity/corpus.json"
@@ -822,67 +820,6 @@ def run_child(scenario: dict[str, Any], child: list[str]) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-class Backend:
-    """Serves scripted completions and keeps every request body."""
-
-    def __init__(self, responses: list[dict[str, Any]]) -> None:
-        self.responses = list(responses)
-        self.bodies: list[dict[str, Any]] = []
-        backend = self
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def log_message(self, *_: Any) -> None:
-                return
-
-            def do_GET(self) -> None:  # noqa: N802
-                self.reply(404, {"error": "not found"})
-
-            def do_POST(self) -> None:  # noqa: N802
-                length = int(self.headers.get("content-length") or 0)
-                raw = self.rfile.read(length) if length else b""
-                try:
-                    body = json.loads(raw or b"{}")
-                except json.JSONDecodeError:
-                    body = {}
-                if not self.path.rstrip("/").endswith("/chat/completions"):
-                    self.reply(404, {"error": "not found"})
-                    return
-                backend.bodies.append(body)
-                response = backend.responses.pop(0) if backend.responses else {"text": "Done."}
-                model = str(body.get("model", "model"))
-                payload = b"".join(
-                    b"data: " + json.dumps(item).encode() + b"\n\n"
-                    for item in blackbox.completion_chunks(response, model)
-                ) + b"data: [DONE]\n\n"
-                self.send_response(200)
-                self.send_header("content-type", "text/event-stream")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-            def reply(self, status: int, body: Any) -> None:
-                payload = json.dumps(body).encode()
-                self.send_response(status)
-                self.send_header("content-type", "application/json")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def base(self) -> str:
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
-
-
 def live_tokens(root: Path) -> list[tuple[str, str]]:
     """The scenario data a live system message may carry, as (label, text)."""
 
@@ -909,7 +846,7 @@ def live_tokens(root: Path) -> list[tuple[str, str]]:
 
 def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
     root = Path(tempfile.mkdtemp(prefix="vibe-system-prompt-live-")).resolve()
-    backend = Backend(copy.deepcopy(scenario["backend"]))
+    backend = stand_in.Backend(copy.deepcopy(scenario["backend"]), stream=stand_in.always)
     try:
         materialize(scenario, root, backend.base)
         environment = environment_for(scenario, root)

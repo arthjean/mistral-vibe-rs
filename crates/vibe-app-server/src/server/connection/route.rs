@@ -11,7 +11,7 @@
 //! In-process clients are this port's own adapters and keep the port's
 //! dispatch ([`ServerConnection::port_request`]).
 
-use super::saved::{NO_ROOT, reopen_start_params};
+use super::saved::{NO_ROOT, SessionParams, reopen_start_params};
 use super::turn::SteerAnswer;
 use super::*;
 use crate::params::object_of;
@@ -456,18 +456,40 @@ impl ServerConnection {
         Ok(batch)
     }
 
-    /// Reference `ShellRequestHandler.dispatch`: an interrupt is answered at
-    /// once, whether or not the operation still runs; a command reserves the
-    /// session, runs outside the request loop and answers once it settles.
+    /// `session/shellCommand` on the connection's root.
     fn reference_shell_command(
         &mut self,
         request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let root = self.root_id_required()?;
+        self.shell_command(request, &root)
+    }
+
+    /// `session/shellCommand` from an in-process client, on the session it
+    /// names, which has to be attached here.
+    pub(super) fn port_shell_command(
+        &mut self,
+        request: ServerRequest,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let SessionParams { session_id } = from_params(&request.params)?;
+        if let Some(batch) = self.attachment_error(request.id.clone(), &session_id) {
+            return Ok(batch);
+        }
+        self.shell_command(request, &session_id)
+    }
+
+    /// Reference `ShellRequestHandler.dispatch`: an interrupt is answered at
+    /// once, whether or not the operation still runs; a command reserves the
+    /// session, runs outside the request loop and answers once it settles.
+    fn shell_command(
+        &mut self,
+        request: ServerRequest,
+        session_id: &str,
+    ) -> Result<DispatchBatch, ProtocolFault> {
         let params = from_params::<ShellCommandParams>(&request.params)?;
         let mut sessions = self.server.lock_sessions();
         let session = sessions
-            .get_mut(&root)
+            .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
         let (command, operation_id, timeout_seconds, cwd) = match params {
             ShellCommandParams::Interrupt { operation_id } => {

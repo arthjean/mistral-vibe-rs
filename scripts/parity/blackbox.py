@@ -2,8 +2,8 @@
 
 A black-box capture starts the reference's own console script, or this port's
 binary, over stdio in a fresh home, behind a local stand-in for the
-chat-completions API, and records what the server writes. This module holds the
-pieces every such capture shares: the stand-in (:class:`Backend`), the
+chat-completions API (:class:`stand_in.Backend`), and records what the server
+writes. This module holds the pieces every such capture shares: the
 directories a scenario runs in (:class:`World`), one server process and the
 client side of its connection (:class:`Agent`), the normalizer that maps
 identifiers, paths and times to placeholders and reduces server-authored prose
@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import errno
 import hashlib
-import http.server
 import json
 import os
 from pathlib import Path
@@ -28,6 +27,7 @@ from typing import Any
 
 import host_env
 from reference import OracleError
+import stand_in
 
 
 #: How long a request may take before the scenario fails.
@@ -79,157 +79,6 @@ ELIDED_UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]\.\.\.[0-9a-fA-F-]{4,}")
 #: The payload size a provider error summarizes, which moves with the calendar
 #: because the system prompt it counts names the weekday.
 APPROX_CHARS = re.compile(r'("approx_chars":)\d+')
-
-
-# --------------------------------------------------------------------------
-# The chat-completions stand-in
-# --------------------------------------------------------------------------
-
-
-def completion_chunks(response: dict[str, Any], model: str) -> list[dict[str, Any]]:
-    """The stream a scripted response is served as, one chunk per delta."""
-
-    chunks: list[dict[str, Any]] = []
-
-    def chunk(delta: dict[str, Any], finish: str | None = None, usage: bool = False):
-        body: dict[str, Any] = {
-            "id": "cmpl-oracle",
-            "object": "chat.completion.chunk",
-            "created": 1_700_000_000,
-            "model": model,
-            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
-        }
-        if usage:
-            body["usage"] = {
-                "prompt_tokens": response.get("promptTokens", 10),
-                "completion_tokens": response.get("completionTokens", 5),
-                "total_tokens": response.get("promptTokens", 10)
-                + response.get("completionTokens", 5),
-            }
-        chunks.append(body)
-
-    chunk({"role": "assistant", "content": ""})
-    for piece in response.get("text", []) if isinstance(response.get("text"), list) else (
-        [response["text"]] if response.get("text") else []
-    ):
-        chunk({"content": piece})
-    for index, call in enumerate(response.get("toolCalls", [])):
-        chunk(
-            {
-                "tool_calls": [
-                    {
-                        "id": call.get("id", f"call_{index}"),
-                        "type": "function",
-                        "index": index,
-                        "function": {
-                            "name": call["name"],
-                            "arguments": json.dumps(call.get("arguments", {})),
-                        },
-                    }
-                ]
-            }
-        )
-    finish = "tool_calls" if response.get("toolCalls") else response.get("finish", "stop")
-    chunk({"content": ""}, finish=finish, usage=True)
-    return chunks
-
-
-class Backend:
-    """Serves scripted completions in order, then a fixed closing answer."""
-
-    def __init__(self) -> None:
-        self.responses: list[dict[str, Any]] = []
-        self.requests = 0
-        self.lock = threading.Lock()
-        backend = self
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def log_message(self, *_: Any) -> None:
-                return
-
-            def do_GET(self) -> None:  # noqa: N802
-                self.reply(404, {"error": "not found"})
-
-            def do_POST(self) -> None:  # noqa: N802
-                length = int(self.headers.get("content-length") or 0)
-                raw = self.rfile.read(length) if length else b""
-                try:
-                    body = json.loads(raw or b"{}")
-                except json.JSONDecodeError:
-                    body = {}
-                if not self.path.rstrip("/").endswith("/chat/completions"):
-                    self.reply(404, {"error": "not found"})
-                    return
-                with backend.lock:
-                    backend.requests += 1
-                    response = (
-                        backend.responses.pop(0)
-                        if backend.responses
-                        else {"text": "Done."}
-                    )
-                if response.get("delay"):
-                    time.sleep(float(response["delay"]))
-                if response.get("status"):
-                    self.reply(response["status"], response.get("body", {}))
-                    return
-                model = str(body.get("model", "model"))
-                if body.get("stream"):
-                    payload = b"".join(
-                        b"data: " + json.dumps(item).encode() + b"\n\n"
-                        for item in completion_chunks(response, model)
-                    ) + b"data: [DONE]\n\n"
-                    self.send_response(200)
-                    self.send_header("content-type", "text/event-stream")
-                    self.send_header("content-length", str(len(payload)))
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                text = response.get("text", "")
-                if isinstance(text, list):
-                    text = "".join(text)
-                self.reply(
-                    200,
-                    {
-                        "id": "cmpl-oracle",
-                        "object": "chat.completion",
-                        "created": 1_700_000_000,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "message": {"role": "assistant", "content": text},
-                                "finish_reason": "stop",
-                            }
-                        ],
-                        "usage": {
-                            "prompt_tokens": 10,
-                            "completion_tokens": 5,
-                            "total_tokens": 15,
-                        },
-                    },
-                )
-
-            def reply(self, status: int, body: Any) -> None:
-                payload = json.dumps(body).encode()
-                self.send_response(status)
-                self.send_header("content-type", "application/json")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def base(self) -> str:
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
 
 
 # --------------------------------------------------------------------------
@@ -480,7 +329,7 @@ def write_tree(root: Path, files: dict[str, str]) -> None:
         path.write_text(content, encoding="utf-8", newline="")
 
 
-def base_config(backend: Backend) -> str:
+def base_config(backend: stand_in.Backend) -> str:
     """Points the default Mistral provider at the stand-in."""
 
     return (

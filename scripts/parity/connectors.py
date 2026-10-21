@@ -3,7 +3,7 @@
 tools a session publishes and calls through it.
 
 Every scenario serves an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in of ``subagent_client.py``. The same
+scripted chat-completions stand-in of ``stand_in.py``. The same
 stand-in also plays the three Mistral endpoints connectors reach:
 
 - ``GET /v1/connectors/bootstrap``, answered from the scenario's scripted
@@ -76,6 +76,7 @@ import loop_capture  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -98,9 +99,9 @@ AUTH_URL = re.compile(r"^/v1/connectors/(?P<id>[^/]+)/auth_url$")
 # --------------------------------------------------------------------------
 
 
-class Backend(subagent_client.Backend):
-    """The hooks stand-in, also serving the connector endpoints a scenario
-    scripts, and logging every request they receive."""
+class Backend(stand_in.Backend):
+    """The chat-completions stand-in, also serving the connector endpoints a
+    scenario scripts, and logging every request they receive."""
 
     def __init__(self, connectors: dict[str, Any]) -> None:
         super().__init__()

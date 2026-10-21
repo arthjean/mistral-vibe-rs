@@ -261,7 +261,7 @@ impl LayeredConfig {
                 .and_then(|values| values.get(collection.key())),
             &JsonPointer::from_segments([collection.key()]),
             "name",
-            mcp_server_table(config)?,
+            mcp_server_table(config),
         );
         self.batch_write(&[ConfigWrite {
             target,
@@ -309,7 +309,7 @@ impl LayeredConfig {
             // exists to answer the equivalence question, and writing it would
             // pin fields the reference leaves for a reader to resolve, such as
             // a stdio entry's working directory.
-            mcp_server_table(config)?,
+            mcp_server_table(config),
         );
         self.batch_write(&[ConfigWrite {
             target,

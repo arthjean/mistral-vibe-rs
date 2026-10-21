@@ -132,14 +132,21 @@ pub struct PluginToolGroupSnapshot {
     pub tools: Vec<PluginToolSnapshot>,
 }
 
+/// What a plugin tool is routed to. Reference `PluginSourceKind`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PluginSourceKind {
+    Mcp,
+    Connector,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PluginToolRouteSnapshot {
     pub plugin_name: String,
     pub group_name: String,
     pub function_name: String,
-    /// `mcp` or `connector`.
-    pub source_kind: String,
+    pub source_kind: PluginSourceKind,
     pub source_id: String,
     pub source_tool_name: String,
     pub execution_name: String,
@@ -429,7 +436,7 @@ pub fn build_snapshot(materialized: &MaterializedPluginSet) -> ResolvedPluginSna
                 plugin_name: normalize_nfc(&route.plugin_name),
                 group_name: normalize_nfc(&route.group_name),
                 function_name: normalize_nfc(&route.function_name),
-                source_kind: route.source_kind.clone(),
+                source_kind: route.source_kind,
                 source_id: normalize_nfc(&route.source_id),
                 source_tool_name: normalize_nfc(&route.source_tool_name),
                 execution_name: normalize_nfc(&route.execution_name),

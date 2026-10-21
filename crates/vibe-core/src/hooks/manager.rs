@@ -13,6 +13,7 @@
 //! denial, which is why a denied chain reports no run end.
 
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -182,23 +183,17 @@ impl HooksManager {
         tool_call_id: Option<&str>,
     ) -> HookExecutionResult {
         let stdin = invocation.to_json().unwrap_or_default();
-        let traced = crate::tracing::hook_span(
+        let Ok(result) = crate::tracing::hook_span(
             crate::tracing::HookSpan {
                 hook_name: &hook.name,
                 hook_type: hook.hook_type.label(),
                 tool_name,
                 tool_call_id,
             },
-            async { Ok::<_, String>(run_hook(hook, &stdin, &self.cwd).await) },
+            async { Ok::<_, Infallible>(run_hook(hook, &stdin, &self.cwd).await) },
         )
         .await;
-        traced.unwrap_or_else(|message| HookExecutionResult {
-            hook_name: hook.name.clone(),
-            exit_code: Some(1),
-            stdout: String::new(),
-            stderr: message,
-            timed_out: false,
-        })
+        result
     }
 
     /// Reference `_process_hook_result`.

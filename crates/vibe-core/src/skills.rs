@@ -196,10 +196,8 @@ pub fn search_paths(inputs: &SearchInputs<'_>) -> Vec<(PathBuf, SkillScope)> {
 /// one directory per process that reads them.
 pub(crate) fn anchor(entry: &str, home: Option<&Path>, working_directory: &Path) -> PathBuf {
     let path = Path::new(entry);
-    let expanded = path.strip_prefix("~").map_or_else(
-        |_| path.to_path_buf(),
-        |rest| home.map_or_else(|| path.to_path_buf(), |home| home.join(rest)),
-    );
+    let expanded =
+        crate::platform::expand_home_against(path, home).unwrap_or_else(|| path.to_path_buf());
     if expanded.is_absolute() {
         expanded
     } else {

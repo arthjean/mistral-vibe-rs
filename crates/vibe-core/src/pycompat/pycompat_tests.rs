@@ -2,6 +2,7 @@
 
 use serde_json::{Value, json};
 
+use super::path::{posix_normpath, windows_normpath};
 use super::pydantic::{self, LineError};
 use super::{
     Dumps, clip, dumps, isprintable, isspace, os_error, parse_float, parse_int, python_eq,
@@ -431,4 +432,35 @@ fn lax_mode_reads_json_scalars_the_way_pydantic_does() {
         pydantic::boolean(&json!(0), true).map_err(|r| r.kind),
         Err("bool_type")
     );
+}
+
+#[test]
+fn posix_normpath_keeps_a_double_leading_slash_and_cannot_climb_the_root() {
+    for (path, normalized) in [
+        ("", "."),
+        ("./", "."),
+        ("a/./b/../c", "a/c"),
+        ("//a//b", "//a/b"),
+        ("///a/../..", "/"),
+        ("/..", "/"),
+        ("../x/..", ".."),
+        ("a/../..", ".."),
+    ] {
+        assert_eq!(posix_normpath(path), normalized, "{path:?}");
+    }
+}
+
+#[test]
+fn windows_normpath_reads_drives_unc_shares_and_either_separator() {
+    for (path, normalized) in [
+        ("", "."),
+        ("C:/a/../b", "C:\\b"),
+        ("c:", "c:"),
+        ("C:..\\x", "C:..\\x"),
+        ("\\\\server\\share\\..\\x", "\\\\server\\share\\x"),
+        ("/a/b/../..", "\\"),
+        ("a\\..\\..", ".."),
+    ] {
+        assert_eq!(windows_normpath(path), normalized, "{path:?}");
+    }
 }

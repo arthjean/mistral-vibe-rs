@@ -2,7 +2,7 @@
 """Black-box capture of agent profiles, their selection and delegation.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
-scripted chat-completions stand-in of ``subagent_client.py``, lays out the
+scripted chat-completions stand-in of ``stand_in.py``, lays out the
 agent files it declares (the workspace's ``.vibe/agents``, the user's
 ``$VIBE_HOME/agents`` and any ``agent_paths`` directory), and drives the
 methods and turns row 20 of ``docs/parity.md`` is about:
@@ -60,6 +60,7 @@ import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -88,7 +89,7 @@ def write_agents(world: blackbox.World, root: Path, agents: dict[str, dict[str, 
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = subagent_client.Backend()
+    backend = stand_in.Backend()
     root = Path(tempfile.mkdtemp(prefix="vibe-agents-oracle-")).resolve()
     session = subagent_client.Session(root)
     world = session.world

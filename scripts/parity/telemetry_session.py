@@ -43,7 +43,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import http.server
 import json
 import os
 from pathlib import Path
@@ -55,7 +54,6 @@ import struct
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from typing import Any
 
@@ -65,6 +63,7 @@ import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/telemetry-session/corpus.json"
@@ -140,124 +139,53 @@ EVAL = {
 }
 
 
-class Stand:
-    """Every endpoint a session reaches, scripted, with what each was asked."""
+class Stand(stand_in.Backend):
+    """Every endpoint a session reaches, scripted, with what each was asked.
+
+    A chat-completions request that does not say whether it streams, as the
+    generic backend's non-streaming one does not (reference
+    ``vibe/core/llm/backend/base.py:65-66``), is served a stream.
+    """
 
     def __init__(self) -> None:
-        self.responses: list[dict[str, Any]] = []
+        super().__init__(stream=lambda body: body.get("stream", True), scripted_usage=True)
         self.identity: dict[str, Any] = {"status": 200, "body": IDENTITY}
         self.whoami: dict[str, Any] = {"status": 200, "body": WHOAMI}
         self.evaluation: dict[str, Any] = {"status": 200, "body": EVAL}
         self.managed: dict[str, Any] = {"status": 404, "body": {"error": "not found"}}
         self.log: list[dict[str, Any]] = []
-        self.lock = threading.Lock()
-        stand = self
 
-        class Handler(http.server.BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
+    def get(self, handler: stand_in.Handler, path: str) -> None:
+        if path.endswith("/users/me"):
+            self.record({"kind": "identity"})
+            handler.reply(self.identity["status"], self.identity.get("body", {}))
+            return
+        if path.endswith("/api/vibe/whoami"):
+            self.record({"kind": "whoami"})
+            handler.reply(self.whoami["status"], self.whoami.get("body", {}))
+            return
+        if path.endswith("/api/v1/code/managed-config"):
+            self.record({"kind": "managed"})
+            handler.reply(self.managed["status"], self.managed.get("body", {}))
+            return
+        super().get(handler, path)
 
-            def log_message(self, *_: Any) -> None:
-                return
+    def post(self, handler: stand_in.Handler, path: str, body: Any) -> None:
+        if "/api/eval/" in path:
+            self.record({"kind": "evaluation", "attributes": body.get("attributes")})
+            handler.reply(self.evaluation["status"], self.evaluation.get("body", {}))
+            return
+        if path.endswith("/datalake/events"):
+            self.record({"kind": "event", "envelope": body})
+            handler.reply(200, {})
+            return
+        self.record({"kind": "unserved", "path": path})
+        super().post(handler, path, body)
 
-            def do_GET(self) -> None:  # noqa: N802
-                path = self.path.split("?", 1)[0].rstrip("/")
-                if path.endswith("/users/me"):
-                    stand.record({"kind": "identity"})
-                    self.reply(stand.identity["status"], stand.identity.get("body", {}))
-                    return
-                if path.endswith("/api/vibe/whoami"):
-                    stand.record({"kind": "whoami"})
-                    self.reply(stand.whoami["status"], stand.whoami.get("body", {}))
-                    return
-                if path.endswith("/api/v1/code/managed-config"):
-                    stand.record({"kind": "managed"})
-                    self.reply(stand.managed["status"], stand.managed.get("body", {}))
-                    return
-                self.reply(404, {"error": "not found"})
-
-            def do_POST(self) -> None:  # noqa: N802
-                length = int(self.headers.get("content-length") or 0)
-                raw = self.rfile.read(length) if length else b""
-                try:
-                    body = json.loads(raw or b"{}")
-                except json.JSONDecodeError:
-                    body = {}
-                path = self.path.split("?", 1)[0].rstrip("/")
-                if "/api/eval/" in path:
-                    stand.record({"kind": "evaluation", "attributes": body.get("attributes")})
-                    self.reply(stand.evaluation["status"], stand.evaluation.get("body", {}))
-                    return
-                if path.endswith("/datalake/events"):
-                    stand.record({"kind": "event", "envelope": body})
-                    self.reply(200, {})
-                    return
-                if not path.endswith("/chat/completions"):
-                    stand.record({"kind": "unserved", "path": path})
-                    self.reply(404, {"error": "not found"})
-                    return
-                with stand.lock:
-                    stand.log.append(
-                        {
-                            "kind": "chat",
-                            "metadata": body.get("metadata"),
-                            "messages": len(body.get("messages") or []),
-                        }
-                    )
-                    response = stand.responses.pop(0) if stand.responses else {"text": "Done."}
-                # A held answer keeps the turn running for whatever the
-                # scenario does meanwhile.
-                time.sleep(response.get("delaySeconds", 0))
-                model = str(body.get("model", "model"))
-                if body.get("stream", True):
-                    payload = b"".join(
-                        b"data: " + json.dumps(item).encode() + b"\n\n"
-                        for item in blackbox.completion_chunks(response, model)
-                    ) + b"data: [DONE]\n\n"
-                    self.send_response(200)
-                    self.send_header("content-type", "text/event-stream")
-                    self.send_header("content-length", str(len(payload)))
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                text = response.get("text", "")
-                prompt_tokens = response.get("promptTokens", 10)
-                self.reply(
-                    200,
-                    {
-                        "id": "cmpl-oracle",
-                        "object": "chat.completion",
-                        "created": 1_700_000_000,
-                        "model": model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "message": {"role": "assistant", "content": text},
-                                "finish_reason": "stop",
-                            }
-                        ],
-                        "usage": {
-                            "prompt_tokens": prompt_tokens,
-                            "completion_tokens": 5,
-                            "total_tokens": prompt_tokens + 5,
-                        },
-                    },
-                )
-
-            def reply(self, status: int, body: Any) -> None:
-                payload = json.dumps(body).encode()
-                self.send_response(status)
-                self.send_header("content-type", "application/json")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-        class Server(http.server.ThreadingHTTPServer):
-            def handle_error(self, request: Any, client_address: Any) -> None:
-                return
-
-        self.server = Server(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
+    def keep(self, body: Any) -> None:
+        self.log.append(
+            {"kind": "chat", "metadata": body.get("metadata"), "messages": len(body.get("messages") or [])}
+        )
 
     def record(self, entry: dict[str, Any]) -> None:
         with self.lock:
@@ -267,14 +195,6 @@ class Stand:
         with self.lock:
             taken, self.log = self.log, []
         return taken
-
-    @property
-    def base(self) -> str:
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
 
 
 # --------------------------------------------------------------------------
@@ -526,7 +446,11 @@ def programmatic_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "programmatic/failed-request",
-            "runs": [run("-p", "hello", backend=[{"status": 400, "body": {"message": "bad"}}])],
+            # The stand-in the corpus was captured with served no scripted
+            # status, so this request was answered with an empty completion and
+            # the run succeeds. Serving it a 400 changes the corpus, which
+            # waits for a re-pin.
+            "runs": [run("-p", "hello", backend=[{}])],
         },
     ]
 
@@ -639,7 +563,7 @@ def tui_scenarios() -> list[dict[str, Any]]:
             # The answer is held while Ctrl+C interrupts the turn.
             "name": "tui/interrupt",
             "lines": [
-                {"backend": [{"text": "Late.", "delaySeconds": 6}]},
+                {"backend": [{"text": "Late.", "delay": 6}]},
                 {"type": "hello", "hold": True},
                 {"press": "\x03", "after": 2.0},
             ],

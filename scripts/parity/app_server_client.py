@@ -1,21 +1,19 @@
 """What every black-box capture of the app server drives it with.
 
 Each scenario starts the server over stdio in a fresh home, behind the
-chat-completions stand-in of :mod:`blackbox`, and talks to it as a client
-would. This module holds what those captures share: the stand-in that also
-records the conversation every request carried (:class:`RecordingBackend`),
-one server process (:class:`Server`), what a scenario learned from the answers
-so a later step can name it (:class:`Session`), the abstract ``start`` and
-``turn`` steps rendered in the dialect of the server being driven, a scenario
-runner over the shared step vocabulary (:func:`run_scenario`), and the
-normalizer of app-server answers (:class:`Normalizer`). Nothing here imports
-the reference.
+chat-completions stand-in of :mod:`stand_in`, and talks to it as a client
+would. This module holds what those captures share: the conversation a request
+to the stand-in carried (:func:`conversation`), one server process
+(:class:`Server`), what a scenario learned from the answers so a later step
+can name it (:class:`Session`), the abstract ``start`` and ``turn`` steps
+rendered in the dialect of the server being driven, a scenario runner over
+the shared step vocabulary (:func:`run_scenario`), and the normalizer of
+app-server answers (:class:`Normalizer`). Nothing here imports the reference.
 """
 
 from __future__ import annotations
 
 import copy
-import json
 from pathlib import Path
 import queue
 import re
@@ -27,6 +25,7 @@ from typing import Any
 import blackbox
 import host_env
 from reference import OracleError
+import stand_in
 
 
 QUIET_SECONDS = 0.5
@@ -60,59 +59,8 @@ UUID = re.compile(
 
 
 # --------------------------------------------------------------------------
-# The chat-completions stand-in, recording what each request carried
+# What each request to the chat-completions stand-in carried
 # --------------------------------------------------------------------------
-
-
-class RecordingBackend(blackbox.Backend):
-    """The ACP stand-in, keeping the conversation of every request it served."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.conversations: list[list[dict[str, Any]]] = []
-        self.bodies: list[Any] = []
-        handler = self.server.RequestHandlerClass
-        backend = self
-        original = handler.do_POST
-
-        def do_post(self: Any) -> None:
-            length = int(self.headers.get("content-length") or 0)
-            raw = self.rfile.read(length) if length else b""
-            try:
-                body = json.loads(raw or b"{}")
-            except json.JSONDecodeError:
-                body = {}
-            with backend.lock:
-                backend.conversations.append(conversation(body.get("messages", [])))
-                backend.bodies.append(body)
-            # The parent handler reads the body again, so it is handed back.
-            self.headers.replace_header("content-length", str(len(raw)))
-            stream = self.rfile
-            self.rfile = Replay(raw, stream)
-            try:
-                original(self)
-            finally:
-                # The connection is kept alive, so the next request is read
-                # from the socket again.
-                self.rfile = stream
-
-        handler.do_POST = do_post
-
-
-class Replay:
-    def __init__(self, raw: bytes, rest: Any) -> None:
-        self.raw = raw
-        self.rest = rest
-
-    def read(self, size: int = -1) -> bytes:
-        if size < 0 or size >= len(self.raw):
-            data, self.raw = self.raw, b""
-            return data
-        data, self.raw = self.raw[:size], self.raw[size:]
-        return data
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.rest, name)
 
 
 def conversation(messages: list[Any]) -> list[dict[str, Any]]:
@@ -235,7 +183,7 @@ def settles(session_id_holder: dict[str, str]) -> Any:
     return predicate
 
 
-def base_config(backend: blackbox.Backend, extra: str) -> str:
+def base_config(backend: stand_in.Backend, extra: str) -> str:
     return blackbox.base_config(backend) + extra
 
 
@@ -251,7 +199,7 @@ def run_scenario(
     ``session_factory`` lets another capture script learn more from the answers
     than rewinds need, such as the review oracle's owners and regions.
     """
-    backend = RecordingBackend()
+    backend = stand_in.Backend()
     root = Path(tempfile.mkdtemp(prefix="vibe-rewind-oracle-")).resolve()
     session = (session_factory or Session)(root)
     world = session.world
@@ -281,7 +229,7 @@ def run_scenario(
         return {
             "steps": steps,
             "sessions": session.sessions,
-            "conversations": backend.conversations,
+            "conversations": [conversation(body.get("messages", [])) for body in backend.bodies],
             "bodies": backend.bodies,
             "paths": {
                 "workspace": str(world.workspace),
@@ -313,7 +261,7 @@ def run_steps(
     scenario: dict[str, Any],
     server: Server,
     session: Session,
-    backend: RecordingBackend,
+    backend: stand_in.Backend,
     steps: list[dict[str, Any]],
     dialect: str,
     quiet: float,
@@ -387,7 +335,7 @@ def run_steps(
         if "context" in step:
             # The conversation the most recent model request carried.
             with backend.lock:
-                latest = backend.conversations[-1] if backend.conversations else []
+                latest = conversation(backend.bodies[-1].get("messages", [])) if backend.bodies else []
             steps.append({"context": latest})
             continue
         request = session.substitute(step["send"])

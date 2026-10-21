@@ -64,6 +64,7 @@ import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/session-parity/corpus.json"
@@ -140,7 +141,7 @@ class Sessions(app_server_client.Session):
 # --------------------------------------------------------------------------
 
 
-def environment(world: blackbox.World, backend: blackbox.Backend) -> dict[str, str]:
+def environment(world: blackbox.World, backend: stand_in.Backend) -> dict[str, str]:
     return host_env.isolated(
         world.home,
         world.vibe_home,
@@ -177,56 +178,11 @@ class Connection:
         self.server.stop()
 
 
-class Backend(app_server_client.RecordingBackend):
-    """The recording stand-in, answering a fast-model probe apart.
-
-    Since v2.26.0 a root session opened with titles on first asks the provider
-    whether it serves a fast model, with a one-token completion that offers no
-    tools (reference ``vibe/core/llm/model_probe.py:189-211``). The shared
-    stand-in serves every request from the script, so the probe would take the
-    reply a turn was scripted with; it is answered here instead. This corpus
-    records no requests, so the probe leaves no trace in it.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        handler = self.server.RequestHandlerClass
-        scripted = handler.do_POST
-
-        def do_post(self: Any) -> None:
-            length = int(self.headers.get("content-length") or 0)
-            raw = self.rfile.read(length) if length else b""
-            try:
-                body = json.loads(raw or b"{}")
-            except json.JSONDecodeError:
-                body = {}
-            if body.get("max_tokens") != 1 or body.get("tools") or body.get("stream"):
-                # The body is handed back, and the socket after it.
-                stream = self.rfile
-                self.rfile = app_server_client.Replay(raw, stream)
-                try:
-                    scripted(self)
-                finally:
-                    self.rfile = stream
-                return
-            self.reply(200, {
-                "id": "cmpl-oracle",
-                "object": "chat.completion",
-                "created": 1_700_000_000,
-                "model": str(body.get("model", "model")),
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "Available."},
-                    "finish_reason": "stop",
-                }],
-                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-            })
-
-        handler.do_POST = do_post
-
-
 def run_scenario(scenario: dict[str, Any], command: list[str], dialect: str, quiet: float) -> dict[str, Any]:
-    backend = Backend()
+    # A root session opened with titles on first probes the provider for a
+    # fast model, which would otherwise take the reply a turn was scripted
+    # with. This corpus records no requests, so the probe leaves no trace in it.
+    backend = stand_in.Backend(probe=True)
     root = Path(tempfile.mkdtemp(prefix="vibe-session-oracle-")).resolve()
     session = Sessions(root)
     world = session.world

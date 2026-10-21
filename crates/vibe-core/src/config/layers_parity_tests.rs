@@ -20,6 +20,7 @@ use toml::Value;
 
 use super::*;
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::valued_differences;
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// What the capture writes for the per-scenario temporary root.
@@ -184,38 +185,6 @@ fn pruned(value: &JsonValue) -> Option<JsonValue> {
     }
 }
 
-/// Every pointer under `pointer` at which two values disagree, as
-/// `(pointer, reference, port)`. Tables are walked key by key, and a key one
-/// side lacks is one difference rendered `absent` on that side; any other pair
-/// is one difference.
-fn differences(
-    pointer: &str,
-    reference: &JsonValue,
-    port: &JsonValue,
-    found: &mut Vec<(String, String, String)>,
-) {
-    let rendered =
-        |value: Option<&JsonValue>| value.map_or_else(|| "absent".to_owned(), JsonValue::to_string);
-    match (reference, port) {
-        (JsonValue::Object(reference), JsonValue::Object(port)) => {
-            let keys = reference.keys().chain(port.keys()).collect::<BTreeSet<_>>();
-            for key in keys {
-                let nested = format!("{pointer}/{key}");
-                match (reference.get(key), port.get(key)) {
-                    (Some(reference), Some(port)) => differences(&nested, reference, port, found),
-                    (reference, port) => {
-                        found.push((nested, rendered(reference), rendered(port)));
-                    }
-                }
-            }
-        }
-        (reference, port) if reference == port => {}
-        (reference, port) => {
-            found.push((pointer.to_owned(), reference.to_string(), port.to_string()))
-        }
-    }
-}
-
 /// The name the reference gives the layer a write without a target lands in.
 fn layer_name(target: ConfigTarget) -> &'static str {
     match target {
@@ -276,12 +245,17 @@ fn replay_stack(case: &StackCase, observed: &mut Vec<(String, String, String, St
     .with_project_trusted(store.is_trusted(&cwd) == Some(true));
 
     let mut check = |what: &str, reference: &JsonValue, port: &JsonValue| {
-        let mut found = Vec::new();
-        differences(what, &resolve_root(reference, &root), port, &mut found);
         observed.extend(
-            found
+            valued_differences(&resolve_root(reference, &root), port)
                 .into_iter()
-                .map(|(pointer, reference, port)| (case.name.clone(), pointer, reference, port)),
+                .map(|difference| {
+                    (
+                        case.name.clone(),
+                        format!("{what}{}", difference.pointer),
+                        difference.expected.to_string(),
+                        difference.actual.to_string(),
+                    )
+                }),
         );
     };
     let snapshot = config

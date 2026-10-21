@@ -238,9 +238,7 @@ async fn sync_pins<T: RegistryTransport + Sync>(
             }
         }
     }
-    for (skill_id, alias, version) in &resolved_aliases {
-        pins::record_resolved(scope.vibe_home, skill_id, alias, *version);
-    }
+    pins::record_resolved(scope.vibe_home, &resolved_aliases);
     let (w, s) = materialize_missing(client, &root, targets).await?;
     Ok((prune_safe(&root, &active), written + w, skipped + s))
 }

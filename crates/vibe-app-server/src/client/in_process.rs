@@ -247,6 +247,9 @@ pub struct PendingPublicCall {
     outbound: Vec<Vec<u8>>,
     deferred: Vec<DeferredWork>,
     listener: Option<LiveNotificationListener>,
+    /// The driver that holds what a legacy session hands it for the next
+    /// turn: the result of a manual command it did not save.
+    driver: Option<Arc<dyn TurnDriver>>,
     /// Where a unified session gives the answer it owes once its work ends.
     later: Option<tokio::sync::oneshot::Receiver<Vec<u8>>>,
 }
@@ -265,6 +268,7 @@ impl PendingPublicCall {
             outbound: dispatched.outbound,
             deferred: dispatched.deferred,
             listener: None,
+            driver: None,
             later: dispatched.later,
         }
     }
@@ -275,6 +279,11 @@ impl PendingPublicCall {
     #[must_use]
     pub fn with_listener(mut self, listener: LiveNotificationListener) -> Self {
         self.listener = Some(listener);
+        self
+    }
+
+    pub(super) fn with_driver(mut self, driver: Arc<dyn TurnDriver>) -> Self {
+        self.driver = Some(driver);
         self
     }
 
@@ -327,6 +336,64 @@ impl PendingPublicCall {
                     let deliver: crate::server::FrameSink = Arc::new(move |frame| live(frame));
                     self.server
                         .execute_vibe_code(request_id, session_id, method, params, launch, deliver)
+                        .await
+                }
+                // A manual command publishes its entry as it runs, and a
+                // session that saves nothing hands the result to its driver
+                // before the command is answered.
+                DeferredWork::ShellCommand {
+                    request_id,
+                    session_id,
+                    operation_id,
+                    command,
+                    cwd,
+                    timeout_ms,
+                } => {
+                    let live = live.clone();
+                    let mut completed = self
+                        .server
+                        .execute_shell_command(
+                            request_id,
+                            session_id,
+                            operation_id,
+                            command,
+                            cwd,
+                            timeout_ms,
+                            move |frame| live(frame),
+                        )
+                        .await;
+                    for work in std::mem::take(&mut completed.deferred) {
+                        let DeferredWork::InjectContext {
+                            session_id,
+                            content,
+                            as_message,
+                            inject_invoked_skill,
+                        } = work
+                        else {
+                            continue;
+                        };
+                        let driver = self.driver.as_ref().ok_or_else(|| {
+                            ClientError::InvalidResponse(format!(
+                                "`{}` handed context to a driver this call does not hold",
+                                self.method
+                            ))
+                        })?;
+                        driver.inject_context(
+                            &session_id,
+                            &content,
+                            as_message,
+                            inject_invoked_skill,
+                        )?;
+                    }
+                    completed
+                }
+                DeferredWork::ShellInterrupt {
+                    request_id,
+                    session_id,
+                    operation_id,
+                } => {
+                    self.server
+                        .answer_shell_interrupt(request_id, session_id, operation_id)
                         .await
                 }
                 DeferredWork::McpCatalog {
@@ -785,6 +852,7 @@ impl InProcessClient {
             outbound: batch.outbound,
             deferred: batch.deferred,
             listener: None,
+            driver: None,
             later: None,
         })
     }

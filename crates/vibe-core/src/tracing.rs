@@ -404,6 +404,14 @@ impl TracedError for String {
     }
 }
 
+/// A body that cannot fail, such as a hook run, which reports its failures in
+/// what it answers rather than as an error.
+impl TracedError for std::convert::Infallible {
+    fn error_type(&self) -> &'static str {
+        match *self {}
+    }
+}
+
 /// Reference `_exception_status`: a backend failure reports the provider and
 /// the status and never the raw message, a model call that declines to record
 /// reports the class alone, and everything else reports the message and records

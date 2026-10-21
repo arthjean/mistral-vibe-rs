@@ -48,6 +48,7 @@ mod programmatic_tests;
 mod sampling_tests;
 mod schema_tests;
 mod session_tests;
+mod shell_tests;
 mod skill_tests;
 
 fn options() -> SessionOptions {

@@ -12,6 +12,7 @@
 mod json;
 mod number;
 mod os_error;
+pub(crate) mod path;
 pub mod pydantic;
 mod repr;
 mod text;

@@ -2,20 +2,19 @@
 
 ``agent_loop.py`` captures the loop a session runs its turns through and
 ``unified_harness.py`` the same loop on the Unified Harness; both run their
-scenarios here. This module holds a scripted stand-in for the chat-completions
-API that keeps every request it was sent (:class:`Backend`), one server process
-whose callbacks a scripted client answers (:class:`Server`), the scenario
-runner (:func:`run_scenario`), the reductions of what a turn raised and a
-session persisted (:class:`Normalizer`, :func:`reduce_turn`), and the views of
-Unified Harness answers that ``connectors.py`` reads too. Nothing here imports
-the reference.
+scenarios here, behind the chat-completions stand-in of :mod:`stand_in` with
+its utility queue and its fast-model probe answer. This module holds one
+server process whose callbacks a scripted client answers (:class:`Server`),
+the scenario runner (:func:`run_scenario`), the reductions of what a turn
+raised and a session persisted (:class:`Normalizer`, :func:`reduce_turn`), and
+the views of Unified Harness answers that ``connectors.py`` reads too. Nothing
+here imports the reference.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 import copy
-import http.server
 import json
 import os
 from pathlib import Path
@@ -23,7 +22,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import threading
 import time
 from typing import Any
 
@@ -32,198 +30,8 @@ import blackbox
 import hook_recorder
 import host_env
 from reference import OracleError
+import stand_in
 import subagent_client
-
-
-# --------------------------------------------------------------------------
-# The chat-completions stand-in
-# --------------------------------------------------------------------------
-
-
-#: What the stand-in answers a fast-model probe with. Since v2.26.0 a root
-#: session opened with titles on first asks the provider whether it serves a
-#: fast model, with a one-token completion that offers no tools (reference
-#: ``vibe/core/llm/model_probe.py:189-211``).
-PROBE_ANSWER = {"text": "Available."}
-
-
-def is_model_probe(body: dict[str, Any]) -> bool:
-    return body.get("max_tokens") == 1 and not body.get("tools")
-
-
-class Backend:
-    """Serves scripted completions, keeping every request it was sent.
-
-    A request that offers tools is a model step of the conversation and takes
-    the next entry of ``responses``; one that offers none is a utility call
-    (a title, a summary) and takes the next entry of ``utility``, so a title
-    generated in the background never consumes the answer the next step was
-    scripted with. A fast-model probe is recorded as a utility call but takes
-    :data:`PROBE_ANSWER`, so the probe never consumes the title a scenario
-    scripted either. An entry may carry ``text`` (a string or its chunks),
-    ``reasoning``, ``toolCalls``, ``promptTokens``, ``completionTokens``,
-    ``cachedTokens``, a ``finish`` reason, a ``delay`` in seconds, or a
-    ``status`` and ``body`` to fail with.
-    """
-
-    def __init__(self) -> None:
-        self.responses: list[dict[str, Any]] = []
-        self.utility: list[dict[str, Any]] = []
-        self.bodies: list[dict[str, Any]] = []
-        self.lock = threading.Lock()
-        backend = self
-
-        class Handler(http.server.BaseHTTPRequestHandler):
-            protocol_version = "HTTP/1.1"
-
-            def log_message(self, *_: Any) -> None:
-                return
-
-            def do_GET(self) -> None:  # noqa: N802
-                self.reply(404, {"error": "not found"})
-
-            def do_POST(self) -> None:  # noqa: N802
-                length = int(self.headers.get("content-length") or 0)
-                raw = self.rfile.read(length) if length else b""
-                try:
-                    body = json.loads(raw or b"{}")
-                except json.JSONDecodeError:
-                    body = {}
-                if not self.path.rstrip("/").endswith("/chat/completions"):
-                    self.reply(404, {"error": "not found"})
-                    return
-                utility = not body.get("tools")
-                with backend.lock:
-                    backend.bodies.append({"utility": utility, "body": body})
-                    queue = backend.utility if utility else backend.responses
-                    if is_model_probe(body):
-                        response = PROBE_ANSWER
-                    else:
-                        response = queue.pop(0) if queue else (
-                            {"text": "Oracle title"} if utility else {"text": "Done."}
-                        )
-                if response.get("delay"):
-                    time.sleep(float(response["delay"]))
-                if response.get("status"):
-                    self.reply(response["status"], response.get("body", {}))
-                    return
-                model = str(body.get("model", "model"))
-                if body.get("stream"):
-                    payload = b"".join(
-                        b"data: " + json.dumps(item).encode() + b"\n\n"
-                        for item in chunks(response, model)
-                    ) + b"data: [DONE]\n\n"
-                    self.send_response(200)
-                    self.send_header("content-type", "text/event-stream")
-                    self.send_header("content-length", str(len(payload)))
-                    self.end_headers()
-                    self.wfile.write(payload)
-                    return
-                self.reply(200, completion(response, model))
-
-            def reply(self, status: int, body: Any) -> None:
-                payload = json.dumps(body).encode()
-                self.send_response(status)
-                self.send_header("content-type", "application/json")
-                self.send_header("content-length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-
-        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-
-    @property
-    def base(self) -> str:
-        return f"http://127.0.0.1:{self.server.server_address[1]}"
-
-    def close(self) -> None:
-        self.server.shutdown()
-        self.server.server_close()
-
-
-def usage(response: dict[str, Any]) -> dict[str, Any]:
-    prompt = response.get("promptTokens", 10)
-    completion_tokens = response.get("completionTokens", 5)
-    body: dict[str, Any] = {
-        "prompt_tokens": prompt,
-        "completion_tokens": completion_tokens,
-        "total_tokens": prompt + completion_tokens,
-    }
-    if "cachedTokens" in response:
-        body["prompt_tokens_details"] = {"cached_tokens": response["cachedTokens"]}
-    return body
-
-
-def tool_calls(response: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        {
-            "id": call.get("id", f"call_{index}"),
-            "type": "function",
-            "index": index,
-            "function": {
-                "name": call["name"],
-                "arguments": call["raw"] if "raw" in call else json.dumps(call.get("arguments", {})),
-            },
-        }
-        for index, call in enumerate(response.get("toolCalls", []))
-    ]
-
-
-def text_pieces(response: dict[str, Any]) -> list[str]:
-    text = response.get("text")
-    if isinstance(text, list):
-        return text
-    return [text] if text else []
-
-
-def chunks(response: dict[str, Any], model: str) -> list[dict[str, Any]]:
-    """The stream a scripted response is served as, one chunk per delta."""
-
-    served: list[dict[str, Any]] = []
-
-    def chunk(delta: dict[str, Any], finish: str | None = None, with_usage: bool = False) -> None:
-        body: dict[str, Any] = {
-            "id": "cmpl-oracle",
-            "object": "chat.completion.chunk",
-            "created": 1_700_000_000,
-            "model": model,
-            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
-        }
-        if with_usage:
-            body["usage"] = usage(response)
-        served.append(body)
-
-    chunk({"role": "assistant", "content": ""})
-    if response.get("reasoning"):
-        # Mistral streams reasoning as a thinking chunk.
-        chunk({"content": [{"type": "thinking", "thinking": [
-            {"type": "text", "text": response["reasoning"]}]}]})
-    for piece in text_pieces(response):
-        chunk({"content": piece})
-    for call in tool_calls(response):
-        chunk({"tool_calls": [call]})
-    finish = "tool_calls" if response.get("toolCalls") else response.get("finish", "stop")
-    chunk({"content": ""}, finish=finish, with_usage=True)
-    return served
-
-
-def completion(response: dict[str, Any], model: str) -> dict[str, Any]:
-    message: dict[str, Any] = {"role": "assistant", "content": "".join(text_pieces(response))}
-    if response.get("toolCalls"):
-        message["tool_calls"] = tool_calls(response)
-    return {
-        "id": "cmpl-oracle",
-        "object": "chat.completion",
-        "created": 1_700_000_000,
-        "model": model,
-        "choices": [{
-            "index": 0,
-            "message": message,
-            "finish_reason": "tool_calls" if response.get("toolCalls") else response.get("finish", "stop"),
-        }],
-        "usage": usage(response),
-    }
 
 
 # --------------------------------------------------------------------------
@@ -520,7 +328,7 @@ def run_scenario(
     :func:`request_view`.
     """
 
-    backend = Backend()
+    backend = stand_in.Backend(utility=True, probe=True, scripted_usage=True)
     root = Path(tempfile.mkdtemp(prefix="vibe-loop-oracle-")).resolve()
     session = session_class(root)
     world = session.world
@@ -569,8 +377,8 @@ def run_scenario(
             "sessions": session.sessions,
             "callbacks": holder["server"].callback_log if "server" in holder else [],
             "requests": [
-                {"utility": entry["utility"], **request_view(entry["body"], entry["utility"])}
-                for entry in backend.bodies
+                {"utility": stand_in.is_utility(body), **request_view(body, stand_in.is_utility(body))}
+                for body in backend.bodies
             ],
             "paths": {
                 "workspace": str(world.workspace),

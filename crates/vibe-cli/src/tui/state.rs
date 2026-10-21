@@ -679,6 +679,18 @@ impl TuiState {
             .history_first_visible
             .clone()
             .filter(|id| snapshot.entries.iter().any(|entry| &entry.id == id));
+        // A local copy of an entry the session published, a manual command's,
+        // gives way to the canonical one the snapshot now holds.
+        self.local_entries.retain(|position| {
+            !self
+                .entry_indexes
+                .get(&position.entry_id)
+                .and_then(|index| self.entries.get(*index)?.source.server())
+                .is_some_and(|published| {
+                    let id = &published.metadata().id;
+                    snapshot.entries.iter().any(|entry| &entry.id == id)
+                })
+        });
         // Entries written before any server entry keep their place at the top.
         let mut leading = 0;
         for position in &self.local_entries {
@@ -779,6 +791,12 @@ impl TuiState {
         self.local_sequence = self.local_sequence.saturating_add(1);
         entry.id = format!("local-{}", self.local_sequence);
         let id = entry.id.clone();
+        // A running effect first drawn here appended all it streamed so far.
+        if let Some(output) =
+            super::transcript::running_output(&entry).filter(|output| !output.is_empty())
+        {
+            self.effect_streams.insert(id.clone(), output.to_owned());
+        }
         self.entry_indexes
             .insert(entry.id.clone(), self.entries.len());
         self.entries.push(entry);

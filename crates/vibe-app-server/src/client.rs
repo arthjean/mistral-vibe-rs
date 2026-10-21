@@ -60,7 +60,9 @@ pub struct SessionCompaction {
     pub hydrated: HydratedSession,
 }
 
-pub trait TurnDriver: Send + Sync {
+/// What runs a session's turns. A driver is shared with the work a call
+/// defers, which outlives the call, so it borrows nothing.
+pub trait TurnDriver: Send + Sync + 'static {
     fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a>;
 
     fn plan_directory(&self) -> Option<PathBuf> {

@@ -397,9 +397,7 @@ fn seed_registry(
             .collect();
         manifest::save(&path, &SkillManifest { skills }).expect("the seeded manifest saves");
     }
-    for (skill_id, alias, version) in resolved {
-        pins::record_resolved(vibe_home, skill_id, alias, *version);
-    }
+    pins::record_resolved(vibe_home, resolved);
 }
 
 fn skill_record(skill: &SkillDefinition, roots: &BTreeMap<String, PathBuf>) -> Value {

@@ -300,6 +300,10 @@ impl ServerConnection {
             | "session/turn/queue/replace"
             | "session/turn/queue/resume" => self.turn_queue_request(request),
             "session/context/inject" => self.context_inject(request),
+            "session/shellCommand" => {
+                let id = request.id.clone();
+                answered(id, self.port_shell_command(request))
+            }
             "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload" => {
                 self.plugin_request(request)
             }

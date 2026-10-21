@@ -244,14 +244,7 @@ pub(super) async fn execute(
             }
         }
         Route::Shell(_) => {
-            if !start_shell(
-                &submitted,
-                working_directory,
-                context.runtime,
-                context.state,
-            )
-            .await?
-            {
+            if !start_shell(&submitted, context.runtime, context.state) {
                 restore_draft(input, submitted, working_directory, context.state);
             }
         }

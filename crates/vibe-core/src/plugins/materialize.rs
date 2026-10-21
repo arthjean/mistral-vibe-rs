@@ -17,6 +17,7 @@ use super::catalog::{PluginConnectorCatalog, PluginMcpDiscovery, build_tool_cata
 use super::diagnostics::{self as codes, PluginConfigIssue};
 use super::native::{PluginKnowledgeDefinition, PluginLibraryDefinition, ResolvedPluginSet};
 use super::paths::{is_relative_to, resolve_strict};
+use super::snapshot::PluginSourceKind;
 use crate::atomic_file::{FileMode, write_atomically};
 use crate::pycompat;
 
@@ -93,7 +94,7 @@ pub struct PluginToolRoute {
     pub plugin_name: String,
     pub group_name: String,
     pub function_name: String,
-    pub source_kind: String,
+    pub source_kind: PluginSourceKind,
     pub source_id: String,
     pub source_tool_name: String,
     pub execution_name: String,
