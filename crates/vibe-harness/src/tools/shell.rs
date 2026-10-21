@@ -15,6 +15,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use vibe_core::platform::BackgroundCommand as _;
+use vibe_core::pycompat::{self, pydantic};
 use vibe_core::tools::shell::HostShells;
 
 use crate::state::ToolResult;
@@ -97,7 +98,9 @@ async fn run(arguments: &Value, context: &ShellContext) -> Result<Value, String>
         .kill_on_drop(true);
     #[cfg(unix)]
     process.process_group(0);
-    let mut child = process.spawn().map_err(|error| io_message(&error))?;
+    let mut child = process
+        .spawn()
+        .map_err(|error| pycompat::os_error(&error, None))?;
     let pid = child.id();
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
@@ -112,10 +115,10 @@ async fn run(arguments: &Value, context: &ShellContext) -> Result<Value, String>
         outcome.map_err(|_| {
             format!(
                 "Command timed out after {timeout}s: {}",
-                crate::tool_projection::python_repr(&command)
+                pycompat::repr_str(&command)
             )
         })?;
-    let status = status.map_err(|error| io_message(&error))?;
+    let status = status.map_err(|error| pycompat::os_error(&error, None))?;
     Ok(json!({
         "command": command,
         "stdout": String::from_utf8_lossy(&stdout),
@@ -206,30 +209,15 @@ pub fn shell_env(extra: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     env
 }
 
-fn io_message(error: &std::io::Error) -> String {
-    let code = error.raw_os_error().unwrap_or(0);
-    let text = error.to_string();
-    let text = text.split(" (os error").next().unwrap_or(&text).to_owned();
-    format!("[Errno {code}] {text}")
-}
-
 /// A pydantic validation failure as `str(exc)` renders one.
 fn validation_error(field: &str, message: &str, kind: &str, input: &Value) -> String {
-    format!(
-        "1 validation error for BashArgs\n{field}\n  {message} [type={kind}, input_value={}, input_type={}]\n    For further information visit https://errors.pydantic.dev/2.12/v/{kind}",
-        crate::tool_projection::python_repr_value(input),
-        python_type(input),
+    pydantic::validation_error(
+        "BashArgs",
+        &[pydantic::LineError {
+            location: field,
+            kind,
+            message,
+            input,
+        }],
     )
-}
-
-fn python_type(value: &Value) -> &'static str {
-    match value {
-        Value::Null => "NoneType",
-        Value::Bool(_) => "bool",
-        Value::Number(number) if number.is_f64() => "float",
-        Value::Number(_) => "int",
-        Value::String(_) => "str",
-        Value::Array(_) => "list",
-        Value::Object(_) => "dict",
-    }
 }

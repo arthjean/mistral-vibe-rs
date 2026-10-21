@@ -15,6 +15,7 @@ use serde_json::Value as JsonValue;
 use toml::{Table, Value};
 
 use super::{ConfigError, ConfigMutation, patch, registry};
+use crate::pycompat::pydantic;
 
 /// The prefix every environment override carries, matched without regard to
 /// case.
@@ -83,13 +84,14 @@ fn typed_value(
     match spec.kind {
         // The reference reads these through pydantic-settings, which accepts
         // this vocabulary for a boolean and nothing else.
-        registry::FieldKind::Bool => parse_flag(raw).ok_or_else(|| invalid("boolean")),
-        registry::FieldKind::Int => raw
-            .trim()
-            .parse::<i64>()
+        registry::FieldKind::Bool => pydantic::lax_bool(raw)
+            .map(Value::Boolean)
+            .ok_or_else(|| invalid("boolean")),
+        registry::FieldKind::Int => pydantic::lax_int(raw)
+            .and_then(|number| i64::try_from(number).ok())
             .map(Value::Integer)
-            .map_err(|_| invalid("integer")),
-        registry::FieldKind::Float => parse_number(raw).ok_or_else(|| invalid("number")),
+            .ok_or_else(|| invalid("integer")),
+        registry::FieldKind::Float => finite_number(raw).ok_or_else(|| invalid("number")),
         // A complex value arrives as JSON, which is what pydantic-settings
         // parses a non-scalar environment override as.
         registry::FieldKind::List | registry::FieldKind::Complex => {
@@ -132,9 +134,11 @@ fn nested_value(spec: &registry::FieldSpec, nested: &[String], raw: &str) -> Opt
     let leaf = match cursor.get("type") {
         Some(JsonValue::String(kind)) => match kind.as_str() {
             "string" => Some(Value::String(raw.to_owned())),
-            "boolean" => parse_flag(raw),
-            "integer" => raw.trim().parse::<i64>().ok().map(Value::Integer),
-            "number" => parse_number(raw),
+            "boolean" => pydantic::lax_bool(raw).map(Value::Boolean),
+            "integer" => pydantic::lax_int(raw)
+                .and_then(|number| i64::try_from(number).ok())
+                .map(Value::Integer),
+            "number" => finite_number(raw),
             _ => None,
         },
         _ => None,
@@ -142,18 +146,8 @@ fn nested_value(spec: &registry::FieldSpec, nested: &[String], raw: &str) -> Opt
     Some(leaf.unwrap_or_else(|| permissive_environment_value(raw)))
 }
 
-fn parse_flag(raw: &str) -> Option<Value> {
-    match raw.to_ascii_lowercase().as_str() {
-        "1" | "on" | "t" | "true" | "y" | "yes" => Some(Value::Boolean(true)),
-        "0" | "off" | "f" | "false" | "n" | "no" => Some(Value::Boolean(false)),
-        _ => None,
-    }
-}
-
-fn parse_number(raw: &str) -> Option<Value> {
-    raw.trim()
-        .parse::<f64>()
-        .ok()
+fn finite_number(raw: &str) -> Option<Value> {
+    pydantic::lax_float(raw)
         .filter(|value| value.is_finite())
         .map(Value::Float)
 }

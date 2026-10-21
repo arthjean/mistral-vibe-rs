@@ -309,7 +309,7 @@ impl ServerConnection {
                 .metadata
                 .bumped_at
                 .as_deref()
-                .and_then(vibe_core::storage::parse_iso_millis);
+                .and_then(vibe_core::time::parse_iso_millis);
             session.pinned_model = hydrated
                 .metadata
                 .config

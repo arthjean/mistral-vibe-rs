@@ -13,10 +13,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 
 use super::RemoteTool;
-use crate::auth::sign_in::UtcTimestamp;
+use crate::atomic_file::{FileMode, ensure_private_directory, write_atomically};
+use crate::pycompat::{self, Dumps};
+use crate::time::UtcTimestamp;
 
 pub const DESCRIPTOR_CACHE_FORMAT: &str = "mistral.vibe.legacy-mcp-descriptors/v1";
 const NAMING_VERSION: &str = "legacy-proxy/v1";
@@ -30,12 +31,19 @@ const MAX_DIRECTORY_BYTES: u64 = 64 * 1024 * 1024;
 /// Reference `descriptor_cache_key`.
 #[must_use]
 pub fn descriptor_cache_key(server_fingerprint: &str, descriptor_revision: &str) -> String {
-    super::authorization::python_json(&json!({
-        "format": DESCRIPTOR_CACHE_FORMAT,
-        "namingVersion": NAMING_VERSION,
-        "serverFingerprint": server_fingerprint,
-        "descriptorRevision": descriptor_revision,
-    }))
+    pycompat::dumps(
+        &json!({
+            "format": DESCRIPTOR_CACHE_FORMAT,
+            "namingVersion": NAMING_VERSION,
+            "serverFingerprint": server_fingerprint,
+            "descriptorRevision": descriptor_revision,
+        }),
+        Dumps {
+            sort_keys: true,
+            separators: Some((",", ":")),
+            ..Dumps::DEFAULT
+        },
+    )
 }
 
 /// One record, reference `LegacyDescriptorCacheRecord`.
@@ -180,43 +188,20 @@ impl McpDescriptorCache {
     }
 
     fn path(&self, key: &str) -> PathBuf {
-        self.root.join(format!(
-            "{}.json",
-            hex::encode(Sha256::digest(key.as_bytes()))
-        ))
+        self.root
+            .join(format!("{}.json", crate::text::sha256_hex(key.as_bytes())))
     }
 
     fn load(&self, key: &str) -> Option<DescriptorRecord> {
         load_path(&self.path(key))
     }
 
+    /// Reference `_replace`: an owner-only file synced and renamed into a
+    /// directory restricted to the owner.
     fn replace(&self, path: &Path, payload: &[u8]) -> std::io::Result<()> {
         ensure_private_directory(&self.root)?;
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let temporary = self.root.join(format!(
-            ".{name}.{}-{}.tmp",
-            std::process::id(),
-            UtcTimestamp::now().micros_since_epoch()
-        ));
-        let written = (|| {
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)?;
-            restrict(&temporary);
-            std::io::Write::write_all(&mut file, payload)?;
-            file.sync_all()?;
-            std::fs::rename(&temporary, path)
-        })();
-        if written.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        written?;
-        restrict(path);
-        Ok(())
+        write_atomically(path, "descriptor", payload, FileMode::Private)
+            .map_err(|error| error.source)
     }
 
     /// Reference `_evict`: drops what cannot be read, then the least recently
@@ -256,26 +241,6 @@ impl McpDescriptorCache {
             remaining -= 1;
         }
     }
-}
-
-fn ensure_private_directory(root: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(root)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(root, std::fs::Permissions::from_mode(0o700));
-    }
-    Ok(())
-}
-
-fn restrict(path: &Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
-    }
-    #[cfg(not(unix))]
-    let _ = path;
 }
 
 /// Reference `_Record.model_dump_json(by_alias=True, exclude_none=False)`.

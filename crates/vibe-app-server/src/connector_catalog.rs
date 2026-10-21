@@ -14,11 +14,12 @@ use std::path::Path;
 use std::time::Duration;
 
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use toml::Value as TomlValue;
+use vibe_core::atomic_file::{FileLock, FileMode, write_atomically};
 use vibe_core::config::ConfigSnapshot;
 use vibe_core::matching::NameFilter;
-use vibe_core::mcp::authorization::python_json_unicode;
+use vibe_core::pycompat::{self, Dumps};
+use vibe_core::text::sha256_hex;
 
 const DEFAULT_BASE_URL: &str = "https://api.mistral.ai";
 const CACHE_FORMAT: i64 = 2;
@@ -140,15 +141,17 @@ impl Disposition {
     }
 }
 
+/// `json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))`.
 fn canonical_json(value: &Value) -> String {
-    python_json_unicode(value)
-}
-
-fn sha256_hex(text: &str) -> String {
-    Sha256::digest(text.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    pycompat::dumps(
+        value,
+        Dumps {
+            ensure_ascii: false,
+            sort_keys: true,
+            separators: Some((",", ":")),
+            ..Dumps::DEFAULT
+        },
+    )
 }
 
 /// Reference `normalize_connector_alias`.
@@ -173,25 +176,6 @@ pub(crate) fn normalize_connector_alias(name: &str) -> String {
     } else {
         trimmed
     }
-}
-
-/// Reference `get_server_url_from_api_base`: the scheme and host of an API
-/// base that ends in a `/v<digits>` segment.
-fn server_url(api_base: &str) -> Option<String> {
-    let scheme = ["https://", "http://"]
-        .into_iter()
-        .find(|scheme| api_base.starts_with(scheme))?;
-    let rest = &api_base[scheme.len()..];
-    // The server part is greedy up to the last `/v<digit>` that leaves a
-    // non-empty host, as the reference's `(https?://.+)(/v\d+.*)` matches it.
-    let mut cut = None;
-    for (index, _) in rest.match_indices("/v") {
-        if index > 0 && rest[index + 2..].starts_with(|character: char| character.is_ascii_digit())
-        {
-            cut = Some(index);
-        }
-    }
-    cut.map(|index| format!("{scheme}{}", &rest[..index]))
 }
 
 fn is_mistral(provider: &toml::Table) -> bool {
@@ -257,12 +241,12 @@ pub(crate) fn mistral_account(
         .get("api_base")
         .and_then(TomlValue::as_str)
         .unwrap_or_default();
-    let base_url = server_url(api_base)
+    let base_url = vibe_core::llm::mistral::server_url(api_base)
         .unwrap_or_else(|| DEFAULT_BASE_URL.to_owned())
         .trim_end_matches('/')
         .to_owned();
     Some(CatalogProvider {
-        fingerprint: sha256_hex(&format!("{base_url}\0{api_key}")),
+        fingerprint: sha256_hex(format!("{base_url}\0{api_key}").as_bytes()),
         base_url,
         api_key,
     })
@@ -583,9 +567,12 @@ pub(crate) fn resolve_catalog(
             diagnostics: bounded_diagnostics(&connector.bootstrap_errors),
         });
     }
-    let revision = sha256_hex(&canonical_json(&Value::Array(
-        connectors.iter().map(revision_payload).collect(),
-    )));
+    let revision = sha256_hex(
+        canonical_json(&Value::Array(
+            connectors.iter().map(revision_payload).collect(),
+        ))
+        .as_bytes(),
+    );
     let catalog = ResolvedCatalog {
         fingerprint: fingerprint.to_owned(),
         revision,
@@ -706,37 +693,24 @@ pub(crate) fn write_cache(
     catalog: &ResolvedCatalog,
     stored_at: i64,
 ) -> std::io::Result<()> {
-    use std::io::Write as _;
-
     let entry = cache_entry(catalog, stored_at);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    // Windows refuses `LockFileEx` on a handle opened for appending alone, so
-    // the lock file is opened for writing.
-    let lock = std::fs::OpenOptions::new()
-        .write(true)
-        .truncate(false)
-        .create(true)
-        .open(path.with_file_name(format!(".{CACHE_FILE}.lock")))?;
-    fs2::FileExt::lock_exclusive(&lock)?;
+    let _lock = FileLock::acquire(&path.with_file_name(format!(".{CACHE_FILE}.lock")))?;
     let mut entries = read_cache_entries(path)
         .into_iter()
         .filter(|(fingerprint, entry)| parse_cache_entry(fingerprint, entry, stored_at).is_some())
         .collect::<Map<_, _>>();
     entries.insert(catalog.fingerprint.clone(), entry);
-    let temporary = path.with_file_name(format!(".{CACHE_FILE}.{}.tmp", std::process::id()));
-    let written = std::fs::File::create(&temporary)
-        .and_then(|mut file| {
-            file.write_all(python_json_unicode(&Value::Object(entries)).as_bytes())?;
-            file.sync_all()
-        })
-        .and_then(|()| std::fs::rename(&temporary, path));
-    if written.is_err() {
-        let _ = std::fs::remove_file(&temporary);
-    }
-    let _ = fs2::FileExt::unlock(&lock);
-    written
+    // The entries are keyed by credential, so the file is owner-only.
+    write_atomically(
+        path,
+        CACHE_FILE,
+        canonical_json(&Value::Object(entries)).as_bytes(),
+        FileMode::Private,
+    )
+    .map_err(|error| error.source)
 }
 
 /// The configuration's `connectors` entries.
@@ -980,7 +954,7 @@ fn selection_revision(selection: &ConnectorSelection, sources: &[(String, Vec<St
             })
         })
         .collect::<Vec<_>>();
-    sha256_hex(&canonical_json(&Value::Array(decisions)))
+    sha256_hex(canonical_json(&Value::Array(decisions)).as_bytes())
 }
 
 /// The `(alias, tools)` pairs a catalog routes.

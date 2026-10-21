@@ -128,10 +128,7 @@ pub fn random_slug() -> String {
         "maple", "meadow", "otter", "pebble", "quartz", "raven", "ridge", "sparrow", "summit",
         "thistle", "tundra", "valley", "walrus", "zephyr",
     ];
-    let mut bytes = [0_u8; 3];
-    // The words only have to differ between calls, so a failed draw degrades
-    // to fixed indices rather than failing the preparation that asked.
-    let _ = getrandom::fill(&mut bytes);
+    let bytes = crate::session_id::random_bytes::<3>();
     let first = usize::from(bytes[0]) % ADJECTIVES.len();
     let mut second = usize::from(bytes[1]) % (ADJECTIVES.len() - 1);
     if second >= first {

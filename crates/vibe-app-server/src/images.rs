@@ -195,10 +195,7 @@ async fn snapshot_inline_image(
         .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
     validate_image_size(bytes.len())
         .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
-    let digest = Sha1::digest(&bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let digest = vibe_core::text::hex_encode(&Sha1::digest(&bytes));
     let directory = session_dir.join("attachments");
     let path = directory.join(format!("{digest}{extension}"));
     let io_error = |error: std::io::Error| DriverError::ImageAttachment(error.to_string());
@@ -276,10 +273,7 @@ pub(crate) fn snapshot_image_file(
         .extension()
         .map(|extension| format!(".{}", extension.to_string_lossy().to_lowercase()))
         .unwrap_or_default();
-    let digest = Sha1::digest(&image.bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let digest = vibe_core::text::hex_encode(&Sha1::digest(&image.bytes));
     let directory = session_dir.join("attachments");
     std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let destination = directory.join(format!("{digest}{extension}"));

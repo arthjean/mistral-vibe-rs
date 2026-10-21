@@ -139,7 +139,7 @@ impl fmt::Display for SessionError {
             Self::Timeout(timeout) => write!(
                 formatter,
                 "no answer arrived within {} seconds",
-                super::render::python_float(timeout.as_secs_f64())
+                crate::pycompat::repr_float(timeout.as_secs_f64())
             ),
             Self::Unauthorized => {
                 formatter.write_str("the server refused the credentials (HTTP 401)")
@@ -165,22 +165,11 @@ pub(crate) enum Endpoint<'a> {
     },
 }
 
-/// One message a transport received, with the text it arrived as.
-///
-/// The text is kept because a structured result is rendered with its keys in
-/// the order the server sent them, which a parsed [`Value`] no longer knows.
+/// One message a transport received.
 enum Inbound {
-    Message { value: Value, raw: String },
+    Message(Value),
     Failed(SessionError),
     Closed,
-}
-
-/// A `tools/call` answer that passed the SDK's validation.
-pub(crate) struct CallAnswer {
-    /// The `CallToolResult` object.
-    pub(crate) result: Value,
-    /// The JSON-RPC message it arrived in, as text.
-    pub(crate) raw: String,
 }
 
 pub(crate) struct Session {
@@ -254,7 +243,7 @@ impl Session {
         } else {
             json!({})
         };
-        let (result, _) = self
+        let result = self
             .request(
                 "initialize",
                 Some(json!({
@@ -298,7 +287,7 @@ impl Session {
     /// `tools/list` without a cursor: the first page is the whole discovery,
     /// as reference `list_tools_stdio` and `list_tools_http` read it.
     pub(crate) async fn list_tools(&mut self) -> Result<Vec<RemoteTool>, SessionError> {
-        let (result, _) = self.request("tools/list", None, self.timeout).await?;
+        let result = self.request("tools/list", None, self.timeout).await?;
         let tools = parse_tools(&result)?;
         for tool in &tools {
             self.output_schemas
@@ -314,7 +303,7 @@ impl Session {
         cursor: Option<&str>,
     ) -> Result<(Vec<RemoteTool>, Option<String>), SessionError> {
         let params = cursor.map(|cursor| json!({"cursor": cursor}));
-        let (result, _) = self.request("tools/list", params, self.timeout).await?;
+        let result = self.request("tools/list", params, self.timeout).await?;
         let tools = parse_tools(&result)?;
         let next = match result.get("nextCursor") {
             None | Some(Value::Null) => None,
@@ -330,8 +319,8 @@ impl Session {
         name: &str,
         arguments: Value,
         timeout: Option<Duration>,
-    ) -> Result<CallAnswer, SessionError> {
-        let (result, raw) = self
+    ) -> Result<Value, SessionError> {
+        let result = self
             .request(
                 "tools/call",
                 Some(json!({"name": name, "arguments": arguments})),
@@ -362,7 +351,7 @@ impl Session {
                 })?;
             }
         }
-        Ok(CallAnswer { result, raw })
+        Ok(result)
     }
 
     /// Ends the session: a stdio server gets its input closed and time to
@@ -382,7 +371,7 @@ impl Session {
         method: &str,
         params: Option<Value>,
         timeout: Option<Duration>,
-    ) -> Result<(Value, String), SessionError> {
+    ) -> Result<Value, SessionError> {
         if self.dead {
             return Err(SessionError::Closed);
         }
@@ -413,13 +402,13 @@ impl Session {
                     .map_err(|_| SessionError::Timeout(timeout.unwrap_or_default()))?,
                 None => self.inbound.recv().await,
             };
-            let (value, raw) = match next {
+            let value = match next {
                 None | Some(Inbound::Closed) => {
                     self.dead = true;
                     return Err(SessionError::Closed);
                 }
                 Some(Inbound::Failed(error)) => return Err(error),
-                Some(Inbound::Message { value, raw }) => (value, raw),
+                Some(Inbound::Message(value)) => value,
             };
             if let Some(inbound_method) = value.get("method").and_then(Value::as_str) {
                 if value.get("id").is_some() {
@@ -451,7 +440,7 @@ impl Session {
                         .to_owned(),
                 });
             }
-            return Ok((value.get("result").cloned().unwrap_or(Value::Null), raw));
+            return Ok(value.get("result").cloned().unwrap_or(Value::Null));
         }
     }
 
@@ -651,7 +640,7 @@ impl StdioChannel {
                 let Ok(value) = serde_json::from_str::<Value>(&line) else {
                     continue;
                 };
-                if sender.send(Inbound::Message { value, raw: line }).is_err() {
+                if sender.send(Inbound::Message(value)).is_err() {
                     return;
                 }
             }
@@ -1015,7 +1004,7 @@ async fn pump(mut response: reqwest::Response, sender: &mpsc::UnboundedSender<In
         };
         match serde_json::from_str::<Value>(&body) {
             Ok(value) => {
-                let _ = sender.send(Inbound::Message { value, raw: body });
+                let _ = sender.send(Inbound::Message(value));
             }
             Err(error) => {
                 let _ = sender.send(Inbound::Failed(protocol(format!(
@@ -1031,7 +1020,7 @@ async fn pump(mut response: reqwest::Response, sender: &mpsc::UnboundedSender<In
         while let Some(event) = take_event(&mut buffer) {
             if let Some(data) = event_data(&event)
                 && let Ok(value) = serde_json::from_str::<Value>(&data)
-                && sender.send(Inbound::Message { value, raw: data }).is_err()
+                && sender.send(Inbound::Message(value)).is_err()
             {
                 return;
             }

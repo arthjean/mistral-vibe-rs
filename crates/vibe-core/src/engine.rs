@@ -160,8 +160,8 @@ pub use contracts::{
     TranscriptSink, chunks_of,
 };
 use ledger::{
-    TurnLedger, TurnRecorder, current_time_millis, lifecycle_for, new_compaction_id, persist,
-    persist_stats, stop_message,
+    TurnLedger, TurnRecorder, lifecycle_for, new_compaction_id, persist, persist_stats,
+    stop_message,
 };
 
 pub type ProviderFuture<'a> =
@@ -515,6 +515,15 @@ pub enum TurnStopReason {
     ResponseLength,
     Cancelled,
     Failed,
+}
+
+impl TurnStopReason {
+    /// Whether the turn stopped on an operator-set ceiling (steps, tokens or
+    /// price), which each surface reports as its own limit outcome.
+    #[must_use]
+    pub const fn is_limit(&self) -> bool {
+        matches!(self, Self::MaxSteps | Self::TokenLimit | Self::PriceLimit)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2438,7 +2447,8 @@ where
                 };
             }
             if pipeline.rewritten {
-                arguments = crate::hooks::python_json_dumps(&pipeline.tool_input);
+                arguments =
+                    crate::pycompat::dumps(&pipeline.tool_input, crate::pycompat::Dumps::DEFAULT);
                 rewritten = Some(arguments.clone());
             }
             tool_input = Some(pipeline.tool_input);

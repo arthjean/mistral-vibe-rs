@@ -7,11 +7,12 @@
 //! `\n` before the split ever sees them. A file carrying a form feed therefore
 //! holds more lines than a naive split reports, and every line index in a
 //! region, an anchor and a dependency edge would shift by that difference. So
-//! the boundary set is reproduced in full here rather than approximated, and
-//! the parity corpus records what the reference answered for each of them.
+//! the split is [`pycompat::splitlines`] rather than an approximation, and the
+//! parity corpus records what the reference answered for each boundary.
 
 use std::sync::Arc;
 
+use crate::pycompat;
 use crate::workspace::text_file::decode;
 
 /// One file's bytes at a point in the log, or its absence.
@@ -87,56 +88,10 @@ pub fn decode_lines(state: &FileState) -> Option<Vec<String>> {
     if state.is_binary() {
         return None;
     }
-    Some(split_lines(&decode(bytes).text))
-}
-
-/// Whether `character` ends a line for Python's `str.splitlines`.
-///
-/// `\r` is in the set even though `decode` has already replaced it, so this
-/// function answers for any text rather than only for text that came through
-/// the decoder.
-const fn is_line_boundary(character: char) -> bool {
-    matches!(
-        character,
-        '\n' | '\r'
-            | '\u{b}'      // line tabulation
-            | '\u{c}'      // form feed
-            | '\u{1c}'     // file separator
-            | '\u{1d}'     // group separator
-            | '\u{1e}'     // record separator
-            | '\u{85}'     // next line
-            | '\u{2028}'   // line separator
-            | '\u{2029}' // paragraph separator
+    Some(
+        pycompat::splitlines(&decode(bytes).text, true)
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
     )
-}
-
-/// `text` split into lines that keep their separator, the way Python's
-/// `str.splitlines(keepends=True)` splits.
-///
-/// An empty input answers an empty list, not one empty line, and a final line
-/// with no separator is still a line. `\r\n` counts as one boundary, so it is
-/// never split into two lines. Joining the result reproduces `text` exactly,
-/// which is what lets a reconstruction splice line spans and re-encode the
-/// concatenation.
-#[must_use]
-pub fn split_lines(text: &str) -> Vec<String> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut characters = text.char_indices().peekable();
-    while let Some((index, character)) = characters.next() {
-        if !is_line_boundary(character) {
-            continue;
-        }
-        let mut end = index + character.len_utf8();
-        if character == '\r' && characters.peek().is_some_and(|(_, next)| *next == '\n') {
-            characters.next();
-            end += '\n'.len_utf8();
-        }
-        lines.push(text[start..end].to_owned());
-        start = end;
-    }
-    if start < text.len() {
-        lines.push(text[start..].to_owned());
-    }
-    lines
 }

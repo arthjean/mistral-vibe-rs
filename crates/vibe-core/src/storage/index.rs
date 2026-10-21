@@ -17,9 +17,9 @@ use std::time::UNIX_EPOCH;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::time::format_iso_micros;
-use super::{MESSAGES_FILE, METADATA_FILE, SessionStore, StorageError, normalize_iso_utc};
-use crate::atomic_file::write_atomically;
+use super::{MESSAGES_FILE, METADATA_FILE, SessionStore, StorageError};
+use crate::atomic_file::{FileMode, write_atomically};
+use crate::time::{format_iso_micros, normalize_iso_utc};
 
 const INDEX_FILE: &str = ".session_index.json";
 /// Reference `_PREVIEW_MAX_CHARS`.
@@ -108,7 +108,7 @@ fn reconcile(store: &SessionStore) -> Result<BTreeMap<String, Entry>, StorageErr
     if dirty {
         // The cache is advisory: a listing that cannot rewrite it still lists.
         if let Ok(encoded) = serde_json::to_vec(&entries) {
-            let _ = write_atomically(&index_path, "session-index", &encoded);
+            let _ = write_atomically(&index_path, "session-index", &encoded, FileMode::Private);
         }
     }
     Ok(entries)

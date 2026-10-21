@@ -343,7 +343,7 @@ impl GitRepo {
     /// resolves out of the checkout is a git-level refusal naming both paths
     /// (`vibe/core/git/repo.py:379-386`).
     pub(crate) fn relative_base(&self, base: &Path) -> Result<PathBuf, WorktreeError> {
-        let resolved = super::resolve_lenient(base);
+        let resolved = crate::platform::resolve_lenient(base);
         resolved
             .strip_prefix(&self.working_dir)
             .map(Path::to_path_buf)

@@ -18,8 +18,8 @@ use serde_json::{Map, Value, json};
 
 use super::adapter::{PreparedRequest, RequestParts, count_field};
 use super::error::{LocalFailure, LocalKind};
-use super::python_json::Ordered;
 use super::types::{Chunk, Message, Role, StopInfo, ToolCall, ToolChoice, Usage};
+use crate::pycompat::{self, Dumps};
 
 const ENDPOINT: &str = "/v1/messages";
 const API_VERSION: &str = "2023-06-01";
@@ -560,11 +560,10 @@ impl AnthropicReader {
                 let error = object_field(data, "error")?.cloned().unwrap_or_default();
                 let kind = error
                     .get("type")
-                    .map_or_else(|| "unknown_error".to_owned(), super::adapter::python_str);
-                let message = error.get("message").map_or_else(
-                    || "unknown streaming error".to_owned(),
-                    super::adapter::python_str,
-                );
+                    .map_or_else(|| "unknown_error".to_owned(), pycompat::str_json);
+                let message = error
+                    .get("message")
+                    .map_or_else(|| "unknown streaming error".to_owned(), pycompat::str_json);
                 Err(LocalFailure::new(
                     LocalKind::Runtime,
                     format!("The Anthropic stream reported {kind}: {message}"),
@@ -622,9 +621,10 @@ fn whole_response(data: &Map<String, Value>) -> Result<Chunk, LocalFailure> {
                 );
             }
             Some("tool_use") => {
-                let input = block
-                    .get("input")
-                    .map_or_else(|| "{}".to_owned(), |input| Ordered::from(input).dumps(true));
+                let input = block.get("input").map_or_else(
+                    || "{}".to_owned(),
+                    |input| pycompat::dumps(input, Dumps::DEFAULT),
+                );
                 calls.push(ToolCall {
                     id: block.get("id").and_then(Value::as_str).map(str::to_owned),
                     index: u64::try_from(index).ok(),
@@ -660,27 +660,4 @@ fn whole_response(data: &Map<String, Value>) -> Result<Chunk, LocalFailure> {
         correlation_id: None,
         stop: stop_info(data.get("stop_reason"), data.get("stop_details"))?,
     })
-}
-
-/// Rewrites the tool inputs of a whole response from its raw text, keeping
-/// each input's key order the way the provider wrote it.
-pub fn reorder_tool_inputs(chunk: &mut Chunk, raw: &str) {
-    let Some(tree) = Ordered::parse(raw) else {
-        return;
-    };
-    let Some(calls) = chunk.message.tool_calls.as_mut() else {
-        return;
-    };
-    for call in calls {
-        let Some(index) = call.index.and_then(|index| usize::try_from(index).ok()) else {
-            continue;
-        };
-        if let Some(input) = tree
-            .get("content")
-            .and_then(|content| content.at(index))
-            .and_then(|block| block.get("input"))
-        {
-            call.arguments = Some(input.dumps(true));
-        }
-    }
 }

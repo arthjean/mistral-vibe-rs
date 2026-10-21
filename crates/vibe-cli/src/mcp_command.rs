@@ -874,7 +874,7 @@ fn translate(error: &clap::Error) -> (Scope, String) {
                 Scope::Sub,
                 format!(
                     "argument {flag}: invalid choice: {} (choose from {})",
-                    crate::argv::reading::python_repr(&value),
+                    vibe_core::pycompat::repr_str(&value),
                     context(error, ContextKind::ValidValue).join(", ")
                 ),
             )
@@ -886,7 +886,7 @@ fn translate(error: &clap::Error) -> (Scope, String) {
             format!(
                 "argument {}: invalid float value: {}",
                 flag(error),
-                crate::argv::reading::python_repr(
+                vibe_core::pycompat::repr_str(
                     &context(error, ContextKind::InvalidValue).join(", ")
                 )
             ),

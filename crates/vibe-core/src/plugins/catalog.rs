@@ -21,10 +21,10 @@ use super::materialize::{
 use super::naming::{
     ToolGroupIdentity, plugin_mcp_group_name, resolve_tool_group_names, tool_function_name,
 };
-use super::native::{PluginDescriptor, PluginMcpServerDefinition, ResolvedPluginSet, python_repr};
+use super::native::{PluginDescriptor, PluginMcpServerDefinition, ResolvedPluginSet};
 use super::redaction::redact_failure;
-use crate::hooks::python_json_dumps;
 use crate::mcp::RemoteTool;
+use crate::pycompat::{self, Dumps};
 
 /// Why a plugin-owned MCP server published no catalog.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,7 +197,7 @@ async fn connect_servers(
                 codes::MCP_AUTHORIZATION_REQUIRED,
                 format!(
                     "The MCP server {} publishes no tools until it is authorized.",
-                    python_repr(&definition.source_id)
+                    pycompat::repr_str(&definition.source_id)
                 ),
                 "mcp_server",
             )),
@@ -210,7 +210,7 @@ async fn connect_servers(
                     codes::MCP_CONNECTION_FAILED,
                     format!(
                         "The MCP server {} could not connect: {detail}",
-                        python_repr(&definition.source_id)
+                        pycompat::repr_str(&definition.source_id)
                     ),
                     "mcp_server",
                 ));
@@ -558,7 +558,7 @@ pub fn schema_fingerprint(
 }
 
 fn dumps(text: &str) -> String {
-    python_json_dumps(&Value::String(text.to_owned()))
+    pycompat::dumps(&Value::String(text.to_owned()), Dumps::DEFAULT)
 }
 
 fn issue(

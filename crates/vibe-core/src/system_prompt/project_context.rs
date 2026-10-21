@@ -125,7 +125,7 @@ impl GitContext {
 #[must_use]
 pub fn git_context(root: &Path, settings: ProjectContextSettings) -> GitContext {
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, GitContext>>> = OnceLock::new();
-    let root = crate::config::harness::resolve_lenient(root);
+    let root = crate::platform::resolve_lenient(root);
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(known) = cache
         .lock()
@@ -190,7 +190,7 @@ fn fetch_git_context(root: &Path, settings: ProjectContextSettings) -> GitContex
         )
     });
     let current_branch = match branch {
-        CallOutcome::Success(output) => crate::text::python_strip(&output).to_owned(),
+        CallOutcome::Success(output) => crate::pycompat::strip(&output).to_owned(),
         other => return failure(other),
     };
     let main_branch = match remote {
@@ -200,7 +200,7 @@ fn fetch_git_context(root: &Path, settings: ProjectContextSettings) -> GitContex
     }
     .to_owned();
     let recent_commits = match log {
-        CallOutcome::Success(output) => parse_git_log(crate::text::python_strip(&output)),
+        CallOutcome::Success(output) => parse_git_log(crate::pycompat::strip(&output)),
         other => return failure(other),
     };
     GitContext::Repository {
@@ -229,7 +229,7 @@ fn failure(outcome: CallOutcome) -> GitContext {
 pub fn parse_git_log(output: &str) -> Vec<String> {
     let mut commits = Vec::new();
     for line in output.split('\n') {
-        let line = crate::text::python_strip(line);
+        let line = crate::pycompat::strip(line);
         if line.is_empty() {
             continue;
         }
@@ -237,7 +237,7 @@ pub fn parse_git_log(output: &str) -> Vec<String> {
             Some((hash, subject)) => {
                 let subject = match subject.rfind('(') {
                     Some(index) if index > 0 && subject.contains(')') => {
-                        crate::text::python_strip(&subject[..index])
+                        crate::pycompat::strip(&subject[..index])
                     }
                     _ => subject,
                 };

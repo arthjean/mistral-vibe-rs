@@ -353,31 +353,12 @@ pub fn debug_log_line(timestamp_seconds: u64, level: &str, message: &str) -> Str
 fn format_utc(seconds: u64) -> String {
     let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
     let day_seconds = seconds % 86_400;
-    let (year, month, day) = civil_from_days(days);
+    let (year, month, day) = vibe_core::time::civil_from_days(days);
     format!(
         "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}",
         day_seconds / 3_600,
         (day_seconds % 3_600) / 60,
         day_seconds % 60
-    )
-}
-
-fn civil_from_days(days_since_epoch: i64) -> (i64, u64, u64) {
-    let days = days_since_epoch.saturating_add(719_468);
-    let era = if days >= 0 { days } else { days - 146_096 } / 146_097;
-    let day_of_era = days - era * 146_097;
-    let year_of_era =
-        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
-    let mut year = year_of_era + era * 400;
-    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
-    let month_prime = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
-    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
-    year += i64::from(month <= 2);
-    (
-        year,
-        u64::try_from(month).unwrap_or_default(),
-        u64::try_from(day).unwrap_or_default(),
     )
 }
 

@@ -7,7 +7,10 @@
 use super::matcher::{Match, SequenceMatcher, Tag};
 
 fn lines(text: &str) -> Vec<String> {
-    super::lines::split_lines(text)
+    crate::pycompat::splitlines(text, true)
+        .into_iter()
+        .map(str::to_owned)
+        .collect()
 }
 
 fn tuples(a: &[String], b: &[String]) -> Vec<(&'static str, usize, usize, usize, usize)> {

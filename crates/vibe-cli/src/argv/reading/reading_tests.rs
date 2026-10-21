@@ -4,7 +4,7 @@ use std::ffi::OsString;
 
 use clap::CommandFactory;
 
-use super::{python_repr, read};
+use super::read;
 use crate::Arguments;
 use crate::argv::PORT_ONLY_ARGUMENTS;
 
@@ -107,12 +107,4 @@ fn a_flag_given_a_value_is_refused_as_argparse_refuses_it() {
 fn a_short_cluster_is_left_for_clap_to_split() {
     assert_eq!(rewrite(&["-phello"]).0, ["-phello"]);
     assert_eq!(rewrite(&["-x"]).0, ["-x"]);
-}
-
-#[test]
-fn values_are_quoted_as_python_quotes_them() {
-    assert_eq!(python_repr("x"), "'x'");
-    assert_eq!(python_repr(""), "''");
-    assert_eq!(python_repr("it's"), "\"it's\"");
-    assert_eq!(python_repr("a\tb"), "'a\\tb'");
 }

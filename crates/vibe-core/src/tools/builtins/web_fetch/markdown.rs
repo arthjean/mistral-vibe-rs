@@ -18,8 +18,9 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::html::{self, Document, NodeKind, is_python_space};
+use super::html::{self, Document, NodeKind};
 use super::numeric::{DECIMAL, DIGIT, NUMERIC};
+use crate::pycompat::{isspace, strip};
 
 /// How deep an element may nest before the conversion gives up.
 ///
@@ -175,11 +176,6 @@ fn colspan_of(value: Option<&str>) -> Result<usize, ConversionError> {
     } else {
         canonical.parse::<usize>().unwrap_or(1000).clamp(1, 1000)
     })
-}
-
-/// Python `str.strip()`.
-fn strip(text: &str) -> &str {
-    text.trim_matches(is_python_space)
 }
 
 /// Python `str.strip(' \t\r\n')`.
@@ -601,7 +597,7 @@ impl Converter<'_> {
             text = text.trim_start_matches([' ', '\t', '\r', '\n']).to_owned();
         }
         if self.remove_outside(next) || (self.remove_inside(parent) && !self.present(next)) {
-            text = text.trim_end_matches(is_python_space).to_owned();
+            text = text.trim_end_matches(isspace).to_owned();
         }
         text
     }
@@ -682,7 +678,7 @@ impl Converter<'_> {
                     .next_block_content_sibling(node)
                     .is_some_and(|next| !matches!(self.document.name(next), Some("ul" | "ol")));
                 if tags.contains("li") {
-                    format!("\n{}", text.trim_end_matches(is_python_space))
+                    format!("\n{}", text.trim_end_matches(isspace))
                 } else {
                     format!("\n\n{text}{}", if before_paragraph { "\n" } else { "" })
                 }

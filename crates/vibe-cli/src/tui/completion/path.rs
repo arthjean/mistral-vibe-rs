@@ -9,6 +9,7 @@ use super::fuzzy::fuzzy_match_score;
 use super::{CompletionCandidate, CompletionKind};
 use crate::tui::input::InputError;
 use vibe_core::matching::fnmatch;
+use vibe_core::pycompat;
 use vibe_core::workspace::text_file;
 use vibe_core::worktree::trusted_git_executable;
 
@@ -525,7 +526,7 @@ fn collect_filesystem_matches(root: &Path, partial: &str) -> Option<Vec<Completi
     if dir_portion.is_empty() {
         return None;
     }
-    let target = lenient_resolve(root, &dir_portion);
+    let target = vibe_core::platform::resolve_lenient(&root.join(&dir_portion));
     if target.starts_with(root) {
         return None;
     }
@@ -593,31 +594,6 @@ fn list_outside_root_children(
             mention_candidate(format!("{dir_portion}/{name}"), is_directory)
         })
         .collect()
-}
-
-/// `Path(base / relative).resolve()` without `strict`: every component that
-/// exists is resolved through its links, a missing one is kept as written,
-/// and `..` steps back from whatever has been resolved so far.
-fn lenient_resolve(base: &Path, relative: &str) -> PathBuf {
-    let mut resolved = base.to_path_buf();
-    for component in Path::new(relative).components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                resolved.pop();
-            }
-            Component::Normal(name) => {
-                resolved.push(name);
-                if let Ok(canonical) = vibe_core::platform::canonicalize(&resolved) {
-                    resolved = canonical;
-                }
-            }
-            Component::RootDir | Component::Prefix(_) => {
-                resolved = PathBuf::from(component.as_os_str());
-            }
-        }
-    }
-    resolved
 }
 
 /// `Path(value).parent.as_posix()` for a relative POSIX path: empty and `.`
@@ -980,20 +956,20 @@ impl IgnoreRules {
             .collect::<Vec<_>>();
         if let Ok(bytes) = fs::read(root.join(".gitignore")) {
             let contents = text_file::decode(&bytes).text;
-            for line in contents.split(is_line_boundary) {
-                let mut raw = line.trim_matches(is_python_space);
+            for line in pycompat::splitlines(&contents, false) {
+                let mut raw = pycompat::strip(line);
                 if raw.is_empty() || raw.starts_with('#') {
                     continue;
                 }
                 if let Some((before, _)) = raw.split_once('#') {
-                    raw = before.trim_end_matches(is_python_space);
+                    raw = before.trim_end_matches(pycompat::isspace);
                 }
                 if raw.is_empty() {
                     continue;
                 }
                 let excludes = !raw.starts_with('!');
                 if let Some(negated) = raw.strip_prefix('!') {
-                    raw = negated.trim_start_matches(is_python_space);
+                    raw = negated.trim_start_matches(pycompat::isspace);
                 }
                 if let Some(rule) = IgnoreRule::parse(raw, excludes) {
                     rules.push(rule);
@@ -1049,28 +1025,6 @@ impl IgnoreRule {
         };
         fnmatch(&self.pattern, target)
     }
-}
-
-/// The boundaries `str.splitlines` splits on once newlines are normalized.
-fn is_line_boundary(character: char) -> bool {
-    matches!(
-        character,
-        '\n' | '\r'
-            | '\u{0b}'
-            | '\u{0c}'
-            | '\u{1c}'
-            | '\u{1d}'
-            | '\u{1e}'
-            | '\u{85}'
-            | '\u{2028}'
-            | '\u{2029}'
-    )
-}
-
-/// `str.isspace` for one character: Unicode whitespace plus the four
-/// information separators Python also counts.
-fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
 fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {

@@ -15,6 +15,7 @@ use super::manifest::{self, ManifestEntry, ManifestVersion, REGISTRY_LATEST_ALIA
 use super::models::SkillVersionInfo;
 use super::service::{RegistryEndpoint, open_client};
 use super::store;
+use crate::platform::resolve_lenient;
 
 /// The `cache.toml` section recording what each custom alias resolved to.
 const RESOLVED_SECTION: &str = "registry_resolved_aliases";
@@ -341,17 +342,6 @@ fn within_roots(path: &Path, roots: &[PathBuf]) -> bool {
     roots
         .iter()
         .any(|root| resolved.starts_with(resolve_lenient(root)))
-}
-
-/// A path resolved through its longest existing prefix.
-fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = crate::platform::canonicalize(path) {
-        return resolved;
-    }
-    match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) => resolve_lenient(parent).join(name),
-        _ => path.to_path_buf(),
-    }
 }
 
 fn cache_path(vibe_home: &Path) -> PathBuf {

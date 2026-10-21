@@ -12,6 +12,7 @@ use std::ffi::OsString;
 
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Arg, Command, CommandFactory, Error, FromArgMatches};
+use vibe_core::pycompat;
 
 use crate::Arguments;
 
@@ -152,7 +153,7 @@ fn argparse_message(error: &Error) -> Option<String> {
             let choices = values(error, ContextKind::ValidValue)?.join(", ");
             Some(format!(
                 "argument {argument}: invalid choice: {} (choose from {choices})",
-                reading::python_repr(&value)
+                pycompat::repr_str(&value)
             ))
         }
         ErrorKind::ValueValidation => {
@@ -162,7 +163,7 @@ fn argparse_message(error: &Error) -> Option<String> {
             let kind = argparse_type(&command, &raw)?;
             Some(format!(
                 "argument {argument}: invalid {kind} value: {}",
-                reading::python_repr(&value)
+                pycompat::repr_str(&value)
             ))
         }
         ErrorKind::ArgumentConflict => {
@@ -272,25 +273,9 @@ fn argparse_type(command: &Command, reported: &str) -> Option<&'static str> {
 /// Returns an error for anything `int()` would refuse, which clap reports as a
 /// failed conversion and [`render`] as argparse's `invalid int value`.
 pub fn python_int(value: &str) -> Result<i64, String> {
-    let trimmed = value.trim_matches(is_python_whitespace);
-    let (negative, digits) = match trimmed.as_bytes().first() {
-        Some(b'-') => (true, &trimmed[1..]),
-        Some(b'+') => (false, &trimmed[1..]),
-        _ => (false, trimmed),
-    };
-    if !has_python_digit_grouping(digits) {
-        return Err(format!("invalid int value: {value:?}"));
-    }
-    let magnitude = digits
-        .bytes()
-        .filter(u8::is_ascii_digit)
-        .fold(0_i128, |total, digit| {
-            total
-                .saturating_mul(10)
-                .saturating_add(i128::from(digit - b'0'))
-        });
-    let signed = if negative { -magnitude } else { magnitude };
-    Ok(i64::try_from(signed).unwrap_or(if negative { i64::MIN } else { i64::MAX }))
+    let parsed =
+        pycompat::parse_int(value).ok_or_else(|| format!("invalid int value: {value:?}"))?;
+    Ok(i64::try_from(parsed).unwrap_or(if parsed < 0 { i64::MIN } else { i64::MAX }))
 }
 
 /// Python's `float()` over one argument, the `type=float` of `--max-price`.
@@ -299,38 +284,7 @@ pub fn python_int(value: &str) -> Result<i64, String> {
 ///
 /// Returns an error for anything `float()` would refuse.
 pub fn python_float(value: &str) -> Result<f64, String> {
-    let trimmed = value.trim_matches(is_python_whitespace);
-    let characters: Vec<char> = trimmed.chars().collect();
-    // An underscore only ever separates two digits.
-    let grouped = characters.iter().enumerate().all(|(index, character)| {
-        *character != '_'
-            || (index > 0
-                && characters[index - 1].is_ascii_digit()
-                && characters.get(index + 1).is_some_and(char::is_ascii_digit))
-    });
-    let plain: String = characters.iter().filter(|c| **c != '_').collect();
-    match plain.parse::<f64>() {
-        Ok(parsed) if grouped && !plain.is_empty() => Ok(parsed),
-        _ => Err(format!("invalid float value: {value:?}")),
-    }
-}
-
-/// Digits, optionally grouped by single underscores, as Python's integer
-/// literal grammar allows them.
-fn has_python_digit_grouping(digits: &str) -> bool {
-    !digits.is_empty()
-        && !digits.starts_with('_')
-        && !digits.ends_with('_')
-        && !digits.contains("__")
-        && digits
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || byte == b'_')
-}
-
-/// `str.strip()`'s notion of whitespace, which adds the four ASCII separator
-/// controls to Unicode's.
-fn is_python_whitespace(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
+    pycompat::parse_float(value).ok_or_else(|| format!("invalid float value: {value:?}"))
 }
 
 #[cfg(test)]

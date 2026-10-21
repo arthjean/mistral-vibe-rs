@@ -22,6 +22,7 @@ use super::{
 };
 use crate::matching::NameFilter;
 use crate::provider::config::{ACTIVE_MODEL_SELECTOR, UtilityFeature, UtilityModels};
+use crate::pycompat::pydantic;
 
 /// The models an experiment adds to the picker without changing the default.
 const ROUTED_EXTRA_MODELS_FIELD: &str = "routed_extra_models";
@@ -327,7 +328,7 @@ fn as_number(value: &JsonValue) -> Option<f64> {
     match value {
         JsonValue::Number(number) => number.as_f64(),
         JsonValue::Bool(flag) => Some(f64::from(u8::from(*flag))),
-        JsonValue::String(text) => text.trim().parse::<f64>().ok(),
+        JsonValue::String(text) => pydantic::lax_float(text),
         _ => None,
     }
 }
@@ -336,24 +337,20 @@ fn as_number(value: &JsonValue) -> Option<f64> {
 /// range the field holds. A string spells a decimal or it is not one, which is
 /// why `"12.0"` reads as twelve where `"12e0"` reads as nothing.
 fn as_integer(value: &JsonValue) -> Option<i64> {
-    if let JsonValue::Number(number) = value
-        && number.is_i64()
-    {
-        return number.as_i64();
+    match value {
+        JsonValue::Number(number) if number.is_i64() => number.as_i64(),
+        JsonValue::String(text) => {
+            pydantic::lax_int(text).and_then(|number| i64::try_from(number).ok())
+        }
+        _ => as_number(value)
+            .filter(|number| {
+                number.is_finite()
+                    && number.fract() == 0.0
+                    && *number >= i64::MIN as f64
+                    && *number <= i64::MAX as f64
+            })
+            .map(|number| number as i64),
     }
-    if let JsonValue::String(text) = value
-        && text.contains(['e', 'E'])
-    {
-        return None;
-    }
-    as_number(value)
-        .filter(|number| {
-            number.is_finite()
-                && number.fract() == 0.0
-                && *number >= i64::MIN as f64
-                && *number <= i64::MAX as f64
-        })
-        .map(|number| number as i64)
 }
 
 /// A boolean as lax mode reads one: the JSON boolean, the number one or zero,
@@ -367,11 +364,7 @@ fn as_flag(value: &JsonValue) -> Option<bool> {
             0.0 => Some(false),
             _ => None,
         },
-        JsonValue::String(text) => match text.to_ascii_lowercase().as_str() {
-            "1" | "true" | "t" | "yes" | "y" | "on" => Some(true),
-            "0" | "false" | "f" | "no" | "n" | "off" => Some(false),
-            _ => None,
-        },
+        JsonValue::String(text) => pydantic::lax_bool(text),
         _ => None,
     }
 }
@@ -748,7 +741,7 @@ pub(super) fn resolve_session_log_dir(
     let candidate = if configured.is_empty() {
         vibe_home.join("logs").join("session")
     } else {
-        expand_home(Path::new(configured), home)
+        crate::platform::expand_home_against(Path::new(configured), home.as_deref())
             .ok_or(ConfigError::UnresolvablePath { field: FIELD })?
     };
     let resolved = absolutize(candidate).ok_or(ConfigError::UnresolvablePath { field: FIELD })?;
@@ -757,22 +750,6 @@ pub(super) fn resolve_session_log_dir(
     };
     logging.insert("save_dir".to_owned(), Value::String(rendered.to_owned()));
     Ok(())
-}
-
-/// Replaces a leading `~` with the user's home directory, as the reference
-/// `expanduser` does. `None` when the path needs a home directory the caller
-/// could not resolve.
-fn expand_home(path: &Path, home: Option<PathBuf>) -> Option<PathBuf> {
-    let mut components = path.components();
-    let Some(first) = components.next() else {
-        return Some(path.to_path_buf());
-    };
-    if first.as_os_str() != "~" {
-        return Some(path.to_path_buf());
-    }
-    let mut home = home?;
-    home.extend(components);
-    Some(home)
 }
 
 /// Anchors a relative path on the working directory without touching the

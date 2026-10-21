@@ -9,7 +9,7 @@
 //! not Unicode. Everywhere else they are the identity.
 
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[cfg(test)]
 mod paths_tests;
@@ -31,6 +31,37 @@ pub fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
 #[must_use]
 pub fn simplified(path: &Path) -> &Path {
     dunce::simplified(path)
+}
+
+/// Python's non-strict `Path.resolve()`, the `os.path.realpath` walk: `path`
+/// made absolute against the working directory, then taken one component at a
+/// time. A component that exists is resolved through its links, one that does
+/// not is kept as written, and `..` steps back from what has been resolved so
+/// far, so a link reached again after `..` leaves a missing component is still
+/// followed.
+#[must_use]
+pub fn resolve_lenient(path: &Path) -> PathBuf {
+    if let Ok(resolved) = canonicalize(path) {
+        return resolved;
+    }
+    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut resolved = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::Prefix(_) | Component::RootDir => resolved.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::Normal(name) => {
+                resolved.push(name);
+                if let Ok(canonical) = canonicalize(&resolved) {
+                    resolved = canonical;
+                }
+            }
+        }
+    }
+    resolved
 }
 
 /// The text Python's `Path.resolve()` gives for a canonical path: no verbatim

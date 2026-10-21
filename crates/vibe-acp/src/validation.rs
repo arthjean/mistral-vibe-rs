@@ -9,6 +9,7 @@
 //! vocabulary, its locations and its union reporting.
 
 use serde_json::{Map, Value, json};
+use vibe_core::pycompat::pydantic;
 
 use crate::protocol::AcpError;
 
@@ -559,11 +560,7 @@ pub(crate) fn lax_bool(value: &Value) -> Option<bool> {
             Some(1.0) => Some(true),
             _ => None,
         },
-        Value::String(text) => match text.to_ascii_lowercase().as_str() {
-            "0" | "off" | "f" | "false" | "n" | "no" => Some(false),
-            "1" | "on" | "t" | "true" | "y" | "yes" => Some(true),
-            _ => None,
-        },
+        Value::String(text) => pydantic::lax_bool(text),
         _ => None,
     }
 }

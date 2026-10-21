@@ -746,8 +746,8 @@ fn answer_model_text(answers: &[PublishedAnswer], cancelled: bool) -> String {
         .iter()
         .map(|answer| {
             vec![
-                ("question", reference_text::string_repr(&answer.question)),
-                ("answer", reference_text::string_repr(&answer.answer)),
+                ("question", vibe_core::pycompat::repr_str(&answer.question)),
+                ("answer", vibe_core::pycompat::repr_str(&answer.answer)),
                 (
                     "is_other",
                     reference_text::boolean(answer.is_other).to_owned(),
@@ -995,10 +995,11 @@ pub(super) fn plan_file_path(plan_directory: &Path, session_id: &str) -> PathBuf
     static NAMES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> =
         std::sync::OnceLock::new();
     let draw = || {
-        let seconds = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs());
-        format!("{seconds}-{}.md", vibe_core::worktree::random_slug())
+        format!(
+            "{}-{}.md",
+            vibe_core::clock::now_seconds(),
+            vibe_core::worktree::random_slug()
+        )
     };
     let name = match NAMES.get_or_init(Default::default).lock() {
         Ok(mut names) => names

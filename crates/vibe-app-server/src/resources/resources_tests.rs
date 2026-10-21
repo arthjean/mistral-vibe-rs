@@ -109,7 +109,7 @@ fn a_page_carries_the_parsed_line_and_the_writing_process() {
     // A line another process wrote is the same line to the reader.
     let path = enclosure.path().join("logs").join("vibe.log");
     let elsewhere = vibe_core::observability::format_log_line(
-        vibe_core::auth::UtcTimestamp::now(),
+        vibe_core::time::UtcTimestamp::now(),
         4_242,
         4_243,
         LogLevel::Warning,

@@ -361,7 +361,7 @@ impl ServerConnection {
                                     ));
                                 }
                                 Record {
-                                    id: vibe_harness::engine::uuid_like(),
+                                    id: vibe_core::session_id::uuid_v4(),
                                     created_at: now_millis(),
                                     params,
                                     entries: prepared,

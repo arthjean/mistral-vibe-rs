@@ -15,6 +15,7 @@ use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
 
 use super::{CONFIG_FILE, ConfigPaths, ConfigTarget, PROJECT_DIRECTORY};
+use crate::platform::resolve_lenient;
 
 /// The directory under a project root, and under the vibe home, that holds
 /// prompt overrides.
@@ -255,7 +256,7 @@ impl HarnessFiles {
         self.project_roots()
             .into_iter()
             .map(|root| {
-                crate::plugins::paths::resolve_lax(&root)
+                resolve_lenient(&root)
                     .join(PROJECT_DIRECTORY)
                     .join("plugins")
             })
@@ -472,31 +473,6 @@ fn collect_agents_docs(start: &Path, stop: &Path) -> Vec<(PathBuf, String)> {
 pub(crate) fn read_stripped(path: &Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
     let decoded = crate::workspace::text_file::decode(&bytes);
-    let stripped = crate::text::python_strip(&decoded.text);
+    let stripped = crate::pycompat::strip(&decoded.text);
     (!stripped.is_empty()).then(|| stripped.to_owned())
-}
-
-/// Python's non-strict `Path.resolve()`: symlinks resolved as far as the path
-/// exists, and the part that does not exist appended as written.
-pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = crate::platform::canonicalize(path) {
-        return resolved;
-    }
-    let mut missing = Vec::new();
-    let mut current = path.to_path_buf();
-    loop {
-        let Some(name) = current.file_name().map(ToOwned::to_owned) else {
-            return path.to_path_buf();
-        };
-        missing.push(name);
-        if !current.pop() {
-            return path.to_path_buf();
-        }
-        if let Ok(mut resolved) = crate::platform::canonicalize(&current) {
-            for name in missing.iter().rev() {
-                resolved.push(name);
-            }
-            return resolved;
-        }
-    }
 }

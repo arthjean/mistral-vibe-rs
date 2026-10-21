@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::engine::{EngineLimits, SessionStats, TurnStopReason};
 use crate::events::ModelMessage;
+use crate::pycompat;
 use crate::workspace::WARNING_TAG;
 
 #[cfg(test)]
@@ -255,8 +256,8 @@ impl ConversationMiddleware for TokenLimitMiddleware {
             return MiddlewareResult::stop(
                 format!(
                     "Token limit exceeded: {} > {}",
-                    thousands(i128::from(spent)),
-                    thousands(i128::from(self.max_total_tokens))
+                    pycompat::thousands(spent),
+                    pycompat::thousands(self.max_total_tokens)
                 ),
                 TurnStopReason::TokenLimit,
             );
@@ -272,22 +273,6 @@ fn dollars(micros: i128, precision: usize) -> String {
     #[allow(clippy::cast_precision_loss)]
     let value = micros as f64 / 1_000_000.0;
     format!("{value:.precision$}")
-}
-
-/// An integer as Python's `{:,}` groups it.
-fn thousands(value: i128) -> String {
-    let digits = value.unsigned_abs().to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 + 1);
-    if value < 0 {
-        grouped.push('-');
-    }
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 /// Compacts the transcript once it reaches the configured threshold.

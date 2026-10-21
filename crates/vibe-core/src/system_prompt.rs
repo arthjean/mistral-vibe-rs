@@ -166,7 +166,7 @@ pub fn load_system_prompt(
 fn read_prompt_file(path: &Path) -> Option<String> {
     let bytes = std::fs::read(path).ok()?;
     let decoded = crate::workspace::text_file::decode(&bytes);
-    Some(crate::text::python_strip(&decoded.text).to_owned())
+    Some(crate::pycompat::strip(&decoded.text).to_owned())
 }
 
 /// Today's date as the base prompt's `$current_date` spells it:
@@ -447,7 +447,7 @@ pub fn compose(inputs: &SystemPromptInputs) -> ComposedSystemPrompt {
     }
     if inputs.include_project_context {
         let project = &inputs.project;
-        let cwd = crate::config::harness::resolve_lenient(&project.cwd);
+        let cwd = crate::platform::resolve_lenient(&project.cwd);
         match dangerous_directory(&cwd, project.home.as_deref()) {
             Some(description) => {
                 composed.dangerous = Some(description);
@@ -483,7 +483,7 @@ pub fn compose(inputs: &SystemPromptInputs) -> ComposedSystemPrompt {
         let additional = project
             .project_roots
             .iter()
-            .filter(|root| crate::config::harness::resolve_lenient(root) != cwd)
+            .filter(|root| crate::platform::resolve_lenient(root) != cwd)
             .cloned()
             .collect::<Vec<_>>();
         if !additional.is_empty() {
@@ -693,7 +693,7 @@ pub fn instructions_section(
     project: &[(PathBuf, String)],
 ) -> Option<String> {
     let mut sections = Vec::new();
-    let user_doc = crate::text::python_strip(&user.1);
+    let user_doc = crate::pycompat::strip(&user.1);
     if !user_doc.is_empty() {
         sections.push(format!(
             "## User instructions\n\nFrom {} (the user's own instructions):\n\n{user_doc}",
@@ -708,7 +708,7 @@ pub fn instructions_section(
             "From {}/{}:\n\n{}",
             directory.display(),
             crate::config::harness::AGENTS_FILE,
-            crate::text::python_strip(content)
+            crate::pycompat::strip(content)
         ));
     }
     if sections.is_empty() {
@@ -725,7 +725,7 @@ pub fn instructions_section(
 /// home directory as the environment spells it and with five system folders.
 #[must_use]
 pub fn dangerous_directory(path: &Path, home: Option<&Path>) -> Option<&'static str> {
-    let path = crate::config::harness::resolve_lenient(path);
+    let path = crate::platform::resolve_lenient(path);
     let mut table: Vec<(PathBuf, &'static str)> = Vec::new();
     if let Some(home) = home {
         table.extend([

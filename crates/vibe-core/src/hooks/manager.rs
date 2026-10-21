@@ -24,7 +24,7 @@ use super::models::{
     HookConfig, HookEvent, HookExecutionResult, HookInvocation, HookSeverity, HookType, HookYield,
 };
 use crate::matching::NameFilter;
-use crate::mcp::render::python_float;
+use crate::pycompat::{self, pydantic};
 
 /// How many times one post-agent hook may send the model back per user turn.
 /// Reference `_MAX_RETRIES`.
@@ -226,7 +226,8 @@ impl HooksManager {
                 hook,
                 invocation,
                 failure_reason(result),
-                timed_out.then(|| format!("Timed out after {}s", python_float(hook.timeout))),
+                timed_out
+                    .then(|| format!("Timed out after {}s", pycompat::repr_float(hook.timeout))),
             );
         }
         match parse_structured_response(&result.stdout) {
@@ -537,7 +538,7 @@ fn parse_structured_response(stdout: &str) -> Result<Option<StructuredResponse>,
     let Value::Object(object) = parsed else {
         return Err(format!(
             "stdout was a JSON {}, expected an object",
-            python_type_name(&parsed)
+            pydantic::type_name(&parsed)
         ));
     };
     validate_response(&object).map(Some).map_err(|errors| {
@@ -546,19 +547,6 @@ fn parse_structured_response(stdout: &str) -> Result<Option<StructuredResponse>,
             render_validation_error(&errors)
         )
     })
-}
-
-/// The name Python gives the type `json.loads` returns for this value.
-fn python_type_name(value: &Value) -> &'static str {
-    match value {
-        Value::Null => "NoneType",
-        Value::Bool(_) => "bool",
-        Value::Number(number) if number.is_f64() => "float",
-        Value::Number(_) => "int",
-        Value::String(_) => "str",
-        Value::Array(_) => "list",
-        Value::Object(_) => "dict",
-    }
 }
 
 /// One Pydantic error of the response model: where, what kind, the message,
@@ -650,37 +638,14 @@ fn optional_text(
 
 /// Pydantic's `str(ValidationError)` for the response model.
 fn render_validation_error(errors: &[ResponseError]) -> String {
-    let mut rendered = format!(
-        "{} validation error{} for HookStructuredResponse",
-        errors.len(),
-        if errors.len() == 1 { "" } else { "s" }
-    );
-    for error in errors {
-        let input = pydantic_input_repr(&error.input);
-        rendered.push_str(&format!(
-            "\n{}\n  {} [type={}, input_value={}, input_type={}]",
-            error.location,
-            error.message,
-            error.kind,
-            input,
-            python_type_name(&error.input),
-        ));
-    }
-    rendered
-}
-
-/// Pydantic's `input_value`: the Python repr, shortened past fifty characters
-/// to its first and last twenty-four around an ellipsis.
-fn pydantic_input_repr(value: &Value) -> String {
-    let repr = crate::mcp::render::python_repr_of_json(value);
-    let characters = repr.chars().collect::<Vec<_>>();
-    if characters.len() <= 50 {
-        return repr;
-    }
-    let head = characters.iter().take(25).collect::<String>();
-    let tail = characters
+    let lines = errors
         .iter()
-        .skip(characters.len().saturating_sub(24))
-        .collect::<String>();
-    format!("{head}...{tail}")
+        .map(|error| pydantic::LineError {
+            location: error.location,
+            kind: error.kind,
+            message: error.message,
+            input: &error.input,
+        })
+        .collect::<Vec<_>>();
+    pydantic::validation_error("HookStructuredResponse", &lines)
 }

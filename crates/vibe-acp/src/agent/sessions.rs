@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{ClientError, SessionOptions, TurnDriver};
+use vibe_core::pycompat;
 use vibe_protocol::ProtocolErrorCode;
 
 use crate::agent::AcpAgent;
@@ -407,9 +408,11 @@ where
                 .map_err(invalid_request)?;
             }
             ("max_turns" | "max_tokens", Some(raw)) => {
-                let parsed = python_int(raw).ok_or_else(|| {
-                    AcpError::InvalidParams(format!("`{raw}` is not a whole number"))
-                })?;
+                let parsed = pycompat::parse_int(raw)
+                    .and_then(|parsed| i64::try_from(parsed).ok())
+                    .ok_or_else(|| {
+                        AcpError::InvalidParams(format!("`{raw}` is not a whole number"))
+                    })?;
                 let key = if config_id == "max_turns" {
                     "maxTurns"
                 } else {
@@ -659,31 +662,6 @@ pub(crate) fn invalid_request(error: AcpError) -> AcpError {
         AcpError::AppServer(ClientError::Protocol(_, message)) => AcpError::InvalidParams(message),
         other => other,
     }
-}
-
-/// Python's `int()` over a string: surrounding whitespace, a sign, and
-/// underscores between digits.
-fn python_int(raw: &str) -> Option<i64> {
-    let trimmed = raw.trim();
-    let (sign, digits) = match trimmed.strip_prefix('-') {
-        Some(rest) => (-1, rest),
-        None => (1, trimmed.strip_prefix('+').unwrap_or(trimmed)),
-    };
-    if digits.is_empty()
-        || digits.starts_with('_')
-        || digits.ends_with('_')
-        || digits.contains("__")
-        || !digits
-            .chars()
-            .all(|character| character.is_ascii_digit() || character == '_')
-    {
-        return None;
-    }
-    digits
-        .replace('_', "")
-        .parse::<i64>()
-        .ok()
-        .map(|value| sign * value)
 }
 
 /// Stops a session the agent no longer holds: its tasks, any turn it runs,

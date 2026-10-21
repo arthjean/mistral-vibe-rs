@@ -37,36 +37,6 @@ pub fn optional<T: Display>(value: Option<T>) -> String {
     value.map_or_else(|| "None".to_owned(), |value| value.to_string())
 }
 
-/// A string the way Python's `repr` prints one.
-///
-/// Single quotes unless the text carries one and no double quote, which is the
-/// rule CPython applies, and the three escapes a repr emits inside either.
-#[must_use]
-pub fn string_repr(value: &str) -> String {
-    let quote = if value.contains('\'') && !value.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut rendered = String::with_capacity(value.len().saturating_add(2));
-    rendered.push(quote);
-    for character in value.chars() {
-        match character {
-            '\\' => rendered.push_str("\\\\"),
-            '\n' => rendered.push_str("\\n"),
-            '\r' => rendered.push_str("\\r"),
-            '\t' => rendered.push_str("\\t"),
-            other if other == quote => {
-                rendered.push('\\');
-                rendered.push(other);
-            }
-            other => rendered.push(other),
-        }
-    }
-    rendered.push(quote);
-    rendered
-}
-
 /// A list of dictionaries the way Python's `repr` prints one.
 ///
 /// Each entry keeps the field order it was built in, because a dictionary
@@ -84,7 +54,7 @@ pub fn dictionary_list(entries: &[Vec<(&str, String)>]) -> String {
             if position > 0 {
                 rendered.push_str(", ");
             }
-            let _ = write!(rendered, "{}: {value}", string_repr(key));
+            let _ = write!(rendered, "{}: {value}", crate::pycompat::repr_str(key));
         }
         rendered.push('}');
     }
@@ -105,18 +75,10 @@ mod tests {
     }
 
     #[test]
-    fn a_repr_prefers_single_quotes_and_switches_for_an_apostrophe() {
-        assert_eq!(string_repr("one"), "'one'");
-        assert_eq!(string_repr("it's"), "\"it's\"");
-        assert_eq!(string_repr("it's \"quoted\""), "'it\\'s \"quoted\"'");
-        assert_eq!(string_repr("a\nb"), "'a\\nb'");
-    }
-
-    #[test]
     fn a_dictionary_list_renders_entries_in_the_order_they_were_built() {
         let entries = vec![vec![
-            ("id", string_repr("one")),
-            ("content", string_repr("first task")),
+            ("id", crate::pycompat::repr_str("one")),
+            ("content", crate::pycompat::repr_str("first task")),
         ]];
         assert_eq!(
             dictionary_list(&entries),

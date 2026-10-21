@@ -26,12 +26,18 @@ use tokio::net::{TcpListener, TcpStream};
 
 use super::call::{self, Answered, Failed, StreamingCall};
 use super::error::{BackendErrorSource, CallFailure, KeySource, WrappedCause};
-use super::python_json::Ordered;
 use super::retry::{Clock, RetryObserver, RetryReason, SleepFuture, SleepKind, next_delay};
 use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
 use super::{Backend, BackendContext, MapCredentials, ModelRequest, TokenFuture, VertexAccess};
 use crate::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
+use crate::pycompat::{self, Dumps};
+
+/// `json.dumps(value, ensure_ascii=False)`, how the stand-in serves a body.
+const UNICODE: Dumps = Dumps {
+    ensure_ascii: false,
+    ..Dumps::DEFAULT
+};
 
 pub(super) const CORPUS: &str = include_str!("../../tests/llm-backends/corpus.json");
 const SCORECARD: &str = include_str!("../../../../docs/parity.md");
@@ -212,7 +218,7 @@ async fn serve(
             )
         } else if let Some(value) = response.get("json") {
             (
-                Ordered::from(value).dumps(false).into_bytes(),
+                pycompat::dumps(value, UNICODE).into_bytes(),
                 "application/json",
             )
         } else {
@@ -293,7 +299,7 @@ fn sse_body(events: &[Value], crlf: bool) -> Vec<u8> {
         let data = &event["data"];
         let payload = match data {
             Value::String(text) => text.clone(),
-            other => Ordered::from(other).dumps(false),
+            other => pycompat::dumps(other, UNICODE),
         };
         out.push_str(&format!("data: {payload}{newline}{newline}"));
     }
@@ -824,7 +830,7 @@ async fn run_scenario(entry: Value) -> (String, Value, Value) {
     let stand_in =
         StandIn::start(entry["responses"].as_array().map_or(&[][..], Vec::as_slice)).await;
     let closed = closed_port();
-    let served = Ordered::from(&entry["responses"]).dumps(false);
+    let served = pycompat::dumps(&entry["responses"], UNICODE);
     let provider_entry = substitute(
         &entry["provider"],
         &[

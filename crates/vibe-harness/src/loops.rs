@@ -11,6 +11,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde_json::{Map, Value, json};
+use vibe_core::atomic_file::{FileMode, write_atomically};
+use vibe_core::pycompat::pydantic;
 
 use crate::state::ToolResult;
 
@@ -193,20 +195,6 @@ struct Schedule {
     disabled: bool,
 }
 
-/// The clock loops are scheduled on, in seconds.
-#[must_use]
-pub fn now_seconds() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0.0, |elapsed| elapsed.as_secs_f64())
-}
-
-fn random_id() -> String {
-    let mut bytes = [0_u8; 4];
-    let _ = getrandom::fill(&mut bytes);
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 /// Reference `parse_interval`.
 ///
 /// # Errors
@@ -250,57 +238,36 @@ pub fn parse_interval(text: &str) -> Result<u64, LoopError> {
 /// A pydantic `value_error` raised by `ScheduledPrompt.validate_prompt`,
 /// which reports the field and the string it was given.
 fn prompt_error(message: &str, prompt: &str) -> LoopError {
-    LoopError(format!(
-        "1 validation error for ScheduledPrompt\nprompt\n  Value error, {message} [type=value_error, input_value={}, input_type=str]",
-        shortened(crate::tool_projection::python_repr(prompt))
+    LoopError(pydantic::validation_error(
+        "ScheduledPrompt",
+        &[pydantic::LineError {
+            location: "prompt",
+            kind: "value_error",
+            message: &format!("Value error, {message}"),
+            input: &json!(prompt),
+        }],
     ))
 }
 
-/// Pydantic's cut of an input's repr past 50 characters: the first 25 and
-/// the last 24 around an ellipsis.
-fn shortened(input: String) -> String {
-    let chars: Vec<char> = input.chars().collect();
-    if chars.len() > 50 {
-        format!(
-            "{}...{}",
-            chars[..25].iter().collect::<String>(),
-            chars[chars.len() - 24..].iter().collect::<String>()
-        )
-    } else {
-        input
-    }
-}
-
 /// A pydantic `value_error` on the whole `ScheduledPrompt` being built, as
-/// the reference raises it: the input dict's repr is cut to its first 25
-/// and last 24 characters past 50.
+/// the reference raises it: the input is the dict of every field.
 fn model_error(message: &str, candidate: &ScheduledPrompt) -> LoopError {
-    let float = |value: f64| {
-        let text = json!(value).to_string();
-        if text.contains('.') || text.contains('e') {
-            text
-        } else {
-            format!("{text}.0")
-        }
-    };
-    let quoted = crate::tool_projection::python_repr;
-    let input = format!(
-        "{{'id': {}, 'interval_seconds': {}, 'cron': {}, 'prompt': {}, 'next_fire_at': {}, 'created_at': {}}}",
-        quoted(&candidate.id),
-        candidate
-            .interval_seconds
-            .map_or_else(|| "None".to_owned(), |seconds| seconds.to_string()),
-        candidate
-            .cron
-            .as_deref()
-            .map_or_else(|| "None".to_owned(), quoted),
-        quoted(&candidate.prompt),
-        float(candidate.next_fire_at),
-        float(candidate.created_at),
-    );
-    let shown = shortened(input);
-    LoopError(format!(
-        "1 validation error for ScheduledPrompt\n  Value error, {message} [type=value_error, input_value={shown}, input_type=dict]"
+    let input = json!({
+        "id": candidate.id,
+        "interval_seconds": candidate.interval_seconds,
+        "cron": candidate.cron,
+        "prompt": candidate.prompt,
+        "next_fire_at": candidate.next_fire_at,
+        "created_at": candidate.created_at,
+    });
+    LoopError(pydantic::validation_error(
+        "ScheduledPrompt",
+        &[pydantic::LineError {
+            location: "",
+            kind: "value_error",
+            message: &format!("Value error, {message}"),
+            input: &input,
+        }],
     ))
 }
 
@@ -420,9 +387,9 @@ impl ScheduledLoops {
                 "Loop limit reached ({MAX_LOOPS_PER_SESSION} per session)."
             )));
         }
-        let now = now_seconds();
+        let now = vibe_core::clock::now_seconds_f64();
         let mut candidate = ScheduledPrompt {
-            id: random_id(),
+            id: vibe_core::session_id::random_hex::<4>(),
             interval_seconds,
             prompt: prompt.to_owned(),
             next_fire_at: now,
@@ -642,14 +609,8 @@ fn write(path: &Path, loops: &[ScheduledPrompt]) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, text)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600));
-    }
-    std::fs::rename(&temporary, path)
+    write_atomically(path, "loops", text.as_bytes(), FileMode::Private)
+        .map_err(|error| error.source)
 }
 
 // --------------------------------------------------------------------------

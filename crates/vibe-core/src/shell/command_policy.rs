@@ -607,32 +607,6 @@ fn is_less_long_string_value_option(option: &str) -> bool {
         .any(|candidate| matches_long_option(option, candidate))
 }
 
-/// Python's `str.isprintable`: no control, format, separator or unassigned
-/// character other than the ASCII space.
-fn is_printable(text: &str) -> bool {
-    text.chars().all(|character| {
-        character == ' '
-            || !(character.is_control()
-                || character.is_whitespace()
-                || matches!(
-                    character,
-                    '\u{ad}'
-                        | '\u{600}'..='\u{605}'
-                        | '\u{61c}'
-                        | '\u{6dd}'
-                        | '\u{70f}'
-                        | '\u{180e}'
-                        | '\u{200b}'..='\u{200f}'
-                        | '\u{202a}'..='\u{202e}'
-                        | '\u{2060}'..='\u{2064}'
-                        | '\u{2066}'..='\u{206f}'
-                        | '\u{feff}'
-                        | '\u{fff9}'..='\u{fffb}'
-                        | '\u{e000}'..='\u{f8ff}'
-                ))
-    })
-}
-
 /// A resumed option text, read as a short cluster when it has no sign.
 fn resumed_requires_approval(suffix: &str) -> bool {
     let suffix = if suffix.starts_with(['-', '+']) {
@@ -664,7 +638,7 @@ fn less_startup_requires_approval(token: &str) -> bool {
     {
         return false;
     }
-    if !(command.starts_with(['/', '?']) && is_printable(command)) {
+    if !(command.starts_with(['/', '?']) && command.chars().all(crate::pycompat::isprintable)) {
         return true;
     }
     less_string_value_requires_approval(&command[1..])
@@ -759,7 +733,10 @@ fn less_short_option_action(token: &str) -> (bool, bool) {
 }
 
 fn less_policy(args: &[String]) -> CommandPolicy {
-    if args.iter().any(|argument| !is_printable(argument)) {
+    if args
+        .iter()
+        .any(|argument| !argument.chars().all(crate::pycompat::isprintable))
+    {
         return CommandPolicy::asking(true);
     }
     for argument in args {

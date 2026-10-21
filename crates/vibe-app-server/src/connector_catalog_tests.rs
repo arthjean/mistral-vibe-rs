@@ -1,4 +1,5 @@
 use serde_json::json;
+use vibe_core::llm::mistral::server_url;
 
 use super::*;
 

@@ -3,7 +3,6 @@ use std::future::Future;
 use std::io::{self, BufRead, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -328,7 +327,6 @@ pub struct Workspace {
     /// One lock per path, so two edits of the same file serialize their
     /// read-modify-write instead of racing and losing one of the two.
     write_locks: Mutex<BTreeMap<PathBuf, Arc<Mutex<()>>>>,
-    next_temporary: AtomicU64,
 }
 
 impl Workspace {
@@ -353,7 +351,6 @@ impl Workspace {
             max_discovered_files: DEFAULT_MAX_DISCOVERED_FILES,
             injected_instructions: Mutex::new(BTreeSet::new()),
             write_locks: Mutex::new(BTreeMap::new()),
-            next_temporary: AtomicU64::new(1),
         })
     }
 
@@ -735,11 +732,17 @@ impl Workspace {
         })
     }
 
+    /// [`crate::atomic_file::write_atomically`]'s recipe, staged and renamed
+    /// through the confined directory handle rather than by path, so the
+    /// replacement cannot be redirected outside the workspace. The file keeps
+    /// the process default mode, as every file the user's tools write.
     fn atomic_replace(&self, relative: &Path, content: &[u8]) -> Result<(), WorkspaceError> {
         let (directory, relative_to) = self.dir_for(relative)?;
-        let sequence = self.next_temporary.fetch_add(1, Ordering::Relaxed);
-        let parent = relative_to.parent().unwrap_or(Path::new("."));
-        let temporary = parent.join(format!(".vibe-{sequence}.tmp"));
+        let parent = relative_to
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        let temporary = parent.join(crate::atomic_file::temporary_name("vibe"));
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
         let mut file = directory
@@ -757,10 +760,22 @@ impl Workspace {
         }
         directory
             .rename(&temporary, &directory, &relative_to)
+            .map_err(|source| {
+                let _ = directory.remove_file(&temporary);
+                WorkspaceError::Io {
+                    path: relative.to_path_buf(),
+                    source,
+                }
+            })?;
+        #[cfg(unix)]
+        directory
+            .open(parent)
+            .and_then(|parent| parent.sync_all())
             .map_err(|source| WorkspaceError::Io {
-                path: relative.to_path_buf(),
+                path: parent.to_path_buf(),
                 source,
-            })
+            })?;
+        Ok(())
     }
 
     fn remove(&self, relative: &Path) -> Result<(), WorkspaceError> {

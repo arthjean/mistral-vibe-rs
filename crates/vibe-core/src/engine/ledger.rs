@@ -207,7 +207,7 @@ impl<'a> TurnRecorder<'a> {
         let envelope = EventEnvelope {
             session_id: self.state().session_id.clone(),
             turn_id: self.state().turn_id.clone(),
-            emitted_at: current_time_millis(),
+            emitted_at: crate::clock::now_millis(),
             working_directory: self.working_directory.clone(),
             event_id: self.next_event_id,
             event,
@@ -287,33 +287,12 @@ pub(super) fn priced_tokens(tokens: u64, price_per_million_micros: u64) -> u64 {
         .unwrap_or(u64::MAX)
 }
 
-pub(super) fn current_time_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        })
-}
-
 /// The identifier that correlates a compaction's boundary events.
 ///
 /// The reference mints a UUID; what matters here is that two compactions in one
-/// session never collide, so the identifier carries real entropy and falls back
-/// to the event stream's own ordering when the platform has none.
+/// session never collide, so the identifier carries real entropy.
 pub(super) fn new_compaction_id() -> String {
-    let mut bytes = [0_u8; 16];
-    if getrandom::fill(&mut bytes).is_err() {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or_default();
-        bytes[..16].copy_from_slice(&stamp.to_le_bytes());
-    }
-    let hexadecimal = bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    format!("compaction-{hexadecimal}")
+    format!("compaction-{}", crate::session_id::random_hex::<16>())
 }
 
 pub(super) fn stop_message(reason: &TurnStopReason) -> &'static str {

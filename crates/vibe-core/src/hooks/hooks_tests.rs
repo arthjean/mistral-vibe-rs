@@ -248,10 +248,13 @@ fn rewritten_arguments_are_written_as_python_json_dumps_writes_them() {
         serde_json::from_str(r#"{"command": "é \"x\"\n", "items": [1, null], "timeout": 1.0}"#)
             .expect("the value parses");
     assert_eq!(
-        python_json_dumps(&value),
+        crate::pycompat::dumps(&value, crate::pycompat::Dumps::DEFAULT),
         r#"{"command": "\u00e9 \"x\"\n", "items": [1, null], "timeout": 1.0}"#
     );
-    assert_eq!(python_json_dumps(&json!("😀")), r#""\ud83d\ude00""#);
+    assert_eq!(
+        crate::pycompat::dumps(&json!("😀"), crate::pycompat::Dumps::DEFAULT),
+        r#""\ud83d\ude00""#
+    );
 }
 
 #[test]

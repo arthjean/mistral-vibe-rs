@@ -16,7 +16,7 @@ use serde_json::{Map, Value};
 use super::compatibility::{
     AdaptedHook, AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
     DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, author_display_name,
-    python_strip, read_text, resolve_declared_path, typescript_identifier,
+    read_text, resolve_declared_path, typescript_identifier,
 };
 use super::diagnostics::Severity;
 use super::foreign::{
@@ -24,10 +24,10 @@ use super::foreign::{
     declared_paths, markdown_files_for_declared_path, mcp_mapping, object_key_order,
     pattern_compiles, skill_files_for_declared_path, unsupported_component,
 };
-use super::native::python_repr;
 use super::paths::{is_relative_to, resolve_strict};
 use super::strict::{self, ValidationErrors, char_len};
 use crate::hooks::{HookConfig, HookType};
+use crate::pycompat;
 use crate::skills::SkillScope;
 
 const FORMAT: &str = "claude_code";
@@ -731,7 +731,7 @@ fn adapt_hook_group(
             path,
             format!(
                 "The Claude hook event {} has no matching runtime lifecycle.",
-                python_repr(event_name)
+                pycompat::repr_str(event_name)
             ),
             "claude_hook_lifecycle_unsupported",
             diagnostics,
@@ -744,7 +744,7 @@ fn adapt_hook_group(
             path,
             format!(
                 "The Claude hook event {} has to hold a list.",
-                python_repr(event_name)
+                pycompat::repr_str(event_name)
             ),
         ));
         return;
@@ -839,7 +839,7 @@ fn adapt_hook_action(
         return None;
     }
     let command = match action.get("command") {
-        Some(Value::String(command)) if !python_strip(command).is_empty() => command.clone(),
+        Some(Value::String(command)) if !pycompat::strip(command).is_empty() => command.clone(),
         _ => {
             diagnostics.push(hooks_invalid(
                 path,

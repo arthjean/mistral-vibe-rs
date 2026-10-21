@@ -1,26 +1,5 @@
-//! Wall-clock readings in the units the harness publishes.
-
-use std::time::{SystemTime, UNIX_EPOCH};
-
-/// Milliseconds since the epoch, the unit every snapshot time is in.
-#[must_use]
-pub fn now_millis() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX)
-        })
-}
-
-/// Microseconds since the epoch.
-#[must_use]
-pub fn now_micros() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX)
-        })
-}
+//! Wall-clock instants spelled in the forms the harness publishes. The clock
+//! itself is read through [`vibe_core::clock`].
 
 /// Python's `datetime.isoformat()` of a UTC instant in microseconds:
 /// `2026-10-13T14:58:17.313000+00:00`.

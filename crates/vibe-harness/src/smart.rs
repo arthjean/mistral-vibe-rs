@@ -17,11 +17,11 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use vibe_core::engine::CompletionProvider;
 use vibe_core::events::ModelMessage;
 use vibe_core::provider::config::ModelConfig;
 use vibe_core::provider::{ProviderChunk, ProviderInput, RequestDialect};
+use vibe_core::pycompat::{self, Dumps};
 
 use crate::engine::ConversationMessage;
 
@@ -130,10 +130,19 @@ impl ClassificationRequest {
     /// covers, the exact call they saw.
     #[must_use]
     pub fn key(&self) -> (String, String) {
-        let canonical = vibe_core::mcp::authorization::python_json_unicode(&self.args);
-        let digest = Sha256::digest(canonical.as_bytes());
-        let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
-        (self.tool_name.clone(), hex)
+        let canonical = pycompat::dumps(
+            &self.args,
+            Dumps {
+                ensure_ascii: false,
+                sort_keys: true,
+                separators: Some((",", ":")),
+                ..Dumps::DEFAULT
+            },
+        );
+        (
+            self.tool_name.clone(),
+            vibe_core::text::sha256_hex(canonical.as_bytes()),
+        )
     }
 
     /// The message the classifier reads.
@@ -315,14 +324,11 @@ pub fn parse(text: &str) -> Result<Classification, String> {
     } else {
         Verdict::Allow
     };
-    let reason = match object.get("reason") {
-        None => String::new(),
-        Some(Value::String(reason)) => reason.clone(),
-        // Python's `str()` of whatever else the answer put there.
-        Some(Value::Null) => "None".to_owned(),
-        Some(Value::Bool(flag)) => if *flag { "True" } else { "False" }.to_owned(),
-        Some(other) => other.to_string(),
-    };
+    // Python's `str()` of whatever the answer put there.
+    let reason = object
+        .get("reason")
+        .map(pycompat::str_json)
+        .unwrap_or_default();
     Ok(Classification {
         verdict,
         reason,

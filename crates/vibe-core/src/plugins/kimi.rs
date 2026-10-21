@@ -16,7 +16,7 @@ use super::claude::hook_matcher;
 use super::compatibility::{
     AdaptedHook, AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
     DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, author_display_name,
-    python_strip, read_text, resolve_declared_path, typescript_identifier,
+    read_text, resolve_declared_path, typescript_identifier,
 };
 use super::diagnostics::Severity;
 use super::foreign::{
@@ -26,6 +26,7 @@ use super::foreign::{
 };
 use super::strict::{self, ValidationErrors, char_len};
 use crate::hooks::{HookConfig, HookType};
+use crate::pycompat;
 use crate::skills::SkillScope;
 
 const FORMAT: &str = "kimi_code";
@@ -213,7 +214,7 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         .as_deref()
         .filter(|text| !text.is_empty())
     {
-        let instructions = python_strip(instructions);
+        let instructions = pycompat::strip(instructions);
         for skill in &mut skills {
             skill.prompt = format!("{instructions}\n\n{}", skill.prompt);
         }
@@ -565,7 +566,7 @@ fn adapt_hook_rule(
     diagnostics: &mut Vec<PluginAdapterDiagnostic>,
 ) -> Option<AdaptedHook> {
     let command = match rule.get("command") {
-        Some(Value::String(command)) if !python_strip(command).is_empty() => command.clone(),
+        Some(Value::String(command)) if !pycompat::strip(command).is_empty() => command.clone(),
         _ => {
             diagnostics.push(hooks_invalid(
                 manifest_path,

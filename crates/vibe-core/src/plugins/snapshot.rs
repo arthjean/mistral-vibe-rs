@@ -12,13 +12,12 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::canonical::{
-    CanonicalJsonError, canonical_json, normalize_json, normalize_nfc, sha256_hex,
-};
+use super::canonical::{CanonicalJsonError, canonical_json, normalize_json, normalize_nfc};
 use super::compatibility::DetectedPluginFormat;
 use super::materialize::MaterializedPluginSet;
 use super::native::{PluginDescriptor, ResolvedPluginSet};
 use super::paths::{PluginPathRef, plugin_path_ref};
+use crate::text::sha256_hex;
 
 /// The hook environment names the host injects, which a snapshot omits.
 pub const HOST_HOOK_ENVIRONMENT: [&str; 2] = ["PLUGIN_ROOT", "PLUGIN_DATA"];

@@ -11,7 +11,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
 
 /// Whether this dotenv line declares `key`.
 fn declares(line: &str, key: &str) -> bool {
@@ -41,7 +41,8 @@ fn render(key: &str, value: &str) -> String {
 /// symlinked path both get here.
 fn write_contents(path: &Path, contents: &str) -> io::Result<()> {
     let original_mode = original_mode(path);
-    write_atomically(path, "vibe-env", contents.as_bytes()).map_err(|error| error.source)?;
+    write_atomically(path, "vibe-env", contents.as_bytes(), FileMode::Private)
+        .map_err(|error| error.source)?;
     restore_mode(path, original_mode)
 }
 

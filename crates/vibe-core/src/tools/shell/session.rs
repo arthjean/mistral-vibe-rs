@@ -22,10 +22,10 @@ use std::time::Instant;
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
-use crate::auth::UtcTimestamp;
 use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
 use crate::process::{ProcessChunk, TerminalManager, TerminalState};
 use crate::shell::ShellConfig;
+use crate::time::UtcTimestamp;
 use crate::tools::config::{
     ShellCommandConfig, ShellInlineConfig, ShellOutputConfig, ToolConfigResolver,
 };
@@ -674,22 +674,15 @@ pub(super) fn append_chunks(session: &ManagedSession, chunks: &[ProcessChunk], d
 /// family's tools from reading, feeding or killing another's session.
 pub(super) fn new_session_id(family: ShellFamily) -> String {
     let now = UtcTimestamp::now();
-    let mut suffix = [0_u8; 4];
     // Reference `_new_session_id` takes its eight hexadecimal characters from
     // `uuid4().hex[:8]`, so the stamp is not what separates two sessions minted
     // inside the same second: a collision would let one read another's log, and
     // the suffix carries real entropy rather than a counter.
-    if getrandom::fill(&mut suffix).is_err() {
-        suffix = (now.micros_since_epoch() as u32).to_le_bytes();
-    }
     format!(
         "{}_{}_{}",
         family.name(),
         compact_stamp(now),
-        suffix
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
+        crate::session_id::random_hex::<4>()
     )
 }
 

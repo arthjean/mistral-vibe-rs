@@ -15,7 +15,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 
 use crate::engine::{
@@ -158,8 +157,7 @@ fn stopped() -> Value {
 /// spawned it. Reference `_operations.py` `child_session_id`.
 #[must_use]
 pub fn child_id(parent_session_id: &str, action_id: &str) -> String {
-    let digest = Sha256::digest(format!("{parent_session_id}\0{action_id}").as_bytes());
-    let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    let hex = vibe_core::text::sha256_hex(format!("{parent_session_id}\0{action_id}").as_bytes());
     format!("child-{}", &hex[..24])
 }
 
@@ -387,7 +385,7 @@ impl SubagentManager {
                 &spawn.id,
                 Some(&spawn.parent),
                 &spawn.parent,
-                crate::clock::now_millis(),
+                vibe_core::clock::now_millis(),
             );
             let core = Arc::new(Mutex::new(SessionCore::new(
                 state,

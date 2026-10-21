@@ -25,10 +25,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use regex::Regex;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::auth::UtcTimestamp;
+use crate::time::UtcTimestamp;
 
 #[cfg(test)]
 mod observability_tests;
@@ -230,8 +229,7 @@ pub fn process_identifiers() -> (u32, u32) {
 /// the identity is the same function of the same input under a stronger digest.
 #[must_use]
 pub fn entry_identity(raw_line: &str) -> String {
-    let digest = Sha256::digest(raw_line.as_bytes());
-    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+    crate::text::sha256_hex(raw_line.as_bytes())
 }
 
 // --------------------------------------------------------------------------

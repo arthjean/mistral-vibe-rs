@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use thiserror::Error;
+use vibe_core::atomic_file;
 use vibe_core::platform::BackgroundCommand as _;
 
 use super::command_handlers::NATIVE_COPY_HINT;
@@ -416,7 +417,7 @@ fn write_clipboard_image_in(directory: &Path, bytes: &[u8]) -> Result<PathBuf, C
             format!("clipboard-{stamp}-{suffix}.png")
         };
         let path = directory.join(name);
-        match open_private_file(&path) {
+        match atomic_file::create_private_file(&path) {
             Ok(mut file) => {
                 if let Err(error) = file.write_all(bytes).and_then(|()| file.sync_all()) {
                     let _ = std::fs::remove_file(&path);
@@ -445,7 +446,7 @@ fn create_private_capture_directory(prefix: &str) -> Result<PathBuf, ClipboardEr
     for suffix in 0..1_000 {
         let directory =
             std::env::temp_dir().join(format!("{prefix}-{}-{stamp}-{suffix}", std::process::id()));
-        match create_private_directory(&directory) {
+        match atomic_file::create_private_directory(&directory) {
             Ok(()) => return Ok(directory),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(error) => return Err(ClipboardError::Operation(error.to_string())),
@@ -457,64 +458,35 @@ fn create_private_capture_directory(prefix: &str) -> Result<PathBuf, ClipboardEr
 }
 
 fn ensure_private_directory(path: &Path) -> Result<(), ClipboardError> {
+    let operation = |error: std::io::Error| ClipboardError::Operation(error.to_string());
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
-            return Err(ClipboardError::Operation(
+            Err(ClipboardError::Operation(
                 "clipboard image directory is not a private directory".to_owned(),
-            ));
+            ))
         }
-        Ok(_) => {}
+        Ok(_) => atomic_file::set_private_permissions(path).map_err(operation),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            create_private_directory(path)
-                .map_err(|error| ClipboardError::Operation(error.to_string()))?;
+            atomic_file::create_private_directory(path).map_err(operation)
         }
-        Err(error) => return Err(ClipboardError::Operation(error.to_string())),
+        Err(error) => Err(operation(error)),
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
-            .map_err(|error| ClipboardError::Operation(error.to_string()))?;
-    }
-    Ok(())
-}
-
-fn create_private_directory(path: &Path) -> std::io::Result<()> {
-    #[cfg_attr(not(unix), expect(unused_mut, reason = "only Unix sets a mode"))]
-    let mut builder = std::fs::DirBuilder::new();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
-    }
-    builder.create(path)
 }
 
 #[cfg(target_os = "macos")]
 fn create_private_file(path: &Path) -> Result<(), ClipboardError> {
-    open_private_file(path)
+    atomic_file::create_private_file(path)
         .map(drop)
         .map_err(|error| ClipboardError::Operation(error.to_string()))
 }
 
 #[cfg(target_os = "macos")]
 fn write_private_file(path: &Path, bytes: &[u8]) -> Result<(), ClipboardError> {
-    let mut file =
-        open_private_file(path).map_err(|error| ClipboardError::Operation(error.to_string()))?;
+    let mut file = atomic_file::create_private_file(path)
+        .map_err(|error| ClipboardError::Operation(error.to_string()))?;
     file.write_all(bytes)
         .and_then(|()| file.sync_all())
         .map_err(|error| ClipboardError::Operation(error.to_string()))
-}
-
-fn open_private_file(path: &Path) -> std::io::Result<std::fs::File> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path)
 }
 
 #[cfg(test)]

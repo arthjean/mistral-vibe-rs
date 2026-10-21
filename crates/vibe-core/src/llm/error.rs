@@ -287,7 +287,7 @@ impl std::error::Error for BackendError {}
 
 /// The first 400 characters of a body on one line.
 fn excerpt(body: &str) -> String {
-    let flattened = super::sse::python_strip(body).replace('\n', " ");
+    let flattened = crate::pycompat::strip(body).replace('\n', " ");
     let mut characters = flattened.chars();
     let head: String = characters.by_ref().take(400).collect();
     if characters.next().is_some() {

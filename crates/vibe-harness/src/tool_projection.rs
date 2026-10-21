@@ -8,6 +8,7 @@
 //! `vibe/app_server/_effect_models.py`.
 
 use serde_json::{Map, Value, json};
+use vibe_core::pycompat;
 
 /// The page a read takes when the call names none.
 pub const DEFAULT_READ_LIMIT: u64 = 2000;
@@ -830,66 +831,9 @@ fn project_question(name: &str, input: &Value) -> Option<Projected> {
     })
 }
 
-/// `repr()` of a JSON value as Python holds it.
-#[must_use]
-pub fn python_repr_value(value: &Value) -> String {
-    match value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::Number(number) => number.to_string(),
-        Value::String(text) => python_repr(text),
-        Value::Array(items) => format!(
-            "[{}]",
-            items
-                .iter()
-                .map(python_repr_value)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        Value::Object(map) => format!(
-            "{{{}}}",
-            map.iter()
-                .map(|(key, value)| format!("{}: {}", python_repr(key), python_repr_value(value)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
-}
-
-/// Python's `repr` of a string, the quoting the web search header uses.
-#[must_use]
-pub fn python_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push(quote);
-    for character in text.chars() {
-        match character {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c == quote => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
-                out.push_str(&format!("\\x{:02x}", c as u32));
-            }
-            c => out.push(c),
-        }
-    }
-    out.push(quote);
-    out
-}
-
 fn project_web_search(name: &str, input: &Value) -> Option<Projected> {
     let query = nonempty(input, "query")?.to_owned();
-    let quoted = python_repr(&query);
+    let quoted = pycompat::repr_str(&query);
     let detail = detail(
         "web_search",
         name,
@@ -927,7 +871,7 @@ fn project_web_search(name: &str, input: &Value) -> Option<Projected> {
                 "Searched",
                 format!(
                     "{} ({count} source{})",
-                    python_repr(query),
+                    pycompat::repr_str(query),
                     if count == 1 { "" } else { "s" }
                 ),
             );
@@ -935,20 +879,6 @@ fn project_web_search(name: &str, input: &Value) -> Option<Projected> {
             Some(completed_state(state, output, display, None))
         })),
     })
-}
-
-/// Python's `f"{n:,}"`.
-#[must_use]
-pub fn thousands(count: usize) -> String {
-    let digits = count.to_string();
-    let mut out = String::new();
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(digit);
-    }
-    out
 }
 
 fn url_domain(url: &str) -> String {
@@ -1001,7 +931,7 @@ fn project_web_fetch(name: &str, input: &Value) -> Option<Projected> {
                 "Fetched",
                 format!(
                     "{url} ({} chars, {})",
-                    thousands(content.chars().count()),
+                    pycompat::thousands(u64::try_from(content.chars().count()).unwrap_or(u64::MAX)),
                     content_type.split(';').next().unwrap_or_default()
                 ),
             );

@@ -26,15 +26,15 @@ use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 
-use crate::atomic_file::{self, AtomicWriteError, create_private_file, write_atomically};
+use crate::atomic_file::{self, AtomicWriteError, FileMode, create_private_file, write_atomically};
 use crate::events::ModelMessage;
 use crate::platform::BackgroundCommand as _;
-use crate::text::hex_encode;
+use crate::pycompat::{self, Dumps};
+use crate::text::sha256_hex;
+use crate::time::parse_iso_millis;
 
-mod canonical_json;
 mod handoff;
 pub mod index;
 pub mod lease;
@@ -43,10 +43,8 @@ pub mod permissions;
 mod record;
 pub(crate) mod time;
 
-use canonical_json::python_canonical_json;
 pub use index::SessionInfo;
 use time::{format_compact_timestamp, format_iso_timestamp};
-pub use time::{normalize_iso_utc, parse_iso_millis};
 
 pub(super) const METADATA_FILE: &str = "meta.json";
 pub(super) const MESSAGES_FILE: &str = "messages.jsonl";
@@ -664,7 +662,7 @@ impl SessionStore {
             encoded.extend(encode_message(message)?);
             encoded.push(b'\n');
         }
-        write_atomically(&path, "messages", &encoded)?;
+        write_atomically(&path, "messages", &encoded, FileMode::Private)?;
         // The reference's message list always opens with the system prompt; a
         // list stored here without one keeps the prompt already recorded.
         if let Some(record) = messages
@@ -1408,7 +1406,7 @@ impl SessionStore {
             }
         }
         let encoded = serde_json::to_vec_pretty(&record).map_err(StorageError::Json)?;
-        write_atomically(&path, "meta", &encoded).map_err(StorageError::from)
+        write_atomically(&path, "meta", &encoded, FileMode::Private).map_err(StorageError::from)
     }
 
     fn write_pointer(&self, session_id: &str) -> Result<(), StorageError> {
@@ -1418,8 +1416,13 @@ impl SessionStore {
         let pointer_directory = self.root.join(LAST_SESSION_DIRECTORY);
         ensure_private_directory(&pointer_directory)?;
         let path = pointer_directory.join(pointer_key);
-        write_atomically(&path, "pointer", format!("{session_id}\n").as_bytes())
-            .map_err(StorageError::from)
+        write_atomically(
+            &path,
+            "pointer",
+            format!("{session_id}\n").as_bytes(),
+            FileMode::Private,
+        )
+        .map_err(StorageError::from)
     }
 
     fn read_pointer(&self) -> Result<Option<String>, StorageError> {
@@ -1739,9 +1742,14 @@ pub(super) fn session_directory_name(prefix: &str, now_ms: u64, id: &str) -> Str
 
 pub(super) fn message_fingerprint(message: &ModelMessage) -> Result<String, StorageError> {
     let value = message_record(message)?;
-    Ok(hex_encode(&Sha256::digest(
-        python_canonical_json(&value).as_bytes(),
-    )))
+    let payload = pycompat::dumps(
+        &value,
+        Dumps {
+            sort_keys: true,
+            ..Dumps::DEFAULT
+        },
+    );
+    Ok(sha256_hex(payload.as_bytes()))
 }
 
 pub(super) fn default_title_source() -> String {

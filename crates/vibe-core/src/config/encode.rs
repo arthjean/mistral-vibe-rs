@@ -19,9 +19,11 @@ const MAX_LINE_LENGTH: usize = 100;
 /// The indentation one array nesting level adds.
 const INDENT: &str = "    ";
 
-/// The document as the reference writes it.
+/// The document as `tomli_w.dumps` writes it with its default options, which
+/// is how the reference writes every TOML file it rewrites whole: a
+/// configuration layer, the trusted folders, the projects store.
 #[must_use]
-pub(super) fn encode_document(table: &Table) -> String {
+pub fn encode_document(table: &Table) -> String {
     let mut out = String::new();
     write_table(&mut out, table, "", false);
     out
@@ -90,7 +92,7 @@ fn literal(value: &Value, nesting: usize) -> String {
     match value {
         Value::String(text) => basic_string(text),
         Value::Integer(number) => number.to_string(),
-        Value::Float(number) => python_float(*number),
+        Value::Float(number) => crate::pycompat::repr_float(*number),
         Value::Boolean(flag) => flag.to_string(),
         Value::Datetime(datetime) => python_datetime(datetime),
         Value::Array(items) => inline_array(items, nesting),
@@ -158,56 +160,6 @@ fn basic_string(text: &str) -> String {
     }
     out.push('"');
     out
-}
-
-/// A float as Python's `str` spells it: the shortest digits that round-trip,
-/// positional between `1e-4` and `1e16` with at least one fractional digit,
-/// scientific with a signed two-digit exponent outside that range.
-fn python_float(number: f64) -> String {
-    if number.is_nan() {
-        return "nan".to_owned();
-    }
-    if number.is_infinite() {
-        return if number < 0.0 { "-inf" } else { "inf" }.to_owned();
-    }
-    // `{:e}` gives the shortest round-trip digits as `d.ddde<exp>`.
-    let scientific = format!("{number:e}");
-    let (mantissa, exponent) = scientific.split_once('e').unwrap_or((&scientific, "0"));
-    let exponent: i32 = exponent.parse().unwrap_or(0);
-    let negative = mantissa.starts_with('-');
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-    let sign = if negative { "-" } else { "" };
-    if (-4..16).contains(&exponent) {
-        let point = exponent + 1;
-        let (integral, fractional) = if point <= 0 {
-            let zeros = "0".repeat(usize::try_from(-point).unwrap_or(0));
-            ("0".to_owned(), format!("{zeros}{digits}"))
-        } else {
-            let point = usize::try_from(point).unwrap_or(0);
-            if digits.len() <= point {
-                (
-                    format!("{digits}{}", "0".repeat(point - digits.len())),
-                    String::new(),
-                )
-            } else {
-                (digits[..point].to_owned(), digits[point..].to_owned())
-            }
-        };
-        let fractional = if fractional.is_empty() {
-            "0".to_owned()
-        } else {
-            fractional
-        };
-        return format!("{sign}{integral}.{fractional}");
-    }
-    let (head, tail) = digits.split_at(1);
-    let mantissa = if tail.is_empty() {
-        head.to_owned()
-    } else {
-        format!("{head}.{tail}")
-    };
-    let exponent_sign = if exponent < 0 { '-' } else { '+' };
-    format!("{sign}{mantissa}e{exponent_sign}{:02}", exponent.abs())
 }
 
 /// A date-time as Python's `str` spells the value `tomllib` reads it as: a

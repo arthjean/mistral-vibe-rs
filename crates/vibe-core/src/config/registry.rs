@@ -24,6 +24,7 @@ use sha2::{Digest, Sha256};
 use toml::Value;
 
 use super::THEME_VALUES;
+use crate::pycompat::pydantic;
 use crate::text::hex_encode;
 
 /// Reference `UNPINNED_ACTIVE_MODEL`: the `active_model` value meaning "the
@@ -939,7 +940,7 @@ pub static FIELDS: &[FieldSpec] = &[
             "",
         ),
     FieldSpec::declared("console_base_url", FieldKind::Str, REPLACE).published(
-        FieldDefault::Str("https://console.mistral.ai"),
+        FieldDefault::Str(crate::auth::DEFAULT_CONSOLE_BASE_URL),
         "Console the browser sign-in flow opens.",
         "",
     ),
@@ -1350,31 +1351,18 @@ pub fn validate_field_types(table: &toml::Table) -> Result<(), String> {
                 toml::Value::Boolean(_) => true,
                 toml::Value::Integer(number) => matches!(number, 0 | 1),
                 toml::Value::Float(number) => *number == 0.0 || *number == 1.0,
-                toml::Value::String(text) => matches!(
-                    text.trim().to_ascii_lowercase().as_str(),
-                    "0" | "1"
-                        | "f"
-                        | "t"
-                        | "n"
-                        | "y"
-                        | "no"
-                        | "yes"
-                        | "off"
-                        | "on"
-                        | "true"
-                        | "false"
-                ),
+                toml::Value::String(text) => pydantic::lax_bool(text).is_some(),
                 _ => false,
             },
             FieldKind::Int => match value {
                 toml::Value::Integer(_) | toml::Value::Boolean(_) => true,
                 toml::Value::Float(number) => number.fract() == 0.0,
-                toml::Value::String(text) => text.trim().parse::<i64>().is_ok(),
+                toml::Value::String(text) => pydantic::lax_int(text).is_some(),
                 _ => false,
             },
             FieldKind::Float => match value {
                 toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Boolean(_) => true,
-                toml::Value::String(text) => text.trim().parse::<f64>().is_ok(),
+                toml::Value::String(text) => pydantic::lax_float(text).is_some(),
                 _ => false,
             },
             FieldKind::List => value.is_array(),

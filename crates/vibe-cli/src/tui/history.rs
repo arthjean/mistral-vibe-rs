@@ -1,9 +1,10 @@
 use std::collections::VecDeque;
-use std::fs::{self, File, OpenOptions};
-use std::io::{ErrorKind, Write};
+use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use tokio::task::JoinHandle;
+use vibe_core::atomic_file::{FileLock, FileMode, write_atomically};
 
 const MAX_HISTORY_ENTRIES: usize = 100;
 
@@ -125,7 +126,7 @@ fn persist_entry(path: &Path, entry: &str) -> Result<(), String> {
     }
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(|error| history_error(path, "create directory", error))?;
-    let _lock = HistoryLock::acquire(path)?;
+    let _lock = history_lock(path)?;
     let mut entries = read_entries(path).map_err(|error| history_error(path, "read", error))?;
     if entries.last().is_some_and(|previous| previous == entry) {
         return Ok(());
@@ -138,55 +139,14 @@ fn persist_entry(path: &Path, entry: &str) -> Result<(), String> {
 }
 
 fn write_entries(path: &Path, entries: &[String]) -> Result<(), String> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    let stamp = vibe_core::clock::now_nanos();
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("vibehistory");
-    let temporary = parent.join(format!(".{name}.{}.{stamp}.tmp", std::process::id()));
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
+    let mut contents = Vec::new();
+    for entry in entries {
+        serde_json::to_writer(&mut contents, entry)
+            .map_err(|error| format!("Prompt history serialization failed: {error}"))?;
+        contents.push(b'\n');
     }
-    let mut file = options
-        .open(&temporary)
-        .map_err(|error| history_error(path, "create replacement", error))?;
-    let write_result = (|| {
-        for entry in entries {
-            serde_json::to_writer(&mut file, entry)
-                .map_err(|error| format!("Prompt history serialization failed: {error}"))?;
-            file.write_all(b"\n")
-                .map_err(|error| history_error(path, "write replacement", error))?;
-        }
-        file.sync_all()
-            .map_err(|error| history_error(path, "sync replacement", error))?;
-        drop(file);
-        fs::rename(&temporary, path).map_err(|error| history_error(path, "replace", error))?;
-        sync_parent(parent);
-        Ok(())
-    })();
-    if write_result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    write_result
-}
-
-#[cfg_attr(
-    not(unix),
-    expect(
-        unused_variables,
-        reason = "a directory cannot be opened to sync it on Windows"
-    )
-)]
-fn sync_parent(parent: &Path) {
-    #[cfg(unix)]
-    if let Ok(directory) = File::open(parent) {
-        let _ = directory.sync_all();
-    }
+    write_atomically(path, "vibehistory", &contents, FileMode::Private)
+        .map_err(|error| history_error(path, "replace", error.source))
 }
 
 fn history_error(path: &Path, operation: &str, error: std::io::Error) -> String {
@@ -196,39 +156,15 @@ fn history_error(path: &Path, operation: &str, error: std::io::Error) -> String 
     )
 }
 
-struct HistoryLock {
-    file: File,
-}
-
-impl HistoryLock {
-    fn acquire(history_path: &Path) -> Result<Self, String> {
-        let parent = history_path.parent().unwrap_or_else(|| Path::new("."));
-        let name = history_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("vibehistory");
-        let path = parent.join(format!(".{name}.lock"));
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt as _;
-
-            options.mode(0o600);
-        }
-        let file = options
-            .open(path)
-            .map_err(|error| history_error(history_path, "open lock", error))?;
-        file.lock()
-            .map_err(|error| history_error(history_path, "lock", error))?;
-        Ok(Self { file })
-    }
-}
-
-impl Drop for HistoryLock {
-    fn drop(&mut self) {
-        let _ = self.file.unlock();
-    }
+/// The cross-process lock every history write merges under, beside the file.
+fn history_lock(history_path: &Path) -> Result<FileLock, String> {
+    let parent = history_path.parent().unwrap_or_else(|| Path::new("."));
+    let name = history_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("vibehistory");
+    FileLock::acquire(&parent.join(format!(".{name}.lock")))
+        .map_err(|error| history_error(history_path, "lock", error))
 }
 
 #[cfg(test)]

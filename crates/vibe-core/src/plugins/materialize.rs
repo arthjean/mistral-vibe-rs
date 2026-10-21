@@ -15,10 +15,10 @@ use serde_json::Value;
 
 use super::catalog::{PluginConnectorCatalog, PluginMcpDiscovery, build_tool_catalog};
 use super::diagnostics::{self as codes, PluginConfigIssue};
-use super::native::{
-    PluginKnowledgeDefinition, PluginLibraryDefinition, ResolvedPluginSet, python_repr,
-};
+use super::native::{PluginKnowledgeDefinition, PluginLibraryDefinition, ResolvedPluginSet};
 use super::paths::{is_relative_to, resolve_strict};
+use crate::atomic_file::{FileMode, write_atomically};
+use crate::pycompat;
 
 /// The variable the Node loader reads its package roots from.
 pub const PLUGIN_NODE_PATHS_ENV: &str = "UNIFIED_HARNESS_PLUGIN_NODE_PATHS";
@@ -201,7 +201,11 @@ fn seed_knowledge(definition: &PluginKnowledgeDefinition, data_root: &Path) -> i
         .ok_or_else(|| io::Error::other("knowledge runtime root has no parent"))?;
     fs::create_dir_all(parent)?;
     if !definition.runtime_root.exists() {
-        let temporary = parent.join(format!(".{}-{}", definition.source_name, random_suffix()));
+        let temporary = parent.join(format!(
+            ".{}-{}",
+            definition.source_name,
+            crate::session_id::random_hex::<16>()
+        ));
         fs::create_dir(&temporary)?;
         let staged = temporary.join("content");
         let outcome = copy_tree(&definition.source_root, &staged).and_then(|()| {
@@ -251,7 +255,7 @@ fn materialize_libraries(
                 &definition.config_file,
                 format!(
                     "The Node plugin library {} cannot load because Node.js is not installed",
-                    python_repr(&definition.alias)
+                    pycompat::repr_str(&definition.alias)
                 ),
                 codes::LIBRARY_RUNTIME_UNAVAILABLE,
                 Some(plugin.source_format),
@@ -265,7 +269,7 @@ fn materialize_libraries(
                 format!(
                     "Could not stage the {} plugin library {}: {error}",
                     definition.language,
-                    python_repr(&definition.alias)
+                    pycompat::repr_str(&definition.alias)
                 ),
                 codes::LIBRARY_MATERIALIZATION_FAILED,
                 Some(plugin.source_format),
@@ -291,7 +295,7 @@ fn seed_library(definition: &PluginLibraryDefinition, data_root: &Path) -> io::R
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
-        let temporary = parent.join(format!(".{name}-{}", random_suffix()));
+        let temporary = parent.join(format!(".{name}-{}", crate::session_id::random_hex::<16>()));
         let copied = if definition.source_path.is_dir() {
             copy_tree(&definition.source_path, &temporary)
         } else {
@@ -426,14 +430,9 @@ fn write_runtime_file(path: &Path, content: &str) -> io::Result<()> {
     if fs::read_to_string(path).is_ok_and(|current| current == content) {
         return Ok(());
     }
-    let name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let temporary = path.with_file_name(format!(".{name}-{}", random_suffix()));
-    let outcome = fs::write(&temporary, content).and_then(|()| fs::rename(&temporary, path));
-    let _ = fs::remove_file(&temporary);
-    outcome
+    // The reference's `write_text` leaves the process default mode.
+    write_atomically(path, "runtime", content.as_bytes(), FileMode::Default)
+        .map_err(|error| error.source)
 }
 
 /// Copies a tree of plain files and directories.
@@ -450,17 +449,4 @@ fn copy_tree(source: &Path, target: &Path) -> io::Result<()> {
         }
     }
     Ok(())
-}
-
-fn random_suffix() -> String {
-    let mut bytes = [0_u8; 16];
-    if getrandom::fill(&mut bytes).is_err() {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or_default()
-            .to_le_bytes();
-        bytes.copy_from_slice(&stamp);
-    }
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

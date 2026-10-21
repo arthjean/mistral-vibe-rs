@@ -7,7 +7,6 @@
 //! digest whatever key order or Unicode composition the file used.
 
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
 
 /// A value RFC 8785 cannot serialize: a float that is not finite, or an
@@ -59,13 +58,7 @@ pub fn canonical_json(value: &Value) -> Result<Vec<u8>, CanonicalJsonError> {
 ///
 /// Whatever [`canonical_json`] refuses.
 pub fn canonical_json_digest(value: &Value) -> Result<String, CanonicalJsonError> {
-    Ok(sha256_hex(&canonical_json(value)?))
-}
-
-/// The SHA-256 of some bytes, in lowercase hex.
-#[must_use]
-pub fn sha256_hex(bytes: &[u8]) -> String {
-    hex::encode(Sha256::digest(bytes))
+    Ok(crate::text::sha256_hex(&canonical_json(value)?))
 }
 
 const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;

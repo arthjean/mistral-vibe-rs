@@ -168,7 +168,7 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
                 .persisted
                 .as_ref()
                 .and_then(|persisted| persisted.metadata.archived_at.as_deref())
-                .and_then(vibe_core::storage::parse_iso_millis),
+                .and_then(vibe_core::time::parse_iso_millis),
             "isUnseen": false,
             // Reference `project_workdir`: the configured display directory
             // when there is one.

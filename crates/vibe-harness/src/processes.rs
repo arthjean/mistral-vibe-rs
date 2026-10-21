@@ -18,10 +18,10 @@ use std::time::{Duration, Instant};
 
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
+use vibe_core::clock::now_millis;
+use vibe_core::text::sha256_hex;
 use vibe_core::tools::shell::CommandEnvironment;
 
-use crate::clock::now_millis;
 use crate::state::ToolResult;
 use crate::tools::shell::ShellContext;
 
@@ -183,23 +183,16 @@ fn unknown(process_id: &str) -> ToolResult {
     )
 }
 
-fn hex_digest(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 /// Reference `_process_id`: stable for one session, action and call.
 #[must_use]
 pub fn process_id(session_id: &str, action_id: &str, call_id: &str) -> String {
-    let session = hex_digest(session_id.as_bytes());
+    let session = sha256_hex(session_id.as_bytes());
     let mut seed = b"process\0".to_vec();
     for part in [session_id, action_id, call_id] {
         seed.extend_from_slice(part.as_bytes());
         seed.push(0);
     }
-    format!("process-{}-{}", &session[..12], &hex_digest(&seed)[..24])
+    format!("process-{}-{}", &session[..12], &sha256_hex(&seed)[..24])
 }
 
 /// Reference `_merge_process_environment`: the environment's defaults under

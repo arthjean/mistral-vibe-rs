@@ -141,7 +141,7 @@ impl CallFacts {
             error.status,
             Some(error.error_type.clone()),
             std::collections::BTreeMap::new(),
-            super::python_json::Ordered::from(&body).dumps(true),
+            crate::pycompat::dumps(&body, crate::pycompat::Dumps::DEFAULT),
             Some(error.message.clone()),
         )
         .into()
@@ -344,14 +344,10 @@ impl GenericBackend {
         let data: Value = serde_json::from_str(&text).map_err(|error| {
             BackendFailure::local(LocalKind::Json, format!("the answer is not JSON: {error}"))
         })?;
-        let mut chunk = dialect
+        dialect
             .reader()
             .parse(&data, &self.provider)
-            .map_err(|failure| facts.surface(failure))?;
-        if matches!(dialect, Dialect::Anthropic | Dialect::VertexAnthropic) {
-            super::anthropic::reorder_tool_inputs(&mut chunk, &text);
-        }
-        Ok(chunk)
+            .map_err(|failure| facts.surface(failure))
     }
 
     /// One streaming call.

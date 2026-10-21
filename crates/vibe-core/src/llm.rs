@@ -29,7 +29,6 @@ pub mod error;
 pub mod generic;
 pub mod mistral;
 pub mod pump;
-pub mod python_json;
 pub mod responses;
 pub mod retry;
 pub mod sse;

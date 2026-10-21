@@ -683,7 +683,7 @@ fn ensure_global_config_paths_are_trusted(project: &Path) -> Result<(), UnsafeFe
         ),
     }
     for path in paths {
-        let resolved = super::resolve_lenient(&path);
+        let resolved = crate::platform::resolve_lenient(&path);
         if resolved.starts_with(project) {
             return Err(unsafe_fetch(
                 "a global git configuration inside the repository is not trusted",

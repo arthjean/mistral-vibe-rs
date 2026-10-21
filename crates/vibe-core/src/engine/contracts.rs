@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 
 use super::{
     CompactionFuture, PersistenceFuture, ProviderFuture, ProviderStreamFuture, SessionStats,
-    ToolFuture, ToolStreamSink, current_time_millis,
+    ToolFuture, ToolStreamSink,
 };
 use crate::compaction::CompactionFailure;
 use crate::events::{
@@ -460,7 +460,7 @@ impl TranscriptSink for SessionTranscriptSink {
         snapshot: &'a ProjectionSnapshot,
     ) -> PersistenceFuture<'a> {
         Box::pin(async move {
-            let persisted_at = current_time_millis();
+            let persisted_at = crate::clock::now_millis();
             let mut metadata = self
                 .metadata
                 .lock()

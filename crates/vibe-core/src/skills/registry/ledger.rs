@@ -17,8 +17,9 @@ use std::path::{Path, PathBuf};
 
 use sha1::{Digest, Sha1};
 
-use super::manifest::resolve_lenient;
 use super::store;
+use crate::atomic_file::{FileMode, write_atomically};
+use crate::platform::resolve_lenient;
 
 /// The key the global manifest's pins are recorded under.
 pub const GLOBAL_KEY: &str = "global";
@@ -67,17 +68,9 @@ pub fn record(vibe_home: &Path, key: &str, active: &BTreeSet<(String, i64)>) -> 
         .map(|(skill_id, version)| format!("{skill_id}@{version}"))
         .collect::<Vec<_>>();
     lines.sort();
-    let staged = root.join(format!(
-        "{key}.{}.tmp",
-        crate::session_id::generate_session_id(None)
-    ));
-    if let Err(error) = fs::write(&staged, lines.join("\n")) {
-        let _ = fs::remove_file(&staged);
-        return Err(error);
-    }
-    fs::rename(&staged, &target).inspect_err(|_| {
-        let _ = fs::remove_file(&staged);
-    })
+    // Owner-only, as the reference's `mkstemp` staging file leaves it.
+    write_atomically(&target, key, lines.join("\n").as_bytes(), FileMode::Private)
+        .map_err(|error| error.source)
 }
 
 /// The union of every recorded repository's active set (reference `union`).

@@ -320,7 +320,7 @@ fn the_mistral_server_is_what_precedes_the_last_version_segment_of_its_base() {
         ("https:///v1", None),
     ] {
         assert_eq!(
-            server_url_from_api_base(api_base).as_deref(),
+            crate::llm::mistral::server_url(api_base).as_deref(),
             expected,
             "{api_base}"
         );

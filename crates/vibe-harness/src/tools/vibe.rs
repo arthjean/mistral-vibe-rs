@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
-use vibe_core::llm::python_json::Ordered;
+use vibe_core::pycompat::{self, Dumps, pydantic};
 
 use crate::state::ToolResult;
 
@@ -18,8 +18,8 @@ const MAX_TODOS_DEFAULT: usize = 100;
 const TODO_STATUSES: [&str; 4] = ["pending", "in_progress", "completed", "cancelled"];
 const TODO_PRIORITIES: [&str; 3] = ["low", "medium", "high"];
 
-/// The field orders the payloads are declared in, which `json.dumps` keeps
-/// and a `serde_json` map does not.
+/// The field orders the payloads are declared in, which `json.dumps` writes
+/// them in whatever order a stored payload carries its keys.
 const FIELD_ORDERS: &[&[&str]] = &[
     &["verb", "todos", "total_count", "message"],
     &["id", "content", "status", "priority"],
@@ -54,12 +54,12 @@ pub fn question_result(result: &Value) -> Value {
 /// every object's keys in the order its model declares them.
 #[must_use]
 pub fn python_dumps(value: &Value) -> String {
-    ordered(value).dumps(true)
+    pycompat::dumps(&ordered(value), Dumps::DEFAULT)
 }
 
-fn ordered(value: &Value) -> Ordered {
+fn ordered(value: &Value) -> Value {
     match value {
-        Value::Array(items) => Ordered::Array(items.iter().map(ordered).collect()),
+        Value::Array(items) => Value::Array(items.iter().map(ordered).collect()),
         Value::Object(map) => {
             let order = FIELD_ORDERS
                 .iter()
@@ -68,13 +68,13 @@ fn ordered(value: &Value) -> Ordered {
             if let Some(order) = order {
                 keys.sort_by_key(|key| order.iter().position(|known| known == key));
             }
-            Ordered::Object(
+            Value::Object(
                 keys.into_iter()
                     .map(|key| (key.clone(), ordered(&map[key])))
                     .collect(),
             )
         }
-        other => Ordered::from(other),
+        other => other.clone(),
     }
 }
 
@@ -201,7 +201,15 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
                         "TodoArgs",
                         &field(name),
                         Some(other),
-                        &format!("Input should be {}", python_choices(allowed)),
+                        &format!(
+                            "Input should be {}",
+                            pydantic::expected_literals(
+                                &allowed
+                                    .iter()
+                                    .map(|choice| Value::from(*choice))
+                                    .collect::<Vec<_>>()
+                            )
+                        ),
                         "enum",
                     )),
                 }
@@ -216,14 +224,6 @@ fn todo_items(value: &Value) -> Result<Vec<Value>, String> {
         .collect()
 }
 
-fn python_choices(allowed: &[&str]) -> String {
-    let quoted: Vec<String> = allowed.iter().map(|choice| format!("'{choice}'")).collect();
-    match quoted.split_last() {
-        Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
-        _ => quoted.join(""),
-    }
-}
-
 /// `str(ValidationError)` for one failing field.
 fn pydantic_error(
     model: &str,
@@ -232,19 +232,14 @@ fn pydantic_error(
     message: &str,
     kind: &str,
 ) -> String {
-    let input = input.unwrap_or(&Value::Null);
-    format!(
-        "1 validation error for {model}\n{field}\n  {message} [type={kind}, input_value={}, input_type={}]\n    For further information visit https://errors.pydantic.dev/2.12/v/{kind}",
-        crate::tool_projection::python_repr_value(input),
-        match input {
-            Value::Null => "NoneType",
-            Value::Bool(_) => "bool",
-            Value::Number(number) if number.is_f64() => "float",
-            Value::Number(_) => "int",
-            Value::String(_) => "str",
-            Value::Array(_) => "list",
-            Value::Object(_) => "dict",
-        },
+    pydantic::validation_error(
+        model,
+        &[pydantic::LineError {
+            location: field,
+            kind,
+            message,
+            input: input.unwrap_or(&Value::Null),
+        }],
     )
 }
 
@@ -455,13 +450,7 @@ pub fn scratchpad_block_to_restate(directory: &Path, history: &[Value]) -> Optio
 }
 
 fn short_digest(bytes: &[u8]) -> String {
-    use sha2::Digest as _;
-    let digest = sha2::Sha256::digest(bytes);
-    digest
-        .iter()
-        .take(8)
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    vibe_core::text::sha256_hex(bytes)[..16].to_owned()
 }
 
 fn read_notes(directory: &Path) -> Option<(String, String)> {

@@ -10,6 +10,7 @@ use serde_json::{Map, Value, json};
 use super::error::{BackendFailure, LocalFailure, LocalKind};
 use super::types::{Chunk, Message, Role, Tool, ToolCall, ToolChoice, Usage};
 use crate::provider::config::ProviderConfig;
+use crate::pycompat;
 
 /// Everything a dialect needs to write one request.
 #[derive(Debug, Clone, Copy)]
@@ -230,18 +231,6 @@ pub fn truthy(value: &Value) -> bool {
     }
 }
 
-/// `str(value)` of a value `json.loads` produced.
-#[must_use]
-pub fn python_str(value: &Value) -> String {
-    match value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::String(text) => text.clone(),
-        other => super::python_json::Ordered::from(other).dumps(false),
-    }
-}
-
 /// A token count as a lenient integer field reads it: an integer, a float
 /// without a fraction, or a string of digits. Anything else is refused.
 ///
@@ -333,7 +322,7 @@ pub fn chat_finish_reason(data: &Map<String, Value>) -> Result<Option<String>, L
         .ok_or_else(|| LocalFailure::new(LocalKind::Attribute, "a choice is not a JSON object"))?;
     Ok(match first.get("finish_reason") {
         None | Some(Value::Null) => None,
-        Some(reason) => Some(python_str(reason)),
+        Some(reason) => Some(pycompat::str_json(reason)),
     })
 }
 
@@ -349,12 +338,12 @@ pub fn coerce_content(value: &Value) -> Option<String> {
                 .iter()
                 .map(|part| match part.get("text") {
                     Some(Value::String(text)) if part.is_object() => text.clone(),
-                    _ => python_str(part),
+                    _ => pycompat::str_json(part),
                 })
                 .collect::<Vec<_>>()
                 .join("\n"),
         ),
-        other => Some(python_str(other)),
+        other => Some(pycompat::str_json(other)),
     }
 }
 

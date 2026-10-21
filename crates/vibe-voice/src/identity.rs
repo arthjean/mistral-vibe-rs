@@ -9,6 +9,7 @@
 //! it JSON-encoded in `x-metadata`, the speech request in its body.
 
 use serde_json::{Map, Value};
+use vibe_core::pycompat::{self, Dumps};
 
 /// The version every audio request reports, the workspace's own.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -70,38 +71,7 @@ pub fn metadata_object(metadata: &RequestMetadata) -> Value {
 /// every character outside ASCII escaped.
 #[must_use]
 pub fn metadata_header(metadata: &RequestMetadata) -> String {
-    let members = metadata
-        .iter()
-        .map(|(key, value)| format!("{}: {}", python_string(key), python_string(value)))
-        .collect::<Vec<_>>();
-    format!("{{{}}}", members.join(", "))
-}
-
-fn python_string(text: &str) -> String {
-    let mut encoded = String::with_capacity(text.len() + 2);
-    encoded.push('"');
-    for character in text.chars() {
-        match character {
-            '"' => encoded.push_str("\\\""),
-            '\\' => encoded.push_str("\\\\"),
-            '\n' => encoded.push_str("\\n"),
-            '\r' => encoded.push_str("\\r"),
-            '\t' => encoded.push_str("\\t"),
-            '\u{08}' => encoded.push_str("\\b"),
-            '\u{0c}' => encoded.push_str("\\f"),
-            character if character.is_ascii() && !character.is_ascii_control() => {
-                encoded.push(character);
-            }
-            character => {
-                let mut units = [0_u16; 2];
-                for unit in character.encode_utf16(&mut units) {
-                    encoded.push_str(&format!("\\u{unit:04x}"));
-                }
-            }
-        }
-    }
-    encoded.push('"');
-    encoded
+    pycompat::dumps(&metadata_object(metadata), Dumps::DEFAULT)
 }
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ fn structured(result: ToolResult) -> Value {
 #[test]
 fn a_process_id_hashes_the_session_and_the_call() {
     let id = process_id("session", "action", "call");
-    assert!(id.starts_with(&format!("process-{}-", &hex_digest(b"session")[..12])));
+    assert!(id.starts_with(&format!("process-{}-", &sha256_hex(b"session")[..12])));
     assert_eq!(id.len(), "process-".len() + 12 + 1 + 24);
     assert_eq!(id, process_id("session", "action", "call"));
 }

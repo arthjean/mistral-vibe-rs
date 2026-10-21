@@ -117,7 +117,7 @@ where
             Some(Value::Number(millis)) => millis.as_u64().map(iso_timestamp),
             Some(Value::String(stamp)) => Some(stamp.clone()),
             Some(Value::Null) => None,
-            _ => Some(iso_timestamp(crate::agent::turn::now_millis())),
+            _ => Some(iso_timestamp(vibe_core::clock::now_millis())),
         };
         if let Some(harness) = &live {
             // Reference `_forward_unsolicited_events`: the session update the

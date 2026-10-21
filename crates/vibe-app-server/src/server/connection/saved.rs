@@ -13,7 +13,8 @@ use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde_json::Map;
 use vibe_core::storage::lease::{LeaseError, SessionLease};
-use vibe_core::storage::{SessionInfo, SessionStore, StorageError, parse_iso_millis};
+use vibe_core::storage::{SessionInfo, SessionStore, StorageError};
+use vibe_core::time::parse_iso_millis;
 use vibe_core::worktree::WorktreeRepository;
 
 /// Reference `_open_initial_session_locked`: what a method needing a root

@@ -14,7 +14,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
 use crate::child::{ChildGroup, Rung};
 use crate::observability::{self, LogLevel};
 
@@ -422,8 +422,13 @@ impl UpdateCacheStore {
                 if let Some(parent) = self.path.parent() {
                     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
                 }
-                write_atomically(&self.path, "cache.toml", encoded.as_bytes())
-                    .map_err(|error| format!("{error:?}"))
+                write_atomically(
+                    &self.path,
+                    "cache.toml",
+                    encoded.as_bytes(),
+                    FileMode::Private,
+                )
+                .map_err(|error| format!("{error:?}"))
             });
         if let Err(error) = written {
             observability::log(
@@ -703,8 +708,9 @@ fn python_iter(value: Option<&serde_json::Value>) -> impl Iterator<Item = serde_
 /// as something no version grammar accepts.
 fn python_str(value: &serde_json::Value) -> Option<String> {
     match value {
-        serde_json::Value::String(text) => Some(text.clone()),
-        serde_json::Value::Number(number) => Some(number.to_string()),
+        serde_json::Value::String(_) | serde_json::Value::Number(_) => {
+            Some(crate::pycompat::str_json(value))
+        }
         _ => None,
     }
 }
@@ -888,7 +894,7 @@ pub fn select_latest_release(payload: &serde_json::Value) -> Option<String> {
 /// around a tag stripped of Python whitespace, and an empty tag is no version.
 #[must_use]
 fn extract_release_version(tag_name: &str) -> Option<String> {
-    let tag = tag_name.trim_matches(version::is_python_space);
+    let tag = crate::pycompat::strip(tag_name);
     let version = tag.strip_prefix(['v', 'V']).unwrap_or(tag);
     (!version.is_empty()).then(|| version.to_owned())
 }
@@ -1291,8 +1297,6 @@ mod tests {
 
     #[test]
     fn the_not_found_sentence_is_this_port_s_own() {
-        use sha2::{Digest, Sha256};
-
         // `NOTICE`: the reference sentence is never committed as text. It is
         // recorded as a length plus a SHA-256 measured from
         // `vibe/cli/update_notifier/adapters/github_update_gateway.py` at
@@ -1307,10 +1311,7 @@ mod tests {
             !sentence.is_empty(),
             "the not-found cause must still name a next action"
         );
-        let digest: String = Sha256::digest(sentence.as_bytes())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect();
+        let digest = crate::text::sha256_hex(sentence.as_bytes());
         assert!(
             sentence.len() != REFERENCE_LENGTH || digest != REFERENCE_DIGEST,
             "the not-found sentence became the reference's own; write an original one"

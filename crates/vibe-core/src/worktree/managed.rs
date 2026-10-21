@@ -16,12 +16,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::observability::{self, LogLevel};
+use crate::platform::resolve_lenient;
 
 use super::git::{self, GitRepo};
 use super::record::{PruneLock, WorktreeClaim};
 use super::{
     ManagedRoot, PendingSessionHold, PreparedWorktree, WorktreeError, WorktreeRecord,
-    WorktreeRecoveryRecord, WorktreeRepository, resolve_lenient, validate_existing_worktree,
+    WorktreeRecoveryRecord, WorktreeRepository, validate_existing_worktree,
 };
 
 /// Where snapshots live: under `refs/vibe/` rather than `refs/heads/`, so a
@@ -234,7 +235,7 @@ impl ManagedWorktree {
     /// own holder, or [`None`] when there is no record to hold
     /// (`vibe/core/git/worktree/repository.py:722-729`).
     pub fn hold_for_attachment(&self) -> Result<Option<PendingSessionHold>, WorktreeError> {
-        let holder_id = format!("attach-{}", random_hex());
+        let holder_id = format!("attach-{}", crate::session_id::random_hex::<16>());
         let _lock = PruneLock::acquire(self.claim.managed())?;
         if self.claim.read().is_none() {
             return Ok(None);
@@ -952,13 +953,4 @@ fn ensure_saved_directory(name: &str, requested: &Path) -> Result<(), WorktreeEr
             ),
         )
     })
-}
-
-fn random_hex() -> String {
-    let mut bytes = [0_u8; 16];
-    if getrandom::fill(&mut bytes).is_err() {
-        let nanos = crate::clock::now_nanos();
-        return format!("{nanos:032x}");
-    }
-    hex::encode(bytes)
 }

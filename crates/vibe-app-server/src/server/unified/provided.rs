@@ -521,11 +521,7 @@ fn digest(salt: &[u8], value: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(salt);
     hasher.update(value.as_bytes());
-    hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    vibe_core::text::hex_encode(&hasher.finalize())
 }
 
 fn unique_digest_name(candidate: &str, digest: &str, used: &[String]) -> String {

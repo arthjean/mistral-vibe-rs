@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use toml::Value as TomlValue;
+use vibe_core::auth::DEFAULT_CONSOLE_BASE_URL;
 use vibe_core::config::DotenvValues;
+use vibe_core::pycompat::{self, Dumps};
 use vibe_core::whoami::{
     HttpWhoAmIGateway, WhoAmIFailure, WhoAmIGateway, WhoAmIResult, reconcile_tenant_domains,
     store_cached_whoami, whoami_cache_path,
@@ -17,7 +19,6 @@ use vibe_core::whoami::{
 use super::WorkspaceService;
 use crate::vocabulary::{AccountActionKind, AccountPlanKind, AccountStatus};
 
-const DEFAULT_CONSOLE_BASE_URL: &str = "https://console.mistral.ai";
 /// Chat plan names the reference sells as Pro.
 const PAID_CHAT_PLANS: [&str; 3] = ["INDIVIDUAL", "EDU", "TEAM"];
 /// The reference's HTTP client keeps httpx's five-second default.
@@ -313,10 +314,17 @@ impl WorkspaceService {
             .await?;
         let organization = identity.organization.as_ref()?;
         let workspace = identity.workspace.as_ref()?;
-        let share_context = vibe_core::mcp::authorization::python_json(&serde_json::json!({
-            "organizationId": organization.id,
-            "workspaceId": workspace.id,
-        }));
+        let share_context = pycompat::dumps(
+            &serde_json::json!({
+                "organizationId": organization.id,
+                "workspaceId": workspace.id,
+            }),
+            Dumps {
+                sort_keys: true,
+                separators: Some((",", ":")),
+                ..Dumps::DEFAULT
+            },
+        );
         let console = self
             .config
             .load()

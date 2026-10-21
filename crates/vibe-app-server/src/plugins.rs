@@ -16,6 +16,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
+use vibe_core::platform::resolve_lenient;
 use vibe_core::plugins::catalog::{PluginConnectorCatalog, PluginMcpDiscovery};
 use vibe_core::plugins::compatibility::{
     PluginMcpHttpAuth, PluginMcpServer, plugin_runtime_state_names,
@@ -25,7 +26,7 @@ use vibe_core::plugins::drift::{
     PluginRouteKey, PluginRouteStatus, reconcile_plugin_routes, retain_pinned_tools,
 };
 use vibe_core::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
-use vibe_core::plugins::paths::{PluginPathRef, resolve_lax, resolve_plugin_path};
+use vibe_core::plugins::paths::{PluginPathRef, resolve_plugin_path};
 use vibe_core::plugins::redaction::{redact_argv, redact_names, redact_url};
 use vibe_core::plugins::snapshot::{ResolvedPluginSnapshot, build_snapshot};
 use vibe_core::plugins::{PluginConfigIssue, PluginResolver, ResolvedPluginSet};
@@ -273,7 +274,7 @@ async fn pin_and_bind(
         .iter()
         .map(|(name, checkout)| {
             (
-                resolve_lax(checkout),
+                resolve_lenient(checkout),
                 installed_scopes
                     .get(name)
                     .copied()
@@ -359,7 +360,7 @@ struct PackageStore {
 impl PackageStore {
     fn new(storage_root: &Path) -> Self {
         Self {
-            root: resolve_lax(storage_root).join("plugins"),
+            root: resolve_lenient(storage_root).join("plugins"),
         }
     }
 

@@ -14,11 +14,13 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 
+use crate::atomic_file::{FileMode, write_atomically};
+use crate::clock::now_seconds_signed;
 use crate::experiments::hash_api_key;
 use crate::identity::IdentityFuture;
 use crate::observability::{self, LogLevel};
@@ -271,14 +273,6 @@ pub fn whoami_cache_path(vibe_home: &Path) -> PathBuf {
     vibe_home.join(WHOAMI_CACHE_FILE)
 }
 
-fn now_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
-        })
-}
-
 fn read_entries(path: &Path) -> Map<String, Value> {
     std::fs::read_to_string(path)
         .ok()
@@ -291,22 +285,17 @@ fn read_entries(path: &Path) -> Map<String, Value> {
 }
 
 /// Writes the entries through a sibling file and a rename, so a reader never
-/// sees half a document. Best effort: a failure leaves the previous file.
+/// sees half a document. Best effort: a failure leaves the previous file. The
+/// entries are keyed by credential, so the file is owner-only.
 fn write_entries(path: &Path, entries: &Map<String, Value>) {
-    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
-        return;
-    };
-    let staged = path.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
     let Ok(text) = serde_json::to_string(entries) else {
         return;
     };
-    let written = path
+    if path
         .parent()
-        .map_or(Ok(()), std::fs::create_dir_all)
-        .and_then(|()| std::fs::write(&staged, text))
-        .and_then(|()| std::fs::rename(&staged, path));
-    if written.is_err() {
-        drop(std::fs::remove_file(&staged));
+        .is_some_and(|parent| std::fs::create_dir_all(parent).is_ok())
+    {
+        let _ = write_atomically(path, "whoami", text.as_bytes(), FileMode::Private);
     }
 }
 
@@ -322,7 +311,7 @@ pub fn load_cached_whoami(path: &Path, api_key: &str) -> Option<WhoAmIResult> {
     // nothing else, a float included.
     let stored_at = entry.get("stored_at_timestamp")?.as_i64()?;
     let payload = entry.get("payload")?.as_object()?;
-    if stored_at <= now_seconds() - WHOAMI_CACHE_TTL_SECONDS {
+    if stored_at <= now_seconds_signed() - WHOAMI_CACHE_TTL_SECONDS {
         return None;
     }
     serde_json::from_value(Value::Object(payload.clone())).ok()
@@ -336,7 +325,10 @@ pub fn store_cached_whoami(path: &Path, api_key: &str, result: &WhoAmIResult) {
     };
     let mut entries = read_entries(path);
     let mut entry = Map::new();
-    entry.insert("stored_at_timestamp".to_owned(), Value::from(now_seconds()));
+    entry.insert(
+        "stored_at_timestamp".to_owned(),
+        Value::from(now_seconds_signed()),
+    );
     entry.insert("payload".to_owned(), payload);
     entries.insert(hash_api_key(api_key), Value::Object(entry));
     write_entries(path, &entries);
@@ -480,7 +472,7 @@ pub fn resolve_user_plan(plan_type: Option<&str>, plan_name: Option<&str>) -> Op
         return Some(NO_PLAN_DATA.to_owned());
     }
     let kind = AccountPlanKind::from_value(plan_type?)?;
-    let name = crate::text::python_strip(plan_name.unwrap_or_default()).to_uppercase();
+    let name = crate::pycompat::strip(plan_name.unwrap_or_default()).to_uppercase();
     let label = match kind {
         AccountPlanKind::Chat => match name.as_str() {
             "FREE" => "Free",

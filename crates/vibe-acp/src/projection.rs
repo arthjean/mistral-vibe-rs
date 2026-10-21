@@ -115,35 +115,7 @@ pub(crate) fn session_info_update(title: Option<&str>, updated_at_ms: u64) -> Va
 /// Milliseconds since the epoch as an ISO 8601 UTC timestamp with an explicit
 /// offset, the form Python's `datetime.isoformat` writes for an aware time.
 pub(crate) fn iso_timestamp(millis: u64) -> String {
-    let seconds = i64::try_from(millis / 1_000).unwrap_or(i64::MAX);
-    let micros = (millis % 1_000) * 1_000;
-    let days = seconds.div_euclid(86_400);
-    let secs_of_day = seconds.rem_euclid(86_400);
-    let (year, month, day) = civil_from_days(days);
-    let (hour, minute, second) = (
-        secs_of_day / 3_600,
-        (secs_of_day % 3_600) / 60,
-        secs_of_day % 60,
-    );
-    if micros == 0 {
-        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}+00:00")
-    } else {
-        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{micros:06}+00:00")
-    }
-}
-
-/// Howard Hinnant's days-to-civil conversion.
-fn civil_from_days(days: i64) -> (i64, i64, i64) {
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let day_of_year = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * day_of_year + 2) / 153;
-    let day = day_of_year - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    (year, month, day)
+    vibe_core::time::format_iso_micros(millis.saturating_mul(1_000))
 }
 
 fn kind(entry: &Value) -> &str {

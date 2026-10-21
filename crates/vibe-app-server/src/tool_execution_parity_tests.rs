@@ -52,6 +52,7 @@ use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
 };
+use vibe_core::pycompat::{self, Dumps};
 use vibe_core::skills::{SkillDiscovery, SkillScope, SkillSource};
 use vibe_core::storage::SessionStore;
 use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
@@ -1071,7 +1072,7 @@ fn response_body(spec: &Value) -> Vec<u8> {
         return unit.repeat(count).into_bytes();
     }
     if let Some(document) = spec.get("json") {
-        return python_json(document).into_bytes();
+        return pycompat::dumps(document, RESPONSE_JSON).into_bytes();
     }
     spec.get("body")
         .and_then(Value::as_str)
@@ -1080,30 +1081,13 @@ fn response_body(spec: &Value) -> Vec<u8> {
         .to_vec()
 }
 
-/// `json.dumps(value, sort_keys=True)`, whose default separators carry a space
-/// that `serde_json::to_string` omits.
-///
-/// The body's byte count is what `web_fetch` reports and what the corpus
-/// digests, so the spacing is load-bearing rather than cosmetic. Key order is
-/// already sorted, because this workspace builds `serde_json` without
-/// `preserve_order`.
-fn python_json(value: &Value) -> String {
-    match value {
-        Value::Object(fields) => {
-            let body = fields
-                .iter()
-                .map(|(key, item)| format!("{}: {}", Value::String(key.clone()), python_json(item)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("{{{body}}}")
-        }
-        Value::Array(items) => format!(
-            "[{}]",
-            items.iter().map(python_json).collect::<Vec<_>>().join(", ")
-        ),
-        other => other.to_string(),
-    }
-}
+/// `json.dumps(value, sort_keys=True)`. The body's byte count is what
+/// `web_fetch` reports and what the corpus digests, so the default separators
+/// are load-bearing rather than cosmetic.
+const RESPONSE_JSON: Dumps = Dumps {
+    sort_keys: true,
+    ..Dumps::DEFAULT
+};
 
 // --------------------------------------------------------------------------
 // Scripted collaborators
@@ -1851,7 +1835,7 @@ fn the_projection_agrees_with_the_capture_script() {
     // `json.dumps` separators, which decide the byte count a fetched body
     // reports.
     assert_eq!(
-        python_json(&json!({"count": 2, "fixture": true})),
+        pycompat::dumps(&json!({"count": 2, "fixture": true}), RESPONSE_JSON),
         r#"{"count": 2, "fixture": true}"#
     );
 }

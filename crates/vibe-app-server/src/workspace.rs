@@ -780,7 +780,7 @@ impl WorkspaceService {
             user_roots: files.user_plugins_dirs(),
             vibe_home: self.paths.vibe_home.clone(),
             storage_root: self.session_logging.save_dir.clone(),
-            workdir: vibe_core::plugins::paths::resolve_lax(working_directory),
+            workdir: vibe_core::platform::resolve_lenient(working_directory),
             configured_mcp_names,
         }
     }

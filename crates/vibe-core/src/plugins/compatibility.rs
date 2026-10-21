@@ -16,6 +16,7 @@ use serde_json::Value;
 
 use super::paths::{is_relative_to, resolve_strict};
 use crate::hooks::HookConfig;
+use crate::pycompat;
 use crate::skills::SkillScope;
 
 pub const NATIVE_SCHEMA: &str = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json";
@@ -422,22 +423,12 @@ pub fn detect_plugin_source_format(root: &Path) -> PluginFormatDetection {
 pub fn author_display_name(value: Option<&Value>) -> Option<String> {
     match value? {
         Value::String(text) => {
-            let trimmed = python_strip(text);
+            let trimmed = pycompat::strip(text);
             (!trimmed.is_empty()).then(|| trimmed.to_owned())
         }
         Value::Object(map) => author_display_name(map.get("name")),
         _ => None,
     }
-}
-
-/// Python's `str.strip()` with no argument, which strips Unicode whitespace.
-#[must_use]
-pub fn python_strip(text: &str) -> &str {
-    text.trim_matches(|character: char| character.is_whitespace() || is_python_space(character))
-}
-
-fn is_python_space(character: char) -> bool {
-    matches!(character, '\u{1c}'..='\u{1f}' | '\u{85}')
 }
 
 /// Every character outside ASCII letters, digits, `_` and `$` becomes `_`,
@@ -511,7 +502,7 @@ pub fn blake2s_hex(payload: &[u8], size: usize) -> String {
     if hasher.finalize_variable(&mut output).is_err() {
         return String::new();
     }
-    hex::encode(output)
+    crate::text::hex_encode(&output)
 }
 
 /// A path a manifest declares, resolved inside the plugin root. Reference

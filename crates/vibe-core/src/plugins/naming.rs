@@ -8,8 +8,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use sha2::{Digest, Sha256};
-
 use super::compatibility::typescript_identifier;
 
 const DIGEST_PREFIX: usize = 8;
@@ -67,7 +65,7 @@ impl ToolGroupIdentity {
             &self.source_id,
         ]
         .join("\0");
-        hex::encode(Sha256::digest(identity.as_bytes()))
+        crate::text::sha256_hex(identity.as_bytes())
     }
 }
 

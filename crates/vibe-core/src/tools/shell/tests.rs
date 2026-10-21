@@ -13,7 +13,6 @@ use tempfile::{TempDir, tempdir};
 use super::session::{SessionLimits, new_session_id};
 use super::specs::CONTROL_KEYS;
 use super::*;
-use crate::auth::UtcTimestamp;
 use crate::matching::NameFilter;
 use crate::platform::Platform;
 use crate::policy::{ApprovalAgent, PermissionStore};
@@ -22,6 +21,7 @@ use crate::policy::{
 };
 use crate::process::{ClientToolIo, ClientToolRequest};
 use crate::shell::{ShellCommandLists, ShellFlavor};
+use crate::time::UtcTimestamp;
 use crate::tools::{ToolHandlerFuture, ToolSkip};
 
 /// Answers every approval the same way and records what it was asked to

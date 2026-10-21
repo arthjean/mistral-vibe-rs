@@ -368,7 +368,7 @@ fn relay(frame: &Value, events: &mpsc::UnboundedSender<TranscribeEvent>) -> bool
         }
         Some("error") => match valid_error_message(frame) {
             Some(message) => {
-                let message = python_str(message);
+                let message = vibe_core::pycompat::str_json(message);
                 let event = if message.contains(EMPTY_RECORDING_MARKER) {
                     TranscribeEvent::Done
                 } else {
@@ -487,68 +487,6 @@ fn valid_done(frame: &Value) -> bool {
 
 fn is_integer(value: Option<&Value>) -> bool {
     value.is_some_and(|value| value.is_i64() || value.is_u64())
-}
-
-/// Python's `str()` of the message the error event carries: text as it is,
-/// an object as Python prints a `dict`.
-fn python_str(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        other => python_repr(other),
-    }
-}
-
-/// Python's `repr()` of a parsed JSON value.
-fn python_repr(value: &Value) -> String {
-    match value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::Number(number) => number.to_string(),
-        Value::String(text) => python_string_repr(text),
-        Value::Array(items) => format!(
-            "[{}]",
-            items.iter().map(python_repr).collect::<Vec<_>>().join(", ")
-        ),
-        Value::Object(members) => format!(
-            "{{{}}}",
-            members
-                .iter()
-                .map(|(key, item)| format!("{}: {}", python_string_repr(key), python_repr(item)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
-}
-
-/// Python's `repr()` of a string: single quotes unless the text holds one
-/// and no double quote, and the control characters escaped.
-fn python_string_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut repr = String::with_capacity(text.len() + 2);
-    repr.push(quote);
-    for character in text.chars() {
-        match character {
-            '\\' => repr.push_str("\\\\"),
-            '\n' => repr.push_str("\\n"),
-            '\r' => repr.push_str("\\r"),
-            '\t' => repr.push_str("\\t"),
-            character if character == quote => {
-                repr.push('\\');
-                repr.push(character);
-            }
-            character if u32::from(character) < 0x20 || character == '\u{7f}' => {
-                repr.push_str(&format!("\\x{:02x}", u32::from(character)));
-            }
-            character => repr.push(character),
-        }
-    }
-    repr.push(quote);
-    repr
 }
 
 #[cfg(test)]

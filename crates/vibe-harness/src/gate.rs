@@ -113,7 +113,7 @@ impl CallbackBook {
     #[must_use]
     pub fn fresh_id(&self, base: &str) -> String {
         if self.waiters.contains_key(base) {
-            format!("{base}-{}", crate::engine::random_hex(4))
+            format!("{base}-{}", vibe_core::session_id::random_hex::<4>())
         } else {
             base.to_owned()
         }

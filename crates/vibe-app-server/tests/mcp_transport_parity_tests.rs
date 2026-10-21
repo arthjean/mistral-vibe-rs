@@ -36,7 +36,7 @@ use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use url::Url;
 use vibe_core::auth::{McpOAuthStore, MemoryKeyringBackend};
-use vibe_core::mcp::authorization::{python_json, server_fingerprint, server_identity};
+use vibe_core::mcp::authorization::{server_fingerprint, server_identity};
 use vibe_core::mcp::{
     DefaultMcpPeerFactory, McpAuthConfig, McpAuthenticationService, McpAuthorizationRequired,
     McpDeclared, McpDeclaredCommand, McpDescriptorCache, McpFuture, McpOAuthConfig, McpRegistry,
@@ -47,12 +47,20 @@ use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
 };
+use vibe_core::pycompat::{self, Dumps};
 use vibe_core::tools::{ToolInvocation, ToolRegistry};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("mcp-transport/corpus.json");
 const FIXTURE: &str = env!("CARGO_BIN_EXE_vibe-mcp-script-fixture");
 const CAPTURE_SCRIPT: &str = "scripts/parity/mcp_transport.py";
+/// `json.dumps(value, sort_keys=True, separators=(",", ":"))`, the spelling the
+/// reference fingerprints and cache keys use.
+const CANONICAL: Dumps = Dumps {
+    sort_keys: true,
+    separators: Some((",", ":")),
+    ..Dumps::DEFAULT
+};
 
 /// A difference the replay accepts, and why.
 struct Divergence {
@@ -649,7 +657,7 @@ fn age_cache(root: &Path, seconds: f64) {
     let Ok(entries) = std::fs::read_dir(root.join("descriptors")) else {
         return;
     };
-    let moved = vibe_core::auth::sign_in::UtcTimestamp::now().plus_seconds(-seconds);
+    let moved = vibe_core::time::UtcTimestamp::now().plus_seconds(-seconds);
     let stamp = moved.to_iso8601().replace("+00:00", "Z");
     for entry in entries.flatten() {
         let path = entry.path();
@@ -764,7 +772,7 @@ async fn run_scenario(
     cache.sort_by_key(|record| {
         (
             record["sourceName"].as_str().unwrap_or_default().to_owned(),
-            python_json(&record["key"]),
+            pycompat::dumps(&record["key"], CANONICAL),
         )
     });
     let required = sessions
@@ -785,7 +793,7 @@ async fn run_scenario(
         .map(|config| {
             (
                 config.alias.clone(),
-                json!({"canonical": python_json(&server_identity(config))}),
+                json!({"canonical": pycompat::dumps(&server_identity(config), CANONICAL)}),
             )
         })
         .collect::<Map<_, _>>();

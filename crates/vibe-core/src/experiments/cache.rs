@@ -14,9 +14,12 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use toml::Table;
+
+use crate::atomic_file::{FileMode, write_atomically};
+use crate::clock::now_seconds_signed;
 
 use super::json::{JsonValue, OrderedMap};
 use super::manager::hash_api_key;
@@ -71,7 +74,7 @@ impl EvalCache {
     /// Reference `load_cached_eval_response`.
     #[must_use]
     pub fn load(&self, effective: &Table, credentials: &CredentialSource) -> Option<EvalResponse> {
-        self.load_at(effective, credentials, now_seconds())
+        self.load_at(effective, credentials, now_seconds_signed())
     }
 
     /// [`Self::load`] as of `now`, in seconds since the epoch.
@@ -109,7 +112,7 @@ impl EvalCache {
         credentials: &CredentialSource,
         response: &EvalResponse,
     ) {
-        self.store_at(effective, credentials, response, now_seconds());
+        self.store_at(effective, credentials, response, now_seconds_signed());
     }
 
     /// [`Self::store`] as of `now`, in seconds since the epoch.
@@ -152,7 +155,7 @@ impl EvalCache {
     /// any configuration exists.
     #[must_use]
     pub fn rollout_variant(&self, feature: &str) -> Option<String> {
-        self.rollout_variant_at(feature, now_seconds())
+        self.rollout_variant_at(feature, now_seconds_signed())
     }
 
     /// [`Self::rollout_variant`] as of `now`, in seconds since the epoch.
@@ -190,27 +193,19 @@ impl EvalCache {
             .unwrap_or_default()
     }
 
-    /// Replaces the file with `entries`, staged beside it under a name that
-    /// carries this process's identifier and moved into place, so a reader
-    /// never sees half a document.
+    /// Replaces the file with `entries`, staged beside it and moved into
+    /// place, so a reader never sees half a document. The entries are keyed
+    /// by credential, so the file is owner-only.
     ///
     /// Reference `_write_entries`.
     fn write_entries(&self, entries: &OrderedMap<JsonValue>) {
-        let Some(name) = self.path.file_name().and_then(|name| name.to_str()) else {
-            return;
-        };
-        let staged = self
-            .path
-            .with_file_name(format!(".{name}.{}.tmp", std::process::id()));
         let text = JsonValue::Object(entries.clone()).python_json_compact();
-        let written = self
+        if self
             .path
             .parent()
-            .map_or(Ok(()), fs::create_dir_all)
-            .and_then(|()| fs::write(&staged, text))
-            .and_then(|()| fs::rename(&staged, &self.path));
-        if written.is_err() {
-            drop(fs::remove_file(&staged));
+            .is_some_and(|parent| fs::create_dir_all(parent).is_ok())
+        {
+            let _ = write_atomically(&self.path, "eval-cache", text.as_bytes(), FileMode::Private);
         }
     }
 }
@@ -246,13 +241,4 @@ fn integer(value: &JsonValue) -> Option<i64> {
 
 fn ttl_seconds() -> i64 {
     i64::try_from(EVAL_CACHE_TTL.as_secs()).unwrap_or(i64::MAX)
-}
-
-/// The current second, as `int(time.time())` answers it.
-fn now_seconds() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |elapsed| {
-            i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
-        })
 }

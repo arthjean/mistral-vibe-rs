@@ -23,7 +23,6 @@ mod models;
 mod hooks_tests;
 
 pub use config::{load_hooks_file, load_hooks_file_with, load_hooks_from_fs};
-pub use json::python_json_dumps;
 pub use manager::{HooksManager, MAX_RETRIES};
 pub use models::{
     DEFAULT_HOOK_TIMEOUT, HookConfig, HookConfigIssue, HookConfigResult, HookEvent,

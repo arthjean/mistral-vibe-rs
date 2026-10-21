@@ -15,7 +15,7 @@ use std::sync::{Arc, LazyLock};
 use regex::Regex;
 use serde_json::{Map, Value};
 
-use super::canonical::{canonical_json_digest, sha256_hex};
+use super::canonical::canonical_json_digest;
 use super::compatibility::{
     AdaptedHook, AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
     DetectedPluginFormat, PluginAdapterDiagnostic, PluginMcpServer, PluginToolOverride,
@@ -24,13 +24,16 @@ use super::compatibility::{
 };
 use super::content::digest_plugin_tree;
 use super::diagnostics::{self as codes, PluginConfigIssue, Severity};
-use super::paths::{is_relative_to, resolve_lax, resolve_strict};
+use super::paths::{is_relative_to, resolve_strict};
 use super::strict::{self, ValidationErrors, at, char_len};
 use crate::extensions::SkillDefinition;
 use crate::hooks::HookConfig;
+use crate::platform::resolve_lenient;
+use crate::pycompat::{self, Dumps};
 use crate::skills::parser::parse_skill_markdown;
 use crate::skills::schema::SkillMetadata;
 use crate::skills::{SkillScope, SkillSource};
+use crate::text::sha256_hex;
 
 const RESERVED_NAMESPACES: [&str; 6] = [
     "file_system",
@@ -425,7 +428,7 @@ impl Resolve<'_> {
             let scope = self
                 .resolver
                 .plugin_scopes
-                .get(&resolve_lax(plugin_dir))
+                .get(&resolve_lenient(plugin_dir))
                 .copied()
                 .unwrap_or(SkillScope::Project);
             buckets.entry(scope).or_default().push(plugin_dir.clone());
@@ -593,7 +596,7 @@ impl Resolve<'_> {
                 &manifest_path,
                 format!(
                     "The plugin namespace {} is reserved",
-                    python_repr(&namespace)
+                    pycompat::repr_str(&namespace)
                 ),
             ));
             return None;
@@ -660,7 +663,7 @@ impl Resolve<'_> {
                     &package.manifest_path,
                     format!(
                         "The plugin namespace {} is reserved",
-                        python_repr(&package.namespace)
+                        pycompat::repr_str(&package.namespace)
                     ),
                     codes::NAMESPACE_RESERVED,
                     Some(package.source_format),
@@ -775,7 +778,7 @@ impl Resolve<'_> {
                     &definition.source_path,
                     format!(
                         "The plugin skill alias {} is declared twice",
-                        python_repr(&alias)
+                        pycompat::repr_str(&alias)
                     ),
                     codes::SKILL_COLLISION,
                     Some(plugin.source_format),
@@ -1018,7 +1021,7 @@ impl Resolve<'_> {
                     &resolved,
                     format!(
                         "The plugin hook name {} is declared twice",
-                        python_repr(&hook.name)
+                        pycompat::repr_str(&hook.name)
                     ),
                     codes::HOOKS_DUPLICATE_NAME,
                     Some(plugin.source_format),
@@ -1200,7 +1203,7 @@ impl Resolve<'_> {
                 display_name: document
                     .display_name
                     .clone()
-                    .unwrap_or_else(|| python_title(&stem.replace('-', " "))),
+                    .unwrap_or_else(|| pycompat::title(&stem.replace('-', " "))),
                 description: document.description.clone(),
                 safety: document.safety.clone(),
                 instructions: document.instructions.clone(),
@@ -1278,7 +1281,7 @@ impl Resolve<'_> {
                     &candidate,
                     format!(
                         "Could not load the Node plugin library {}: {error}",
-                        python_repr(&alias)
+                        pycompat::repr_str(&alias)
                     ),
                     codes::LIBRARY_INVALID,
                     Some(plugin.source_format),
@@ -1320,7 +1323,7 @@ impl Resolve<'_> {
                     &candidate,
                     format!(
                         "Could not load the Python plugin library {}: {error}",
-                        python_repr(&alias)
+                        pycompat::repr_str(&alias)
                     ),
                     codes::LIBRARY_INVALID,
                     Some(plugin.source_format),
@@ -1399,7 +1402,7 @@ impl Resolve<'_> {
                     &item.config_file,
                     format!(
                         "The {language} library alias {} is claimed by more than one plugin: {owners}",
-                        python_repr(&alias)
+                        pycompat::repr_str(&alias)
                     ),
                     codes::LIBRARY_ALIAS_COLLISION,
                     Some(DetectedPluginFormat::AgentPlugins10),
@@ -1429,8 +1432,8 @@ impl Resolve<'_> {
                 message: format!(
                     "The MCP server {} of plugin {} is disabled because a configured MCP server \
                      already has that name and the two would share credentials; rename one of them",
-                    python_repr(&definition.source_id),
-                    python_repr(&definition.plugin_name),
+                    pycompat::repr_str(&definition.source_id),
+                    pycompat::repr_str(&definition.plugin_name),
                 ),
                 severity: Severity::Warning,
                 code: Some(codes::MCP_SERVER_SHADOWED.to_owned()),
@@ -1491,15 +1494,15 @@ impl Resolve<'_> {
                     &resolved_config,
                     format!(
                         "Could not load the MCP server {}: {error}",
-                        python_repr(&source_id)
+                        pycompat::repr_str(&source_id)
                     ),
                 )),
                 Ok((None, transport)) => self.issues.push(PluginConfigIssue::plain(
                     &resolved_config,
                     format!(
                         "The MCP server {} uses the unsupported transport {}",
-                        python_repr(&source_id),
-                        python_repr(&transport)
+                        pycompat::repr_str(&source_id),
+                        pycompat::repr_str(&transport)
                     ),
                 )),
                 Ok((Some(server), _)) => {
@@ -1570,8 +1573,8 @@ impl Resolve<'_> {
                         } else {
                             Err(format!(
                                 "the skill name {} does not match its directory {}",
-                                python_repr(&skill.name),
-                                python_repr(&expected_name)
+                                pycompat::repr_str(&skill.name),
+                                pycompat::repr_str(&expected_name)
                             ))
                         }
                     }),
@@ -1597,7 +1600,7 @@ impl Resolve<'_> {
                         &resolved_skill,
                         format!(
                             "The plugin skill alias {} is declared twice",
-                            python_repr(&alias)
+                            pycompat::repr_str(&alias)
                         ),
                         codes::SKILL_COLLISION,
                         Some(plugin.source_format),
@@ -1676,7 +1679,7 @@ impl Resolve<'_> {
                     &item.manifest_path,
                     format!(
                         "Two plugins named {} have the same precedence",
-                        python_repr(&name)
+                        pycompat::repr_str(&name)
                     ),
                 ));
             }
@@ -1712,7 +1715,7 @@ impl Resolve<'_> {
                     &item.manifest_path,
                     format!(
                         "The plugin namespace {} is claimed by {names}",
-                        python_repr(&namespace)
+                        pycompat::repr_str(&namespace)
                     ),
                 ));
             }
@@ -1792,23 +1795,32 @@ pub fn render_generated_skill(definition: &AdaptedSkill) -> String {
         "---".to_owned(),
         format!(
             "name: {}",
-            crate::hooks::python_json_dumps(&Value::String(definition.source_name.clone()))
+            pycompat::dumps(
+                &Value::String(definition.source_name.clone()),
+                Dumps::DEFAULT
+            )
         ),
         format!(
             "description: {}",
-            crate::hooks::python_json_dumps(&Value::String(definition.description.clone()))
+            pycompat::dumps(
+                &Value::String(definition.description.clone()),
+                Dumps::DEFAULT
+            )
         ),
     ];
     if !definition.allowed_tools.is_empty() {
         lines.push(format!(
             "allowed-tools: {}",
-            crate::hooks::python_json_dumps(&Value::Array(
-                definition
-                    .allowed_tools
-                    .iter()
-                    .map(|tool| Value::String(tool.clone()))
-                    .collect()
-            ))
+            pycompat::dumps(
+                &Value::Array(
+                    definition
+                        .allowed_tools
+                        .iter()
+                        .map(|tool| Value::String(tool.clone()))
+                        .collect()
+                ),
+                Dumps::DEFAULT
+            )
         ));
     }
     if !definition.model_invocable {
@@ -1827,7 +1839,7 @@ pub fn render_generated_skill(definition: &AdaptedSkill) -> String {
 /// file name kept. Reference `SkillInfo.from_metadata`.
 fn skill_file_path(path: &Path) -> PathBuf {
     match (path.parent(), path.file_name()) {
-        (Some(parent), Some(name)) => resolve_lax(parent).join(name),
+        (Some(parent), Some(name)) => resolve_lenient(parent).join(name),
         _ => path.to_path_buf(),
     }
 }
@@ -1838,7 +1850,7 @@ fn openai_policy(path: &Path, root: &Path) -> Result<bool, String> {
     {
         let resolved = resolve_strict(&metadata)
             .map_err(|error| format!("agents/openai.yaml cannot be read: {error}"))?;
-        if !is_relative_to(&resolved, &resolve_lax(root)) {
+        if !is_relative_to(&resolved, &resolve_lenient(root)) {
             return Err("agents/openai.yaml has to resolve inside the plugin".to_owned());
         }
     }
@@ -2082,8 +2094,8 @@ fn load_knowledge_folder(
     if metadata.name != directory {
         return Err(format!(
             "the knowledge name {} does not match its directory {}",
-            python_repr(&metadata.name),
-            python_repr(&directory)
+            pycompat::repr_str(&metadata.name),
+            pycompat::repr_str(&directory)
         ));
     }
     Ok((source_root, source_entrypoint, metadata))
@@ -2396,7 +2408,7 @@ fn parse_libraries(text: &str) -> Result<LibraryEntries, String> {
                     language,
                     format!(
                         "{} is not a valid {label} package alias",
-                        python_repr(alias)
+                        pycompat::repr_str(alias)
                     ),
                 );
                 return None;
@@ -2658,11 +2670,14 @@ fn validate_http_headers(headers: &[(String, String)]) -> Result<(), String> {
         if !HTTP_HEADER_NAME.is_match(name) {
             return Err(format!(
                 "{} is not a valid HTTP header name",
-                python_repr(name)
+                pycompat::repr_str(name)
             ));
         }
         if !seen.insert(name.to_lowercase()) {
-            return Err(format!("the HTTP header {} is repeated", python_repr(name)));
+            return Err(format!(
+                "the HTTP header {} is repeated",
+                pycompat::repr_str(name)
+            ));
         }
         if value.chars().any(|character| {
             character != '\t'
@@ -2672,7 +2687,7 @@ fn validate_http_headers(headers: &[(String, String)]) -> Result<(), String> {
         }) {
             return Err(format!(
                 "the value of the HTTP header {} is invalid",
-                python_repr(name)
+                pycompat::repr_str(name)
             ));
         }
     }
@@ -2730,7 +2745,7 @@ fn to_plugin_mcp_server(
 
 fn resolve_plugin_command(plugin_root: &Path, command: &str) -> Result<String, String> {
     if let Some(relative) = command.strip_prefix("./") {
-        let resolved = resolve_lax(&plugin_root.join(relative));
+        let resolved = resolve_lenient(&plugin_root.join(relative));
         if !is_relative_to(&resolved, plugin_root) {
             return Err("a stdio command has to resolve inside the plugin".to_owned());
         }
@@ -2770,8 +2785,8 @@ fn resolve_plugin_cwd(plugin: &PluginDescriptor, value: Option<&str>) -> Result<
             "a stdio cwd has to start with './', '${PLUGIN_ROOT}' or '${PLUGIN_DATA}'".to_owned(),
         );
     };
-    let resolved = resolve_lax(&candidate);
-    if !is_relative_to(&resolved, &resolve_lax(&expected_root)) {
+    let resolved = resolve_lenient(&candidate);
+    if !is_relative_to(&resolved, &resolve_lenient(&expected_root)) {
         return Err("the stdio cwd resolves outside the root it names".to_owned());
     }
     Ok(resolved)
@@ -2886,34 +2901,6 @@ fn file_name(path: &Path) -> String {
 #[must_use]
 pub fn path_text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
-}
-
-/// Python's `repr` of a string, which every message quotes names with.
-#[must_use]
-pub fn python_repr(value: &str) -> String {
-    crate::mcp::render::python_string(value)
-}
-
-/// Python's `str.title()`: a letter after a non-letter is uppercased and every
-/// other letter lowercased.
-#[must_use]
-pub fn python_title(value: &str) -> String {
-    let mut titled = String::with_capacity(value.len());
-    let mut previous_cased = false;
-    for character in value.chars() {
-        if character.is_alphabetic() {
-            if previous_cased {
-                titled.extend(character.to_lowercase());
-            } else {
-                titled.extend(character.to_uppercase());
-            }
-            previous_cased = true;
-        } else {
-            titled.push(character);
-            previous_cased = false;
-        }
-    }
-    titled
 }
 
 #[cfg(test)]

@@ -10,6 +10,7 @@
 use serde_json::{Map, Value, json};
 
 use super::ToolEffectKind;
+use crate::pycompat::pydantic;
 
 /// The type a field validates as, in pydantic's lax mode.
 #[derive(Clone, Copy)]
@@ -374,11 +375,7 @@ fn boolean(value: &Value) -> Option<Value> {
             Some(1.0) => Some(json!(true)),
             _ => None,
         },
-        Value::String(text) => match text.to_ascii_lowercase().as_str() {
-            "0" | "off" | "f" | "false" | "n" | "no" => Some(json!(false)),
-            "1" | "on" | "t" | "true" | "y" | "yes" => Some(json!(true)),
-            _ => None,
-        },
+        Value::String(text) => pydantic::lax_bool(text).map(Value::Bool),
         _ => None,
     }
 }

@@ -15,11 +15,9 @@
 //! `crate::auth::mcp_oauth`.
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::sync::{Arc, Mutex as StdMutex};
 
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 use tokio::sync::Mutex;
 
 use super::{McpAuthConfig, McpServerConfig, McpTransportConfig};
@@ -27,6 +25,7 @@ use crate::auth::mcp_oauth::{
     AuthUrlSink, CredentialBackup, McpOAuthError, McpOAuthStore, RefreshOutcome, perform_login,
     refresh_credential,
 };
+use crate::pycompat::{self, Dumps};
 
 /// What kind of credential a server connects with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -655,7 +654,8 @@ impl McpAuthenticationService {
         let Some(store) = &self.oauth else {
             return required(McpAuthorizationReason::Missing);
         };
-        let current = oauth_fingerprint(server).map(|fingerprint| python_json(&fingerprint));
+        let current =
+            oauth_fingerprint(server).map(|fingerprint| pycompat::dumps(&fingerprint, FINGERPRINT));
         let (Ok(saved), Ok(tokens)) = (store.fingerprint(name), store.tokens(name)) else {
             return required(McpAuthorizationReason::Missing);
         };
@@ -676,7 +676,7 @@ impl McpAuthenticationService {
         };
         if tokens
             .expiry()
-            .is_some_and(|expiry| expiry <= crate::auth::mcp_oauth::now_seconds())
+            .is_some_and(|expiry| expiry <= crate::clock::now_seconds_f64())
         {
             match refresh_credential(store, server).await {
                 RefreshOutcome::Completed => {}
@@ -750,8 +750,8 @@ fn http_headers_with(
 
 /// Reference `_authorization_material`: a digest of the headers themselves.
 fn authorization_material(headers: &BTreeMap<String, String>) -> String {
-    let encoded = python_json(&json!(headers));
-    hex::encode(Sha256::digest(encoded.as_bytes()))
+    let encoded = pycompat::dumps(&json!(headers), FINGERPRINT);
+    crate::text::sha256_hex(encoded.as_bytes())
 }
 
 /// The seconds a timeout is configured in, as the reference's float field.
@@ -871,105 +871,24 @@ pub fn server_identity(server: &McpServerConfig) -> Value {
 /// Reference `_server_fingerprint`.
 #[must_use]
 pub fn server_fingerprint(server: &McpServerConfig) -> String {
-    let encoded = python_json(&server_identity(server));
-    hex::encode(Sha256::digest(encoded.as_bytes()))
+    let encoded = pycompat::dumps(&server_identity(server), FINGERPRINT);
+    crate::text::sha256_hex(encoded.as_bytes())
 }
 
-/// Python's `json.dumps(value, sort_keys=True, separators=(",", ":"))`:
-/// ASCII-only, keys sorted by code point, floats in their `repr`.
-#[must_use]
-pub fn python_json(value: &Value) -> String {
-    let mut rendered = String::new();
-    write_python_json(value, &mut rendered, true);
-    rendered
-}
-
-/// The same spelling with `ensure_ascii=False`: characters outside ASCII are
-/// written as themselves rather than escaped.
-#[must_use]
-pub fn python_json_unicode(value: &Value) -> String {
-    let mut rendered = String::new();
-    write_python_json(value, &mut rendered, false);
-    rendered
-}
-
-fn write_python_json(value: &Value, rendered: &mut String, ascii: bool) {
-    match value {
-        Value::Null => rendered.push_str("null"),
-        Value::Bool(flag) => rendered.push_str(if *flag { "true" } else { "false" }),
-        Value::Number(number) => {
-            if number.is_f64() {
-                let float = number.as_f64().unwrap_or_default();
-                rendered.push_str(&match super::render::python_float(float).as_str() {
-                    "nan" => "NaN".to_owned(),
-                    "inf" => "Infinity".to_owned(),
-                    "-inf" => "-Infinity".to_owned(),
-                    other => other.to_owned(),
-                });
-            } else {
-                rendered.push_str(&number.to_string());
-            }
-        }
-        Value::String(text) => write_python_string(text, rendered, ascii),
-        Value::Array(items) => {
-            rendered.push('[');
-            for (index, item) in items.iter().enumerate() {
-                if index > 0 {
-                    rendered.push(',');
-                }
-                write_python_json(item, rendered, ascii);
-            }
-            rendered.push(']');
-        }
-        Value::Object(fields) => {
-            let mut keys = fields.keys().collect::<Vec<_>>();
-            keys.sort_by(|left, right| left.chars().cmp(right.chars()));
-            rendered.push('{');
-            for (index, key) in keys.into_iter().enumerate() {
-                if index > 0 {
-                    rendered.push(',');
-                }
-                write_python_string(key, rendered, ascii);
-                rendered.push(':');
-                if let Some(field) = fields.get(key) {
-                    write_python_json(field, rendered, ascii);
-                }
-            }
-            rendered.push('}');
-        }
-    }
-}
-
-fn write_python_string(text: &str, rendered: &mut String, ascii: bool) {
-    rendered.push('"');
-    for character in text.chars() {
-        match character {
-            '"' => rendered.push_str("\\\""),
-            '\\' => rendered.push_str("\\\\"),
-            '\n' => rendered.push_str("\\n"),
-            '\r' => rendered.push_str("\\r"),
-            '\t' => rendered.push_str("\\t"),
-            '\u{8}' => rendered.push_str("\\b"),
-            '\u{c}' => rendered.push_str("\\f"),
-            printable if (' '..='~').contains(&printable) => rendered.push(printable),
-            wide if !ascii && wide > '~' => rendered.push(wide),
-            other => {
-                let mut units = [0_u16; 2];
-                for unit in other.encode_utf16(&mut units) {
-                    let _ = write!(rendered, "\\u{unit:04x}");
-                }
-            }
-        }
-    }
-    rendered.push('"');
-}
+/// `json.dumps(value, sort_keys=True, separators=(",", ":"))`, the spelling
+/// every fingerprint here is taken over.
+const FINGERPRINT: Dumps = Dumps {
+    sort_keys: true,
+    separators: Some((",", ":")),
+    ..Dumps::DEFAULT
+};
 
 /// A stored fingerprint re-spelled canonically, so one written by either
 /// implementation compares by content rather than by spacing.
 fn normalized_json(stored: &str) -> Option<String> {
     serde_json::from_str::<Value>(stored)
         .ok()
-        .map(|value| python_json(&value))
+        .map(|value| pycompat::dumps(&value, FINGERPRINT))
 }
 
 #[cfg(test)]
@@ -977,10 +896,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn python_json_matches_json_dumps_with_sorted_compact_ascii_output() {
+    fn fingerprints_dump_sorted_compact_ascii_json() {
         let value = json!({"b": 10.0, "a": ["é", null, true, 0.5], "c": "q\"\\\n\u{1f600}"});
         assert_eq!(
-            python_json(&value),
+            pycompat::dumps(&value, FINGERPRINT),
             r#"{"a":["\u00e9",null,true,0.5],"b":10.0,"c":"q\"\\\n\ud83d\ude00"}"#
         );
     }

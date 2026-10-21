@@ -27,6 +27,7 @@ use std::sync::LazyLock;
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Number, Value};
+use vibe_core::pycompat::pydantic;
 use vibe_protocol::{InvalidParamsIssue, PathSegment};
 
 /// The reduced pydantic-core schemas, compiled in.
@@ -553,7 +554,7 @@ impl Walk {
                     self.fail(
                         path,
                         "literal_error",
-                        format!("Input should be {}", expected_list(expected)),
+                        format!("Input should be {}", pydantic::expected_literals(expected)),
                     );
                     None
                 }
@@ -566,7 +567,7 @@ impl Walk {
                     self.fail(
                         path,
                         "enum",
-                        format!("Input should be {}", expected_list(values)),
+                        format!("Input should be {}", pydantic::expected_literals(values)),
                     );
                     None
                 }
@@ -820,26 +821,22 @@ impl Walk {
                 self.integral(value, path)
             }
             Json::Bool(value) if !strict => Some(i64::from(*value)),
-            Json::String(text) if !strict => {
-                let trimmed = text.trim();
-                if let Ok(value) = trimmed.parse::<i64>() {
-                    return Some(value);
+            Json::String(text) if !strict => match pydantic::lax_int(text) {
+                // Past the 64-bit range the value saturates, as a float does.
+                Some(value) => Some(i64::try_from(value).unwrap_or(if value < 0 {
+                    i64::MIN
+                } else {
+                    i64::MAX
+                })),
+                None => {
+                    self.fail(
+                        path,
+                        "int_parsing",
+                        "Input should be a valid integer, unable to parse string as an integer",
+                    );
+                    None
                 }
-                match trimmed.parse::<f64>() {
-                    Ok(value) if value.is_finite() && value.fract() == 0.0 => {
-                        self.integral(value, path)
-                    }
-                    _ => {
-                        self.fail(
-                            path,
-                            "int_parsing",
-                            "Input should be a valid integer, unable to parse string as an \
-                             integer",
-                        );
-                        None
-                    }
-                }
-            }
+            },
             _ => {
                 self.fail(path, "int_type", "Input should be a valid integer");
                 None
@@ -871,7 +868,7 @@ impl Walk {
         let value = match input {
             Json::Number(number) => number.as_f64(),
             Json::Bool(value) if !strict => Some(if *value { 1.0 } else { 0.0 }),
-            Json::String(text) if !strict => match python_float(text.trim()) {
+            Json::String(text) if !strict => match pydantic::lax_float(text) {
                 Some(value) => Some(value),
                 None => {
                     self.fail(
@@ -915,14 +912,10 @@ impl Walk {
                     None
                 }
             },
-            Json::String(text) if !strict => match text.to_ascii_lowercase().as_str() {
-                "0" | "off" | "f" | "false" | "n" | "no" => Some(false),
-                "1" | "on" | "t" | "true" | "y" | "yes" => Some(true),
-                _ => {
-                    self.fail(path, "bool_parsing", PARSING);
-                    None
-                }
-            },
+            Json::String(text) if !strict => pydantic::lax_bool(text).or_else(|| {
+                self.fail(path, "bool_parsing", PARSING);
+                None
+            }),
             _ => {
                 self.fail(path, "bool_type", "Input should be a valid boolean");
                 None
@@ -989,20 +982,6 @@ impl Walk {
     }
 }
 
-/// Python's `float()` over a string pydantic already stripped.
-fn python_float(text: &str) -> Option<f64> {
-    match text.to_ascii_lowercase().as_str() {
-        "inf" | "+inf" | "infinity" | "+infinity" => Some(f64::INFINITY),
-        "-inf" | "-infinity" => Some(f64::NEG_INFINITY),
-        "nan" | "+nan" | "-nan" => Some(f64::NAN),
-        _ => text
-            .replace('_', "")
-            .parse::<f64>()
-            .ok()
-            .filter(|_| !text.starts_with('_') && !text.ends_with('_') && !text.contains("__")),
-    }
-}
-
 /// Python's `==` between two JSON values: `1`, `1.0` and `true` compare
 /// equal, which is how a literal meets its input.
 fn python_equal(left: &Value, right: &Value) -> bool {
@@ -1023,27 +1002,6 @@ fn number_text(value: f64) -> String {
         format!("{value:.0}")
     } else {
         value.to_string()
-    }
-}
-
-/// The expected values a literal or enum error lists: `'a'`, `'a' or 'b'`,
-/// `'a', 'b' or 'c'`.
-fn expected_list(values: &[Value]) -> String {
-    let rendered = values.iter().map(python_repr).collect::<Vec<_>>();
-    match rendered.split_last() {
-        None => String::new(),
-        Some((last, [])) => last.clone(),
-        Some((last, rest)) => format!("{} or {last}", rest.join(", ")),
-    }
-}
-
-fn python_repr(value: &Value) -> String {
-    match value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::String(text) => format!("'{text}'"),
-        other => other.to_string(),
     }
 }
 

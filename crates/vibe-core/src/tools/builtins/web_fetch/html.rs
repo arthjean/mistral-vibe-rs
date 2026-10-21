@@ -635,7 +635,7 @@ impl<'a> Tokenizer<'a> {
             attributes.push((key, value));
             cursor = self.skip_attribute_separators(after);
         }
-        let rest = py_strip(&raw[cursor..end]);
+        let rest = crate::pycompat::strip(&raw[cursor..end]);
         if rest != ">" && rest != "/>" {
             tree.data(&raw[index..end]);
             return Some(end);
@@ -805,17 +805,6 @@ impl<'a> Tokenizer<'a> {
         };
         Some((value, next))
     }
-}
-
-/// Python `str.strip()`.
-fn py_strip(text: &str) -> &str {
-    text.trim_matches(is_python_space)
-}
-
-/// Python `str.isspace` for one character: Unicode whitespace plus the four
-/// information separators Python counts and Rust does not.
-pub(super) fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
 fn lookup_named(name: &str) -> Option<&'static str> {

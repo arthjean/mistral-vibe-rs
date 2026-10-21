@@ -11,7 +11,6 @@
 //! completes, and `text` the last thing the assistant said.
 
 mod layout;
-mod pyjson;
 
 use std::collections::HashSet;
 use std::io::Write;
@@ -19,7 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde_json::json;
+use serde_json::{Value, json};
 use vibe_app_server::client::{
     CallbackDetail, ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientError,
     ClientInfo, DriverError, HeadlessService, ProgrammaticTeleportEvent, PublicCallbackState,
@@ -29,9 +28,9 @@ use vibe_app_server::client::{
 use vibe_app_server::experiments::SessionExperiments;
 use vibe_app_server::server::AppServer;
 use vibe_app_server::workspace::WorkspaceService;
+use vibe_core::pycompat::{self, Dumps};
 use vibe_core::telemetry::TelemetryRecord;
 
-use self::pyjson::Ordered;
 use crate::{
     Arguments, CliError, CliTelemetryObserver, OutputMode, bootstrap, since_process_start_ms,
 };
@@ -46,6 +45,21 @@ const INTERRUPT_GRACE: Duration = Duration::from_secs(5);
 /// Reference `_last_assistant_text`'s fallback when a limit stopped a turn
 /// before the assistant said anything.
 const LIMIT_FALLBACK: &str = "The configured conversation limit was reached";
+
+/// `json.dumps(value, ensure_ascii=False)`, which is how reference
+/// `ProgrammaticOutput` writes a streamed line.
+const LINE: Dumps = Dumps {
+    ensure_ascii: false,
+    ..Dumps::DEFAULT
+};
+
+/// `json.dumps(value, indent=2, ensure_ascii=False)`, which is how it writes
+/// the `json` document.
+const DOCUMENT: Dumps = Dumps {
+    ensure_ascii: false,
+    indent: Some(2),
+    ..Dumps::DEFAULT
+};
 
 /// What the programmatic path reports about the session it opens: the observer
 /// every event goes to, the census `vibe.new_session` carries, and the
@@ -441,12 +455,7 @@ impl<D: TurnDriver> Run<'_, D> {
             Settled::Interrupted => Ok(End::Interrupted),
             Settled::Finished(stop_reason) => {
                 let history = self.history()?;
-                if matches!(
-                    stop_reason,
-                    PublicTurnStopReason::MaxSteps
-                        | PublicTurnStopReason::TokenLimit
-                        | PublicTurnStopReason::PriceLimit
-                ) {
+                if stop_reason.is_limit() {
                     return Err(CliError::Limit(
                         last_assistant_text(&history).unwrap_or_else(|| LIMIT_FALLBACK.to_owned()),
                     ));
@@ -657,7 +666,7 @@ impl Output {
                 continue;
             }
             self.emitted.insert(entry.metadata().id.clone());
-            let line = entry_document(entry)?.compact();
+            let line = pycompat::dumps(&entry_document(entry)?, LINE);
             writeln!(stdout, "{line}").map_err(CliError::Stdout)?;
             stdout.flush().map_err(CliError::Stdout)?;
         }
@@ -674,7 +683,8 @@ impl Output {
         }
         let progress = match self.mode {
             OutputMode::Streaming => {
-                let line = Ordered::of(event).map_err(CliError::Json)?.compact();
+                let event = serde_json::to_value(event).map_err(CliError::Json)?;
+                let line = pycompat::dumps(&event, LINE);
                 writeln!(stdout, "{line}").map_err(CliError::Stdout)?;
                 return stdout.flush().map_err(CliError::Stdout);
             }
@@ -712,13 +722,11 @@ impl Output {
                     .map(entry_document)
                     .collect::<Result<Vec<_>, _>>()?;
                 let payload = match &self.teleport_url {
-                    Some(url) => Ordered::Object(vec![
-                        ("history".to_owned(), Ordered::Array(entries)),
-                        ("teleportUrl".to_owned(), Ordered::String(url.clone())),
-                    ]),
-                    None => Ordered::Array(entries),
+                    Some(url) => json!({"history": entries, "teleportUrl": url}),
+                    None => Value::Array(entries),
                 };
-                writeln!(stdout, "{}", payload.pretty()).map_err(CliError::Stdout)?;
+                writeln!(stdout, "{}", pycompat::dumps(&payload, DOCUMENT))
+                    .map_err(CliError::Stdout)?;
                 stdout.flush().map_err(CliError::Stdout)?;
                 Ok(None)
             }
@@ -732,9 +740,9 @@ impl Output {
 
 /// One history entry as the reference dumps it: its base fields, then the
 /// discriminator, then the fields of its own type.
-fn entry_document(entry: &PublicHistoryEntry) -> Result<Ordered, CliError> {
-    let mut document = Ordered::of(entry).map_err(CliError::Json)?;
-    document.move_after("type", "relatedEntryId");
+fn entry_document(entry: &PublicHistoryEntry) -> Result<Value, CliError> {
+    let mut document = serde_json::to_value(entry).map_err(CliError::Json)?;
+    layout::move_after(&mut document, "type", "relatedEntryId");
     layout::arrange(&mut document);
     Ok(document)
 }

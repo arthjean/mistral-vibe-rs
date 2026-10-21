@@ -1,33 +1,55 @@
 use serde_json::json;
 
-use super::layout;
-use super::pyjson::Ordered;
+use vibe_core::pycompat;
+
+use super::{LINE, layout};
 
 #[test]
 fn an_effect_names_its_input_and_output_keys_in_declared_order() {
-    let mut entry = Ordered::of(&json!({
+    let mut entry = json!({
         "detail": {"input": {"filePath": "a", "limit": 2000, "offset": null}, "kind": "file_read"},
         "state": {"output": {"content": "x", "filePath": "a", "numLines": 1, "startLine": 1}},
         "type": "effect",
-    }))
-    .expect("entry");
+    });
     layout::arrange(&mut entry);
     assert_eq!(
-        entry.compact(),
+        pycompat::dumps(&entry, LINE),
         r#"{"detail": {"input": {"filePath": "a", "offset": null, "limit": 2000}, "kind": "file_read"}, "state": {"output": {"filePath": "a", "content": "x", "numLines": 1, "startLine": 1}}, "type": "effect"}"#
     );
 }
 
 #[test]
 fn a_kind_without_a_model_keeps_its_order() {
-    let mut entry = Ordered::of(&json!({
+    let mut entry = json!({
         "type": "effect",
         "detail": {"kind": "tool", "input": {"b": 1, "a": 2}},
-    }))
-    .expect("entry");
-    let before = entry.compact();
+    });
+    let before = pycompat::dumps(&entry, LINE);
     layout::arrange(&mut entry);
-    assert_eq!(entry.compact(), before);
+    assert_eq!(pycompat::dumps(&entry, LINE), before);
+}
+
+#[test]
+fn a_moved_key_lands_after_its_anchor() {
+    #[derive(serde::Serialize)]
+    struct Entry {
+        r#type: &'static str,
+        id: &'static str,
+        related: Option<&'static str>,
+        text: &'static str,
+    }
+    let mut value = serde_json::to_value(Entry {
+        r#type: "message",
+        id: "1",
+        related: None,
+        text: "é\n",
+    })
+    .expect("value");
+    layout::move_after(&mut value, "type", "related");
+    assert_eq!(
+        pycompat::dumps(&value, LINE),
+        r#"{"id": "1", "related": null, "type": "message", "text": "é\n"}"#
+    );
 }
 
 #[test]

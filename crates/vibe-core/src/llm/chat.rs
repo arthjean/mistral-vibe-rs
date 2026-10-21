@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 
 use super::adapter::{
     PreparedRequest, RequestParts, bearer_headers, chat_finish_reason, chat_payload, chat_usage,
-    finalize_chat, optional_index, optional_string, python_str, truthy, validate_message,
+    finalize_chat, optional_index, optional_string, truthy, validate_message,
 };
 use super::error::{LocalFailure, LocalKind};
 use super::types::{Chunk, Message, Role, StopInfo, ToolCall};
@@ -452,10 +452,4 @@ pub fn parse_reasoning(data: &Map<String, Value>) -> Result<Chunk, LocalFailure>
         correlation_id: None,
         stop: chat_finish_reason(data)?.map(StopInfo::reason),
     })
-}
-
-/// `str()` of a finish reason, which may be any JSON value.
-#[must_use]
-pub fn finish_reason_text(value: &Value) -> String {
-    python_str(value)
 }

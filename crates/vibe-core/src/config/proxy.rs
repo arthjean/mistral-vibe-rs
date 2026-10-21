@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use super::{ConfigError, ConfigFileLock, ensure_private_directory};
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
 
 const PROXY_ENV_FILE: &str = ".env";
 
@@ -128,7 +128,8 @@ impl ProxyEnvironmentStore {
         let _lock = ConfigFileLock::acquire(parent)?;
         let existing = read_contents(&self.path)?;
         let encoded = apply_changes(&existing, changes);
-        write_atomically(&self.path, "env", encoded.as_bytes()).map_err(ConfigError::from)
+        write_atomically(&self.path, "env", encoded.as_bytes(), FileMode::Private)
+            .map_err(ConfigError::from)
     }
 }
 

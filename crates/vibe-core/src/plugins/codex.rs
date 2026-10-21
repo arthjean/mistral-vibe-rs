@@ -15,13 +15,14 @@ use serde_json::{Map, Value};
 use super::compatibility::{
     AdaptedMcpServer, AdaptedPluginPackage, AdaptedUnsupportedComponent, DetectedPluginFormat,
     PluginAdapterDiagnostic, PluginAdapterResult, PluginMcpHttpAuth, PluginMcpServer,
-    author_display_name, python_strip, read_text, resolve_declared_path, typescript_identifier,
+    author_display_name, read_text, resolve_declared_path, typescript_identifier,
 };
 use super::diagnostics::Severity;
-use super::native::python_repr;
-use super::paths::{is_relative_to, resolve_lax, resolve_strict};
+use super::paths::{is_relative_to, resolve_strict};
 use super::strict::char_len;
 use crate::config::mcp::{normalize_mcp_server_name, normalize_mcp_server_url};
+use crate::platform::resolve_lenient;
+use crate::pycompat;
 use crate::skills::SkillScope;
 
 const MANIFEST: &str = ".codex-plugin/plugin.json";
@@ -87,13 +88,13 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let mut diagnostics = Vec::new();
     let mut unsupported = Vec::new();
     let name = match &manifest.name {
-        Some(name) if !python_strip(name).is_empty() => name.clone(),
+        Some(name) if !pycompat::strip(name).is_empty() => name.clone(),
         _ => file_name(root),
     };
     let version = manifest
         .version
         .as_deref()
-        .map(|version| python_strip(version).to_owned())
+        .map(|version| pycompat::strip(version).to_owned())
         .filter(|version| !version.is_empty());
     let mut private_metadata = BTreeMap::from([("codexManifest".to_owned(), raw_manifest)]);
     let namespace = typescript_identifier(&name);
@@ -373,7 +374,7 @@ fn load_mcp_server_definitions(
                 config_path.to_path_buf(),
                 format!(
                     "Could not load the Codex MCP server {}: {error}",
-                    python_repr(source_id)
+                    pycompat::repr_str(source_id)
                 ),
                 false,
                 "mcp_server",
@@ -409,7 +410,7 @@ fn remove_mcp_server_collisions(
             format!(
                 "More than one configuration source declares the Codex MCP server {}, so every \
                  declaration of it is disabled.",
-                python_repr(&source_id)
+                pycompat::repr_str(&source_id)
             ),
             false,
             "mcp_server",
@@ -566,7 +567,7 @@ fn unsupported_field_diagnostics(
         config_path.to_path_buf(),
         format!(
             "The Codex MCP server {} declares {}, kept as package data with no runtime equivalent.",
-            python_repr(source_id),
+            pycompat::repr_str(source_id),
             extras.into_iter().collect::<Vec<_>>().join(", ")
         ),
         false,
@@ -590,11 +591,14 @@ fn validate_static_headers(headers: &BTreeMap<String, String>) -> Result<(), Str
         if !HEADER_NAME.is_match(name) {
             return Err(format!(
                 "{} is not a valid HTTP header name",
-                python_repr(name)
+                pycompat::repr_str(name)
             ));
         }
         if !seen.insert(name.to_lowercase()) {
-            return Err(format!("the HTTP header {} is repeated", python_repr(name)));
+            return Err(format!(
+                "the HTTP header {} is repeated",
+                pycompat::repr_str(name)
+            ));
         }
     }
     Ok(())
@@ -631,7 +635,7 @@ fn string_map(map: &Map<String, Value>, key: &str) -> Result<Vec<(String, String
 /// Reference `_resolve_command`.
 fn resolve_command(root: &Path, command: &str) -> Result<String, String> {
     if let Some(relative) = command.strip_prefix("./") {
-        let resolved = resolve_lax(&root.join(relative));
+        let resolved = resolve_lenient(&root.join(relative));
         if !is_relative_to(&resolved, root) {
             return Err("a stdio command has to resolve inside the plugin".to_owned());
         }
@@ -653,7 +657,7 @@ fn resolve_cwd(root: &Path, value: Option<&str>) -> Result<PathBuf, String> {
     if value.contains('\\') || relative.starts_with('/') || parts.contains(&"..") {
         return Err("a stdio cwd has to resolve inside the plugin".to_owned());
     }
-    let resolved = resolve_lax(
+    let resolved = resolve_lenient(
         &parts
             .iter()
             .fold(root.to_path_buf(), |path, part| path.join(part)),

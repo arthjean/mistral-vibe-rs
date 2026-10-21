@@ -87,7 +87,10 @@ async fn fetch_plan_attributes(
     let console = effective
         .get("console_base_url")
         .and_then(toml::Value::as_str)
-        .map_or_else(|| DEFAULT_CONSOLE_BASE_URL.to_owned(), ToOwned::to_owned);
+        .map_or_else(
+            || crate::auth::DEFAULT_CONSOLE_BASE_URL.to_owned(),
+            ToOwned::to_owned,
+        );
     let (identity, whoami) = tokio::join!(
         sources
             .identity
@@ -105,10 +108,6 @@ async fn fetch_plan_attributes(
     );
     (Some(attributes), derive_user_plan(whoami.as_ref()))
 }
-
-/// The console the account endpoint is served from when the document names
-/// none. Reference `VibeConfigSchema.console_base_url`'s default.
-const DEFAULT_CONSOLE_BASE_URL: &str = "https://console.mistral.ai";
 
 /// Resolves the snapshot and the plan, then looks the rollout up for this
 /// session and records what it resolved: in `cache` for the next session of

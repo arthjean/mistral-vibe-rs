@@ -26,9 +26,10 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
+use vibe_core::platform::resolve_lenient;
 use vibe_protocol::ProtocolErrorCode;
 
-use super::store::{ProjectLink, ProjectsStore, StoreError, resolve_path};
+use super::store::{ProjectLink, ProjectsStore, StoreError};
 use crate::host::expand_home;
 use crate::vibe_code::Service;
 use crate::vibe_code::git::{FailureClass, GitRepoInfo, GitRepository, normalize_repo_url};
@@ -445,7 +446,7 @@ impl ProjectLinks<'_> {
                 let _ = self.store.delete_project_link(&inspected.path);
             }
             Err(_) => {
-                let requested = resolve_path(&expand_home(Path::new(root_path)));
+                let requested = resolve_lenient(&expand_home(Path::new(root_path)));
                 let target = self
                     .store
                     .list_project_links()
@@ -532,7 +533,10 @@ async fn eligible_root(root_path: &str) -> Result<(PathBuf, GitRepoInfo), Failur
         .metadata()
         .await
         .map_err(|failure| refuse(failure.message))?;
-    let repo_root = git.repo_root.clone().unwrap_or_else(|| resolve_path(&path));
+    let repo_root = git
+        .repo_root
+        .clone()
+        .unwrap_or_else(|| resolve_lenient(&path));
     Ok((repo_root, git))
 }
 

@@ -8,7 +8,7 @@
     )
 )]
 
-mod atomic_file;
+pub mod atomic_file;
 pub mod auth;
 pub mod checkpoints;
 mod child;
@@ -47,6 +47,7 @@ pub mod process;
 pub mod prompt;
 pub mod provider;
 pub mod pty;
+pub mod pycompat;
 pub mod pyurl;
 pub mod redaction;
 mod remote_tools;
@@ -62,6 +63,7 @@ pub mod storage;
 pub mod system_prompt;
 pub mod telemetry;
 pub mod text;
+pub mod time;
 pub mod tools;
 pub mod tracing;
 pub mod trust;

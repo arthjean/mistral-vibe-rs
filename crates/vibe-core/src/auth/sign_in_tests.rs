@@ -10,11 +10,11 @@ use std::task::{Context, Poll};
 use serde_json::json;
 
 use super::sign_in::{
-    SignInErrorCode, SignInEvent, SignInService, UtcTimestamp, browser_launch_candidates,
-    code_challenge, generate_code_verifier, launch_detached, open_system_browser,
-    openable_browser_url,
+    SignInErrorCode, SignInEvent, SignInService, browser_launch_candidates, code_challenge,
+    generate_code_verifier, launch_detached, open_system_browser, openable_browser_url,
 };
 use super::testing::{ScriptedOpener, ScriptedSignInGateway, ScriptedSignInRuntime};
+use crate::time::UtcTimestamp;
 
 const VERIFIER: &str = "unit-test-verifier";
 

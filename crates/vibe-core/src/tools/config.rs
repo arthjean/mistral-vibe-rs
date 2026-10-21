@@ -437,23 +437,6 @@ pub const DECLARATIONS: [ToolConfigDeclaration; 26] = [
 /// table rather than from a composition. The shell lists follow the host the
 /// binary runs on, which is the branch the reference composes there too.
 #[must_use]
-/// Reference `get_server_url_from_api_base`: what precedes the last
-/// `/v<digit>` segment of an `http` or `https` base, or `None` when the base
-/// has no such segment.
-fn server_url_from_api_base(api_base: &str) -> Option<String> {
-    let scheme = ["https://", "http://"]
-        .into_iter()
-        .find(|scheme| api_base.starts_with(scheme))?;
-    let bytes = api_base.as_bytes();
-    (scheme.len() + 1..bytes.len().saturating_sub(2))
-        .rev()
-        .find(|&index| {
-            bytes[index] == b'/' && bytes[index + 1] == b'v' && bytes[index + 2].is_ascii_digit()
-        })
-        .filter(|_| !api_base.contains('\n'))
-        .map(|index| api_base[..index].to_owned())
-}
-
 pub fn declared_document(tool: &str) -> JsonValue {
     serde_json::to_value(ToolConfigResolver::new().view_document(tool)).unwrap_or(JsonValue::Null)
 }
@@ -1076,7 +1059,7 @@ impl ToolConfigResolver {
                 provider
                     .get("api_base")
                     .and_then(Value::as_str)
-                    .and_then(server_url_from_api_base)
+                    .and_then(crate::llm::mistral::server_url)
             });
         self.update(tools);
     }

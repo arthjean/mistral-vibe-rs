@@ -1,4 +1,4 @@
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use crate::images::ImageFormat;
 
@@ -55,7 +55,7 @@ fn pasted_path_mention(line: &str) -> Option<String> {
     if candidate.is_empty() {
         return None;
     }
-    let path = expand_tilde_path(&candidate);
+    let path = crate::platform::expand_home(Path::new(&candidate));
     (path.is_absolute() && path.exists()).then(|| format!("@{}", quote_path_if_needed(&candidate)))
 }
 
@@ -156,7 +156,7 @@ pub fn resolve_owned_candidate(
 }
 
 fn candidate_path(workspace: &Path, candidate: &str) -> PathBuf {
-    let candidate = expand_tilde_path(candidate);
+    let candidate = crate::platform::expand_home(Path::new(candidate));
     if candidate.is_absolute() {
         candidate
     } else {
@@ -224,7 +224,7 @@ fn unescaped_path_candidate(value: &str) -> String {
 }
 
 fn is_image_file(candidate: &str) -> bool {
-    let path = expand_tilde_path(candidate);
+    let path = crate::platform::expand_home(Path::new(candidate));
     path.is_absolute() && ImageFormat::from_path(&path).is_some() && path.is_file()
 }
 
@@ -297,17 +297,4 @@ fn is_path_token_boundary(text: &str, byte: usize) -> bool {
 
 fn is_mention_path_character(character: char) -> bool {
     character.is_alphanumeric() || "._/\\-()[]{}~".contains(character)
-}
-
-fn expand_tilde_path(value: &str) -> PathBuf {
-    let path = Path::new(value);
-    let mut components = path.components();
-    if !matches!(components.next(), Some(Component::Normal(first)) if first == "~") {
-        return path.to_path_buf();
-    }
-    let Some(mut home) = crate::platform::user_home() else {
-        return path.to_path_buf();
-    };
-    home.extend(components);
-    home
 }

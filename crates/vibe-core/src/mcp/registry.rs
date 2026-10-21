@@ -13,7 +13,7 @@ use futures_util::future::join_all;
 use super::authorization::authorization_kind;
 use super::descriptor_cache::descriptor_cache_key;
 use super::*;
-use crate::auth::sign_in::UtcTimestamp;
+use crate::time::UtcTimestamp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

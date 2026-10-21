@@ -134,11 +134,11 @@ pub(super) async fn run_web_search(
             vec![
                 (
                     "title",
-                    reference_text::string_repr(source["title"].as_str().unwrap_or_default()),
+                    crate::pycompat::repr_str(source["title"].as_str().unwrap_or_default()),
                 ),
                 (
                     "url",
-                    reference_text::string_repr(source["url"].as_str().unwrap_or_default()),
+                    crate::pycompat::repr_str(source["url"].as_str().unwrap_or_default()),
                 ),
             ]
         })

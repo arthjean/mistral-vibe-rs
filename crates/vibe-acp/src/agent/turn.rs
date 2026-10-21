@@ -16,7 +16,9 @@ use vibe_app_server::client::{
     DriverError, ProgrammaticUpdate, PublicContentBlock, PublicTurnOutcome, PublicTurnStopReason,
     TurnDriver, TurnErrorCode, TurnRequest, turn_error_code,
 };
+use vibe_core::clock::now_millis;
 use vibe_core::provider::ProviderError;
+use vibe_core::session_id::uuid_v4;
 
 use crate::agent::AcpAgent;
 use crate::commands::CommandOutcome;
@@ -73,7 +75,7 @@ where
             }
         };
         let content = project_prompt(&prompt)?;
-        let message_id = uuid();
+        let message_id = uuid_v4();
         let input =
             match crate::commands::execute(self, &harness, &content.text, &message_id).await? {
                 Some(CommandOutcome::Response(response)) => return Ok(response),
@@ -144,9 +146,7 @@ where
         };
         let stop_reason = match turn.stop_reason {
             PublicTurnStopReason::Cancelled => "cancelled",
-            PublicTurnStopReason::MaxSteps
-            | PublicTurnStopReason::TokenLimit
-            | PublicTurnStopReason::PriceLimit => "max_turn_requests",
+            reason if reason.is_limit() => "max_turn_requests",
             _ => "end_turn",
         };
         let usage = self.usage(harness).await;
@@ -512,40 +512,4 @@ fn turn_input(content: ProjectedPrompt, message_id: String, display: Option<Valu
         display,
         injected: false,
     }
-}
-
-/// A fresh random version-4 UUID in its canonical form, which is what the
-/// reference mints message and tool call identifiers as.
-pub(crate) fn uuid() -> String {
-    let mut bytes = [0_u8; 16];
-    if getrandom::fill(&mut bytes).is_err() {
-        let stamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or_default()
-            .to_le_bytes();
-        bytes.copy_from_slice(&stamp);
-    }
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex = bytes
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..]
-    )
-}
-
-pub(crate) fn now_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        })
 }

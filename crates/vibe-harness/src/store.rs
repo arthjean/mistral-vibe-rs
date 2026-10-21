@@ -15,9 +15,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
+use vibe_core::atomic_file::{FileMode, write_atomically};
+use vibe_core::clock::now_millis;
+use vibe_core::text::sha256_hex;
 
-use crate::clock::{iso_millis_z, now_millis};
+use crate::clock::iso_millis_z;
 use crate::engine::{ConversationMessage, SessionCore};
 use crate::state::{HarnessState, Projector};
 
@@ -39,26 +41,16 @@ pub struct SessionStore {
     journal: u64,
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
 fn compact(value: &Value) -> Vec<u8> {
     serde_json::to_vec(value).unwrap_or_default()
 }
 
 /// Writes through a sibling temporary file, so a reader never sees half.
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    fs::create_dir_all(parent)?;
-    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    temporary.write_all(bytes)?;
-    temporary.as_file().sync_all()?;
-    temporary.persist(path).map_err(|error| error.error)?;
-    Ok(())
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    write_atomically(path, "unified", bytes, FileMode::Private).map_err(|error| error.source)
 }
 
 fn generation_name(generation: u64) -> String {

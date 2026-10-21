@@ -10,12 +10,12 @@
 use serde_json::{Value, json};
 use toml::Value as TomlValue;
 use vibe_core::config::DotenvValues;
+use vibe_core::pycompat;
 use vibe_core::skills::registry::manifest::{self, SkillManifest};
 use vibe_core::skills::registry::pins::{self, PinTarget, SkillScope};
 use vibe_core::skills::registry::service::{self, RegistryEndpoint};
 use vibe_core::skills::registry::sync::{self, SyncScope};
 use vibe_core::skills::{installed_marks, installed_skills, skill_summary};
-use vibe_core::worktree::python_repr;
 use vibe_protocol::ProtocolErrorCode;
 
 use super::{MISTRAL_KEY, WorkspaceService};
@@ -246,12 +246,15 @@ impl WorkspaceService {
                     .as_array()
                     .and_then(|rows| rows.iter().find(|row| row["name"] == name))
                     .ok_or_else(|| {
-                        invalid(format!("no installed skill named {}", python_repr(name)))
+                        invalid(format!(
+                            "no installed skill named {}",
+                            pycompat::repr_str(name)
+                        ))
                     })?;
                 if row["locked"] == true {
                     return Err(invalid(format!(
                         "{} is fixed by configuration and cannot be toggled here",
-                        python_repr(name)
+                        pycompat::repr_str(name)
                     )));
                 }
                 let enabled = params

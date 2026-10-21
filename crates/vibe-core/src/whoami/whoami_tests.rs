@@ -84,7 +84,7 @@ fn the_disk_cache_round_trips_expires_and_clears() {
 
     let mut stale = stored.clone();
     stale[hash_api_key("key")]["stored_at_timestamp"] =
-        json!(now_seconds() - WHOAMI_CACHE_TTL_SECONDS);
+        json!(now_seconds_signed() - WHOAMI_CACHE_TTL_SECONDS);
     std::fs::write(&path, stale.to_string()).expect("written");
     assert_eq!(load_cached_whoami(&path, "key"), None);
 

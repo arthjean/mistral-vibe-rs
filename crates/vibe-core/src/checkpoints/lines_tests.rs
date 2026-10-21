@@ -1,12 +1,13 @@
 //! What Python's line splitting does that a naive split does not.
 
-use super::lines::{FileState, decode_lines, split_lines};
+use super::lines::{FileState, decode_lines};
+use crate::pycompat::splitlines;
 
 #[test]
 fn a_newline_ends_a_line_and_stays_on_it() {
-    assert_eq!(split_lines("one\ntwo\n"), vec!["one\n", "two\n"]);
+    assert_eq!(splitlines("one\ntwo\n", true), vec!["one\n", "two\n"]);
     assert_eq!(
-        split_lines("one\ntwo\n"),
+        splitlines("one\ntwo\n", true),
         "one\ntwo\n".split_inclusive('\n').collect::<Vec<_>>()
     );
 }
@@ -18,7 +19,7 @@ fn every_boundary_character_python_splits_on_ends_a_line() {
     ] {
         let text = format!("head{separator}tail");
         assert_eq!(
-            split_lines(&text),
+            splitlines(&text, true),
             vec![format!("head{separator}"), "tail".to_owned()],
             "U+{:04X} did not end a line",
             u32::from(separator)
@@ -29,19 +30,19 @@ fn every_boundary_character_python_splits_on_ends_a_line() {
 #[test]
 fn a_carriage_return_and_a_newline_are_one_boundary() {
     assert_eq!(
-        split_lines("one\r\ntwo\rthree"),
+        splitlines("one\r\ntwo\rthree", true),
         vec!["one\r\n", "two\r", "three"]
     );
 }
 
 #[test]
 fn an_empty_string_holds_no_line_at_all() {
-    assert!(split_lines("").is_empty());
+    assert!(splitlines("", true).is_empty());
 }
 
 #[test]
 fn a_final_line_without_a_separator_is_still_a_line() {
-    assert_eq!(split_lines("one\ntwo"), vec!["one\n", "two"]);
+    assert_eq!(splitlines("one\ntwo", true), vec!["one\n", "two"]);
 }
 
 #[test]
@@ -58,7 +59,7 @@ fn joining_the_lines_reproduces_the_input() {
         "\u{85}leading boundary",
     ] {
         assert_eq!(
-            split_lines(text).concat(),
+            splitlines(text, true).concat(),
             text,
             "round trip failed on {text:?}"
         );

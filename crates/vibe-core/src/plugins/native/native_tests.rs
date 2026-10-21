@@ -57,9 +57,3 @@ fn the_private_server_alias_matches_the_reference_shape() {
     assert!(alias.ends_with("_my_server"));
     assert_eq!(alias.len(), "plugin_".len() + 16 + "_my_server".len());
 }
-
-#[test]
-fn python_title_cases_words_like_str_title() {
-    assert_eq!(python_title("code reviewer"), "Code Reviewer");
-    assert_eq!(python_title("a1b"), "A1B");
-}

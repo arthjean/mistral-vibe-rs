@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 
 use serde_json::{Map, Value};
+use vibe_core::pycompat::pydantic;
 use vibe_protocol::{InvalidParamsIssue, PathSegment};
 
 /// The largest string the boundary accepts for a single parameter.
@@ -110,49 +111,10 @@ pub(crate) fn python_int(value: &Value) -> Result<i128, &'static str> {
             #[allow(clippy::cast_possible_truncation)]
             Ok(value as i128)
         }
-        Value::String(text) => parse_integer_text(text.trim())
+        Value::String(text) => pydantic::lax_int(text)
             .ok_or("Input should be a valid integer, unable to parse string as an integer"),
         _ => Err("Input should be a valid integer"),
     }
-}
-
-/// Decimal digits with an optional sign, single underscores between digits,
-/// and an optional fraction made only of zeros.
-fn parse_integer_text(text: &str) -> Option<i128> {
-    let (negative, body) = match text.as_bytes().first() {
-        Some(b'-') => (true, &text[1..]),
-        Some(b'+') => (false, &text[1..]),
-        _ => (false, text),
-    };
-    let (whole, fraction) = match body.split_once('.') {
-        Some((whole, fraction)) => (whole, Some(fraction)),
-        None => (body, None),
-    };
-    if fraction
-        .is_some_and(|fraction| fraction.is_empty() || fraction.bytes().any(|byte| byte != b'0'))
-    {
-        return None;
-    }
-    let mut value: i128 = 0;
-    let mut previous_underscore = true;
-    let mut digits = 0_usize;
-    for byte in whole.bytes() {
-        match byte {
-            b'0'..=b'9' => {
-                value = value
-                    .saturating_mul(10)
-                    .saturating_add(i128::from(byte - b'0'));
-                previous_underscore = false;
-                digits += 1;
-            }
-            b'_' if !previous_underscore => previous_underscore = true,
-            _ => return None,
-        }
-    }
-    if digits == 0 || previous_underscore {
-        return None;
-    }
-    Some(if negative { -value } else { value })
 }
 
 /// Validates a request's parameters the way the reference's `validate_wire`
@@ -248,14 +210,10 @@ impl WireCheck {
             Some(Value::Bool(flag)) => Some(*flag),
             Some(Value::Number(number)) if number.as_u64() == Some(0) => Some(false),
             Some(Value::Number(number)) if number.as_u64() == Some(1) => Some(true),
-            Some(Value::String(text)) => match text.trim().to_ascii_lowercase().as_str() {
-                "true" | "1" | "yes" | "on" | "t" | "y" => Some(true),
-                "false" | "0" | "no" | "off" | "f" | "n" => Some(false),
-                _ => {
-                    self.report(child_path(parent, field), "Input should be a valid boolean");
-                    None
-                }
-            },
+            Some(Value::String(text)) => pydantic::lax_bool(text).or_else(|| {
+                self.report(child_path(parent, field), "Input should be a valid boolean");
+                None
+            }),
             Some(_) => {
                 self.report(child_path(parent, field), "Input should be a valid boolean");
                 None

@@ -15,9 +15,9 @@ use vibe_app_server::client::{
 
 use super::{app_server_message, end_turn, text_content};
 use crate::agent::AcpAgent;
-use crate::agent::turn::uuid;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
+use vibe_core::session_id::uuid_v4;
 
 const PUSH_OPTION_ID: &str = "teleport_push_and_continue";
 const CANCEL_OPTION_ID: &str = "teleport_cancel";
@@ -185,7 +185,7 @@ where
                 Some(status_meta("unavailable")),
             ));
         };
-        let call_id = uuid();
+        let call_id = uuid_v4();
         self.session_update(
             &harness.session_id,
             json!({
@@ -198,7 +198,7 @@ where
                 "_meta": status_meta("starting"),
             }),
         );
-        let operation_id = uuid();
+        let operation_id = uuid_v4();
         let mut events = match self
             .start_teleport(harness, &picker_id, &project_id, &operation_id)
             .await

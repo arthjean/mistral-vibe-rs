@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::extensions::SkillDefinition;
-use crate::hooks::python_json_dumps;
+use crate::pycompat::{self, Dumps};
 
 /// The directory under the vibe home the built-in plugins are written to.
 pub const BUILTIN_PLUGINS_DIRECTORY: &str = "builtin-plugins";
@@ -55,7 +55,7 @@ fn skill_file(name: &str) -> PathBuf {
 
 /// A legacy builtin as a `SKILL.md` the plugin ships.
 fn render_skill(skill: &SkillDefinition) -> String {
-    let quoted = |text: &str| python_json_dumps(&Value::String(text.to_owned()));
+    let quoted = |text: &str| pycompat::dumps(&Value::String(text.to_owned()), Dumps::DEFAULT);
     let mut lines = vec![
         "---".to_owned(),
         format!("name: {}", quoted(&skill.name)),

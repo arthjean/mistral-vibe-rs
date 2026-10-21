@@ -4,11 +4,11 @@
 //! model per effect kind (`vibe/app_server/_effect_models.py`), so the keys of
 //! `detail.input` and `state.output` come out in the order those models
 //! declare them. This port carries both documents as JSON values, whose keys
-//! serde orders alphabetically, so the programmatic writer puts them back in
-//! the declared order before it prints them. A kind with no model, and a key a
-//! model does not declare, keep the order they arrived in.
+//! keep the order this port wrote them in, so the programmatic writer puts
+//! them back in the declared order before it prints them. A kind with no
+//! model, and a key a model does not declare, keep the order they arrived in.
 
-use super::pyjson::Ordered;
+use serde_json::{Map, Value};
 
 /// One model's keys, and the models of the lists it holds.
 struct Model {
@@ -133,8 +133,8 @@ fn output_model(kind: &str) -> Option<&'static Model> {
 
 /// Puts an entry's effect documents in their declared order: an effect's own
 /// input and output, and the input of the effect an approval gates.
-pub(super) fn arrange(entry: &mut Ordered) {
-    let Some(entry_type) = entry.get("type").and_then(Ordered::as_str) else {
+pub(super) fn arrange(entry: &mut Value) {
+    let Some(entry_type) = entry.get("type").and_then(Value::as_str) else {
         return;
     };
     match entry_type {
@@ -142,7 +142,7 @@ pub(super) fn arrange(entry: &mut Ordered) {
             let kind = entry
                 .get("detail")
                 .and_then(|detail| detail.get("kind"))
-                .and_then(Ordered::as_str)
+                .and_then(Value::as_str)
                 .map(str::to_owned);
             let Some(kind) = kind else {
                 return;
@@ -173,7 +173,7 @@ pub(super) fn arrange(entry: &mut Ordered) {
             };
             let kind = effect
                 .get("kind")
-                .and_then(Ordered::as_str)
+                .and_then(Value::as_str)
                 .map(str::to_owned);
             if let (Some(model), Some(input)) = (
                 kind.as_deref().and_then(input_model),
@@ -186,13 +186,43 @@ pub(super) fn arrange(entry: &mut Ordered) {
     }
 }
 
-fn apply(value: &mut Ordered, model: &Model) {
-    value.order_by(model.keys);
+fn apply(value: &mut Value, model: &Model) {
+    let Value::Object(fields) = value else {
+        return;
+    };
+    // A key the model does not declare keeps its place after the declared
+    // ones, in the order it arrived.
+    let mut entries = std::mem::take(fields).into_iter().collect::<Vec<_>>();
+    entries.sort_by_key(|(name, _)| {
+        model
+            .keys
+            .iter()
+            .position(|key| key == name)
+            .unwrap_or(model.keys.len())
+    });
+    *fields = entries.into_iter().collect::<Map<_, _>>();
     for (field, item_model) in model.lists {
-        if let Some(Ordered::Array(items)) = value.get_mut(field) {
+        if let Some(Value::Array(items)) = fields.get_mut(*field) {
             for item in items {
                 apply(item, item_model);
             }
         }
     }
+}
+
+/// Moves `key` right after `anchor` in `value`, which is where a pydantic
+/// model that inherits its base fields declares a discriminator serde writes
+/// first; after the last key when `anchor` is missing.
+pub(super) fn move_after(value: &mut Value, key: &str, anchor: &str) {
+    let Value::Object(fields) = value else {
+        return;
+    };
+    let Some(moved) = fields.shift_remove(key) else {
+        return;
+    };
+    let to = fields
+        .keys()
+        .position(|name| name == anchor)
+        .map_or(fields.len(), |index| index + 1);
+    fields.shift_insert(to, key.to_owned(), moved);
 }

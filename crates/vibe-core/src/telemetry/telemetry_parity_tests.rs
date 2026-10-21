@@ -40,7 +40,6 @@ use serde_json::{Map, Value, json};
 use opentelemetry_sdk::trace::SpanData;
 use opentelemetry_semantic_conventions::attribute as semconv;
 
-use crate::auth::UtcTimestamp;
 use crate::compaction::{CompactionFailureReason, CompactionStatus};
 use crate::config::registry::{FIELDS, default_document};
 use crate::config::{ConfigPaths, LayeredConfig};
@@ -51,6 +50,7 @@ use crate::observability::{
     encode_log_message, format_log_line, log_pattern_groups, parse_log_line, process_identifiers,
 };
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::time::UtcTimestamp;
 use crate::tracing::{
     AGENT_NAME, AgentSpan, BackendFailure, HOOK_NAME_KEY, HOOK_TYPE_KEY, HookSpan,
     MISTRAL_OTEL_PATH, MISTRAL_PROVIDER_VALUE, ModelCallSpan, OPERATION_CHAT,

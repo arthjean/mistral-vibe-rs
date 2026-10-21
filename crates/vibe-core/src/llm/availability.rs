@@ -14,12 +14,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
 
 use super::error::BackendFailure;
 use super::retry::{Clock, NoRetryObserver, SystemClock};
 use super::types::Message;
 use super::{Backend, BackendContext, Credentials, ModelRequest};
+use crate::atomic_file::{FileMode, write_atomically};
 use crate::experiments::{JsonValue, OrderedMap};
 use crate::observability::{self, LogLevel};
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
@@ -311,18 +311,12 @@ impl ModelAvailability {
         kept.insert(key.to_owned(), JsonValue::Object(fields));
         let text = JsonValue::Object(kept).python_json_compact();
         let path = self.cache_path();
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let staging = path.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+        // The verdicts are keyed by credential, so the file is owner-only.
         let written = path
             .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(&staging, text))
-            .and_then(|()| std::fs::rename(&staging, &path));
-        if written.is_err() {
-            let _ = std::fs::remove_file(&staging);
+            .is_some_and(|parent| std::fs::create_dir_all(parent).is_ok())
+            && write_atomically(&path, "model-probe", text.as_bytes(), FileMode::Private).is_ok();
+        if !written {
             observability::log(
                 LogLevel::Debug,
                 &format!(
@@ -372,10 +366,10 @@ pub fn cache_key(provider: &ProviderConfig, model: &ModelConfig, credential: &st
         provider.api_base.trim_end_matches('/'),
         provider.backend.label(),
         &model.name,
-        &hex::encode(Sha256::digest(credential.as_bytes())),
+        &crate::text::sha256_hex(credential.as_bytes()),
     ]
     .join("|");
-    let mut key = hex::encode(Sha256::digest(material.as_bytes()));
+    let mut key = crate::text::sha256_hex(material.as_bytes());
     key.truncate(32);
     key
 }

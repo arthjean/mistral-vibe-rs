@@ -16,10 +16,9 @@
 //! [`Document::into_output`] the single way this family publishes a result: a
 //! shell tool that forgets to render its own text cannot exist.
 
-use std::fmt::Write as _;
-
 use serde_json::{Map, Value};
 
+use crate::pycompat;
 use crate::tools::ToolExecutionOutput;
 
 /// One published result: the fields the reference declares, in its order.
@@ -107,7 +106,7 @@ impl Document {
             if index > 0 {
                 out.push_str(", ");
             }
-            quote(name, out);
+            out.push_str(&pycompat::repr_str(name));
             out.push_str(": ");
             node.repr(out);
         }
@@ -135,7 +134,7 @@ impl Node {
 
     fn repr(&self, out: &mut String) {
         match self {
-            Self::Leaf(value) => repr_value(value, out),
+            Self::Leaf(value) => out.push_str(&pycompat::repr_json(value)),
             Self::Object(document) => document.repr(out),
             Self::List(documents) => {
                 out.push('[');
@@ -149,67 +148,6 @@ impl Node {
             }
         }
     }
-}
-
-/// Python `repr` of a value that came out of JSON.
-fn repr_value(value: &Value, out: &mut String) {
-    match value {
-        Value::Null => out.push_str("None"),
-        Value::Bool(flag) => out.push_str(if *flag { "True" } else { "False" }),
-        Value::Number(number) => out.push_str(&number.to_string()),
-        Value::String(text) => quote(text, out),
-        Value::Array(items) => {
-            out.push('[');
-            for (index, item) in items.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                repr_value(item, out);
-            }
-            out.push(']');
-        }
-        Value::Object(map) => {
-            out.push('{');
-            for (index, (key, item)) in map.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                quote(key, out);
-                out.push_str(": ");
-                repr_value(item, out);
-            }
-            out.push('}');
-        }
-    }
-}
-
-/// Python `repr` of a string: single quotes unless the string carries one and
-/// no double quote, the four escapes a shell log can produce, and a hexadecimal
-/// escape for the remaining control characters.
-fn quote(text: &str, out: &mut String) {
-    let delimiter = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    out.push(delimiter);
-    for character in text.chars() {
-        match character {
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            found if found == delimiter => {
-                out.push('\\');
-                out.push(found);
-            }
-            found if (found as u32) < 0x20 || found as u32 == 0x7f => {
-                let _ = write!(out, "\\x{:02x}", found as u32);
-            }
-            found => out.push(found),
-        }
-    }
-    out.push(delimiter);
 }
 
 #[cfg(test)]

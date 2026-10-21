@@ -82,12 +82,3 @@ fn a_linked_worktree_keeps_its_own_identity_and_configuration() {
 fn a_directory_outside_any_repository_has_no_identity() {
     assert_eq!(git_repository_identity(Path::new("/")), None);
 }
-
-#[test]
-fn lines_split_as_python_splits_them() {
-    assert_eq!(
-        split_lines("a\r\nb\rc\n\nd\n"),
-        vec!["a", "b", "c", "", "d"]
-    );
-    assert!(split_lines("").is_empty());
-}

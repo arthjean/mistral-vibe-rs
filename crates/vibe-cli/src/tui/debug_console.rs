@@ -7,7 +7,7 @@
 //! explicit request, and a refresh never disturbs the selection.
 
 use serde_json::Value;
-use vibe_core::auth::UtcTimestamp;
+use vibe_core::time::UtcTimestamp;
 
 use super::diagnostics::{debug_log_line, log_level_color};
 use super::interaction::{Overlay, OverlayItem, OverlayKind};

@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use serde_json::{Value, json};
 
-use crate::shell::resolve_path;
+use crate::platform::resolve_lenient;
 use crate::tools::{ToolError, ToolExecutionOutput, ToolOutputSink};
 
 use super::decode::{read_file_window, skip_utf8_continuation_prefix};
@@ -541,8 +541,8 @@ fn resolve_log_path(shell: &SessionShell, arguments: &Value) -> Result<PathBuf, 
             message: "is required when session_id is absent".to_owned(),
         });
     };
-    let base = resolve_path(&shell.log_root);
-    let candidate = resolve_path(&shell.log_root.join(relative));
+    let base = resolve_lenient(&shell.log_root);
+    let candidate = resolve_lenient(&shell.log_root.join(relative));
     if !candidate.starts_with(&base) {
         return Err(ToolError::Execution(
             "the log path escapes the session log directory".to_owned(),
@@ -555,7 +555,7 @@ fn resolve_log_path(shell: &SessionShell, arguments: &Value) -> Result<PathBuf, 
 /// Reference `_reject_other_family_session_log`: a path under the sessions
 /// directory must be named after this family's sessions.
 fn refuse_other_family_session_log(shell: &SessionShell, path: &Path) -> Result<(), ToolError> {
-    if !path.starts_with(resolve_path(&shell.sessions_directory())) {
+    if !path.starts_with(resolve_lenient(&shell.sessions_directory())) {
         return Ok(());
     }
     let prefix = format!("{}_", shell.family.name());

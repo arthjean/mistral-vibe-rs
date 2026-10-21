@@ -18,15 +18,16 @@ use futures_util::stream::FuturesUnordered;
 use serde_json::{Map, Value, json};
 use tokio::sync::watch;
 use tokio::time::Instant;
+use vibe_core::clock::now_millis;
 use vibe_core::engine::CompletionProvider;
 use vibe_core::events::{ModelMessage, ModelToolCall};
 use vibe_core::provider::config::ModelConfig;
 use vibe_core::provider::{
     ProviderChunk, ProviderError, ProviderInput, RequestDialect, ToolDefinition,
 };
+use vibe_core::session_id::{random_bytes, random_hex, uuid_v4};
 
 use crate::catalog::{self, ModelTool};
-use crate::clock::now_millis;
 use crate::gate::{
     Approver, AskFuture, CallbackAnswer, CallbackBook, GateVerdict, ToolGate, approval_callback,
     user_input_callback,
@@ -429,7 +430,7 @@ impl SessionCore {
 
     /// Commits a new turn: its user entry, and the session running it.
     pub fn begin_turn(&mut self, request: &TurnRequest) -> (String, HarnessState) {
-        self.begin_turn_as(request, format!("turn-{}", random_hex(16)))
+        self.begin_turn_as(request, format!("turn-{}", random_hex::<16>()))
     }
 
     /// Reference `_start_queued_turn`: a queued turn's context entries reach
@@ -446,7 +447,7 @@ impl SessionCore {
                 injected: true,
             });
         }
-        let turn_id = format!("turn-{}", random_hex(16));
+        let turn_id = format!("turn-{}", random_hex::<16>());
         let input = self.next_input();
         self.projector.apply(
             input,
@@ -831,7 +832,7 @@ pub async fn run_turn(
     let mut first_call = true;
     let mut iterations: u32 = 0;
     loop {
-        let action_id = uuid_like();
+        let action_id = uuid_v4();
         let prepared = {
             let Ok(mut core) = core.lock() else {
                 return TurnEnd::Interrupted;
@@ -968,7 +969,7 @@ pub async fn run_turn(
             for call in &calls {
                 if let Some(harness) = &call.harness {
                     let action = ToolAction {
-                        action_id: uuid_like(),
+                        action_id: uuid_v4(),
                         turn_id: turn_id.clone(),
                         tool_name: harness.name.to_owned(),
                         arguments: harness.arguments.clone(),
@@ -1415,7 +1416,7 @@ async fn run_compaction(
     } else {
         "manual"
     };
-    let compaction_id = uuid_like();
+    let compaction_id = uuid_v4();
     let mut attempt = 1;
     let mut retried = false;
     loop {
@@ -2188,8 +2189,7 @@ async fn run_program(
         .lock()
         .map(|core| core.conversation.len() + 1)
         .unwrap_or_default();
-    let mut seed_bytes = [0u8; 4];
-    let _ = getrandom::fill(&mut seed_bytes);
+    let seed_bytes = random_bytes::<4>();
     let tools = crate::programmatic::namespaces(&environment.callables);
     let now = now_millis();
     let mut record: Vec<Recorded> = Vec::new();
@@ -2262,7 +2262,7 @@ async fn run_program(
                 continue;
             }
             let action = ToolAction {
-                action_id: uuid_like(),
+                action_id: uuid_v4(),
                 turn_id: turn_id.to_owned(),
                 tool_name: callable.runtime.to_string(),
                 arguments: callable.runtime_arguments(call.arguments.clone()),
@@ -2667,31 +2667,4 @@ async fn execute(
             _ => ToolResult::failed("tool_failed", format!("Unsupported tool: {other}")),
         },
     })
-}
-
-/// A random identifier shaped like a UUID.
-#[must_use]
-pub fn uuid_like() -> String {
-    let hex = random_hex(16);
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
-}
-
-/// `bytes` random bytes as lowercase hex.
-#[must_use]
-pub fn random_hex(bytes: usize) -> String {
-    let mut buffer = vec![0u8; bytes];
-    if getrandom::fill(&mut buffer).is_err() {
-        let seed = now_millis().to_le_bytes();
-        for (index, byte) in buffer.iter_mut().enumerate() {
-            *byte = seed[index % seed.len()].wrapping_add(u8::try_from(index % 256).unwrap_or(0));
-        }
-    }
-    buffer.iter().map(|byte| format!("{byte:02x}")).collect()
 }

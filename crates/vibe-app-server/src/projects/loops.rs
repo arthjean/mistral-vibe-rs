@@ -23,8 +23,6 @@ pub(super) const MIN_LOOP_INTERVAL_SECONDS: u64 = 30;
 
 pub(super) const MAX_LOOPS_PER_SESSION: usize = 50;
 
-pub(super) static NEXT_LOOP_TEMP_FILE: AtomicU64 = AtomicU64::new(1);
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LoopState {
@@ -423,8 +421,7 @@ impl ProjectsService {
         &self,
         loops: &BTreeMap<String, ScheduledLoop>,
     ) -> Result<(), ProjectsServiceError> {
-        persist_json_atomically(&self.loop_store, loops, &NEXT_LOOP_TEMP_FILE)
-            .map_err(ProjectsServiceError::Persistence)
+        persist_json_atomically(&self.loop_store, loops).map_err(ProjectsServiceError::Persistence)
     }
 
     pub(super) fn ensure_loop_store_ready(&self) -> Result<(), ProjectsServiceError> {

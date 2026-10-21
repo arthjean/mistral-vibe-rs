@@ -3,23 +3,12 @@
 //!
 //! The reference resolves an object- or array-valued variant by handing the
 //! decoded payload to `json.dumps` and returning the string, so the *variant a
-//! caller reads* is a serialization rather than a structure. Two properties of
-//! that serialization are load-bearing and neither survives a round trip
-//! through [`serde_json::Value`]:
-//!
-//! - **Key order.** Python keeps the order the document carried, which is the
-//!   order the GrowthBook proxy wrote. A reordered re-encode would hand the
-//!   configuration layer, the session metadata and the telemetry label a
-//!   different string than the reference produces for the same response, so
-//!   this type keeps the order itself rather than through how
-//!   [`serde_json::Map`] is built.
-//! - **Separators and escaping.** `json.dumps` writes `", "` between items and
-//!   `": "` after a key, and escapes every non-ASCII character as `\uXXXX`.
-//!   [`serde_json::to_string`] writes neither space and emits non-ASCII raw.
-//!
-//! `serde_json`'s `preserve_order` covers the first property and none of the
-//! second, so the value lives here, private to the one boundary that needs
-//! both.
+//! caller reads* is a serialization rather than a structure. Its key order is
+//! load-bearing: Python keeps the order the document carried, which is the
+//! order the GrowthBook proxy wrote, and a reordered re-encode would hand the
+//! configuration layer, the session metadata and the telemetry label a
+//! different string than the reference produces for the same response. The
+//! text itself is [`crate::pycompat::dumps`].
 //!
 //! Reference: `vibe/core/experiments/manager.py` at the pinned commit, where
 //! `get_variant_or_none`, `_forced_variant_or_none` and `_variant_label` each
@@ -30,6 +19,8 @@ use std::fmt;
 use serde::de::{MapAccess, SeqAccess, Visitor};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use crate::pycompat::{self, Dumps};
 
 // --------------------------------------------------------------------------
 // The map
@@ -254,54 +245,39 @@ impl JsonValue {
     /// space after every separator, and every non-ASCII character escaped.
     #[must_use]
     pub fn python_json(&self) -> String {
-        let mut rendered = String::new();
-        self.write_python_json(&mut rendered, Separators::DEFAULT);
-        rendered
+        pycompat::dumps(&self.to_value(), Dumps::DEFAULT)
     }
 
     /// The text `json.dumps(value, separators=(",", ":"))` gives this value:
     /// no space anywhere, every non-ASCII character still escaped.
     #[must_use]
     pub fn python_json_compact(&self) -> String {
-        let mut rendered = String::new();
-        self.write_python_json(&mut rendered, Separators::COMPACT);
-        rendered
+        pycompat::dumps(
+            &self.to_value(),
+            Dumps {
+                separators: Some((",", ":")),
+                ..Dumps::DEFAULT
+            },
+        )
     }
 
-    fn write_python_json(&self, out: &mut String, separators: Separators) {
+    /// The same value as a [`serde_json::Value`], which keeps the key order
+    /// because the workspace builds `serde_json` with `preserve_order`.
+    fn to_value(&self) -> serde_json::Value {
         match self {
-            Self::Null => out.push_str("null"),
-            Self::Bool(true) => out.push_str("true"),
-            Self::Bool(false) => out.push_str("false"),
-            // `json.dumps` writes a float as its `repr`, whose exponent is
-            // signed and at least two digits long.
-            Self::Number(number) => match number.as_f64().filter(|_| number.is_f64()) {
-                Some(float) => out.push_str(&crate::mcp::render::python_float(float)),
-                None => out.push_str(&number.to_string()),
-            },
-            Self::String(text) => write_python_string(out, text),
+            Self::Null => serde_json::Value::Null,
+            Self::Bool(flag) => serde_json::Value::Bool(*flag),
+            Self::Number(number) => serde_json::Value::Number(number.clone()),
+            Self::String(text) => serde_json::Value::String(text.clone()),
             Self::Array(items) => {
-                out.push('[');
-                for (position, item) in items.iter().enumerate() {
-                    if position > 0 {
-                        out.push_str(separators.item);
-                    }
-                    item.write_python_json(out, separators);
-                }
-                out.push(']');
+                serde_json::Value::Array(items.iter().map(Self::to_value).collect())
             }
-            Self::Object(entries) => {
-                out.push('{');
-                for (position, (key, value)) in entries.iter().enumerate() {
-                    if position > 0 {
-                        out.push_str(separators.item);
-                    }
-                    write_python_string(out, key);
-                    out.push_str(separators.key);
-                    value.write_python_json(out, separators);
-                }
-                out.push('}');
-            }
+            Self::Object(entries) => serde_json::Value::Object(
+                entries
+                    .iter()
+                    .map(|(key, value)| (key.to_owned(), value.to_value()))
+                    .collect(),
+            ),
         }
     }
 }
@@ -324,63 +300,6 @@ impl PartialEq for PythonNumber {
                 float.fract() == 0.0 && integer as f64 == float
             }
         }
-    }
-}
-
-/// The two separators `json.dumps` writes between items and after a key.
-#[derive(Clone, Copy)]
-struct Separators {
-    item: &'static str,
-    key: &'static str,
-}
-
-impl Separators {
-    const DEFAULT: Self = Self {
-        item: ", ",
-        key: ": ",
-    };
-    const COMPACT: Self = Self {
-        item: ",",
-        key: ":",
-    };
-}
-
-/// One string as `json.dumps` writes it: the two mandatory escapes, the five
-/// short control escapes, `\uXXXX` for every other control character, and
-/// `\uXXXX` for every non-ASCII character because `ensure_ascii` defaults to
-/// true. A character outside the basic multilingual plane is written as the
-/// surrogate pair Python writes.
-fn write_python_string(out: &mut String, value: &str) {
-    out.push('"');
-    for character in value.chars() {
-        match character {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            other if other.is_ascii_control() => push_unicode_escape(out, other as u16),
-            other if other.is_ascii() => out.push(other),
-            other => {
-                let mut units = [0_u16; 2];
-                for unit in other.encode_utf16(&mut units) {
-                    push_unicode_escape(out, *unit);
-                }
-            }
-        }
-    }
-    out.push('"');
-}
-
-/// One `\uXXXX` escape, in the lowercase hexadecimal Python writes.
-fn push_unicode_escape(out: &mut String, unit: u16) {
-    out.push_str("\\u");
-    for shift in [12_u32, 8, 4, 0] {
-        let nibble = u32::from((unit >> shift) & 0xf);
-        // The mask keeps every nibble below 16, so the conversion is total.
-        out.push(char::from_digit(nibble, 16).unwrap_or('0'));
     }
 }
 

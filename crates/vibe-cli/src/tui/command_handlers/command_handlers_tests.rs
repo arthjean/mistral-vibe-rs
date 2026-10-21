@@ -6,8 +6,8 @@ use vibe_core::observability::{LogLevel, LogLevelChain};
 use super::log_level::{Applied, Badge, LogLevelBackend, Picker, apply};
 use super::mcp_arguments::{parse_add, split_posix};
 use super::{
-    Effect, ScheduledLoop, Stats, format_duration, format_loop_list, grouped, session_cost,
-    short_session_id, status_document,
+    Effect, ScheduledLoop, Stats, format_duration, format_loop_list, session_cost,
+    short_session_id, status_document, thousands,
 };
 
 #[test]
@@ -96,8 +96,8 @@ fn the_loop_table_escapes_cells_and_clamps_overdue_runs() {
 
 #[test]
 fn status_groups_thousands_and_prices_cached_tokens() {
-    assert_eq!(grouped(0), "0");
-    assert_eq!(grouped(1_234_567), "1,234,567");
+    assert_eq!(thousands(0_u64), "0");
+    assert_eq!(thousands(1_234_567_u64), "1,234,567");
     // Cached tokens bill at the cached price, and never beyond the prompt.
     assert!((session_cost(1_000_000, 0, 400_000, 2.0, 6.0, Some(0.5)) - 1.4).abs() < 1e-9);
     assert!((session_cost(10, 1_000_000, 50, 2.0, 6.0, None) - 6.00002).abs() < 1e-9);

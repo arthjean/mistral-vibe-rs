@@ -41,9 +41,10 @@ use serde_json::Value;
 use toml::Table;
 use url::Url;
 
+use crate::llm::mistral::server_url;
 use crate::telemetry::{
     TELEMETRY_AUTHORIZATION_SCHEME, TELEMETRY_DEFAULT_API_KEY_VARIABLE, TELEMETRY_DEFAULT_BASE_URL,
-    mistral_provider, server_url_from_api_base,
+    mistral_provider,
 };
 
 /// The version the tracer and the exported resource report.
@@ -173,7 +174,7 @@ pub fn build_span_exporter_config(
         .as_ref()
         .and_then(|provider| provider.get("api_base"))
         .and_then(toml::Value::as_str)
-        .and_then(server_url_from_api_base)
+        .and_then(server_url)
         .filter(|server| !serves_no_telemetry(server))
         .unwrap_or_else(|| DEFAULT_MISTRAL_SERVER_URL.to_owned());
     let variable = otel_credential_variable(effective);

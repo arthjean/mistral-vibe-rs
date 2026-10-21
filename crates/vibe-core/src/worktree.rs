@@ -31,10 +31,11 @@
 use std::cell::OnceCell;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use std::sync::LazyLock;
 
-use regex::Regex;
 use thiserror::Error;
+
+use crate::platform::resolve_lenient;
+use crate::pycompat;
 
 pub mod fetch;
 pub(crate) mod git;
@@ -115,20 +116,6 @@ pub const AUTO_WORKTREE_BRANCH_PREFIX: &str = "vibe/";
 /// many recovery branch names a restore tries
 /// (`vibe/core/git/worktree/repository.py:34`).
 const MAX_AUTO_WORKTREE_ATTEMPTS: usize = 100;
-
-/// One character Python calls non-printable: anything in the Unicode `Other`
-/// or `Separator` categories, minus the ASCII space.
-///
-/// `str.isprintable` is what the reference tests a name with
-/// (`vibe/core/git/worktree/repository.py:1139-1141`), and the classes come from
-/// `regex`, which carries the Unicode tables the check needs.
-#[expect(
-    clippy::expect_used,
-    reason = "the pattern is a compile-time constant that compiles"
-)]
-static NON_PRINTABLE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[^\P{C} ]|[^\P{Z} ]").expect("the non-printable pattern compiles")
-});
 
 /// The directory every managed worktree of every checkout lives under,
 /// resolved once, and the claims beside them.
@@ -1090,36 +1077,6 @@ fn managed_worktree_root_in(
     }
 }
 
-/// The reference's non-strict `resolve` over a path that may not exist yet:
-/// the deepest existing ancestor is canonicalized and the remainder appended,
-/// so two spellings of one location compare equal.
-pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = crate::platform::canonicalize(path) {
-        return resolved;
-    }
-    // The longest prefix that exists is resolved, and the rest is applied
-    // lexically, `..` included, which is what a non-strict `Path.resolve()`
-    // does with a tail that is not there.
-    let components = path.components().collect::<Vec<_>>();
-    for split in (1..components.len()).rev() {
-        let prefix = components[..split].iter().collect::<PathBuf>();
-        let Ok(mut resolved) = crate::platform::canonicalize(&prefix) else {
-            continue;
-        };
-        for component in &components[split..] {
-            match component {
-                Component::ParentDir => {
-                    resolved.pop();
-                }
-                Component::CurDir => {}
-                other => resolved.push(other.as_os_str()),
-            }
-        }
-        return resolved;
-    }
-    path.to_path_buf()
-}
-
 /// The directory a session runs in once the worktree exists.
 ///
 /// Five questions, in the reference's order
@@ -1325,7 +1282,7 @@ pub fn is_portable_worktree_name(name: &str) -> bool {
     if name.is_empty() || matches!(name, "." | "..") {
         return false;
     }
-    if name.ends_with(' ') || name.ends_with('.') || NON_PRINTABLE.is_match(name) {
+    if name.ends_with(' ') || name.ends_with('.') || !name.chars().all(pycompat::isprintable) {
         return false;
     }
     if name.contains(INVALID_NAME_CHARACTERS) {
@@ -1345,47 +1302,6 @@ pub fn is_portable_worktree_name(name: &str) -> bool {
 #[cfg(test)]
 fn validate_branch_name(directory: &Path, branch: &str) -> Result<(), WorktreeError> {
     GitRepo::at(directory)?.validate_branch(branch)
-}
-
-/// A string as Python's `repr` spells it, which is how the reference quotes a
-/// worktree or branch name in what it prints: single quotes unless the text
-/// holds one and no double quote, the quote and the backslash escaped, and a
-/// character `str.isprintable` refuses written as its escape.
-#[must_use]
-pub fn python_repr(text: &str) -> String {
-    let quote = if text.contains('\'') && !text.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut rendered = String::with_capacity(text.len() + 2);
-    rendered.push(quote);
-    let mut buffer = [0_u8; 4];
-    for character in text.chars() {
-        match character {
-            '\\' => rendered.push_str("\\\\"),
-            '\t' => rendered.push_str("\\t"),
-            '\n' => rendered.push_str("\\n"),
-            '\r' => rendered.push_str("\\r"),
-            _ if character == quote => {
-                rendered.push('\\');
-                rendered.push(character);
-            }
-            _ if NON_PRINTABLE.is_match(character.encode_utf8(&mut buffer)) => {
-                let code = u32::from(character);
-                if code < 0x100 {
-                    rendered.push_str(&format!("\\x{code:02x}"));
-                } else if code < 0x1_0000 {
-                    rendered.push_str(&format!("\\u{code:04x}"));
-                } else {
-                    rendered.push_str(&format!("\\U{code:08x}"));
-                }
-            }
-            _ => rendered.push(character),
-        }
-    }
-    rendered.push(quote);
-    rendered
 }
 
 fn path_text(path: &Path) -> Result<&str, WorktreeError> {

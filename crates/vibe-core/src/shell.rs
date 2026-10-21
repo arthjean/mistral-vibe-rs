@@ -24,7 +24,6 @@ use command_policy::{analyze_command_policy, has_option_guardrails, path_candida
 pub use extract::{REDIRECT_MARKER, extract_commands};
 use extract::{TextAnalysis, analyze_text};
 use lexer::{WordSplit, split_tokens, whitespace_words};
-pub(crate) use repository::resolve_path;
 use repository::{git_repository_identity, git_repository_requires_approval};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -924,7 +923,7 @@ fn resolve_tool_path(raw: &str, cwd: &Path) -> PathBuf {
         cwd.join(expanded)
     };
     if joined.is_absolute() {
-        resolve_path(&joined)
+        crate::platform::resolve_lenient(&joined)
     } else {
         joined
     }
@@ -937,8 +936,12 @@ fn git_repository_pattern(command: &str, cwds: &BTreeSet<PathBuf>, cwd_is_unknow
     let mut identities = cwds
         .iter()
         .map(|cwd| {
-            git_repository_identity(cwd)
-                .unwrap_or_else(|| format!("directory:{}", resolve_path(cwd).display()))
+            git_repository_identity(cwd).unwrap_or_else(|| {
+                format!(
+                    "directory:{}",
+                    crate::platform::resolve_lenient(cwd).display()
+                )
+            })
         })
         .collect::<BTreeSet<_>>();
     if cwd_is_unknown {
@@ -1129,7 +1132,7 @@ fn escaping_directory(context: &ShellPolicyContext, directory: &PolicyPath) -> O
 fn outside_name(path: &PolicyPath) -> String {
     match policy_path_to_host(path) {
         Some(host) => crate::platform::strip_verbatim_prefix(
-            &crate::worktree::resolve_lenient(&host).to_string_lossy(),
+            &crate::platform::resolve_lenient(&host).to_string_lossy(),
         ),
         None => render_policy_path(path),
     }
@@ -1168,22 +1171,9 @@ fn render_policy_path(path: &PolicyPath) -> String {
 /// directory inside the workspace and never raise a requirement. On Windows
 /// `expanduser` also reads `~\`, and joins the rest under the Windows home.
 fn expand_home(token: &str) -> String {
-    if cfg!(windows) {
-        return crate::platform::expand_home(Path::new(token))
-            .to_string_lossy()
-            .into_owned();
-    }
-    if token != "~" && !token.starts_with("~/") {
-        return token.to_owned();
-    }
-    let Some(home) = crate::config::user_home_directory() else {
-        return token.to_owned();
-    };
-    let home = home.to_string_lossy().into_owned();
-    match token.strip_prefix("~/") {
-        Some(rest) => format!("{}/{rest}", home.trim_end_matches('/')),
-        None => home,
-    }
+    crate::platform::expand_home(Path::new(token))
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn normalize_operand(
@@ -1893,7 +1883,7 @@ mod tests {
             return;
         };
         let expected = crate::platform::strip_verbatim_prefix(
-            &crate::worktree::resolve_lenient(&home.join(".ssh").join("id_rsa")).to_string_lossy(),
+            &crate::platform::resolve_lenient(&home.join(".ssh").join("id_rsa")).to_string_lossy(),
         );
         let names_the_home = |analysis: &ShellAnalysis| {
             analysis

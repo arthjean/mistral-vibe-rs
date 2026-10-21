@@ -22,7 +22,7 @@ use super::{
     TEMP_SEQUENCE, ensure_private_directory, is_safe_handoff_component, sync_directory,
     validate_session_id,
 };
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
 use crate::events::ModelMessage;
 
 impl SessionStore {
@@ -241,7 +241,8 @@ impl SessionStore {
     ) -> Result<(), StorageError> {
         let mut encoded = serde_json::to_vec_pretty(journal).map_err(StorageError::Json)?;
         encoded.push(b'\n');
-        write_atomically(path, "handoff-journal", &encoded).map_err(StorageError::from)
+        write_atomically(path, "handoff-journal", &encoded, FileMode::Private)
+            .map_err(StorageError::from)
     }
 
     pub(super) fn recover_handoff_locked(

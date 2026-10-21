@@ -230,9 +230,7 @@ impl ServiceAccount {
     fn assertion(&self) -> Result<String, LocalFailure> {
         use aws_lc_rs::{rand, signature};
 
-        let issued = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_secs());
+        let issued = crate::clock::now_seconds();
         let mut header = json!({"alg": "RS256", "typ": "JWT"});
         if let Some(id) = &self.private_key_id {
             header["kid"] = Value::String(id.clone());

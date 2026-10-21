@@ -14,9 +14,9 @@ use vibe_app_server::client::{ClientError, TurnDriver};
 
 use crate::agent::AcpAgent;
 use crate::agent::sessions::history_entries;
-use crate::agent::turn::uuid;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
+use vibe_core::session_id::uuid_v4;
 
 /// What a command did with the prompt.
 pub(crate) enum CommandOutcome {
@@ -270,7 +270,7 @@ where
         let mut update = json!({
             "sessionUpdate": "agent_message_chunk",
             "content": {"type": "text", "text": text},
-            "messageId": uuid(),
+            "messageId": uuid_v4(),
         });
         if let Some(meta) = meta {
             update["_meta"] = meta.clone();
@@ -418,7 +418,7 @@ where
                 None,
             ));
         }
-        let call_id = uuid();
+        let call_id = uuid_v4();
         self.session_update(
             &harness.session_id,
             json!({

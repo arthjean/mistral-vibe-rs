@@ -99,21 +99,12 @@ pub fn hex_encode(bytes: &[u8]) -> String {
     encoded
 }
 
-/// Whether `character` is whitespace to Python's `str.isspace`, which is what
-/// `str.strip()` with no argument removes.
-///
-/// Rust's `char::is_whitespace` reads the Unicode `White_Space` property, which
-/// leaves out the four ASCII information separators (`U+001C` to `U+001F`)
-/// Python counts as whitespace.
+/// The SHA-256 of `bytes`, as [`hex_encode`] spells it.
 #[must_use]
-pub fn is_python_whitespace(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
-}
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest as _, Sha256};
 
-/// Python's `str.strip()` with no argument.
-#[must_use]
-pub fn python_strip(value: &str) -> &str {
-    value.trim_matches(is_python_whitespace)
+    hex_encode(&Sha256::digest(bytes))
 }
 
 #[cfg(test)]

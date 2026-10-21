@@ -18,8 +18,8 @@ use crate::pyurl::{PyUrl, normalize_url_origin};
 
 use super::sign_in::{
     CODE_CHALLENGE_METHOD, SignInError, SignInErrorCode, SignInGateway, SignInPoll, SignInProcess,
-    UtcTimestamp,
 };
+use crate::time::UtcTimestamp;
 
 /// The creation endpoint under the API base.
 pub const SIGN_IN_PATH: &str = "/vibe/sign-in";

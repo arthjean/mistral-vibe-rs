@@ -10,6 +10,8 @@
 //! Positions here are byte offsets into the prompt, so a keystroke costs the
 //! length of the token under the caret rather than the length of the prompt.
 
+use vibe_core::pycompat;
+
 /// A mid-prompt skill token is at least a slash and one more character.
 const MIN_SKILL_TOKEN_LEN: usize = 2;
 
@@ -44,16 +46,16 @@ pub(crate) fn token_span(text: &str, cursor: usize, default_mode: bool) -> Optio
     if text[cursor..]
         .chars()
         .next()
-        .is_some_and(|following| !is_python_space(following))
+        .is_some_and(|following| !pycompat::isspace(following))
     {
         return None;
     }
     let start = text[..cursor]
         .char_indices()
         .rev()
-        .find(|(_, character)| is_python_space(*character))
+        .find(|(_, character)| pycompat::isspace(*character))
         .map_or(0, |(byte, character)| byte + character.len_utf8());
-    if text[..start].chars().rev().all(is_python_space) {
+    if text[..start].chars().rev().all(pycompat::isspace) {
         return None;
     }
     let token = &text[start..cursor];
@@ -114,12 +116,6 @@ pub(crate) fn still_applies(
             .alias
             .to_lowercase()
             .starts_with(&text[ghost.start..ghost.end].to_lowercase())
-}
-
-/// `str.isspace` for one character: Unicode whitespace plus the four
-/// information separators Python also counts.
-fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
 #[cfg(test)]

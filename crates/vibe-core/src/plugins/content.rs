@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-use super::canonical::{normalize_nfc, sha256_hex};
+use super::canonical::normalize_nfc;
+use crate::text::sha256_hex;
 
 /// Digests a plugin tree, skipping every entry with a path component in
 /// `ignored_names`.
@@ -65,7 +66,7 @@ pub fn digest_plugin_tree(root: &Path, ignored_names: &BTreeSet<String>) -> io::
         }
         entry(&mut digest, b"f", &relative, &digest_file(&path)?);
     }
-    Ok(hex::encode(digest.finalize()))
+    Ok(crate::text::hex_encode(&digest.finalize()))
 }
 
 /// The package files the package's own root `mcp.json` launches through a
@@ -190,5 +191,5 @@ fn digest_file(path: &Path) -> io::Result<String> {
         }
         digest.update(&buffer[..read]);
     }
-    Ok(hex::encode(digest.finalize()))
+    Ok(crate::text::hex_encode(&digest.finalize()))
 }

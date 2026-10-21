@@ -20,7 +20,7 @@ use toml::Value;
 use super::models::{
     DEFAULT_HOOK_TIMEOUT, HookConfig, HookConfigIssue, HookConfigResult, HookType,
 };
-use crate::mcp::render::{python_float, python_string};
+use crate::pycompat::{self, pydantic};
 
 /// Loads one hook file. A missing file is no hooks and no issue. Reference
 /// `load_hooks_file`.
@@ -58,7 +58,10 @@ pub fn load_hooks_file_with(path: &Path, strict: bool) -> HookConfigResult {
         Err(error) => {
             result.issues.push(issue(
                 path,
-                format!("Failed to parse: {}", os_error(&error, path)),
+                format!(
+                    "Failed to parse: {}",
+                    pycompat::os_error(&error, Some(path))
+                ),
             ));
             return result;
         }
@@ -121,7 +124,7 @@ pub fn load_hooks_from_fs(files: &[PathBuf]) -> HookConfigResult {
             if !seen.insert(hook.name.clone()) {
                 all.issues.push(issue(
                     path,
-                    format!("Duplicate hook name: {}", python_string(&hook.name)),
+                    format!("Duplicate hook name: {}", pycompat::repr_str(&hook.name)),
                 ));
                 continue;
             }
@@ -135,21 +138,6 @@ fn issue(path: &Path, message: String) -> HookConfigIssue {
     HookConfigIssue {
         file: path.to_path_buf(),
         message,
-    }
-}
-
-/// Python's `str(OSError)`, which is what a read failure reports.
-fn os_error(error: &std::io::Error, path: &Path) -> String {
-    let description = error.to_string();
-    let description = description
-        .split_once(" (os error")
-        .map_or(description.as_str(), |(text, _)| text);
-    match error.raw_os_error() {
-        Some(code) => format!(
-            "[Errno {code}] {description}: {}",
-            python_string(&path.to_string_lossy())
-        ),
-        None => description.to_owned(),
     }
 }
 
@@ -265,9 +253,9 @@ fn python_str(value: &Value) -> String {
 /// Python's `repr` of the value `tomllib` parses this TOML into.
 fn python_repr(value: &Value) -> String {
     match value {
-        Value::String(text) => python_string(text),
+        Value::String(text) => pycompat::repr_str(text),
         Value::Integer(number) => number.to_string(),
-        Value::Float(number) => python_float(*number),
+        Value::Float(number) => pycompat::repr_float(*number),
         Value::Boolean(true) => "True".to_owned(),
         Value::Boolean(false) => "False".to_owned(),
         Value::Datetime(datetime) => datetime.to_string(),
@@ -279,7 +267,7 @@ fn python_repr(value: &Value) -> String {
             "{{{}}}",
             table
                 .iter()
-                .map(|(key, item)| format!("{}: {}", python_string(key), python_repr(item)))
+                .map(|(key, item)| format!("{}: {}", pycompat::repr_str(key), python_repr(item)))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -410,8 +398,8 @@ fn optional_string(
     }
 }
 
-/// Pydantic's lax `float`: numbers, booleans, and the strings Python's
-/// `float()` reads.
+/// Pydantic's lax `float`: numbers, booleans, and the strings its lax mode
+/// reads as one.
 fn lax_float(value: &Value) -> Result<f64, &'static str> {
     match value {
         Value::Float(number) => Ok(*number),
@@ -421,51 +409,9 @@ fn lax_float(value: &Value) -> Result<f64, &'static str> {
         )]
         Value::Integer(number) => Ok(*number as f64),
         Value::Boolean(flag) => Ok(if *flag { 1.0 } else { 0.0 }),
-        Value::String(text) => python_float_from_str(text).ok_or(UNPARSABLE_NUMBER),
+        Value::String(text) => pydantic::lax_float(text).ok_or(UNPARSABLE_NUMBER),
         _ => Err(VALID_NUMBER),
     }
-}
-
-/// Python's `float(str)`: surrounding whitespace, a sign, `inf`, `infinity`
-/// and `nan` in any case, and underscores between digits.
-fn python_float_from_str(text: &str) -> Option<f64> {
-    let trimmed = text.trim();
-    let characters = trimmed.chars().collect::<Vec<_>>();
-    let mut cleaned = String::with_capacity(trimmed.len());
-    for (index, character) in characters.iter().enumerate() {
-        if *character == '_' {
-            let digit_before = index
-                .checked_sub(1)
-                .and_then(|before| characters.get(before))
-                .is_some_and(char::is_ascii_digit);
-            let digit_after = characters
-                .get(index.saturating_add(1))
-                .is_some_and(char::is_ascii_digit);
-            if !(digit_before && digit_after) {
-                return None;
-            }
-            continue;
-        }
-        cleaned.push(*character);
-    }
-    let lowered = cleaned.to_ascii_lowercase();
-    let unsigned = lowered.trim_start_matches(['+', '-']);
-    if unsigned.len().saturating_add(1) < lowered.len() {
-        return None;
-    }
-    if matches!(unsigned, "inf" | "infinity" | "nan") {
-        return lowered.parse::<f64>().ok();
-    }
-    // Rust accepts exactly the decimal forms Python does once the special
-    // words are handled, and nothing hexadecimal.
-    if unsigned.is_empty()
-        || !unsigned.chars().all(|character| {
-            character.is_ascii_digit() || matches!(character, '.' | 'e' | '+' | '-')
-        })
-    {
-        return None;
-    }
-    lowered.parse::<f64>().ok()
 }
 
 /// Pydantic's lax `bool`.
@@ -477,11 +423,7 @@ fn lax_bool(value: &Value) -> Result<bool, &'static str> {
         Value::Integer(_) => Err(UNINTERPRETABLE_BOOLEAN),
         Value::Float(number) if *number == 0.0 => Ok(false),
         Value::Float(number) if *number == 1.0 => Ok(true),
-        Value::String(text) => match text.to_ascii_lowercase().as_str() {
-            "0" | "off" | "f" | "false" | "n" | "no" => Ok(false),
-            "1" | "on" | "t" | "true" | "y" | "yes" => Ok(true),
-            _ => Err(UNINTERPRETABLE_BOOLEAN),
-        },
+        Value::String(text) => pydantic::lax_bool(text).ok_or(UNINTERPRETABLE_BOOLEAN),
         _ => Err(VALID_BOOLEAN),
     }
 }

@@ -12,6 +12,7 @@ use vibe_app_server::client::{
 };
 use vibe_core::events::UserQuestionRequest;
 use vibe_core::policy::{PathGrantScope, PermissionRequirement, path_scope_target};
+use vibe_core::pycompat;
 
 use crate::agent::AcpAgent;
 use crate::projection::updated_entry_updates;
@@ -407,7 +408,7 @@ fn user_answers(
             if items.is_empty() {
                 return Err(format!("the answer to {key} is an empty list"));
             }
-            let rendered = items.iter().map(python_str).collect::<Vec<_>>();
+            let rendered = items.iter().map(pycompat::str_json).collect::<Vec<_>>();
             let is_other = rendered.iter().any(|item| !labels.contains(&item.as_str()));
             answers.push(json!({
                 "question": question.question,
@@ -429,15 +430,4 @@ fn user_answers(
         }
     }
     Ok(answers)
-}
-
-/// Python's `str()` of a JSON value, as a joined answer renders it.
-fn python_str(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::Null => "None".to_owned(),
-        other => other.to_string(),
-    }
 }

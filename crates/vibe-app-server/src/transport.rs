@@ -798,13 +798,10 @@ async fn run_turn<D>(
     }
     let notification = match outcome {
         Ok(outcome) => {
-            let stop_reason = matches!(
-                outcome.stop_reason,
-                crate::client::PublicTurnStopReason::MaxSteps
-                    | crate::client::PublicTurnStopReason::TokenLimit
-                    | crate::client::PublicTurnStopReason::PriceLimit
-            )
-            .then_some(vibe_core::events::PublicTurnStopReason::Limit);
+            let stop_reason = outcome
+                .stop_reason
+                .is_limit()
+                .then_some(vibe_core::events::PublicTurnStopReason::Limit);
             let error = public_turn_error(&outcome.stop_reason);
             server.complete_turn_with_details(
                 &reservation.session_id,

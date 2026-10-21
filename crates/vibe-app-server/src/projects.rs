@@ -16,17 +16,16 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::params::{self, optional_u64, required_string};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 use serde_json::Value;
 use thiserror::Error;
+use vibe_core::atomic_file::{FileMode, write_atomically};
 
 pub(crate) mod links;
 mod loops;
@@ -271,57 +270,13 @@ fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> Pr
     }
 }
 
-fn persist_json_atomically<T: Serialize>(
-    path: &Path,
-    value: &T,
-    sequence: &AtomicU64,
-) -> std::io::Result<()> {
+/// `value` as pretty JSON, replacing `path` atomically and owner-only.
+fn persist_json_atomically<T: Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let sequence = sequence.fetch_add(1, Ordering::Relaxed);
-    let file_name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("state.json");
-    let temporary = path.with_file_name(format!(
-        ".{file_name}.tmp-{}-{sequence}",
-        std::process::id()
-    ));
     let contents = serde_json::to_vec_pretty(value).map_err(std::io::Error::other)?;
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let write_result = (|| {
-        let mut file = options.open(&temporary)?;
-        file.write_all(&contents)?;
-        file.sync_all()
-    })();
-    if let Err(error) = write_result {
-        let _ = fs::remove_file(&temporary);
-        return Err(error);
-    }
-    if let Err(error) = replace_file(&temporary, path) {
-        let _ = fs::remove_file(&temporary);
-        return Err(error);
-    }
-    #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        fs::File::open(parent)?.sync_all()?;
-    }
-    Ok(())
-}
-
-fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
-    #[cfg(target_os = "windows")]
-    if destination.exists() {
-        fs::remove_file(destination)?;
-    }
-    fs::rename(source, destination)
+    write_atomically(path, "state", &contents, FileMode::Private).map_err(|error| error.source)
 }
 
 impl From<params::ParamError> for ProjectsServiceError {

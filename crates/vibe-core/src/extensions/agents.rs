@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use toml::Table;
 
 use super::{ExtensionError, ExtensionSource, parse_agent};
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
 use crate::policy::{PermissionMode, PermissionRule, PermissionScope};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -324,9 +324,11 @@ impl AgentRegistry {
             path: source.to_path_buf(),
             source: error,
         })?;
-        write_atomically(&destination, "agent", &contents).map_err(|error| ExtensionError::Io {
-            path: error.path,
-            source: error.source,
+        write_atomically(&destination, "agent", &contents, FileMode::Private).map_err(|error| {
+            ExtensionError::Io {
+                path: error.path,
+                source: error.source,
+            }
         })?;
         let installed = parse_agent(&destination, ExtensionSource::User)?;
         self.agents

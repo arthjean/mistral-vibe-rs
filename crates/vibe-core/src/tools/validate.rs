@@ -14,6 +14,7 @@
 use serde_json::{Map, Value};
 
 use super::{ToolError, resolve_reference};
+use crate::pycompat::pydantic;
 
 /// One place a call's arguments failed the tool's declared schema.
 ///
@@ -279,14 +280,7 @@ pub fn python_bool(value: &Value) -> Option<bool> {
 /// both measured against the reference interpreter.
 fn coerce_boolean(value: &Value) -> Option<Value> {
     match value {
-        Value::String(text) => {
-            let lowered = text.to_ascii_lowercase();
-            match lowered.as_str() {
-                "yes" | "on" | "true" | "t" | "y" | "1" => Some(Value::Bool(true)),
-                "no" | "off" | "false" | "f" | "n" | "0" => Some(Value::Bool(false)),
-                _ => None,
-            }
-        }
+        Value::String(text) => pydantic::lax_bool(text).map(Value::Bool),
         // Only the two values that name a truth: `2` and `-1` are rejected
         // rather than treated as truthy.
         Value::Number(number) => {
@@ -324,7 +318,9 @@ fn coerce_integer(value: &Value) -> Option<Value> {
             let float = number.as_f64()?;
             (float.fract() == 0.0).then(|| Value::from(float as i64))
         }
-        Value::String(text) => parse_integer(text).map(Value::from),
+        Value::String(text) => pydantic::lax_int(text)
+            .and_then(|integer| i64::try_from(integer).ok())
+            .map(Value::from),
         _ => None,
     }
 }
@@ -335,44 +331,13 @@ fn coerce_integer(value: &Value) -> Option<Value> {
 fn coerce_number(value: &Value) -> Option<Value> {
     match value {
         Value::Bool(flag) => Some(Value::from(f64::from(u8::from(*flag)))),
-        Value::String(text) => {
-            let normalized = text.trim().replace('_', "");
-            let parsed = normalized.parse::<f64>().ok()?;
-            // JSON carries no infinity and no NaN, so a string spelling either
-            // cannot be represented and is refused instead of silently clamped.
-            parsed.is_finite().then(|| Value::from(parsed))
-        }
+        // JSON carries no infinity and no NaN, so a string spelling either
+        // cannot be represented and is refused instead of silently clamped.
+        Value::String(text) => pydantic::lax_float(text)
+            .filter(|parsed| parsed.is_finite())
+            .map(Value::from),
         _ => None,
     }
-}
-
-/// Parses the integer spellings the reference accepts and no others.
-///
-/// Python's `int()` trims whitespace, honors a sign and ignores underscore
-/// separators, and Pydantic additionally accepts a decimal spelling whose
-/// fraction is zero. It refuses exponent notation, so `"1e2"` is not an integer
-/// even though it is a whole number.
-fn parse_integer(text: &str) -> Option<i64> {
-    let normalized = text.trim().replace('_', "");
-    if normalized.is_empty() {
-        return None;
-    }
-    if let Ok(integer) = normalized.parse::<i64>() {
-        return Some(integer);
-    }
-    let decimal = normalized
-        .split_once('.')
-        .filter(|_| !normalized.contains(['e', 'E']))?;
-    let whole = format!("{}{}", decimal.0, decimal.1);
-    if !whole
-        .trim_start_matches(['+', '-'])
-        .chars()
-        .all(|character| character.is_ascii_digit())
-    {
-        return None;
-    }
-    let parsed = normalized.parse::<f64>().ok()?;
-    (parsed.fract() == 0.0 && parsed.is_finite()).then_some(parsed as i64)
 }
 
 /// Collects every violation the value carries against the schema.

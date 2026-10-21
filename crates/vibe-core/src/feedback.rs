@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
 
 /// Reference `FEEDBACK_PROBABILITY`.
 const FEEDBACK_PROBABILITY: f64 = 0.05;
@@ -107,7 +107,12 @@ impl FeedbackCache {
             if let Some(parent) = self.path.parent() {
                 let _ = fs::create_dir_all(parent);
             }
-            let _ = write_atomically(&self.path, "cache.toml", encoded.as_bytes());
+            let _ = write_atomically(
+                &self.path,
+                "cache.toml",
+                encoded.as_bytes(),
+                FileMode::Private,
+            );
         }
     }
 

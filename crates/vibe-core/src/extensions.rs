@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use toml::Table;
 
-use crate::atomic_file::write_atomically;
+use crate::atomic_file::{FileMode, write_atomically};
+use crate::pycompat;
 use crate::skills::parser::parse_skill_markdown;
 use crate::skills::schema::SkillMetadata;
 use crate::skills::{RegistryRef, SkillDiscovery, SkillScope, SkillSource};
@@ -334,7 +335,7 @@ fn migrate_agent_file(path: &Path) {
     };
     // The migration is best effort, as the reference's is: a profile that
     // cannot be rewritten is still read through the same migration.
-    let _ = write_atomically(path, "agent", encoded.as_bytes());
+    let _ = write_atomically(path, "agent", encoded.as_bytes(), FileMode::Private);
 }
 
 fn discover_skills(
@@ -641,27 +642,10 @@ fn take_string(table: &mut Table, key: &str) -> Option<String> {
         .and_then(|value| value.as_str().map(ToOwned::to_owned))
 }
 
-/// The display name a profile that declares none is published under.
-///
-/// Reference `path.stem.replace("-", " ").title()`: every run of cased
-/// letters starts upper case and continues lower case, and anything that is
-/// not a cased letter (a digit, a space, an underscore) starts a new run.
+/// The display name a profile that declares none is published under:
+/// reference `path.stem.replace("-", " ").title()`.
 fn title_from_name(name: &str) -> String {
-    let mut title = String::with_capacity(name.len());
-    let mut previous_cased = false;
-    for character in name.chars() {
-        let character = if character == '-' { ' ' } else { character };
-        let cased = character.is_uppercase() || character.is_lowercase();
-        if cased && previous_cased {
-            title.extend(character.to_lowercase());
-        } else if cased {
-            title.extend(character.to_uppercase());
-        } else {
-            title.push(character);
-        }
-        previous_cased = cased;
-    }
-    title
+    pycompat::title(&name.replace('-', " "))
 }
 
 #[derive(Debug, Error)]

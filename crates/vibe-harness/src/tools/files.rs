@@ -12,6 +12,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
+use vibe_core::pycompat;
 
 use crate::state::ToolResult;
 
@@ -272,34 +273,6 @@ fn encode(text: &str, encoding: Encoding) -> Option<Vec<u8>> {
     }
 }
 
-/// `str.splitlines(keepends=True)`: Python's line boundaries.
-fn split_lines_keep(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut chars = text.char_indices().peekable();
-    while let Some((index, character)) = chars.next() {
-        let end = match character {
-            '\r' => {
-                if let Some((_, '\n')) = chars.peek() {
-                    chars.next();
-                    index + 2
-                } else {
-                    index + 1
-                }
-            }
-            '\n' | '\u{0b}' | '\u{0c}' | '\u{1c}' | '\u{1d}' | '\u{1e}' | '\u{85}' | '\u{2028}'
-            | '\u{2029}' => index + character.len_utf8(),
-            _ => continue,
-        };
-        lines.push(&text[start..end]);
-        start = end;
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
 /// Lines as a text-mode reader with `newline=""` yields them: split after
 /// `\n`, `\r` or `\r\n` only.
 fn reader_lines(text: &str) -> Vec<&str> {
@@ -340,15 +313,17 @@ fn open_regular(path: &Path) -> Result<(fs::File, fs::Metadata), String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             return Err(format!("File not found at: {}", path.display()));
         }
-        Err(error) => return Err(os_error(&error, path)),
+        Err(error) => return Err(pycompat::os_error(&error, Some(path))),
     };
     if link.is_ok_and(|meta| meta.file_type().is_symlink()) {
         return Err(format!(
-            "[Errno 40] Too many levels of symbolic links: '{}'",
-            path.display()
+            "[Errno 40] Too many levels of symbolic links: {}",
+            pycompat::repr_str(&path.to_string_lossy())
         ));
     }
-    let metadata = file.metadata().map_err(|error| os_error(&error, path))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| pycompat::os_error(&error, Some(path)))?;
     if metadata.is_dir() {
         return Err(format!(
             "Path is a directory, not a file: {}",
@@ -359,14 +334,6 @@ fn open_regular(path: &Path) -> Result<(fs::File, fs::Metadata), String> {
         return Err(format!("Path is not a regular file: {}", path.display()));
     }
     Ok((file, metadata))
-}
-
-/// An `OSError` as Python renders it.
-fn os_error(error: &std::io::Error, path: &Path) -> String {
-    let code = error.raw_os_error().unwrap_or(0);
-    let text = error.to_string();
-    let text = text.split(" (os error").next().unwrap_or(&text).to_owned();
-    format!("[Errno {code}] {text}: '{}'", path.display())
 }
 
 // --------------------------------------------------------------------------
@@ -395,7 +362,7 @@ fn read_file(arguments: &Value, workspace: &Workspace) -> Result<ToolResult, Str
     let (mut file, metadata) = open_regular(&path)?;
     let mut raw = Vec::new();
     file.read_to_end(&mut raw)
-        .map_err(|error| os_error(&error, &path))?;
+        .map_err(|error| pycompat::os_error(&error, Some(path.as_path())))?;
     let prefix = &raw[..raw.len().min(SNIFF_BYTES)];
     for encoding in candidate_encodings(prefix) {
         let Some(text) = decode(&raw, encoding) else {
@@ -413,7 +380,7 @@ fn read_file(arguments: &Value, workspace: &Workspace) -> Result<ToolResult, Str
         };
         let (content, truncated) = read_page(&lines, start, limit);
         let returned = content.len();
-        let lines_read = split_lines_keep(&content).len();
+        let lines_read = pycompat::splitlines(&content, true).len();
         return Ok(succeeded(
             json!({
                 "path": path.to_string_lossy(),
@@ -487,7 +454,7 @@ fn write_file(arguments: &Value, workspace: &Workspace) -> Result<ToolResult, St
         })
         .flatten();
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| os_error(&error, parent))?;
+        fs::create_dir_all(parent).map_err(|error| pycompat::os_error(&error, Some(parent)))?;
     }
     atomic_write(&path, content.as_bytes())?;
     let meta = previous.map(|previous| {
@@ -538,7 +505,7 @@ fn search_replace(arguments: &Value, workspace: &Workspace) -> Result<ToolResult
     }
     let mut raw = Vec::new();
     file.read_to_end(&mut raw)
-        .map_err(|error| os_error(&error, &path))?;
+        .map_err(|error| pycompat::os_error(&error, Some(path.as_path())))?;
     drop(file);
     let prefix = &raw[..raw.len().min(SNIFF_BYTES)];
     let mut decoded = None;
@@ -585,8 +552,8 @@ fn search_replace(arguments: &Value, workspace: &Workspace) -> Result<ToolResult
             ));
         }
         let count = if replace_all { matches } else { 1 };
-        let old_lines = split_lines_keep(old);
-        let new_lines = split_lines_keep(new);
+        let old_lines = pycompat::splitlines(old, true);
+        let new_lines = pycompat::splitlines(new, true);
         let mut delta: i64 = 0;
         for start in updated
             .match_indices(old)
@@ -640,16 +607,16 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .prefix(&format!(".{name}."))
         .suffix(".tmp")
         .tempfile_in(parent)
-        .map_err(|error| os_error(&error, parent))?;
+        .map_err(|error| pycompat::os_error(&error, Some(parent)))?;
     temporary
         .write_all(bytes)
         .and_then(|()| temporary.as_file().sync_all())
-        .map_err(|error| os_error(&error, path))?;
+        .map_err(|error| pycompat::os_error(&error, Some(path)))?;
     if let Ok(metadata) = fs::metadata(path) {
         let _ = fs::set_permissions(temporary.path(), metadata.permissions());
     }
     temporary
         .persist(path)
         .map(|_| ())
-        .map_err(|error| os_error(&error.error, path))
+        .map_err(|error| pycompat::os_error(&error.error, Some(path)))
 }

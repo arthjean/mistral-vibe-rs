@@ -16,6 +16,7 @@
 
 use std::collections::BTreeMap;
 
+use vibe_core::pycompat::thousands;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::TelemetryCommandKind;
 use vibe_core::workspace::WARNING_TAG;
@@ -553,19 +554,6 @@ async fn compact<B: CommandBackend>(arguments: &str, backend: &mut B) {
     backend.emit(status);
 }
 
-/// Python's `{:,}`: thousands separated by commas.
-fn grouped(value: u64) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
-}
-
 /// Reference `session_token_cost`: cached prompt tokens bill at the cached
 /// price when the model declares one, and never beyond the prompt count.
 pub(super) fn session_cost(
@@ -588,7 +576,7 @@ pub(super) fn session_cost(
 pub(super) fn status_document(stats: &Stats) -> String {
     let cached = |tokens: u64| {
         if tokens > 0 {
-            format!(" _(including {} cached)_", grouped(tokens))
+            format!(" _(including {} cached)_", thousands(tokens))
         } else {
             String::new()
         }
@@ -597,12 +585,12 @@ pub(super) fn status_document(stats: &Stats) -> String {
         "## Agent Statistics\n\n- **Steps**: {}\n- **Session Prompt Tokens**: {}{}\n- **Session \
          Completion Tokens**: {}\n- **Session Total LLM Tokens**: {}\n- **Last Turn Tokens**: \
          {}{}\n- **Cost**: ${:.4}\n",
-        grouped(stats.steps),
-        grouped(stats.session_prompt_tokens),
+        thousands(stats.steps),
+        thousands(stats.session_prompt_tokens),
         cached(stats.session_cached_tokens),
-        grouped(stats.session_completion_tokens),
-        grouped(stats.session_total_llm_tokens),
-        grouped(stats.last_turn_total_tokens),
+        thousands(stats.session_completion_tokens),
+        thousands(stats.session_total_llm_tokens),
+        thousands(stats.last_turn_total_tokens),
         cached(stats.last_turn_cached_tokens),
         stats.session_cost,
     )

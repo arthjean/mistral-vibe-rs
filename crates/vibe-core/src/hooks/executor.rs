@@ -36,7 +36,12 @@ pub(crate) async fn run_hook(hook: &HookConfig, stdin: &[u8], cwd: &Path) -> Hoo
         .envs(crate::config::inherited_by_children());
     let (mut child, pipes) = match ChildGroup::spawn(&mut command) {
         Ok(spawned) => spawned,
-        Err(error) => return failed(format!("Failed to start: {}", python_os_error(&error, cwd))),
+        Err(error) => {
+            return failed(format!(
+                "Failed to start: {}",
+                crate::pycompat::os_error(&error, Some(cwd))
+            ));
+        }
     };
     let Some(mut child_stdin) = pipes.stdin else {
         let _ = child.signal(true);
@@ -211,19 +216,4 @@ fn decode_utf32(bytes: &[u8], unit: fn([u8; 4]) -> u32) -> Option<String> {
                 .and_then(char::from_u32)
         })
         .collect()
-}
-
-/// Python's `str(OSError)` for a failed spawn, which names the path involved.
-fn python_os_error(error: &io::Error, cwd: &Path) -> String {
-    let description = error.to_string();
-    let description = description
-        .split_once(" (os error")
-        .map_or(description.as_str(), |(text, _)| text);
-    match error.raw_os_error() {
-        Some(code) => format!(
-            "[Errno {code}] {description}: {}",
-            crate::mcp::render::python_string(&cwd.to_string_lossy())
-        ),
-        None => description.to_owned(),
-    }
 }

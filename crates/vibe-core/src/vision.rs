@@ -51,8 +51,7 @@ impl ImageToDescribe {
     /// An image the request carried inline.
     #[must_use]
     pub fn inline(alias: &str, mime_type: &str, data: &str) -> Self {
-        let digest = Sha1::digest(data.as_bytes());
-        let hex: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        let hex = crate::text::hex_encode(&Sha1::digest(data.as_bytes()));
         Self {
             alias: alias.to_owned(),
             mime_type: mime_type.to_owned(),

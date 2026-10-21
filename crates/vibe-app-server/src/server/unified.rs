@@ -14,7 +14,8 @@ use std::sync::{Arc, Mutex};
 
 use serde_json::{Map, Value, json};
 use tokio::sync::{mpsc, watch};
-use vibe_harness::clock::{iso_micros, iso_millis, now_micros, now_millis, parse_iso_millis};
+use vibe_core::clock::{now_micros, now_millis};
+use vibe_harness::clock::{iso_micros, iso_millis, parse_iso_millis};
 use vibe_harness::engine::{
     CallbackEvent, Publication, SessionCore, TurnEnd, TurnEnvironment, TurnRequest, run_turn,
 };
@@ -1064,7 +1065,7 @@ impl ServerConnection {
                 let entry = vibe_harness::state::public_message_entry(
                     &unified.id,
                     None,
-                    &format!("context-{}", vibe_harness::engine::random_hex(16)),
+                    &format!("context-{}", vibe_core::session_id::random_hex::<16>()),
                     "user",
                     &content,
                     now,
@@ -2025,7 +2026,7 @@ async fn run_scheduled_loops(server: AppServer, weak: std::sync::Weak<UnifiedSes
                 .core
                 .lock()
                 .ok()
-                .and_then(|core| core.loops.next_due_in(vibe_harness::loops::now_seconds()))
+                .and_then(|core| core.loops.next_due_in(vibe_core::clock::now_seconds_f64()))
                 .unwrap_or(1.0)
         };
         tokio::select! {
@@ -2060,7 +2061,7 @@ async fn run_scheduled_loops(server: AppServer, weak: std::sync::Weak<UnifiedSes
         let Some(loops) = session.core.lock().ok().map(|core| Arc::clone(&core.loops)) else {
             continue;
         };
-        let Some(due) = loops.due(vibe_harness::loops::now_seconds()) else {
+        let Some(due) = loops.due(vibe_core::clock::now_seconds_f64()) else {
             continue;
         };
         let fired_at = now_millis();
@@ -2076,7 +2077,7 @@ async fn run_scheduled_loops(server: AppServer, weak: std::sync::Weak<UnifiedSes
             true,
         );
         let Ok((content, display)) = prepared else {
-            loops.mark_fired(&due.id, vibe_harness::loops::now_seconds());
+            loops.mark_fired(&due.id, vibe_core::clock::now_seconds_f64());
             continue;
         };
         let request = TurnRequest {
@@ -2096,7 +2097,7 @@ async fn run_scheduled_loops(server: AppServer, weak: std::sync::Weak<UnifiedSes
                 tokio::spawn(drive_unified_turn(begun.work, outbox));
             }
         }
-        loops.mark_fired(&due.id, vibe_harness::loops::now_seconds());
+        loops.mark_fired(&due.id, vibe_core::clock::now_seconds_f64());
     }
 }
 

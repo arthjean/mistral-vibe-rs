@@ -27,7 +27,7 @@ use crate::skills::SkillDiscovery;
 use crate::tools::config::{SharedToolConfig, TodoConfig, ToolConfigResolver, declared_document};
 use crate::tools::{
     OwnedToolHandlerFuture, RegistrationOutcome, ToolError, ToolHandler, ToolInvocation,
-    ToolOutputSink, ToolRegistry, reference_text,
+    ToolOutputSink, ToolRegistry,
 };
 
 /// The redirect budget the security NFR sets for `web_fetch`.
@@ -136,10 +136,10 @@ impl TodoItem {
     /// The entry as one dictionary of the model-facing rendering.
     fn rendered_fields(&self) -> Vec<(&'static str, String)> {
         vec![
-            ("id", reference_text::string_repr(&self.id)),
-            ("content", reference_text::string_repr(&self.content)),
-            ("status", reference_text::string_repr(&self.status)),
-            ("priority", reference_text::string_repr(&self.priority)),
+            ("id", crate::pycompat::repr_str(&self.id)),
+            ("content", crate::pycompat::repr_str(&self.content)),
+            ("status", crate::pycompat::repr_str(&self.status)),
+            ("priority", crate::pycompat::repr_str(&self.priority)),
         ]
     }
 }

@@ -606,13 +606,10 @@ impl InProcessClient {
                 _ => None,
             })
             .unwrap_or_default();
-        let public_stop_reason = matches!(
-            outcome.stop_reason,
-            PublicTurnStopReason::MaxSteps
-                | PublicTurnStopReason::TokenLimit
-                | PublicTurnStopReason::PriceLimit
-        )
-        .then_some(vibe_core::events::PublicTurnStopReason::Limit);
+        let public_stop_reason = outcome
+            .stop_reason
+            .is_limit()
+            .then_some(vibe_core::events::PublicTurnStopReason::Limit);
         self.server.complete_turn_with_details(
             &reservation.session_id,
             &reservation.turn_id,

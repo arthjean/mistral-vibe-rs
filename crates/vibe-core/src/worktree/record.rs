@@ -20,15 +20,16 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::{self, File, OpenOptions};
-use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
 use serde::{Deserialize, Serialize};
 
-use crate::auth::UtcTimestamp;
+use crate::atomic_file::{FileLock, FileMode, open_private_lock, write_atomically};
+use crate::platform::resolve_lenient;
+use crate::time::UtcTimestamp;
 
-use super::{ManagedRoot, WorktreeError, resolve_lenient};
+use super::{ManagedRoot, WorktreeError};
 
 /// The directory claims live in, beside the buckets. A bucket is always
 /// `<name>-<12 hex>`, so this leading-dot name cannot collide with one
@@ -146,7 +147,7 @@ impl WorktreeRecoveryRecord {
 mod timestamp {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    use crate::auth::UtcTimestamp;
+    use crate::time::UtcTimestamp;
 
     pub(super) fn serialize<S: Serializer>(
         value: &UtcTimestamp,
@@ -173,11 +174,9 @@ mod timestamp {
 /// digest (`vibe/core/git/worktree/record.py:103-105`).
 #[must_use]
 pub fn managed_bucket_name(repo_root: &Path, common_git_dir: &Path) -> String {
-    use sha2::{Digest as _, Sha256};
-
-    let digest = hex::encode(Sha256::digest(
+    let digest = crate::text::sha256_hex(
         crate::platform::strip_verbatim_prefix(&common_git_dir.to_string_lossy()).as_bytes(),
-    ));
+    );
     let repository_name = repo_root
         .file_name()
         .map(|value| value.to_string_lossy().into_owned())
@@ -188,39 +187,13 @@ pub fn managed_bucket_name(repo_root: &Path, common_git_dir: &Path) -> String {
     )
 }
 
-/// An exclusive lock on one file under the claims root, released on drop.
-struct DirectoryLock {
-    file: File,
-}
-
-impl DirectoryLock {
-    fn acquire(managed: &ManagedRoot, name: &str) -> Result<Self, WorktreeError> {
-        let root = managed.claims();
-        fs::create_dir_all(&root).map_err(|source| WorktreeError::io(&root, source))?;
-        let path = root.join(name);
-        let file = open_lock_file(&path)?;
-        fs2::FileExt::lock_exclusive(&file).map_err(|source| WorktreeError::io(&path, source))?;
-        Ok(Self { file })
-    }
-}
-
-impl Drop for DirectoryLock {
-    fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.file);
-    }
-}
-
-fn open_lock_file(path: &Path) -> Result<File, WorktreeError> {
-    let mut options = OpenOptions::new();
-    options.read(true).append(true).create(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-        options.mode(0o600);
-    }
-    options
-        .open(path)
-        .map_err(|source| WorktreeError::io(path, source))
+/// An exclusive lock on one file under the claims root, released when the
+/// guard is dropped.
+fn directory_lock(managed: &ManagedRoot, name: &str) -> Result<FileLock, WorktreeError> {
+    let root = managed.claims();
+    fs::create_dir_all(&root).map_err(|source| WorktreeError::io(&root, source))?;
+    let path = root.join(name);
+    FileLock::acquire(&path).map_err(|source| WorktreeError::io(&path, source))
 }
 
 /// Holds the retention lock for its lifetime.
@@ -229,20 +202,20 @@ fn open_lock_file(path: &Path) -> Result<File, WorktreeError> {
 /// cannot be judged abandoned while a session is on its way into it
 /// (`vibe/core/git/worktree/record.py:112-121`).
 pub struct PruneLock {
-    _lock: DirectoryLock,
+    _lock: FileLock,
 }
 
 impl PruneLock {
     pub fn acquire(managed: &ManagedRoot) -> Result<Self, WorktreeError> {
         Ok(Self {
-            _lock: DirectoryLock::acquire(managed, PRUNE_LOCK_FILENAME)?,
+            _lock: directory_lock(managed, PRUNE_LOCK_FILENAME)?,
         })
     }
 }
 
 /// Holds the claims registry lock for its lifetime ([`WorktreeClaim::locked`]).
 pub struct ClaimLock {
-    _lock: DirectoryLock,
+    _lock: FileLock,
 }
 
 /// One managed worktree, addressed by its bucket and name.
@@ -338,7 +311,7 @@ impl WorktreeClaim {
     /// the lock itself, such as reading the holders, may run under it.
     pub fn locked(&self) -> Result<ClaimLock, WorktreeError> {
         Ok(ClaimLock {
-            _lock: DirectoryLock::acquire(&self.managed, REGISTRY_LOCK_FILENAME)?,
+            _lock: directory_lock(&self.managed, REGISTRY_LOCK_FILENAME)?,
         })
     }
 
@@ -464,7 +437,7 @@ impl WorktreeClaim {
         if let Some(parent) = holder.parent() {
             fs::create_dir_all(parent).map_err(|source| WorktreeError::io(parent, source))?;
         }
-        let _registry = DirectoryLock::acquire(&self.managed, REGISTRY_LOCK_FILENAME)?;
+        let _registry = directory_lock(&self.managed, REGISTRY_LOCK_FILENAME)?;
         let mut held = HELD_FILES
             .lock()
             .map_err(|_| WorktreeError::record("the holder registry is poisoned"))?;
@@ -478,7 +451,7 @@ impl WorktreeClaim {
             entry.1 += 1;
             return Ok(());
         }
-        let file = open_lock_file(holder)?;
+        let file = open_private_lock(holder).map_err(|source| WorktreeError::io(holder, source))?;
         if fs2::FileExt::try_lock_exclusive(&file).is_err() {
             return Err(WorktreeError::record(format!(
                 "worktree holder {:?} is already active",
@@ -493,7 +466,7 @@ impl WorktreeClaim {
         if !holder.exists() && !holder_is_owned(holder) {
             return;
         }
-        let Ok(_registry) = DirectoryLock::acquire(&self.managed, REGISTRY_LOCK_FILENAME) else {
+        let Ok(_registry) = directory_lock(&self.managed, REGISTRY_LOCK_FILENAME) else {
             return;
         };
         if let Ok(mut held) = HELD_FILES.lock()
@@ -516,7 +489,7 @@ impl WorktreeClaim {
     fn live_holders(&self, keep: impl Fn(&str) -> bool) -> BTreeSet<String> {
         let directory = self.directory().join(HOLDERS_DIR_NAME);
         let mut live = BTreeSet::new();
-        let Ok(_registry) = DirectoryLock::acquire(&self.managed, REGISTRY_LOCK_FILENAME) else {
+        let Ok(_registry) = directory_lock(&self.managed, REGISTRY_LOCK_FILENAME) else {
             return live;
         };
         let Ok(entries) = fs::read_dir(&directory) else {
@@ -537,22 +510,9 @@ impl WorktreeClaim {
         let target = directory.join(file);
         let rendered = serde_json::to_string_pretty(value)
             .map_err(|error| WorktreeError::record(error.to_string()))?;
-        let staging = directory.join(format!(
-            ".{file}.{}.{}.json.tmp",
-            std::process::id(),
-            crate::clock::now_nanos()
-        ));
-        let written = (|| {
-            let mut handle = File::create(&staging)?;
-            handle.write_all(rendered.as_bytes())?;
-            handle.sync_all()?;
-            fs::rename(&staging, &target)
-        })();
-        if let Err(source) = written {
-            let _ = fs::remove_file(&staging);
-            return Err(WorktreeError::io(&target, source));
-        }
-        Ok(())
+        // Owner-only, as the reference's `NamedTemporaryFile` staging leaves it.
+        write_atomically(&target, file, rendered.as_bytes(), FileMode::Private)
+            .map_err(|error| WorktreeError::io(&target, error.source))
     }
 }
 

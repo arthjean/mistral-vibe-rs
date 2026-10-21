@@ -9,8 +9,8 @@
 //! session's accounting follows behind them.
 
 use serde_json::{Value, json};
+use vibe_core::clock::now_millis;
 
-use crate::clock::now_millis;
 use crate::patch::{make_json_patch, patch_json};
 
 /// Paths whose string growth is published as an append.

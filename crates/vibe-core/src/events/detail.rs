@@ -20,6 +20,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 
 use crate::policy::{PathGrantScope, PermissionRequirement};
+use crate::pycompat;
 use crate::scratchpad::SCRATCHPAD_PREFIX;
 use crate::workspace::tool_path;
 
@@ -1082,8 +1083,8 @@ fn call_content(kind: ToolEffectKind, arguments: &Value) -> Option<String> {
         ToolEffectKind::FileWrite => optional_string_argument(arguments, &["content"]),
         ToolEffectKind::FileEdit => Some(format!(
             "old_string: {}\nnew_string: {}",
-            python_string(&optional_string_argument(arguments, &["old_string"])?),
-            python_string(&optional_string_argument(arguments, &["new_string"])?)
+            pycompat::repr_str(&optional_string_argument(arguments, &["old_string"])?),
+            pycompat::repr_str(&optional_string_argument(arguments, &["new_string"])?)
         )),
         _ => None,
     }
@@ -1260,49 +1261,10 @@ fn generic_call_summary(tool_name: &str, arguments: &Value, wire_order: &[String
     let rendered = ordered
         .into_iter()
         .take(3)
-        .map(|(key, value)| format!("{key}={}", python_repr(value)))
+        .map(|(key, value)| format!("{key}={}", pycompat::repr_json(value)))
         .collect::<Vec<_>>()
         .join(", ");
     format!("{tool_name}({rendered})")
-}
-
-/// One argument value, spelled the way the reference interpreter spells it.
-///
-/// The generic summary interpolates its arguments, so a value crossing it
-/// renders under Python's literal syntax rather than JSON's: the two disagree
-/// on booleans, on the null, and on the quote a key or a string carries.
-fn python_repr(value: &Value) -> String {
-    match value {
-        Value::Null => "None".to_owned(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::String(text) => python_string(text),
-        Value::Array(items) => format!(
-            "[{}]",
-            items.iter().map(python_repr).collect::<Vec<_>>().join(", ")
-        ),
-        Value::Object(fields) => format!(
-            "{{{}}}",
-            fields
-                .iter()
-                .map(|(key, value)| format!("{}: {}", python_string(key), python_repr(value)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        number => number.to_string(),
-    }
-}
-
-/// A string literal under Python's quoting rule: single quotes, unless the text
-/// carries one and no double quote, in which case the pair switches rather than
-/// escaping.
-fn python_string(text: &str) -> String {
-    let escaped = text.replace('\\', "\\\\");
-    if escaped.contains('\'') && !escaped.contains('"') {
-        format!("\"{escaped}\"")
-    } else {
-        format!("'{}'", escaped.replace('\'', "\\'"))
-    }
 }
 
 impl EffectResultDisplay {
@@ -1649,7 +1611,7 @@ fn completed_header(
                 format!(
                     "{} ({} chars, {})",
                     string_argument(output, &["url"]),
-                    grouped_thousands(content_length),
+                    pycompat::thousands(u64::try_from(content_length).unwrap_or(u64::MAX)),
                     content_type.split(';').next().unwrap_or_default()
                 ),
                 truncated(truncated_flag(output)),
@@ -2107,19 +2069,6 @@ fn answered_message(output: &Value) -> String {
         })
         .collect::<Vec<_>>()
         .join(" · ")
-}
-
-/// The thousands-grouped form a byte count renders as.
-fn grouped_thousands(value: usize) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len().saturating_add(digits.len() / 3));
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 #[cfg(test)]

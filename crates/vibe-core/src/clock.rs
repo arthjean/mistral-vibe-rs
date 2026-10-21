@@ -19,6 +19,14 @@ pub fn now_millis() -> u64 {
     })
 }
 
+/// Microseconds since the Unix epoch.
+#[must_use]
+pub fn now_micros() -> u64 {
+    since_epoch().map_or(0, |elapsed| {
+        u64::try_from(elapsed.as_micros()).unwrap_or(u64::MAX)
+    })
+}
+
 /// Seconds since the Unix epoch.
 #[must_use]
 pub fn now_seconds() -> u64 {
@@ -29,6 +37,13 @@ pub fn now_seconds() -> u64 {
 #[must_use]
 pub fn now_seconds_signed() -> i64 {
     i64::try_from(now_seconds()).unwrap_or(i64::MAX)
+}
+
+/// Seconds since the Unix epoch with their fraction, as Python's `time.time()`
+/// answers them.
+#[must_use]
+pub fn now_seconds_f64() -> f64 {
+    since_epoch().map_or(0.0, |elapsed| elapsed.as_secs_f64())
 }
 
 /// Nanoseconds since the Unix epoch.

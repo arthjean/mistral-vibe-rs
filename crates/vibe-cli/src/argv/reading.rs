@@ -22,6 +22,7 @@
 use std::ffi::OsString;
 
 use clap::{Arg, ArgAction, Command};
+use vibe_core::pycompat;
 
 /// How many values an option takes, in argparse's three shapes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +119,7 @@ pub(crate) fn read(command: &Command, argv: Vec<OsString>, exact_only: &[&str]) 
                         refusal = Some(format!(
                             "argument {}: ignored explicit argument {}",
                             option.spellings.join("/"),
-                            python_repr(explicit)
+                            pycompat::repr_str(explicit)
                         ));
                         break;
                     }
@@ -315,35 +316,6 @@ fn looks_like_a_negative_number(text: &str) -> bool {
         None => !rest.is_empty() && digits(rest),
         Some((whole, fraction)) => !fraction.is_empty() && digits(whole) && digits(fraction),
     }
-}
-
-/// Python's `repr` of a string, which is how argparse quotes a value it names.
-pub(crate) fn python_repr(value: &str) -> String {
-    let quote = if value.contains('\'') && !value.contains('"') {
-        '"'
-    } else {
-        '\''
-    };
-    let mut rendered = String::with_capacity(value.len() + 2);
-    rendered.push(quote);
-    for character in value.chars() {
-        match character {
-            '\\' => rendered.push_str("\\\\"),
-            '\n' => rendered.push_str("\\n"),
-            '\r' => rendered.push_str("\\r"),
-            '\t' => rendered.push_str("\\t"),
-            character if character == quote => {
-                rendered.push('\\');
-                rendered.push(character);
-            }
-            character if character.is_control() => {
-                rendered.push_str(&format!("\\x{:02x}", u32::from(character)));
-            }
-            character => rendered.push(character),
-        }
-    }
-    rendered.push(quote);
-    rendered
 }
 
 #[cfg(test)]

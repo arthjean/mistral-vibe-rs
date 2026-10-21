@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::{ConfigError, ConfigPaths, LOCK_FILE, TRANSACTION_FILE};
-use crate::atomic_file::{self, create_private_file, write_atomically};
+use crate::atomic_file::{self, FileMode, create_private_file, write_atomically};
 
 pub(super) struct PreparedWrite {
     destination: PathBuf,
@@ -310,7 +310,7 @@ pub(super) fn write_journal(path: &Path, journal: &ConfigJournal) -> Result<(), 
     ensure_private_directory(parent)?;
     let mut encoded = serde_json::to_vec(journal).map_err(ConfigError::Json)?;
     encoded.push(b'\n');
-    write_atomically(path, "journal", &encoded).map_err(ConfigError::from)
+    write_atomically(path, "journal", &encoded, FileMode::Private).map_err(ConfigError::from)
 }
 
 /// The advisory lock every configuration read and write is serialized behind.

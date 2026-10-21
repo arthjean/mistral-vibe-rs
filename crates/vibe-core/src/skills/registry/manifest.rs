@@ -12,6 +12,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::platform::resolve_lenient;
+
 /// The registry's reserved alias that always resolves to the newest version,
 /// server-side. A pin set to this alias auto-resolves to latest and never
 /// reports an update as available.
@@ -194,29 +196,4 @@ fn toml_string(value: &str) -> String {
     }
     quoted.push('"');
     quoted
-}
-
-/// The reference's non-strict `resolve` over a path that may not exist yet:
-/// the deepest existing ancestor is canonicalized and the remainder appended,
-/// so two spellings of one location compare equal.
-pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
-    if let Ok(resolved) = crate::platform::canonicalize(path) {
-        return resolved;
-    }
-    let mut remainder = Vec::new();
-    let mut cursor = path;
-    while let Some(parent) = cursor.parent() {
-        if let Some(name) = cursor.file_name() {
-            remainder.push(name.to_owned());
-        }
-        if let Ok(resolved) = crate::platform::canonicalize(parent) {
-            let mut out = resolved;
-            for part in remainder.iter().rev() {
-                out.push(part);
-            }
-            return out;
-        }
-        cursor = parent;
-    }
-    path.to_path_buf()
 }

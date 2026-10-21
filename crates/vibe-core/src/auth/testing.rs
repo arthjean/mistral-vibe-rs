@@ -14,9 +14,9 @@ use serde_json::Value;
 use super::keyring::{KeyringBackend, KeyringFailure};
 use super::sign_in::{
     SignInError, SignInErrorCode, SignInGateway, SignInPoll, SignInProcess, SignInRuntime,
-    UtcTimestamp,
 };
 use super::sign_in_http::{SignInHttpClient, SignInHttpResponse, SignInTransportError};
+use crate::time::UtcTimestamp;
 
 /// The failure kinds the capture scripts inject.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

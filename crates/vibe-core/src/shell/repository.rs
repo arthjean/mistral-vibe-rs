@@ -46,7 +46,7 @@ fn git_config_paths(cwd: &Path) -> Vec<PathBuf> {
         if !prefix.eq_ignore_ascii_case("gitdir") {
             return Vec::new();
         }
-        let mut git_dir = expand_home(value.trim());
+        let mut git_dir = crate::platform::expand_home(Path::new(value.trim()));
         if !git_dir.is_absolute() {
             git_dir = directory.join(git_dir);
         }
@@ -66,18 +66,6 @@ fn git_config_paths(cwd: &Path) -> Vec<PathBuf> {
     Vec::new()
 }
 
-fn expand_home(value: &str) -> PathBuf {
-    if (value == "~" || value.starts_with("~/"))
-        && let Some(home) = crate::config::user_home_directory()
-    {
-        return match value.strip_prefix("~/") {
-            Some(rest) => home.join(rest),
-            None => home,
-        };
-    }
-    PathBuf::from(value)
-}
-
 /// A stable name for the repository governing `cwd`, or [`None`] outside one.
 ///
 /// The worktree's own git directory, resolved, so a symlinked checkout path
@@ -86,7 +74,7 @@ fn expand_home(value: &str) -> PathBuf {
 pub(crate) fn git_repository_identity(cwd: &Path) -> Option<String> {
     let paths = git_config_paths(cwd);
     let git_dir = paths.last()?.parent()?.to_path_buf();
-    let resolved = resolve_path(&git_dir);
+    let resolved = crate::platform::resolve_lenient(&git_dir);
     Some(resolved.to_string_lossy().into_owned())
 }
 
@@ -104,7 +92,7 @@ fn git_config_entries(cwd: &Path) -> Vec<ConfigEntry> {
             continue;
         };
         let mut section = String::new();
-        for raw in split_lines(&text) {
+        for raw in crate::pycompat::splitlines(&text, false) {
             let line = raw.trim().trim_start_matches('\u{feff}');
             if line.is_empty() || line.starts_with(['#', ';']) {
                 continue;
@@ -154,43 +142,6 @@ fn config_entry(line: &str) -> Option<(String, String)> {
     Some((key.to_owned(), value.trim_matches('"').to_owned()))
 }
 
-/// Python's `str.splitlines`.
-fn split_lines(text: &str) -> Vec<&str> {
-    let mut lines = Vec::new();
-    let mut start = 0;
-    let mut characters = text.char_indices().peekable();
-    while let Some((index, character)) = characters.next() {
-        let breaks = matches!(
-            character,
-            '\n' | '\r'
-                | '\u{b}'
-                | '\u{c}'
-                | '\u{1c}'
-                | '\u{1d}'
-                | '\u{1e}'
-                | '\u{85}'
-                | '\u{2028}'
-                | '\u{2029}'
-        );
-        if !breaks {
-            continue;
-        }
-        lines.push(&text[start..index]);
-        let mut end = index + character.len_utf8();
-        if character == '\r'
-            && let Some((next_index, '\n')) = characters.peek().copied()
-        {
-            characters.next();
-            end = next_index + 1;
-        }
-        start = end;
-    }
-    if start < text.len() {
-        lines.push(&text[start..]);
-    }
-    lines
-}
-
 fn is_active(value: &str) -> bool {
     !FALSE_VALUES.contains(&value.to_lowercase().as_str())
 }
@@ -230,27 +181,6 @@ pub(crate) fn git_repository_requires_approval(tokens: &[String], cwd: &Path) ->
     }
     // A remerge can run a merge driver, and a signature check a verifier.
     subcommand == "log" && (active("merge", &["driver"]) || active("gpg", &["program"]))
-}
-
-/// `path` made absolute with its symlinks resolved as far as it exists, the
-/// rest folded lexically: Python's non-strict `Path.resolve`.
-pub(crate) fn resolve_path(path: &Path) -> PathBuf {
-    let mut resolved = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => {
-                resolved.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => {
-                resolved.push(other.as_os_str());
-                if let Ok(canonical) = crate::platform::canonicalize(&resolved) {
-                    resolved = canonical;
-                }
-            }
-        }
-    }
-    resolved
 }
 
 #[cfg(test)]

@@ -13,9 +13,10 @@ pub use console::{BackgroundCommand, unicode_vars};
 pub use console::{CREATE_NO_WINDOW, background_creation_flags};
 pub use executables::{executable_names, find_executable, is_executable_file, path_candidates};
 pub use home::{
-    HomeNotFound, VIBE_HOME_ENV_VAR, expand_home, user_home, vibe_home, vibe_home_or_local,
+    HomeNotFound, VIBE_HOME_ENV_VAR, expand_home, expand_home_against, user_home, vibe_home,
+    vibe_home_or_local,
 };
-pub use paths::{canonicalize, simplified, strip_verbatim_prefix};
+pub use paths::{canonicalize, resolve_lenient, simplified, strip_verbatim_prefix};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

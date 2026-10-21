@@ -98,7 +98,7 @@ pub enum LineError {
 /// A line that is neither blank, a comment, nor `key: value`, and a `data`
 /// value that is not JSON.
 pub fn data_line(line: &str) -> Result<DataLine, LineError> {
-    if python_strip(line).is_empty() || line.starts_with(':') {
+    if crate::pycompat::strip(line).is_empty() || line.starts_with(':') {
         return Ok(DataLine::Skip);
     }
     if !line.contains(": ") {
@@ -115,23 +115,11 @@ pub fn data_line(line: &str) -> Result<DataLine, LineError> {
     if key != "data" {
         return Ok(DataLine::Skip);
     }
-    let value = python_strip(value);
+    let value = crate::pycompat::strip(value);
     if value == "[DONE]" {
         return Ok(DataLine::Done);
     }
     serde_json::from_str(value)
         .map(DataLine::Event)
         .map_err(|_| LineError::Json)
-}
-
-/// `str.strip()` with no argument: Python's whitespace also counts the four
-/// information separators U+001C to U+001F, which Rust's does not.
-#[must_use]
-pub fn python_strip(text: &str) -> &str {
-    text.trim_matches(is_python_space)
-}
-
-#[must_use]
-pub fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }

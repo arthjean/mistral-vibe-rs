@@ -150,35 +150,9 @@ fn normalized_metadata(
         None | Some(Value::Null) => Ok(BTreeMap::new()),
         Some(Value::Object(entries)) => Ok(entries
             .iter()
-            .map(|(key, value)| (key.clone(), python_text(value)))
+            .map(|(key, value)| (key.clone(), crate::pycompat::str_json(value)))
             .collect()),
         Some(_) => Err(SkillValidationError::new("metadata", "must be a mapping")),
-    }
-}
-
-/// A value as Python's `str()` spells it: `True`, `None`, `1.0`.
-fn python_text(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Bool(true) => "True".to_owned(),
-        Value::Bool(false) => "False".to_owned(),
-        Value::Null => "None".to_owned(),
-        Value::Number(number) => match number.as_f64() {
-            Some(float) if !number.is_i64() && !number.is_u64() => python_float_text(float),
-            _ => number.to_string(),
-        },
-        container => container.to_string(),
-    }
-}
-
-/// Python spells every finite float with a decimal point or an exponent, where
-/// Rust's shortest form drops the point from a whole number.
-fn python_float_text(value: f64) -> String {
-    let text = format!("{value}");
-    if text.contains(['.', 'e', 'E']) || value.is_nan() || value.is_infinite() {
-        text
-    } else {
-        format!("{text}.0")
     }
 }
 

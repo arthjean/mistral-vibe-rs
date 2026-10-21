@@ -1,6 +1,8 @@
 //! Exit contract pinned to the reference `QuitManager` and
 //! `vibe.cli.session_exit`.
 
+use vibe_core::pycompat::thousands;
+
 use super::interaction::QuitConfirmation;
 
 /// Reference `action_suspend_with_message`.
@@ -94,19 +96,6 @@ pub fn resolve_quit(
         return true;
     }
     confirmation.request(key, now_ms)
-}
-
-/// Python's `f"{value:,}"`.
-fn thousands(value: u64) -> String {
-    let digits = value.to_string();
-    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
-    for (index, digit) in digits.chars().enumerate() {
-        if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            grouped.push(',');
-        }
-        grouped.push(digit);
-    }
-    grouped
 }
 
 #[cfg(test)]

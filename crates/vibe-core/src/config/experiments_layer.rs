@@ -223,17 +223,11 @@ fn mapped_field(
 fn switched_on(variant: &JsonValue, words: &[&str]) -> bool {
     match variant {
         JsonValue::Bool(flag) => *flag,
-        JsonValue::String(text) => words.contains(&python_strip(text).to_lowercase().as_str()),
+        JsonValue::String(text) => {
+            words.contains(&crate::pycompat::strip(text).to_lowercase().as_str())
+        }
         _ => false,
     }
-}
-
-/// A string with the characters Python's `str.strip()` removes taken off both
-/// ends: Unicode white space, plus the four separators Python also counts.
-fn python_strip(text: &str) -> &str {
-    text.trim_matches(|character: char| {
-        character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
-    })
 }
 
 /// A variant as the payload it carries: the JSON a string spells, the string

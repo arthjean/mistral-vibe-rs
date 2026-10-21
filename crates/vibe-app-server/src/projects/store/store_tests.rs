@@ -6,8 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use tempfile::{TempDir, tempdir};
+use vibe_core::config::encode_document;
 
-use super::{ProjectLink, ProjectsStore, StoreError, dump, parse_document};
+use super::{ProjectLink, ProjectsStore, StoreError, parse_document};
 
 fn store() -> (TempDir, ProjectsStore) {
     let home = tempdir().expect("a vibe home");
@@ -37,7 +38,7 @@ fn canonical(path: &Path) -> PathBuf {
 }
 
 fn rewritten(text: &str) -> String {
-    dump(&parse_document(text).expect("the document parses"))
+    encode_document(&parse_document(text).expect("the document parses").table)
 }
 
 #[test]
@@ -198,6 +199,40 @@ fn entries_the_store_cannot_read_survive_a_rewrite_and_others_are_dropped() {
         "{text}"
     );
     assert_eq!(store.list_project_links().len(), 1);
+}
+
+#[test]
+fn a_store_holding_an_integer_wider_than_i64_is_read_but_never_rewritten() {
+    let (home, store) = store();
+    let path = home.path().join("projects.toml");
+    let directory = tempdir().expect("a directory");
+    let root = canonical(directory.path());
+    // The reference reads both entries, lists the second, and writes both
+    // integers back unchanged; a `toml::Value` holds neither of them.
+    let source = format!(
+        "version = 1\nprojects = [\n    {{ kind = \"cloud\", size = 170141183460469231731687303715884105727 }},\n    {{ kind = \"local\", directory_path = '{}', project_id = \"a\", project_name = \"A\", stamp = -9223372036854775809 }},\n]\n",
+        root.display()
+    );
+    fs::write(&path, &source).expect("the store fixture writes");
+
+    assert_eq!(store.list_project_links(), vec![local(&root, "a")]);
+    let error = store
+        .upsert_project_link(&remote(&root, "b"))
+        .expect_err("the rewrite is refused");
+    assert_eq!(
+        error.to_string(),
+        format!(
+            "{} holds an integer outside the signed 64-bit range, which a rewrite would change",
+            path.display()
+        )
+    );
+    store
+        .delete_project_link(&root)
+        .expect_err("the rewrite is refused");
+    assert_eq!(
+        fs::read_to_string(&path).expect("the store is readable"),
+        source
+    );
 }
 
 #[test]

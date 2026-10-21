@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::fs;
-use std::fs::OpenOptions;
 use std::ops::Range;
 use std::process::{Command, ExitStatus};
 use std::sync::Arc;
@@ -945,14 +944,7 @@ impl SystemExternalEditor {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         if !path.exists() {
-            let mut options = OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            options.open(path).map_err(|error| error.to_string())?;
+            vibe_core::atomic_file::create_private_file(path).map_err(|error| error.to_string())?;
         }
         // Reference `ExternalEditor.edit_file(check=False)`: only an editor
         // that cannot start fails; its exit status is not read.
@@ -986,14 +978,8 @@ impl ExternalEditorPort for SystemExternalEditor {
             "mistral-vibe-rs-editor-{}-{stamp}.md",
             std::process::id()
         ));
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut file = options.open(&path).map_err(|error| error.to_string())?;
+        let mut file = vibe_core::atomic_file::create_private_file(&path)
+            .map_err(|error| error.to_string())?;
         std::io::Write::write_all(&mut file, initial.as_bytes())
             .map_err(|error| error.to_string())?;
         file.sync_all().map_err(|error| error.to_string())?;

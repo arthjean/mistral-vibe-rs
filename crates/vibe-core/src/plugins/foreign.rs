@@ -17,13 +17,13 @@ use serde_json::{Map, Value};
 use super::compatibility::{
     AdaptedMcpServer, AdaptedPluginPackage, AdaptedSkill, AdaptedUnsupportedComponent,
     DetectedPluginFormat, PluginAdapterDiagnostic, PluginAdapterResult, PluginMcpServer,
-    author_display_name, portable_skill_name, python_strip, read_text, resolve_declared_path,
+    author_display_name, portable_skill_name, read_text, resolve_declared_path,
     typescript_identifier, walk_files,
 };
 use super::diagnostics::Severity;
-use super::native::python_repr;
-use super::paths::{is_relative_to, resolve_lax, resolve_strict};
-use crate::hooks::python_json_dumps;
+use super::paths::{is_relative_to, resolve_strict};
+use crate::platform::resolve_lenient;
+use crate::pycompat::{self, Dumps};
 use crate::skills::SkillScope;
 use crate::skills::parser::parse_skill_markdown;
 use crate::skills::schema::SkillMetadata;
@@ -253,7 +253,7 @@ pub(super) fn openai_policy(path: &Path, root: &Path) -> Result<bool, String> {
     {
         let resolved = resolve_strict(&metadata)
             .map_err(|error| format!("agents/openai.yaml cannot be read: {error}"))?;
-        if !is_relative_to(&resolved, &resolve_lax(root)) {
+        if !is_relative_to(&resolved, &resolve_lenient(root)) {
             return Err("agents/openai.yaml has to resolve inside the plugin".to_owned());
         }
     }
@@ -324,7 +324,7 @@ pub(super) fn adapt_skill_file(
             false
         }
     };
-    let prompt = with_tool_guidance(python_strip(&body), &metadata.allowed_tools);
+    let prompt = with_tool_guidance(pycompat::strip(&body), &metadata.allowed_tools);
     Some(AdaptedSkill {
         source_name: metadata.name,
         description: metadata.description,
@@ -358,7 +358,7 @@ pub(super) fn adapt_static_command(
             return None;
         }
     };
-    let body = python_strip(&body).to_owned();
+    let body = pycompat::strip(&body).to_owned();
     if body.is_empty() {
         diagnostics.push(diagnostic(
             source_format,
@@ -396,7 +396,7 @@ pub(super) fn adapt_static_command(
         return None;
     }
     let command_name = match frontmatter.get("name") {
-        Some(Value::String(name)) => python_strip(name).to_owned(),
+        Some(Value::String(name)) => pycompat::strip(name).to_owned(),
         _ => source_name.to_owned(),
     };
     let generated_name = match portable_skill_name(&command_name, "command-") {
@@ -407,8 +407,8 @@ pub(super) fn adapt_static_command(
         }
     };
     let description = match frontmatter.get("description") {
-        Some(Value::String(text)) if !python_strip(text).is_empty() => {
-            python_strip(text).to_owned()
+        Some(Value::String(text)) if !pycompat::strip(text).is_empty() => {
+            pycompat::strip(text).to_owned()
         }
         _ => description_from_body(&body),
     };
@@ -535,7 +535,7 @@ pub(super) fn adapt_mcp_servers(
                 config_path,
                 format!(
                     "Could not import the MCP server {}: {error}",
-                    python_repr(source_id)
+                    pycompat::repr_str(source_id)
                 ),
                 "mcp_server",
                 Severity::Error,
@@ -700,7 +700,7 @@ fn normalize_vendor_skill_frontmatter(
         for (key, value) in vendor {
             metadata.insert(
                 format!("vendor.{key}"),
-                Value::String(python_json_dumps(value)),
+                Value::String(pycompat::dumps(value, Dumps::DEFAULT)),
             );
         }
         normalized.insert("metadata".to_owned(), Value::Object(metadata));
@@ -734,7 +734,7 @@ fn with_tool_guidance(body: &str, allowed_tools: &[String]) -> String {
 fn description_from_body(body: &str) -> String {
     let first = body
         .lines()
-        .map(python_strip)
+        .map(pycompat::strip)
         .find(|line| !line.is_empty())
         .unwrap_or_default();
     let description = if first.is_empty() {
@@ -805,7 +805,7 @@ fn resolve_command(root: &Path, original: &str, expanded: &str) -> Result<String
         }
         return Ok(original.to_owned());
     };
-    let resolved = resolve_lax(&candidate);
+    let resolved = resolve_lenient(&candidate);
     if !is_relative_to(&resolved, root) {
         return Err("a stdio command has to resolve inside the plugin".to_owned());
     }
@@ -826,7 +826,7 @@ fn resolve_cwd(root: &Path, value: Option<&str>) -> Result<PathBuf, String> {
             .filter(|part| !part.is_empty() && *part != ".")
             .fold(root.to_path_buf(), |path, part| path.join(part))
     };
-    let resolved = resolve_lax(&candidate);
+    let resolved = resolve_lenient(&candidate);
     if !is_relative_to(&resolved, root) {
         return Err("a stdio cwd has to resolve inside the plugin".to_owned());
     }
@@ -945,7 +945,7 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
     let mut unsupported = Vec::new();
     let (package_path, package) = opencode_package(root, &mut diagnostics);
     let raw_name = match package.get("name") {
-        Some(Value::String(name)) if !python_strip(name).is_empty() => name.clone(),
+        Some(Value::String(name)) if !pycompat::strip(name).is_empty() => name.clone(),
         _ => root
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -1041,8 +1041,8 @@ pub fn adapt(root: &Path, data_root_base: &Path, scope: SkillScope) -> PluginAda
         .or_else(|| skills.first().map(|skill| skill.source_path.clone()))
         .unwrap_or_else(|| root.to_path_buf());
     let description = match package.get("description") {
-        Some(Value::String(text)) if !python_strip(text).is_empty() => {
-            python_strip(text).to_owned()
+        Some(Value::String(text)) if !pycompat::strip(text).is_empty() => {
+            pycompat::strip(text).to_owned()
         }
         _ => format!("Portable capabilities imported from OpenCode package {name}."),
     };
@@ -1313,8 +1313,8 @@ fn opencode_skills(
                 &path,
                 format!(
                     "The OpenCode skill name {} does not match its directory {}.",
-                    python_repr(&skill.source_name),
-                    python_repr(&directory)
+                    pycompat::repr_str(&skill.source_name),
+                    pycompat::repr_str(&directory)
                 ),
                 "skill",
                 Severity::Error,
@@ -1328,7 +1328,7 @@ fn opencode_skills(
             &path,
             format!(
                 "Imported the portable skill {} without evaluating OpenCode code.",
-                python_repr(&skill.source_name)
+                pycompat::repr_str(&skill.source_name)
             ),
             "skill",
             Severity::Info,
@@ -1519,7 +1519,7 @@ fn remove_trailing_commas(value: &str) -> String {
         if character == ','
             && characters[index + 1..]
                 .iter()
-                .find(|next| !is_python_space(**next))
+                .find(|next| !pycompat::isspace(**next))
                 .is_some_and(|next| matches!(next, '}' | ']'))
         {
             continue;
@@ -1527,10 +1527,6 @@ fn remove_trailing_commas(value: &str) -> String {
         output.push(character);
     }
     output
-}
-
-fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || matches!(character, '\u{1c}'..='\u{1f}')
 }
 
 fn report_opencode_config_extensions(
@@ -1576,7 +1572,7 @@ fn report_opencode_config_extensions(
             path,
             format!(
                 "The OpenCode config field {} has no safe declarative translation and was skipped.",
-                python_repr(field)
+                pycompat::repr_str(field)
             ),
             kind,
             Severity::Warning,
@@ -1621,7 +1617,7 @@ fn opencode_translate_mcp_server(
             path,
             format!(
                 "Skipped the disabled OpenCode MCP server {}.",
-                python_repr(name)
+                pycompat::repr_str(name)
             ),
             "mcp_server",
             Severity::Info,
@@ -1652,7 +1648,7 @@ fn opencode_translate_mcp_server(
             path,
             format!(
                 "Translated the declarative OpenCode MCP server {} without evaluating plugin code.",
-                python_repr(name)
+                pycompat::repr_str(name)
             ),
             "mcp_server",
             Severity::Info,
@@ -1743,7 +1739,7 @@ fn opencode_translate_remote_mcp(
             path,
             format!(
                 "The OpenCode MCP server {} needs host-managed OAuth and was skipped.",
-                python_repr(name)
+                pycompat::repr_str(name)
             ),
             "mcp_server",
             Severity::Warning,
@@ -1806,7 +1802,7 @@ fn opencode_unsupported_env_reference(
         path,
         format!(
             "The OpenCode MCP server {} interpolates environment variables at runtime and was skipped.",
-            python_repr(name)
+            pycompat::repr_str(name)
         ),
         "mcp_server",
         Severity::Warning,
@@ -1829,7 +1825,10 @@ fn opencode_invalid_mcp(
         "opencode",
         "mcp_server_invalid",
         path,
-        format!("The OpenCode MCP server {} {reason}.", python_repr(name)),
+        format!(
+            "The OpenCode MCP server {} {reason}.",
+            pycompat::repr_str(name)
+        ),
         "mcp_server",
         Severity::Error,
         false,

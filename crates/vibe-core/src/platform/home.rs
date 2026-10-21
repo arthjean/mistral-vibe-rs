@@ -60,6 +60,16 @@ pub fn expand_home(path: &Path) -> PathBuf {
     expand_home_with(path, user_home().as_deref(), cfg!(windows))
 }
 
+/// [`expand_home`] against `home` rather than the environment's, or [`None`]
+/// when `path` starts with `~` and there is no home to read it as.
+#[must_use]
+pub fn expand_home_against(path: &Path, home: Option<&Path>) -> Option<PathBuf> {
+    if home.is_none() && home_relative_tail(path, cfg!(windows)).is_some() {
+        return None;
+    }
+    Some(expand_home_with(path, home, cfg!(windows)))
+}
+
 fn home_relative_tail(path: &Path, windows: bool) -> Option<&str> {
     let separators: &[char] = if windows { &['/', '\\'] } else { &['/'] };
     let rest = path.to_str()?.strip_prefix('~')?;

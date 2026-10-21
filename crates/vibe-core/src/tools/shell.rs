@@ -709,7 +709,7 @@ async fn run_windows_fallback(
         .filter(|cwd| !cwd.is_empty())
         .map_or_else(
             || working_directory.to_path_buf(),
-            |cwd| crate::shell::resolve_path(&working_directory.join(cwd)),
+            |cwd| crate::platform::resolve_lenient(&working_directory.join(cwd)),
         );
     let resolved = host::resolve_session_shell(
         shell.family,

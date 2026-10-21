@@ -18,9 +18,8 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, Mutex};
 
-use regex::Regex;
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
@@ -31,6 +30,7 @@ use url::Url;
 
 use crate::compaction::CompactionStatus;
 use crate::engine::EventObserver;
+use crate::llm::mistral::server_url;
 
 pub mod records;
 
@@ -109,17 +109,6 @@ pub fn telemetry_user_agent(backend: Option<&str>) -> String {
     agent
 }
 
-/// Reference `get_server_url_from_api_base`: the origin an `api_base` carries
-/// ahead of its version segment. `None` when it carries no version segment,
-/// which is what sends the endpoint to [`TELEMETRY_DEFAULT_BASE_URL`].
-static SERVER_URL: LazyLock<Option<Regex>> =
-    LazyLock::new(|| Regex::new(r"^(https?://.+)(/v\d+.*)").ok());
-
-pub(crate) fn server_url_from_api_base(api_base: &str) -> Option<String> {
-    let captures = SERVER_URL.as_ref()?.captures(api_base)?;
-    Some(captures.get(1)?.as_str().to_owned())
-}
-
 /// Reference `TelemetryClient._get_telemetry_url`: the server derived from the
 /// provider's `api_base`, or the default one, joined with the datalake path.
 ///
@@ -131,8 +120,7 @@ pub(crate) fn server_url_from_api_base(api_base: &str) -> Option<String> {
 /// of `docs/parity.md`.
 #[must_use]
 pub fn telemetry_endpoint(api_base: &str) -> Option<Url> {
-    let base =
-        server_url_from_api_base(api_base).unwrap_or_else(|| TELEMETRY_DEFAULT_BASE_URL.to_owned());
+    let base = server_url(api_base).unwrap_or_else(|| TELEMETRY_DEFAULT_BASE_URL.to_owned());
     let endpoint = Url::parse(base.trim_end_matches('/'))
         .ok()?
         .join(TELEMETRY_PATH)

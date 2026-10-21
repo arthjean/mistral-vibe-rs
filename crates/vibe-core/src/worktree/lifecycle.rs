@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::observability::{self, LogLevel};
+use crate::platform::resolve_lenient;
 
 use super::{
     ManagedRoot, ManagedWorktree, PendingSessionHold, PreparedWorktree, RetainedRepositoryMapping,
-    WorktreeError, WorktreeRepository, resolve_lenient,
+    WorktreeError, WorktreeRepository,
 };
 
 /// What a session asked for.

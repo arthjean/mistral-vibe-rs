@@ -13,10 +13,11 @@ use std::sync::Arc;
 
 use vibe_core::llm::AmbientCredentials;
 use vibe_core::provider::config::ModelConfig;
+use vibe_core::pycompat;
 
 use vibe_core::worktree::{
     ManagedRoot, ManagedWorktree, PreparedWorktree, WorktreeError, WorktreeRepository,
-    inspect_worktree_for_cleanup, naming_model, python_repr, remove_worktree,
+    inspect_worktree_for_cleanup, naming_model, remove_worktree,
 };
 
 use crate::Arguments;
@@ -132,7 +133,7 @@ impl LaunchWorkspace {
 
         let managed = ManagedRoot::for_vibe_home(&vibe_home_directory(arguments, &base_directory));
         let requested_name = match &flag {
-            WorktreeFlag::Named(name) => format!(" {}", python_repr(name)),
+            WorktreeFlag::Named(name) => format!(" {}", pycompat::repr_str(name)),
             WorktreeFlag::Auto => String::new(),
         };
         writeln!(narration, "Preparing worktree{requested_name}...")
@@ -343,7 +344,7 @@ pub fn cleanup_worktree(
         writeln!(
             output,
             "Worktree {} has {}.",
-            python_repr(&worktree.name),
+            pycompat::repr_str(&worktree.name),
             state.reasons().join(", ")
         )
         .map_err(|source| startup_io(&worktree.root, source))?;
@@ -370,7 +371,7 @@ pub fn cleanup_worktree(
         writeln!(
             output,
             "Branch {} existed before this session and was attached, not created by Vibe.",
-            python_repr(&worktree.branch)
+            pycompat::repr_str(&worktree.branch)
         )
         .map_err(|source| startup_io(&worktree.root, source))?;
         confirm(
@@ -378,7 +379,7 @@ pub fn cleanup_worktree(
             output,
             &format!(
                 "Also delete branch {}? [y/N] ",
-                python_repr(&worktree.branch)
+                pycompat::repr_str(&worktree.branch)
             ),
             &["y", "yes", "delete"],
         )?

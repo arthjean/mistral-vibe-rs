@@ -17,8 +17,9 @@ use crate::mcp::{
     McpTransportConfig,
 };
 use crate::redaction::{is_sensitive_key, redact_table, redact_value};
+use crate::text::sha256_hex;
 use document::{
-    fingerprint_optional, hex_digest, migrate_file, patch_target_document, persist_models_as_list,
+    fingerprint_optional, migrate_file, patch_target_document, persist_models_as_list,
     read_table_optional, validate_table,
 };
 use effective::{finalize_effective, require_configured_model};
@@ -51,6 +52,7 @@ mod view;
 pub(crate) use crate::platform::user_home as user_home_directory;
 pub use dotenv::{DotenvValues, global_env_file, inherited_by_children};
 pub use effective::{active_model_alias, available_model_aliases, default_model_alias};
+pub use encode::encode_document;
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
 pub use experiments_layer::{
     EXPERIMENTS_LAYER_NAME, ExperimentsLayer, MAPPED_EXPERIMENTS, PromptResolves, configured_fields,
@@ -956,7 +958,7 @@ impl LayeredConfig {
             // still compares what the caller last saw.
             fingerprints.insert(
                 ConfigTarget::Ephemeral,
-                Some(hex_digest(
+                Some(sha256_hex(
                     target_values
                         .get(&ConfigTarget::Ephemeral)
                         .map(Table::to_string)
@@ -1019,7 +1021,7 @@ impl LayeredConfig {
             }
             let Some(path) = self.target_path(write.target) else {
                 let persisted = self.ephemeral_document()?;
-                if Some(hex_digest(persisted.to_string().as_bytes())) != write.expected_fingerprint
+                if Some(sha256_hex(persisted.to_string().as_bytes())) != write.expected_fingerprint
                 {
                     return Err(ConfigError::ConcurrentEdit {
                         target: write.target,

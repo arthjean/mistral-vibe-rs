@@ -255,7 +255,7 @@ impl McpOAuthStore {
         alias: &str,
         token: &OAuthToken,
     ) -> Result<StoredTokens, KeyringFailure> {
-        let stored = StoredTokens::from_token(token, now_seconds());
+        let stored = StoredTokens::from_token(token, crate::clock::now_seconds_f64());
         self.set(&mcp_oauth_username(alias, "tokens"), &stored.to_json())?;
         Ok(stored)
     }
@@ -362,12 +362,6 @@ impl std::fmt::Debug for CredentialBackup {
             .field("keyring_available", &self.keyring_available)
             .finish_non_exhaustive()
     }
-}
-
-pub(crate) fn now_seconds() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0.0, |elapsed| elapsed.as_secs_f64())
 }
 
 /// SDK `OAuthToken`: what a token endpoint answers.

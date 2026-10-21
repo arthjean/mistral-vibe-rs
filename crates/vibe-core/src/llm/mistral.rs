@@ -10,6 +10,9 @@
 //! every retryable status and every such failure as it happens. Its event
 //! reader splits on blank lines of any newline style and ends on `[DONE]`.
 
+use std::sync::LazyLock;
+
+use regex::Regex;
 use serde_json::{Map, Value, json};
 
 use super::adapter::{lax_count, truthy};
@@ -19,7 +22,6 @@ use super::error::{
 };
 use super::generic::{CallFacts, merge_headers};
 use super::pump::{ChunkPump, ChunkStream, EventSource, Settle};
-use super::python_json::Ordered;
 use super::retry::{
     Clock, MISTRAL_RETRYABLE_STATUSES, RetryObserver, RetryReason, SleepKind, mistral_delay,
     mistral_retry_after_millis,
@@ -30,6 +32,7 @@ use super::types::{
 };
 use super::{BackendContext, ModelRequest};
 use crate::provider::config::ProviderConfig;
+use crate::pycompat::{self, Dumps};
 
 const PATH: &str = "/v1/chat/completions";
 /// The variable the Mistral client reads a key from when it is handed none.
@@ -45,26 +48,17 @@ pub struct MistralBackend {
     context: BackendContext,
 }
 
-/// The server URL the client takes: the API base without its version path.
-/// Reference `get_server_url_from_api_base`, whose greedy match cuts at the
-/// last `/v<digits>`.
+static SERVER_URL: LazyLock<Option<Regex>> =
+    LazyLock::new(|| Regex::new(r"^(https?://.+)(/v\d+.*)").ok());
+
+/// The server URL an API base names: what precedes its last `/v<digits>`
+/// segment on its first line, or `None` without one. Reference
+/// `get_server_url_from_api_base` (`vibe/utils/http.py`), the same regex,
+/// which every client of a Mistral API base derives its server from.
 #[must_use]
 pub fn server_url(api_base: &str) -> Option<String> {
-    let rest = api_base
-        .strip_prefix("https://")
-        .or_else(|| api_base.strip_prefix("http://"))?;
-    let scheme_length = api_base.len() - rest.len();
-    let bytes = api_base.as_bytes();
-    // The host part needs at least one character before the version path.
-    (scheme_length + 1..api_base.len())
-        .rev()
-        .find(|&position| {
-            bytes[position] == b'/'
-                && bytes.get(position + 1) == Some(&b'v')
-                && bytes.get(position + 2).is_some_and(u8::is_ascii_digit)
-                && !api_base[scheme_length..position].contains('\n')
-        })
-        .map(|position| api_base[..position].to_owned())
+    let captures = SERVER_URL.as_ref()?.captures(api_base)?;
+    Some(captures.get(1)?.as_str().to_owned())
 }
 
 impl MistralBackend {
@@ -682,17 +676,13 @@ fn parse_content(content: &Value) -> Result<(String, Option<String>), LocalFailu
     }
 }
 
-/// The tool calls of a delta or a message; `ordered` is the same value with
-/// its key order, which arguments given as an object are written back in.
-fn parse_tool_calls(
-    calls: &[Value],
-    ordered: Option<&Ordered>,
-) -> Result<Vec<ToolCall>, LocalFailure> {
+/// The tool calls of a delta or a message. Arguments given as an object are
+/// written back as `json.dumps` text, keys in the order the provider sent them.
+fn parse_tool_calls(calls: &[Value]) -> Result<Vec<ToolCall>, LocalFailure> {
     let refused = |what: &str| LocalFailure::new(LocalKind::Validation, what.to_owned());
     calls
         .iter()
-        .enumerate()
-        .map(|(position, call)| {
+        .map(|call| {
             let call = call
                 .as_object()
                 .ok_or_else(|| refused("a tool call is not an object"))?;
@@ -706,14 +696,13 @@ fn parse_tool_calls(
                 .ok_or_else(|| refused("a tool call carries no name"))?;
             let arguments = match function.get("arguments") {
                 Some(Value::String(arguments)) => arguments.clone(),
-                Some(Value::Object(arguments)) => ordered
-                    .and_then(|tree| tree.at(position))
-                    .and_then(|call| call.get("function"))
-                    .and_then(|function| function.get("arguments"))
-                    .map_or_else(
-                        || Ordered::from(&Value::Object(arguments.clone())).dumps(false),
-                        |arguments| arguments.dumps(false),
-                    ),
+                Some(arguments @ Value::Object(_)) => pycompat::dumps(
+                    arguments,
+                    Dumps {
+                        ensure_ascii: false,
+                        ..Dumps::DEFAULT
+                    },
+                ),
                 _ => return Err(refused("a tool call carries no arguments")),
             };
             let id = match call.get("id") {
@@ -816,17 +805,8 @@ fn event_chunk(text: &str, correlation_id: Option<&String>) -> Result<Chunk, Loc
         Some(content) if truthy(content) => parse_content(content)?,
         _ => (String::new(), None),
     };
-    let ordered = Ordered::parse(text);
     let tool_calls = match delta.get("tool_calls") {
-        Some(Value::Array(calls)) if !calls.is_empty() => {
-            let tree = ordered
-                .as_ref()
-                .and_then(|tree| tree.get("choices"))
-                .and_then(|choices| choices.at(0))
-                .and_then(|choice| choice.get("delta"))
-                .and_then(|delta| delta.get("tool_calls"));
-            Some(parse_tool_calls(calls, tree)?)
-        }
+        Some(Value::Array(calls)) if !calls.is_empty() => Some(parse_tool_calls(calls)?),
         _ => None,
     };
     Ok(Chunk {
@@ -883,17 +863,8 @@ fn whole_answer(text: &str) -> Result<Chunk, LocalFailure> {
         Some(content) if truthy(content) => parse_content(content)?,
         _ => (String::new(), None),
     };
-    let ordered = Ordered::parse(text);
     let tool_calls = match message.and_then(|message| message.get("tool_calls")) {
-        Some(Value::Array(calls)) if !calls.is_empty() => {
-            let tree = ordered
-                .as_ref()
-                .and_then(|tree| tree.get("choices"))
-                .and_then(|choices| choices.at(0))
-                .and_then(|choice| choice.get("message"))
-                .and_then(|message| message.get("tool_calls"));
-            Some(parse_tool_calls(calls, tree)?)
-        }
+        Some(Value::Array(calls)) if !calls.is_empty() => Some(parse_tool_calls(calls)?),
         _ => None,
     };
     Ok(Chunk {

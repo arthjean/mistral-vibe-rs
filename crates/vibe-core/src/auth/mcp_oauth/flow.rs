@@ -24,8 +24,10 @@ use sha2::{Digest, Sha256};
 
 use super::{
     AuthUrlSink, ClientInformation, Headless, LATEST_PROTOCOL_VERSION, McpOAuthError,
-    McpOAuthStore, OAUTH_INVALID_GRANT, OAuthClientConfig, OAuthToken, any_http_url, now_seconds,
+    McpOAuthStore, OAUTH_INVALID_GRANT, OAuthClientConfig, OAuthToken, any_http_url,
 };
+use crate::clock::now_seconds_f64;
+use crate::pycompat::pydantic;
 use crate::pyurl::PyUrl;
 
 /// What the flow may do when the operator has to authorize.
@@ -215,7 +217,7 @@ impl<'a> Provider<'a> {
             && self
                 .token_expiry
                 .filter(|expiry| *expiry != 0.0)
-                .is_none_or(|expiry| now_seconds() <= expiry)
+                .is_none_or(|expiry| now_seconds_f64() <= expiry)
     }
 
     fn can_refresh_token(&self) -> bool {
@@ -541,7 +543,7 @@ impl<'a> Provider<'a> {
         #[allow(clippy::cast_precision_loss)]
         let expiry = token
             .expires_in
-            .map(|seconds| now_seconds() + seconds as f64);
+            .map(|seconds| now_seconds_f64() + seconds as f64);
         self.store
             .set_tokens(self.alias(), token)
             .map_err(keyring)?;
@@ -913,11 +915,7 @@ fn optional_bool(value: Option<&Value>) -> Option<Option<bool>> {
             Some(1.0) => Some(Some(true)),
             _ => None,
         },
-        Some(Value::String(text)) => match text.to_ascii_lowercase().as_str() {
-            "0" | "off" | "f" | "false" | "n" | "no" => Some(Some(false)),
-            "1" | "on" | "t" | "true" | "y" | "yes" => Some(Some(true)),
-            _ => None,
-        },
+        Some(Value::String(text)) => pydantic::lax_bool(text).map(Some),
         Some(_) => None,
     }
 }

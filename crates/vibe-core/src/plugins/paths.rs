@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::canonical::normalize_nfc;
+use crate::platform::resolve_lenient;
 
 /// The plugin root spelled as a reference to itself.
 pub const PLUGIN_ROOT_REF: &str = ".";
@@ -41,8 +42,8 @@ pub fn plugin_path_ref(
     root: &Path,
     target: &Path,
 ) -> Result<PluginPathRef, PluginPathOutsideRoot> {
-    let resolved_root = resolve_lax(root);
-    let resolved_target = resolve_lax(target);
+    let resolved_root = resolve_lenient(root);
+    let resolved_target = resolve_lenient(target);
     let Ok(relative) = resolved_target.strip_prefix(&resolved_root) else {
         return Err(PluginPathOutsideRoot {
             plugin: plugin.to_owned(),
@@ -71,14 +72,6 @@ pub fn resolve_plugin_path(reference: &PluginPathRef, root: &Path) -> PathBuf {
         .path
         .split('/')
         .fold(root.to_path_buf(), |path, part| path.join(part))
-}
-
-/// Python's `Path.resolve()` without `strict`: the longest existing prefix is
-/// resolved through the filesystem and the rest is applied lexically.
-#[must_use]
-pub fn resolve_lax(path: &Path) -> PathBuf {
-    let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
-    crate::worktree::resolve_lenient(&absolute)
 }
 
 /// Python's `Path.resolve(strict=True)`.

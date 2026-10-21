@@ -20,8 +20,8 @@ use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
-use crate::platform::strip_verbatim_prefix;
-use crate::worktree::resolve_lenient;
+use crate::atomic_file;
+use crate::platform::{resolve_lenient, strip_verbatim_prefix};
 
 /// The trust file's name under the vibe home.
 pub const TRUST_FILE: &str = "trusted_folders.toml";
@@ -170,15 +170,7 @@ impl Folders {
             fs::create_dir_all(parent)?;
         }
         if !self.path.exists() {
-            let mut options = OpenOptions::new();
-            options.write(true).create(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt as _;
-
-                options.mode(0o600);
-            }
-            options.open(&self.path)?;
+            atomic_file::open_private_for_rewrite(&self.path)?;
         }
         let rendered = render(&self.trusted, &self.untrusted);
         let written = OpenOptions::new()
@@ -268,50 +260,15 @@ fn strings(value: Option<&toml::Value>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The two lists as `tomli_w` writes them: an empty list inline, any other
-/// one item per line with a four-space indent and a trailing comma, every
-/// path a basic string.
+/// The two lists as `tomli_w` writes them.
 fn render(trusted: &[String], untrusted: &[String]) -> String {
-    format!(
-        "trusted = {}\nuntrusted = {}\n",
-        render_array(trusted),
-        render_array(untrusted)
-    )
-}
-
-fn render_array(items: &[String]) -> String {
-    if items.is_empty() {
-        return "[]".to_owned();
-    }
-    let lines = items
-        .iter()
-        .map(|item| format!("    {}", basic_string(item)))
-        .collect::<Vec<_>>();
-    format!("[\n{},\n]", lines.join(",\n"))
-}
-
-/// A TOML basic string, escaped as `tomli_w` escapes one: the six compact
-/// escapes, every other control character but tab as `\uXXXX`.
-fn basic_string(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len() + 2);
-    escaped.push('"');
-    for character in value.chars() {
-        match character {
-            '\u{8}' => escaped.push_str("\\b"),
-            '\n' => escaped.push_str("\\n"),
-            '\u{c}' => escaped.push_str("\\f"),
-            '\r' => escaped.push_str("\\r"),
-            '"' => escaped.push_str("\\\""),
-            '\\' => escaped.push_str("\\\\"),
-            '\t' => escaped.push('\t'),
-            control if control.is_ascii_control() => {
-                escaped.push_str(&format!("\\u{:04x}", u32::from(control)));
-            }
-            other => escaped.push(other),
-        }
-    }
-    escaped.push('"');
-    escaped
+    let list = |items: &[String]| {
+        toml::Value::Array(items.iter().cloned().map(toml::Value::String).collect())
+    };
+    let mut document = toml::Table::new();
+    document.insert("trusted".to_owned(), list(trusted));
+    document.insert("untrusted".to_owned(), list(untrusted));
+    crate::config::encode_document(&document)
 }
 
 static STORES: LazyLock<Mutex<HashMap<PathBuf, Arc<Mutex<Folders>>>>> =
@@ -436,7 +393,7 @@ impl TrustStore {
 /// what is stored matches what the reference stores.
 #[must_use]
 pub fn resolve(path: &Path) -> PathBuf {
-    let expanded = expand_user(path);
+    let expanded = crate::platform::expand_home(path);
     let absolute = std::path::absolute(&expanded).unwrap_or(expanded);
     let resolved = resolve_lenient(&absolute);
     PathBuf::from(strip_verbatim_prefix(&resolved.to_string_lossy()))
@@ -448,18 +405,6 @@ fn normalize(path: &Path) -> String {
 
 fn home() -> Option<PathBuf> {
     crate::platform::user_home()
-}
-
-fn expand_user(path: &Path) -> PathBuf {
-    let text = path.to_string_lossy();
-    let rest = match text.strip_prefix('~') {
-        Some(rest) if rest.is_empty() || rest.starts_with(['/', std::path::MAIN_SEPARATOR]) => rest,
-        _ => return path.to_path_buf(),
-    };
-    match home() {
-        Some(home) => PathBuf::from(format!("{}{rest}", home.to_string_lossy())),
-        None => path.to_path_buf(),
-    }
 }
 
 fn is_strict_ancestor(ancestor: &Path, path: &Path) -> bool {
@@ -748,7 +693,12 @@ pub fn untrusted_config_warning_due(vibe_home: &Path, dirs: &[String]) -> bool {
     document.insert(WARNING_SECTION.to_owned(), toml::Value::Table(section));
     if let Ok(encoded) = toml::to_string_pretty(&toml::Value::Table(document)) {
         let _ = fs::create_dir_all(vibe_home);
-        let _ = crate::atomic_file::write_atomically(&path, "cache.toml", encoded.as_bytes());
+        let _ = atomic_file::write_atomically(
+            &path,
+            "cache.toml",
+            encoded.as_bytes(),
+            atomic_file::FileMode::Private,
+        );
     }
     true
 }

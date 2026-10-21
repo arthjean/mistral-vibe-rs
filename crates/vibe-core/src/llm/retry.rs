@@ -230,7 +230,7 @@ pub fn generic_is_retryable(failure: &BackendFailure) -> bool {
 /// digits, or an HTTP date measured from `now`, a past one reading as zero.
 #[must_use]
 pub fn generic_retry_after(value: &str, now: SystemTime) -> Option<f64> {
-    let value = super::sse::python_strip(value);
+    let value = crate::pycompat::strip(value);
     if value.is_empty() {
         return None;
     }
@@ -281,7 +281,7 @@ pub fn mistral_retry_after_millis(value: &str, now: SystemTime) -> Option<i64> {
     if value.is_empty() {
         return None;
     }
-    if let Some(seconds) = python_float(value) {
+    if let Some(seconds) = crate::pycompat::parse_float(value) {
         #[allow(clippy::cast_possible_truncation)]
         return Some((seconds * 1000.0).round_ties_even() as i64);
     }
@@ -299,28 +299,6 @@ pub fn mistral_delay(retry_after_millis: Option<i64>, retries: u32, jitter: f64)
     }
     let sleep = 0.5 * 1.5f64.powf(f64::from(retries)) + jitter;
     sleep.min(30.0)
-}
-
-/// `float()` over a header value: surrounding whitespace, a sign, digits with
-/// an optional fraction and exponent, `inf` and `nan`.
-fn python_float(value: &str) -> Option<f64> {
-    let trimmed = super::sse::python_strip(value);
-    if trimmed.is_empty() {
-        return None;
-    }
-    let body = trimmed
-        .strip_prefix(['+', '-'])
-        .unwrap_or(trimmed)
-        .to_ascii_lowercase();
-    let special = matches!(body.as_str(), "inf" | "infinity" | "nan");
-    let numeric = !body.is_empty()
-        && body
-            .chars()
-            .all(|character| character.is_ascii_digit() || "._e+-".contains(character));
-    if !(special || numeric) {
-        return None;
-    }
-    trimmed.replace('_', "").parse::<f64>().ok()
 }
 
 fn seconds_between(from: SystemTime, to: SystemTime) -> f64 {
@@ -367,7 +345,7 @@ fn parse_http_date(value: &str) -> Option<SystemTime> {
     if !(1..=31).contains(&day) || hour > 23 || minute > 59 || second > 61 {
         return None;
     }
-    let days = days_from_civil(year, month_number, day);
+    let days = crate::time::days_from_civil(year, i64::from(month_number), i64::from(day));
     let seconds = days * 86_400 + hour * 3_600 + minute * 60 + second - offset_seconds;
     let magnitude = Duration::from_secs(seconds.unsigned_abs());
     if seconds >= 0 {
@@ -412,18 +390,6 @@ fn zone_offset(zone: &str) -> Option<i64> {
     let hours: i64 = digits[..2].parse().ok()?;
     let minutes: i64 = digits[2..].parse().ok()?;
     Some(sign * (hours * 3_600 + minutes * 60))
-}
-
-/// Days since 1970-01-01 of a proleptic Gregorian date.
-fn days_from_civil(year: i64, month: u32, day: u32) -> i64 {
-    let year = if month <= 2 { year - 1 } else { year };
-    let era = year.div_euclid(400);
-    let year_of_era = year - era * 400;
-    let month = i64::from(month);
-    let day = i64::from(day);
-    let day_of_year = (153 * (if month > 2 { month - 3 } else { month + 9 }) + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    era * 146_097 + day_of_era - 719_468
 }
 
 /// Spaces successive calls after a rate limit. Reference `AdaptivePacer`.

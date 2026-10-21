@@ -176,7 +176,7 @@ impl Version {
     pub fn parse(raw: &str) -> Option<Self> {
         let captures = VERSION_PATTERN
             .as_ref()?
-            .captures(raw.trim_matches(is_python_space))?;
+            .captures(crate::pycompat::strip(raw))?;
         let number = |name: &str| {
             captures
                 .name(name)
@@ -325,13 +325,6 @@ impl fmt::Display for Version {
         }
         Ok(())
     }
-}
-
-/// `str.isspace()`, which is what the reference's `\s` matches in a text
-/// pattern: Unicode whitespace plus the four ASCII separators `U+001C` through
-/// `U+001F`, which the Unicode `White_Space` property leaves out.
-pub(super) fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
 /// Reference `_parse_filename_version` in

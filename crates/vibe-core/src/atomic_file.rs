@@ -4,7 +4,8 @@
 //! configuration, transaction journals, pointers) needs the same guarantee: an
 //! interrupted process must leave either the previous content or the new one,
 //! never a half-written file. The recipe is always identical, so it lives here
-//! once instead of being restated at each call site.
+//! once instead of being restated at each call site, in this crate and in the
+//! crates above it.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -13,10 +14,51 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static TEMPORARY_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
+/// Who may read a file this module creates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileMode {
+    /// The current user alone (`0o600` on Unix).
+    Private,
+    /// The process default for a new file (`0o666` less the umask), for an
+    /// artifact the reference leaves at that default.
+    Default,
+}
+
 /// Creates a file that must not already exist, restricted to the current user.
-pub(crate) fn create_private_file(path: &Path) -> std::io::Result<File> {
+///
+/// # Errors
+///
+/// Whatever creating `path` reports, [`std::io::ErrorKind::AlreadyExists`]
+/// included.
+pub fn create_private_file(path: &Path) -> std::io::Result<File> {
+    create_new_file(path, FileMode::Private)
+}
+
+fn create_new_file(path: &Path, mode: FileMode) -> std::io::Result<File> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
+    #[cfg(unix)]
+    if mode == FileMode::Private {
+        use std::os::unix::fs::OpenOptionsExt as _;
+
+        options.mode(0o600);
+    }
+    #[cfg(not(unix))]
+    let _ = mode;
+    options.open(path)
+}
+
+/// Opens `path` to be rewritten from its start: an existing file is truncated
+/// and keeps its mode, a missing one is created restricted to the current user,
+/// as the reference's `touch(mode=0o600, exist_ok=True)` before a rewrite
+/// leaves it.
+///
+/// # Errors
+///
+/// Whatever opening or creating `path` reports.
+pub fn open_private_for_rewrite(path: &Path) -> std::io::Result<File> {
+    let mut options = OpenOptions::new();
+    options.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt as _;
@@ -50,13 +92,18 @@ pub(crate) fn open_private_lock(path: &Path) -> std::io::Result<File> {
 /// Errors surface as [`std::io::Error`] so each caller maps them into its own
 /// error type; a caller that wants to distinguish "already held" reads
 /// [`std::io::ErrorKind::WouldBlock`] off [`FileLock::try_acquire`].
-pub(crate) struct FileLock {
+#[derive(Debug)]
+pub struct FileLock {
     file: File,
 }
 
 impl FileLock {
     /// Blocks until the lock is available.
-    pub(crate) fn acquire(path: &Path) -> std::io::Result<Self> {
+    ///
+    /// # Errors
+    ///
+    /// The lock file cannot be opened or locked.
+    pub fn acquire(path: &Path) -> std::io::Result<Self> {
         use fs2::FileExt as _;
 
         let file = open_private_lock(path)?;
@@ -66,7 +113,11 @@ impl FileLock {
 
     /// Fails with [`std::io::ErrorKind::WouldBlock`] rather than waiting when
     /// another holder owns the lock.
-    pub(crate) fn try_acquire(path: &Path) -> std::io::Result<Self> {
+    ///
+    /// # Errors
+    ///
+    /// The lock file cannot be opened, or another holder owns the lock.
+    pub fn try_acquire(path: &Path) -> std::io::Result<Self> {
         use fs2::FileExt as _;
 
         let file = open_private_lock(path)?;
@@ -96,12 +147,34 @@ pub(crate) fn ensure_private_directory(path: &Path) -> std::io::Result<()> {
 }
 
 /// Creates `path`, failing if it already exists, restricted to the current user.
-pub(crate) fn create_private_directory(path: &Path) -> std::io::Result<()> {
-    fs::create_dir(path)?;
+///
+/// The directory is created owner-only rather than restricted afterward, so
+/// it is never open to others, even under a shared temporary root.
+///
+/// # Errors
+///
+/// Whatever creating `path` reports, [`std::io::ErrorKind::AlreadyExists`]
+/// included, or a failure to set its permissions.
+pub fn create_private_directory(path: &Path) -> std::io::Result<()> {
+    #[cfg_attr(not(unix), expect(unused_mut, reason = "only Unix sets a mode"))]
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+
+        builder.mode(0o700);
+    }
+    builder.create(path)?;
     set_private_permissions(path)
 }
 
-fn set_private_permissions(path: &Path) -> std::io::Result<()> {
+/// Restricts the existing directory `path` to the current user (`0o700` on
+/// Unix; nothing elsewhere).
+///
+/// # Errors
+///
+/// A failure to set the permissions.
+pub fn set_private_permissions(path: &Path) -> std::io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
@@ -128,46 +201,39 @@ pub(crate) fn sync_directory(path: &Path) -> std::io::Result<()> {
     }
 }
 
-/// Reserves a unique sidecar path next to `destination`.
+/// A unique name for a staging file, `.{prefix}.{pid}.{sequence}.tmp`.
 ///
-/// The name is process-unique, so two concurrent writers of the same
+/// The process id and a process-wide sequence make it unique across every
+/// writer, in this process or another, so two concurrent writers of the same
 /// destination never collide on their staging file.
-pub(crate) fn temporary_sibling(
-    destination: &Path,
-    prefix: &str,
-) -> std::io::Result<std::path::PathBuf> {
-    let parent = destination.parent().ok_or_else(|| {
-        std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "path has no parent directory",
-        )
-    })?;
+pub(crate) fn temporary_name(prefix: &str) -> String {
     let sequence = TEMPORARY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    Ok(parent.join(format!(".{prefix}.{sequence}.tmp")))
+    format!(".{prefix}.{}.{sequence}.tmp", std::process::id())
 }
 
 /// Writes `bytes` to `destination` atomically and durably.
 ///
-/// Content is staged in a private sibling file, flushed, renamed over the
-/// destination, and the containing directory is flushed in turn. A failure at
-/// any step removes the staging file and leaves `destination` untouched.
+/// Content is staged in a sibling file created with `mode`, flushed, renamed
+/// over the destination, and the containing directory is flushed in turn. A
+/// failure at any step removes the staging file and leaves `destination`
+/// untouched.
 ///
-/// The error carries the path that actually failed, which the caller maps into
-/// its own error type.
-pub(crate) fn write_atomically(
+/// # Errors
+///
+/// The step that failed, with the path it failed on, which the caller maps
+/// into its own error type.
+pub fn write_atomically(
     destination: &Path,
     prefix: &str,
     bytes: &[u8],
+    mode: FileMode,
 ) -> Result<(), AtomicWriteError> {
     let parent = destination
         .parent()
         .ok_or_else(|| AtomicWriteError::no_parent(destination))?;
-    let temporary = temporary_sibling(destination, prefix).map_err(|source| AtomicWriteError {
-        path: destination.to_path_buf(),
-        source,
-    })?;
+    let temporary = parent.join(temporary_name(prefix));
     let result = (|| {
-        let mut file = create_private_file(&temporary).map_err(|source| AtomicWriteError {
+        let mut file = create_new_file(&temporary, mode).map_err(|source| AtomicWriteError {
             path: temporary.clone(),
             source,
         })?;
@@ -195,9 +261,9 @@ pub(crate) fn write_atomically(
 
 /// An I/O failure together with the path that produced it.
 #[derive(Debug)]
-pub(crate) struct AtomicWriteError {
-    pub(crate) path: std::path::PathBuf,
-    pub(crate) source: std::io::Error,
+pub struct AtomicWriteError {
+    pub path: std::path::PathBuf,
+    pub source: std::io::Error,
 }
 
 impl AtomicWriteError {
@@ -220,8 +286,8 @@ mod tests {
     fn writes_replace_content_without_leaving_sidecars() {
         let directory = tempfile::tempdir().expect("temporary directory");
         let path = directory.path().join("value.txt");
-        write_atomically(&path, "value", b"first").expect("first write");
-        write_atomically(&path, "value", b"second").expect("second write");
+        write_atomically(&path, "value", b"first", FileMode::Private).expect("first write");
+        write_atomically(&path, "value", b"second", FileMode::Private).expect("second write");
 
         assert_eq!(
             std::fs::read_to_string(&path).expect("persisted content"),
@@ -241,7 +307,8 @@ mod tests {
         let parent = directory.path().join("missing");
         let path = parent.join("value.txt");
 
-        let error = write_atomically(&path, "value", b"content").expect_err("missing parent");
+        let error = write_atomically(&path, "value", b"content", FileMode::Private)
+            .expect_err("missing parent");
 
         assert_eq!(error.path.parent(), Some(parent.as_path()));
         assert!(!parent.exists());

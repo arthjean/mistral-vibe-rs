@@ -17,6 +17,7 @@ use vibe_core::engine::CompletionProvider;
 use vibe_core::events::ModelMessage;
 use vibe_core::provider::config::ModelConfig;
 use vibe_core::provider::{ProviderInput, RequestDialect, RequestLimits};
+use vibe_core::pycompat::{self, Dumps};
 
 /// Reference `TitlePolicy`.
 const CONFIRM_AFTER_STEPS: usize = 6;
@@ -195,9 +196,18 @@ fn tool_block(entry: &Value) -> Option<String> {
     let mut lines = Vec::new();
     let call = &detail["input"];
     if !call.is_null() {
-        let text = call
-            .as_str()
-            .map_or_else(|| python_json(call), str::to_owned);
+        let text = call.as_str().map_or_else(
+            || {
+                pycompat::dumps(
+                    call,
+                    Dumps {
+                        ensure_ascii: false,
+                        ..Dumps::DEFAULT
+                    },
+                )
+            },
+            str::to_owned,
+        );
         let text = text.trim();
         if !text.is_empty() && !matches!(text, "{}" | "[]" | "\"\"") {
             lines.push(format!("tool({name}): {}", truncated(text, MAX_TOOL_CHARS)));
@@ -225,28 +235,6 @@ fn tool_block(entry: &Value) -> Option<String> {
         ));
     }
     (!lines.is_empty()).then(|| lines.join("\n"))
-}
-
-/// `json.dumps(value, ensure_ascii=False)`: separators `", "` and `": "`.
-fn python_json(value: &Value) -> String {
-    match value {
-        Value::Array(items) => format!(
-            "[{}]",
-            items.iter().map(python_json).collect::<Vec<_>>().join(", ")
-        ),
-        Value::Object(map) => format!(
-            "{{{}}}",
-            map.iter()
-                .map(|(key, value)| format!(
-                    "{}: {}",
-                    Value::String(key.clone()),
-                    python_json(value)
-                ))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        other => other.to_string(),
-    }
 }
 
 /// Reference `clean_title`.
