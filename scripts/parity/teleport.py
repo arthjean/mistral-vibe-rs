@@ -52,7 +52,6 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import base64
 import concurrent.futures
 import copy
 import hashlib
@@ -64,30 +63,38 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 from typing import Any
-from urllib.parse import parse_qsl, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
-import agents  # noqa: E402
-import hooks  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
 import host_env  # noqa: E402
-import rewind  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
+import subagent_client  # noqa: E402
+from vibe_code import (  # noqa: E402
+    API_KEY,
+    Backend,
+    DEAD_PROXY,
+    EVENT_TIMEOUT,
+    GITHUB_URL,
+    Normalizer,
+    base_config,
+    code_view,
+    git_env,
+    ok,
+    page,
+    project,
+    started,
+)
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/teleport-parity/corpus.json"
 SCHEMA_VERSION = 1
 
 QUIET_SECONDS = 0.6
-EVENT_TIMEOUT = 40.0
-API_KEY = "oracle-key"
-GITHUB_URL = "https://github.com/oracle/repo.git"
-#: A proxy nothing listens on, so a fetch of the GitHub remote fails at once.
-DEAD_PROXY = "http://127.0.0.1:9"
 
 TERMINAL_KINDS = {"complete", "failed"}
 TELEMETRY_EVENTS = {
@@ -98,178 +105,21 @@ TELEMETRY_EVENTS = {
 
 
 # --------------------------------------------------------------------------
-# The stand-in
-# --------------------------------------------------------------------------
-
-
-def project(identifier: str, name: str | None = None, repos: list[str] | None = None,
-            read_only: bool = False, branch: str | None = "main") -> dict[str, Any]:
-    entry: dict[str, Any] = {
-        "id": identifier,
-        "name": name or identifier,
-        "repositories": [
-            {"repoUrl": url, **({"defaultBranch": branch} if branch else {})}
-            for url in (repos if repos is not None else [GITHUB_URL])
-        ],
-    }
-    if read_only:
-        entry["isReadOnly"] = True
-    return entry
-
-
-def ok(body: Any) -> dict[str, Any]:
-    return {"status": 200, "body": body}
-
-
-def page(*projects: dict[str, Any], cursor: str | None = None) -> dict[str, Any]:
-    body: dict[str, Any] = {"items": list(projects)}
-    if cursor is not None:
-        body["nextCursor"] = cursor
-    return ok(body)
-
-
-def started(url: str = "https://chat.mistral.ai/code/session-1",
-            project_id: str = "proj-1") -> dict[str, Any]:
-    return ok({
-        "sessionId": "nuage-session",
-        "webSessionId": "web-session",
-        "projectId": project_id,
-        "status": "running",
-        "url": url,
-    })
-
-
-class Backend(hooks.Backend):
-    """The hooks stand-in, also playing the account, the Vibe Code API and the
-    datalake, and logging every request they receive."""
-
-    def __init__(self, code: dict[str, Any]) -> None:
-        super().__init__()
-        self.pages: dict[str, Any] = json.loads(json.dumps(code.get("pages", {"": page()})))
-        self.creates: list[Any] = list(code.get("create", []))
-        self.starts: list[Any] = list(code.get("start", [started()]))
-        self.whoami: Any = code.get("whoami", ok({"plan_type": "API", "plan_name": "Scale"}))
-        self.code_log: list[dict[str, Any]] = []
-        self.telemetry: list[dict[str, Any]] = []
-        self.release = threading.Event()
-        handler = self.server.RequestHandlerClass
-        backend = self
-        chat = handler.do_POST
-
-        def authorized(self: Any) -> bool:
-            return self.headers.get("authorization") == f"Bearer {API_KEY}"
-
-        def do_get(self: Any) -> None:
-            parts = urlsplit(self.path)
-            if parts.path == "/api/v1/code/projects":
-                query = dict(parse_qsl(parts.query))
-                with backend.lock:
-                    backend.code_log.append({
-                        "method": "GET", "path": parts.path,
-                        "query": sorted(parse_qsl(parts.query)),
-                        "authorized": authorized(self),
-                    })
-                    answer = backend.pages.get(query.get("cursor", ""), page())
-                    # A list answers in order, its last answer repeating.
-                    if isinstance(answer, list):
-                        answer = answer.pop(0) if len(answer) > 1 else answer[0]
-                backend.answer(self, answer)
-                return
-            if parts.path == "/api/vibe/whoami":
-                backend.answer(self, backend.whoami)
-                return
-            self.reply(404, {"error": "not found"})
-
-        def do_post(self: Any) -> None:
-            parts = urlsplit(self.path)
-            if parts.path.startswith("/api/v1/code/") or parts.path == "/v1/datalake/events":
-                length = int(self.headers.get("content-length") or 0)
-                raw = self.rfile.read(length) if length else b""
-                try:
-                    body = json.loads(raw or b"{}")
-                except json.JSONDecodeError:
-                    body = {"unparsed": raw.decode("utf-8", "replace")}
-                if parts.path == "/v1/datalake/events":
-                    with backend.lock:
-                        backend.telemetry.append(body)
-                    self.reply(200, {})
-                    return
-                with backend.lock:
-                    backend.code_log.append({
-                        "method": "POST", "path": parts.path,
-                        "authorized": authorized(self),
-                        "contentType": self.headers.get("content-type"),
-                        "body": body,
-                    })
-                    if parts.path == "/api/v1/code/projects":
-                        answer = backend.creates.pop(0) if backend.creates else {"status": 500, "body": {"detail": "no"}}
-                    elif parts.path == "/api/v1/code/sessions":
-                        answer = backend.starts.pop(0) if len(backend.starts) > 1 else (backend.starts[0] if backend.starts else started())
-                    else:
-                        answer = {"status": 404, "body": {"detail": "no"}}
-                backend.answer(self, answer)
-                return
-            chat(self)
-
-        handler.do_GET = do_get
-        handler.do_POST = do_post
-
-    def answer(self, handler: Any, answer: Any) -> None:
-        if answer.get("block"):
-            self.release.wait(timeout=EVENT_TIMEOUT)
-        if answer.get("delay"):
-            time.sleep(float(answer["delay"]))
-        if answer.get("drop"):
-            # The connection closes with no response at all.
-            handler.close_connection = True
-            try:
-                handler.connection.shutdown(2)
-            except OSError:
-                pass
-            return
-        status = int(answer.get("status", 200))
-        if "raw" in answer:
-            payload = str(answer["raw"]).encode()
-            handler.send_response(status)
-            handler.send_header("content-type", "text/plain")
-            handler.send_header("content-length", str(len(payload)))
-            handler.end_headers()
-            handler.wfile.write(payload)
-            return
-        try:
-            handler.reply(status, answer.get("body", {}))
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-
-
-# --------------------------------------------------------------------------
 # The checkout
 # --------------------------------------------------------------------------
 
 
-def git_env(world: acp.World) -> dict[str, str]:
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(world.home),
-        **host_env.windows_base(str(world.home)),
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "LANG": "C.UTF-8",
-        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
-        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
-    }
-
-
-def run_git(world: acp.World, *args: str, cwd: Path | None = None, check: bool = True) -> str:
+def run_git(world: blackbox.World, *args: str, cwd: Path | None = None, check: bool = True) -> str:
     result = subprocess.run(
         ["git", *args], cwd=cwd or world.workspace, env=git_env(world),
         capture_output=True, text=True, check=False,
     )
     if check and result.returncode != 0:
-        raise rewind.OracleError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+        raise OracleError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
 
 
-def prepare_git(world: acp.World, spec: dict[str, Any] | None) -> None:
+def prepare_git(world: blackbox.World, spec: dict[str, Any] | None) -> None:
     (world.home / ".gitconfig").write_text(
         "[user]\n\tname = Oracle\n\temail = oracle@example.com\n"
         "[init]\n\tdefaultBranch = main\n"
@@ -336,30 +186,10 @@ def prepare_git(world: acp.World, spec: dict[str, Any] | None) -> None:
 # --------------------------------------------------------------------------
 
 
-def base_config(backend: Backend, scenario: dict[str, Any]) -> str:
-    telemetry = "true" if scenario.get("telemetry") else "false"
-    active = scenario.get("activeModel", "mistral-medium-3.5")
-    return (
-        f'active_model = "{active}"\n'
-        f"enable_telemetry = {telemetry}\n"
-        "enable_update_checks = false\n"
-        f'console_base_url = "{backend.base}"\n'
-        f'vibe_code_sessions_base_url = "{backend.base}"\n'
-        f'vibe_base_url = "{backend.base}/vibe"\n'
-        + scenario.get("config", "")
-        + "\n[[providers]]\n"
-        'name = "mistral"\n'
-        f'api_base = "{backend.base}/v1"\n'
-        f'api_key_env_var = "{scenario.get("keyVariable", "MISTRAL_API_KEY")}"\n'
-        'backend = "mistral"\n'
-        + scenario.get("tables", "")
-    )
-
-
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend(scenario.get("code", {}))
     root = Path(tempfile.mkdtemp(prefix="vibe-teleport-oracle-")).resolve()
-    session = rewind.Session(root)
+    session = app_server_client.Session(root)
     world = session.world
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
@@ -370,13 +200,12 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         )
         env = {
             **git_env(world),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": API_KEY,
-            "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+            **host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY=API_KEY,
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            ),
             # The port's fixture delivers the events its server raises only
             # when asked; the reference ignores the variable.
             "VIBE_ORACLE_TELEMETRY": "1",
@@ -386,12 +215,12 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
                 env.pop(key, None)
             else:
                 env[key] = value
-        server = agents.Server(command, env, world.workspace, {}, world, callbacks=[])
+        server = subagent_client.Server(command, env, world.workspace, {}, world, callbacks=[])
         steps: list[dict[str, Any]] = []
         state: dict[str, Any] = {"picker": None}
         try:
             run_steps(scenario, server, session, backend, steps, quiet, state)
-        except (rewind.OracleError, acp.OracleError) as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             backend.release.set()
@@ -420,7 +249,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         shutil.rmtree(root, ignore_errors=True)
 
 
-def substitute(value: Any, session: rewind.Session, state: dict[str, Any]) -> Any:
+def substitute(value: Any, session: app_server_client.Session, state: dict[str, Any]) -> Any:
     value = session.substitute(value)
     if isinstance(value, dict):
         return {key: substitute(item, session, state) for key, item in value.items()}
@@ -431,7 +260,7 @@ def substitute(value: Any, session: rewind.Session, state: dict[str, Any]) -> An
     return value
 
 
-def learn(message: dict[str, Any], session: rewind.Session, state: dict[str, Any]) -> None:
+def learn(message: dict[str, Any], session: app_server_client.Session, state: dict[str, Any]) -> None:
     session.learn(message)
     result = message.get("result")
     if isinstance(result, dict) and isinstance(result.get("pickerId"), str):
@@ -444,7 +273,7 @@ def teleport_event(message: dict[str, Any]) -> dict[str, Any] | None:
     return (message.get("params") or {}).get("event")
 
 
-def collect_teleport(server: rewind.Server, request_id: Any, stop: set[str],
+def collect_teleport(server: app_server_client.Server, request_id: Any, stop: set[str],
                      quiet: float) -> list[dict[str, Any]]:
     """Everything the server writes until the request is answered and an event
     of a stopping kind arrived, then silence."""
@@ -501,8 +330,8 @@ def sequence(messages: list[dict[str, Any]], request_id: Any) -> list[Any]:
 
 def run_steps(
     scenario: dict[str, Any],
-    server: rewind.Server,
-    session: rewind.Session,
+    server: app_server_client.Server,
+    session: app_server_client.Session,
     backend: Backend,
     steps: list[dict[str, Any]],
     quiet: float,
@@ -531,7 +360,7 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": rewind.render_turn("reference", target, step["turn"])})
+                         "params": app_server_client.render_turn("reference", target, step["turn"])})
             if step.get("background"):
                 time.sleep(step.get("settle", 0.3))
                 observed = server.collect(None, quiet)
@@ -539,7 +368,7 @@ def run_steps(
                     learn(message, session, state)
                 steps.append({"turn": "background"})
                 continue
-            observed = server.wait_for(rewind.settles({}))
+            observed = server.wait_for(app_server_client.settles({}))
             observed += server.collect(None, quiet)
             for message in observed:
                 learn(message, session, state)
@@ -604,7 +433,7 @@ def run_steps(
         })
 
 
-def checkout_view(world: acp.World, spec: dict[str, Any]) -> dict[str, Any]:
+def checkout_view(world: blackbox.World, spec: dict[str, Any]) -> dict[str, Any]:
     """What a step asks of the checkout: refs and marker files."""
 
     view: dict[str, Any] = {}
@@ -628,57 +457,6 @@ def checkout_view(world: acp.World, spec: dict[str, Any]) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 # Normalization
 # --------------------------------------------------------------------------
-
-
-#: Identifier keys this surface adds to the shared set.
-TELEPORT_ID_KEYS = {"pickerId", "idempotencyKey", "conversationId"}
-
-
-def decode_diff(content: str) -> dict[str, Any]:
-    """A diff as the start carries it: the frame header's content-size flag and
-    the patch it decompresses to, reduced to a digest."""
-
-    try:
-        raw = base64.b64decode(content, validate=True)
-    except (ValueError, TypeError):
-        return {"invalid": "base64"}
-    try:
-        import zstandard  # the reference interpreter carries it
-
-        decompressed = zstandard.ZstdDecompressor().decompress(raw, max_output_size=64 * 1024 * 1024)
-    except Exception:  # noqa: BLE001
-        try:
-            decompressed = subprocess.run(
-                ["zstd", "-d", "-c"], input=raw, capture_output=True, check=True
-            ).stdout
-        except (OSError, subprocess.CalledProcessError):
-            # A host without the CLI (a stock Windows one) still has the
-            # standard library's decoder from Python 3.14 on.
-            try:
-                from compression import zstd
-
-                decompressed = zstd.decompress(raw)
-            except Exception:  # noqa: BLE001
-                return {"invalid": "zstd"}
-    text = decompressed.decode("utf-8", "replace")
-    return {
-        "bytes": len(decompressed),
-        "sha256": hashlib.sha256(decompressed).hexdigest(),
-        "files": sorted({line[6:] for line in text.splitlines() if line.startswith("+++ b/")}),
-    }
-
-
-def code_view(entry: dict[str, Any]) -> dict[str, Any]:
-    view = {k: v for k, v in entry.items() if k != "body"}
-    body = copy.deepcopy(entry.get("body"))
-    if isinstance(body, dict) and entry["path"] == "/api/v1/code/sessions":
-        for repository in (body.get("context") or {}).get("repositories") or []:
-            diff = repository.get("diff") if isinstance(repository, dict) else None
-            if isinstance(diff, dict) and isinstance(diff.get("content"), str):
-                diff["content"] = decode_diff(diff["content"])
-    if body is not None:
-        view["body"] = body
-    return view
 
 
 def telemetry_view(body: Any) -> list[dict[str, Any]]:
@@ -720,25 +498,9 @@ def summary_requests(bodies: list[Any]) -> list[Any]:
         found.append({
             "tools": len(body.get("tools") or []),
             "stream": bool(body.get("stream")),
-            "conversation": hooks.transcript(body.get("messages", [])),
+            "conversation": subagent_client.transcript(body.get("messages", [])),
         })
     return found
-
-
-class Normalizer(hooks.Normalizer):
-    def value(self, value: Any, key: str | None = None) -> Any:
-        if key in TELEPORT_ID_KEYS and isinstance(value, str) and value:
-            if value in self.authored:
-                return value
-            return self.identity(value)
-        return super().value(value, key)
-
-    def collect_ids(self, value: Any, key: str | None = None) -> None:
-        if key in TELEPORT_ID_KEYS and isinstance(value, str) and value:
-            if value not in self.authored:
-                self.identity(value)
-            return
-        super().collect_ids(value, key)
 
 
 def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
@@ -1156,10 +918,10 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
-                raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
+                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
             command = [str(binary), *HARNESS_FLAGS]
         selected = [
             scenario
@@ -1202,15 +964,15 @@ def main() -> int:
                 != json.loads(json.dumps(entry["observed"]))
             ]
             if differing:
-                raise rewind.OracleError("a fresh capture differs for " + ", ".join(differing))
+                raise OracleError("a fresh capture differs for " + ", ".join(differing))
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (rewind.OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"teleport oracle: {error}", file=sys.stderr)
         return 1
 

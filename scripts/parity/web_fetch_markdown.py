@@ -32,80 +32,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 import random
-import subprocess
 import sys
 from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/web-fetch-markdown/corpus.json")
-INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 GENERATED_SEED = 20260923
 GENERATED_COUNT = 400
-
-
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, interpreter: Path | None
-) -> None:
-    """Re-runs this script under an interpreter that can import ``vibe``."""
-    try:
-        import vibe  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidates = [
-        interpreter,
-        Path(os.environ[INTERPRETER_VARIABLE])
-        if os.environ.get(INTERPRETER_VARIABLE)
-        else None,
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    candidate = next(
-        (path for path in candidates if path is not None and path.is_file()), None
-    )
-    if candidate is None:
-        raise OracleError(
-            f"cannot import `vibe` and no reference interpreter under {reference}"
-        )
-    if Path(sys.executable).resolve() == candidate.resolve():
-        raise OracleError(f"{candidate} cannot import `vibe`")
-    os.execv(
-        str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]]
-    )
 
 
 # --------------------------------------------------------------------------
@@ -279,8 +219,8 @@ def observe(html: str) -> dict[str, str]:
         return {"error": str(error)}
 
 
-def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
-    pin = resolve_reference(reference, expected_commit)
+def build_corpus(commit: str) -> dict[str, Any]:
+    pin = {"commit": commit}
     fixtures = [
         {"name": name, "html": html, **observe(html)}
         for name, html in FIXTURES.items()
@@ -320,11 +260,12 @@ def main() -> int:
     arguments = parser.parse_args()
 
     try:
-        reexecute_with_reference_interpreter(arguments.reference, arguments.interpreter)
-        corpus = build_corpus(
+        commit, _ = reexecute_pinned(
             arguments.reference,
             None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            override=arguments.interpreter,
         )
+        corpus = build_corpus(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

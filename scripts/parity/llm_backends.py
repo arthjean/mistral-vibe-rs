@@ -74,17 +74,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from compaction import (  # noqa: E402
-    OracleError,
-    extract_pinned_tree,
-    reexecute_with_reference_interpreter,
-    resolve_reference,
-)
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
 
 SCHEMA_VERSION = 3
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/llm-backends/corpus.json")
-DEFAULT_CACHE = Path(".parity")
 
 KEY_VARIABLE = "ORACLE_API_KEY"
 #: The variable the Mistral client reads a key from when it is handed none.
@@ -2205,9 +2199,13 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     try:
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        pinned = extract_pinned_tree(arguments.reference, reference["commit"], arguments.cache)
-        reexecute_with_reference_interpreter(arguments.reference, arguments.python, pinned)
+        commit, _ = reexecute_pinned(
+            arguments.reference,
+            arguments.expected_commit,
+            cache=arguments.cache,
+            override=arguments.python,
+        )
+        reference = {"commit": commit, "path": str(arguments.reference)}
         if arguments.only:
             global all_scenarios  # noqa: PLW0603
             everything = all_scenarios

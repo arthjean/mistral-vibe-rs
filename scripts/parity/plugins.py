@@ -75,6 +75,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, reexecute_pinned, require_pin  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -105,42 +106,9 @@ api_key_env_var = ""
 """
 
 
-class OracleError(RuntimeError):
-    """Raised when a corpus cannot be produced from an authoritative state."""
-
-
 # --------------------------------------------------------------------------
 # Reference pinning
 # --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=reference, capture_output=True, text=True, check=False
-    )
-    if result.returncode != 0:
-        raise OracleError(f"git rev-parse failed in {reference}: {result.stderr.strip()}")
-    commit = result.stdout.strip()
-    if expected and commit != expected:
-        raise OracleError(f"reference checkout is at {commit}, not the pinned {expected}")
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(reference: Path) -> None:
-    try:
-        import vibe  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidate = reference / ".venv/bin/python"
-    if not candidate.is_file():
-        raise OracleError(f"cannot import `vibe` and no reference interpreter at {candidate}")
-    if Path(sys.executable).resolve() == candidate.resolve():
-        raise OracleError(f"{candidate} cannot import `vibe`")
-    os.execv(str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]])
 
 
 def digest(text: str) -> dict[str, Any]:
@@ -681,17 +649,13 @@ def run_scenario(
         f"trusted = [{', '.join(trusted)}]\nuntrusted = []\n", encoding="utf-8", newline=""
     )
     env = {
+        **host_env.isolated(
+            home,
+            vibe_home,
+            MISTRAL_API_KEY="oracle-key",
+            VIBE_API_BASE="http://127.0.0.1:9/v1/chat/completions",
+        ),
         "PATH": f"{fixture_dir}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}",
-        "HOME": str(home),
-        **host_env.windows_base(str(home)),
-        "VIBE_HOME": str(vibe_home),
-        "MISTRAL_API_KEY": "oracle-key",
-        "VIBE_API_BASE": "http://127.0.0.1:9/v1/chat/completions",
-        "LANG": "C.UTF-8",
-        "TERM": "dumb",
-        "NO_COLOR": "1",
-        "CI": "true",
-        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
     }
     server = Server([*command, *scenario["flags"]], env, workspace)
     steps: list[Any] = []
@@ -883,12 +847,13 @@ def main() -> int:
         families = ("resolve", "server") if arguments.family == "all" else (arguments.family,)
         if "resolve" in families and arguments.server is not None:
             raise OracleError("the resolve family runs the reference in process; drop --server")
-        if "resolve" in families:
-            reexecute_with_reference_interpreter(arguments.reference)
-        if arguments.server is None:
-            reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        else:
+        if arguments.server is not None:
             reference = {"commit": "server-override"}
+        elif "resolve" in families:
+            commit, _ = reexecute_pinned(arguments.reference, arguments.expected_commit)
+            reference = {"commit": commit}
+        else:
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
         if "resolve" in families:
             fixtures = json.loads(FIXTURES.read_text(encoding="utf-8"))
             emit(

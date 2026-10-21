@@ -61,6 +61,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, reference_interpreter, require_pin  # noqa: E402
+import blackbox  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -73,10 +75,6 @@ DATE_PLACEHOLDER = "<DATE>"
 ORACLE_SHELL = "/opt/oracle/bin/oracle-shell"
 HASH = re.compile(r"^[0-9a-f]{7,40}(?= |$)")
 CO_AUTHOR = "Co-Authored-By: Mistral Vibe <vibe@mistral.ai>"
-
-
-class OracleError(RuntimeError):
-    pass
 
 
 # --------------------------------------------------------------------------
@@ -433,15 +431,7 @@ def materialize(scenario: dict[str, Any], root: Path, backend: str = "http://127
 
 def environment_for(scenario: dict[str, Any], root: Path) -> dict[str, str]:
     environment = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(root / "home"),
-        **host_env.windows_base(str(root / "home")),
-        "VIBE_HOME": str(root / "home/.vibe"),
-        "LANG": "C.UTF-8",
-        "TERM": "dumb",
-        "NO_COLOR": "1",
-        "CI": "true",
-        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+        **host_env.isolated(root / "home", root / "home/.vibe"),
         "MISTRAL_API_KEY": "oracle-key",
         "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_CONFIG_NOSYSTEM": "1",
@@ -836,8 +826,6 @@ class Backend:
     """Serves scripted completions and keeps every request body."""
 
     def __init__(self, responses: list[dict[str, Any]]) -> None:
-        import acp
-
         self.responses = list(responses)
         self.bodies: list[dict[str, Any]] = []
         backend = self
@@ -866,7 +854,7 @@ class Backend:
                 model = str(body.get("model", "model"))
                 payload = b"".join(
                     b"data: " + json.dumps(item).encode() + b"\n\n"
-                    for item in acp.completion_chunks(response, model)
+                    for item in blackbox.completion_chunks(response, model)
                 ) + b"data: [DONE]\n\n"
                 self.send_response(200)
                 self.send_header("content-type", "text/event-stream")
@@ -966,24 +954,6 @@ def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def reference_interpreter(reference: Path) -> Path:
-    for candidate in (reference / ".venv/bin/python", reference / ".venv/Scripts/python.exe"):
-        if candidate.is_file():
-            return candidate
-    raise OracleError(f"no reference interpreter under {reference}; run `uv sync --frozen`")
-
-
-def resolve_reference(reference: Path, expected: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"no reference checkout at {reference}")
-    commit = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=reference, capture_output=True, text=True, check=False
-    ).stdout.strip()
-    if expected and commit != expected:
-        raise OracleError(f"the reference is at {commit}, not the pinned {expected}")
-    return {"commit": commit}
-
-
 def capture(scenario: dict[str, Any], interpreter: Path | None, command: list[str]) -> dict[str, Any]:
     if scenario["family"] == "live":
         observed = run_live(scenario, command)
@@ -1034,7 +1004,7 @@ def main() -> int:
             arguments.output.write_text(rendered({"scenarios": captured}), encoding="utf-8", newline="")
             print(f"captured {len(captured)} live scenarios into {arguments.output}")
             return 0
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
+        reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
         interpreter = reference_interpreter(arguments.reference)
         command = [str(arguments.reference / ".venv/bin/vibe"), *HARNESS_FLAGS]
         selected = [s for s in scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]

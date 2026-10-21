@@ -33,7 +33,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use url::Url;
 use vibe_core::auth::{McpOAuthStore, MemoryKeyringBackend};
 use vibe_core::mcp::authorization::{server_fingerprint, server_identity};
@@ -43,17 +42,22 @@ use vibe_core::mcp::{
     McpServerConfig, McpStaticAuth, McpTransportConfig, SamplingHandler, SamplingRequest,
     SamplingResponse, SamplingRole,
 };
-use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::replay::{Capture, digest};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
 };
 use vibe_core::pycompat::{self, Dumps};
+use vibe_core::text::sha256_hex;
 use vibe_core::tools::{ToolInvocation, ToolRegistry};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("mcp-transport/corpus.json");
 const FIXTURE: &str = env!("CARGO_BIN_EXE_vibe-mcp-script-fixture");
-const CAPTURE_SCRIPT: &str = "scripts/parity/mcp_transport.py";
+const CAPTURE: Capture = Capture {
+    script: "scripts/parity/mcp_transport.py",
+    family: &[],
+    arguments: &["--fixture", FIXTURE],
+};
 /// `json.dumps(value, sort_keys=True, separators=(",", ":"))`, the spelling the
 /// reference fingerprints and cache keys use.
 const CANONICAL: Dumps = Dumps {
@@ -79,25 +83,6 @@ const LEDGER: &[Divergence] = &[Divergence {
     why: "a remote tool name a provider would refuse is sanitized into the published \
               name; the reference publishes it as the server spelled it",
 }];
-
-fn repository() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the crate sits two levels under the workspace")
-        .to_path_buf()
-}
-
-fn hexadecimal(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
-fn digest(text: &str) -> Value {
-    json!({
-        "length": text.chars().count(),
-        "sha256": hexadecimal(&Sha256::digest(text.as_bytes())),
-    })
-}
 
 // --------------------------------------------------------------------------
 // The host pieces the reference capture supplies.
@@ -753,7 +738,7 @@ async fn run_scenario(
             let key = record["key"].as_str().expect("key").to_owned();
             assert_eq!(
                 path.file_name().and_then(|name| name.to_str()),
-                Some(format!("{}.json", hexadecimal(&Sha256::digest(key.as_bytes()))).as_str()),
+                Some(format!("{}.json", sha256_hex(key.as_bytes())).as_str()),
                 "a descriptor cache file is not named by its key"
             );
             let mut parsed: Value = serde_json::from_str(&key).expect("key JSON");
@@ -1005,23 +990,5 @@ async fn every_scenario_matches_the_reference_mcp_client() {
 
 #[test]
 fn the_live_reference_still_answers_what_the_corpus_records() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "MCP transport") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return;
-    }
-    let output = Command::new("python3")
-        .arg(repository().join(CAPTURE_SCRIPT))
-        .args(["--check", "--fixture", FIXTURE, "--reference"])
-        .arg(&root)
-        .current_dir(repository())
-        .output()
-        .expect("the capture script runs");
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT} --corpus`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    CAPTURE.probe("MCP transport");
 }

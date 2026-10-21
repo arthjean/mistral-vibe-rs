@@ -41,11 +41,15 @@ use vibe_core::mcp::{
     McpAuthConfig, McpAuthenticationError, McpAuthenticationService, McpAuthorization, McpDeclared,
     McpOAuthConfig, McpServerConfig, McpStaticAuth, McpTransportConfig,
 };
-use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::replay::{Capture, digest, pointer_matches};
 
 const CORPUS: &str = include_str!("mcp-oauth/corpus.json");
 const FIXTURE: &str = env!("CARGO_BIN_EXE_vibe-oauth-script-fixture");
-const CAPTURE_SCRIPT: &str = "scripts/parity/mcp_oauth.py";
+const CAPTURE: Capture = Capture {
+    script: "scripts/parity/mcp_oauth.py",
+    family: &[],
+    arguments: &["--fixture", FIXTURE],
+};
 const SERVICE: &str = "ai.mistral.vibe";
 const STEP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -84,20 +88,6 @@ const LEDGER: &[Divergence] = &[
           `GET`) name the Python HTTP library that sent them; this port's name none",
     },
 ];
-
-fn pointer_matches(pattern: &str, pointer: &str) -> bool {
-    let pattern = pattern.split('/').collect::<Vec<_>>();
-    let pointer = pointer.split('/').collect::<Vec<_>>();
-    pattern.len() == pointer.len()
-        && pattern
-            .iter()
-            .zip(&pointer)
-            .all(|(pattern, segment)| *pattern == "*" || pattern == segment)
-}
-
-fn repository() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 
 // --------------------------------------------------------------------------
 // One scenario.
@@ -359,14 +349,6 @@ fn mask_pairs(pairs: &Value) -> Value {
             })
             .collect(),
     )
-}
-
-fn digest(text: &str) -> Value {
-    json!({"length": text.chars().count(), "sha256": hex(&Sha256::digest(text.as_bytes()))})
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// A host without any credential store.
@@ -783,23 +765,5 @@ async fn every_scenario_matches_the_reference_capture() {
 
 #[test]
 fn the_live_reference_still_answers_what_the_corpus_records() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "MCP OAuth") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return;
-    }
-    let output = Command::new("python3")
-        .arg(repository().join(CAPTURE_SCRIPT))
-        .args(["--check", "--fixture", FIXTURE, "--reference"])
-        .arg(&root)
-        .current_dir(repository())
-        .output()
-        .expect("the capture script runs");
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT} --corpus`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    CAPTURE.probe("MCP OAuth");
 }

@@ -50,10 +50,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
 import host_env  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
-import rewind  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/review-parity/corpus.json"
@@ -65,16 +66,12 @@ CONTENT_KEYS = {"content", "baseline", "current"}
 TOKEN = re.compile(r"\$(O|V|N|P)(\d+)")
 
 
-class OracleError(RuntimeError):
-    pass
-
-
 # --------------------------------------------------------------------------
 # What a client learns from the answers
 # --------------------------------------------------------------------------
 
 
-class ReviewSession(rewind.Session):
+class ReviewSession(app_server_client.Session):
     """The rewind oracle's session, also learning what review answers name."""
 
     def __init__(self, root: Path) -> None:
@@ -136,7 +133,7 @@ class ReviewSession(rewind.Session):
 # --------------------------------------------------------------------------
 
 
-class Normalizer(rewind.Normalizer):
+class Normalizer(app_server_client.Normalizer):
     #: Set while a review answer is normalized, the only place where
     #: `CONTENT_KEYS` hold file content rather than a server's prose.
     verbatim = False
@@ -187,7 +184,7 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[Any]:
 # --------------------------------------------------------------------------
 
 
-call = rewind.call
+call = app_server_client.call
 
 
 def send(method: str, session: str = "$S1", **params: Any) -> dict[str, Any]:
@@ -678,7 +675,7 @@ def scenarios() -> list[dict[str, Any]]:
         ),
         edited(
             "rewind/in-place",
-            rewind.rewind("$U2", inplace=True),
+            app_server_client.rewind("$U2", inplace=True),
             state(),
             *reads("$P2"),
             revert({"kind": "all"}),
@@ -686,7 +683,7 @@ def scenarios() -> list[dict[str, Any]]:
         ),
         edited(
             "rewind/fork-restoring-files",
-            rewind.rewind("$U2", restoreFiles=True),
+            app_server_client.rewind("$U2", restoreFiles=True),
             {"files": WATCHED},
             state("$S2"),
             state("$S1"),
@@ -710,7 +707,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw answers")
-    parser.add_argument("--quiet", type=float, default=rewind.QUIET_SECONDS)
+    parser.add_argument("--quiet", type=float, default=app_server_client.QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
@@ -725,7 +722,7 @@ def main() -> int:
             reference = {"commit": "server-override"}
             dialect = arguments.dialect or "port"
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
@@ -742,7 +739,7 @@ def main() -> int:
 
         def capture(scenario: dict[str, Any]) -> dict[str, Any]:
             started = time.monotonic()
-            run = rewind.run_scenario(
+            run = app_server_client.run_scenario(
                 scenario, command, dialect, arguments.quiet, session_factory=ReviewSession
             )
             entry = {
@@ -781,10 +778,10 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (OracleError, acp.OracleError, rewind.OracleError) as error:
+    except OracleError as error:
         print(f"review oracle: {error}", file=sys.stderr)
         return 1
 

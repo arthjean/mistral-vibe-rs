@@ -35,83 +35,19 @@ import argparse
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/tool-config/defaults.json")
-INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: The keys whose defaults the reference composes from the running shell rather
 #: than from a constant, captured once per branch.
 SHELL_LIST_KEYS = ("allowlist", "denylist", "denylist_standalone")
-
-
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, interpreter: Path | None
-) -> None:
-    """Re-runs this script under an interpreter that can import ``vibe``."""
-    try:
-        import vibe  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidates = [
-        interpreter,
-        Path(os.environ[INTERPRETER_VARIABLE])
-        if os.environ.get(INTERPRETER_VARIABLE)
-        else None,
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    candidate = next(
-        (path for path in candidates if path is not None and path.is_file()), None
-    )
-    if candidate is None:
-        raise OracleError(
-            f"cannot import `vibe` and no reference interpreter under {reference}"
-        )
-    if Path(sys.executable).resolve() == candidate.resolve():
-        raise OracleError(f"{candidate} cannot import `vibe`")
-    os.execv(
-        str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]]
-    )
 
 
 # --------------------------------------------------------------------------
@@ -119,9 +55,8 @@ def reexecute_with_reference_interpreter(
 # --------------------------------------------------------------------------
 
 
-def capture_declarations(reference: Path) -> dict[str, dict[str, Any]]:
+def capture_declarations() -> dict[str, dict[str, Any]]:
     """What ``discover_tool_defaults`` answers for the builtin directory."""
-    sys.path.insert(0, str(reference))
     from vibe.core.config.harness_files import init_harness_files_manager
     from vibe.core.tools.manager import ToolManager
 
@@ -132,7 +67,7 @@ def capture_declarations(reference: Path) -> dict[str, dict[str, Any]]:
     return {name: declarations[name] for name in sorted(declarations)}
 
 
-def capture_shell_lists(reference: Path) -> dict[str, dict[str, list[str]]]:
+def capture_shell_lists() -> dict[str, dict[str, list[str]]]:
     """The three host-dependent shell lists, under both shell branches.
 
     ``uses_posix_shell()`` is read by the default factories at model
@@ -140,7 +75,6 @@ def capture_shell_lists(reference: Path) -> dict[str, dict[str, list[str]]]:
     that reads it. Nothing is written to the checkout: the substitution lives in
     this process only.
     """
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.builtins import bash as reference_bash
 
     original = reference_bash.uses_posix_shell
@@ -160,14 +94,13 @@ def capture_shell_lists(reference: Path) -> dict[str, dict[str, list[str]]]:
     return captured
 
 
-def capture_default_document_tools(reference: Path) -> dict[str, dict[str, Any]]:
+def capture_default_document_tools() -> dict[str, dict[str, Any]]:
     """The ``tools`` table the shipped default document carries.
 
     ``create_default_config`` fills it from the same enumeration, so this is the
     published half of the same observation: what an operator reads back from a
     fresh configuration.
     """
-    sys.path.insert(0, str(reference))
     from vibe.core.config.vibe_schema import create_default_config
 
     tools = create_default_config().get("tools")
@@ -176,15 +109,15 @@ def capture_default_document_tools(reference: Path) -> dict[str, dict[str, Any]]
     return {name: tools[name] for name in sorted(tools)}
 
 
-def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
-    pin = resolve_reference(reference, expected_commit)
-    declarations = capture_declarations(reference)
-    published = capture_default_document_tools(reference)
+def build_corpus(commit: str) -> dict[str, Any]:
+    pin = {"commit": commit}
+    declarations = capture_declarations()
+    published = capture_default_document_tools()
     if declarations != published:
         raise OracleError(
             "the enumerated defaults and the shipped default document disagree"
         )
-    shell_lists = capture_shell_lists(reference)
+    shell_lists = capture_shell_lists()
     keys = sorted({key for entry in declarations.values() for key in entry})
     branch = "posix" if os.name != "nt" else "windows"
     # The shell families are the ones carrying a standalone denylist, and the
@@ -235,11 +168,12 @@ def main() -> int:
     arguments = parser.parse_args()
 
     try:
-        reexecute_with_reference_interpreter(arguments.reference, arguments.interpreter)
-        corpus = build_corpus(
+        commit, _ = reexecute_pinned(
             arguments.reference,
             None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            override=arguments.interpreter,
         )
+        corpus = build_corpus(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

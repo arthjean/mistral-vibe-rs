@@ -66,7 +66,6 @@ from pathlib import Path
 import platform
 import re
 import socket
-import subprocess
 import sys
 import tempfile
 from typing import Any
@@ -74,17 +73,11 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/tool-presentation-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/tool-presentation/corpus.json")
-
-#: Where the extracted pinned tree is cached between runs. Gitignored, and
-#: keyed by commit so a re-pin extracts a new one instead of reusing the old.
-DEFAULT_CACHE = Path(".parity")
-
-#: Set on the re-executed process so it does not extract and re-exec forever.
-_REEXEC_MARKER = "VIBE_PARITY_PINNED_TREE"
 
 #: The marker a projected string carries in place of its content. The key is
 #: what makes a described value unmistakable in the corpus and in Rust, where a
@@ -100,112 +93,6 @@ _IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,31}")
 #: A path or a request target: a pointer, and nothing that could hold a
 #: sentence.
 _POINTER = re.compile(r"/[A-Za-z0-9._~/-]{0,95}")
-
-
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def _git(reference: Path, *arguments: str) -> str:
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git {' '.join(arguments)} failed in {reference}: {result.stderr.strip()}"
-        )
-    return result.stdout.strip()
-
-
-def resolve_reference(reference: Path, expected: str) -> dict[str, str]:
-    """The pinned commit, taken from the checkout without depending on its HEAD.
-
-    The checkout only has to *contain* the pin, not sit on it, so a workstation
-    that moved HEAD can still capture and is never tempted into a re-pin by
-    accident. ``git archive`` reads the commit out below without touching the
-    working tree, which is what the read-only constraint asks for.
-    """
-
-    if not reference.is_dir():
-        raise OracleError(
-            f"no reference checkout at {reference}; set VIBE_REFERENCE to the checkout "
-            "path or pass --reference"
-        )
-    try:
-        _git(reference, "cat-file", "-e", f"{expected}^{{commit}}")
-    except OracleError as error:
-        raise OracleError(
-            f"{reference} does not contain the pinned commit {expected}: {error}"
-        ) from error
-    return {"commit": expected, "path": str(reference)}
-
-
-def extract_pinned_tree(reference: Path, commit: str, cache: Path) -> Path:
-    """The pinned source tree, materialized out of tree and reused across runs."""
-
-    import tarfile
-
-    # Absolute, because `_git` runs with the reference as its working directory
-    # and a relative output path would resolve inside the read-only checkout.
-    tree = (cache / f"reference-{commit[:12]}").resolve()
-    marker = tree / "vibe" / "__init__.py"
-    if marker.is_file():
-        return tree
-    tree.mkdir(parents=True, exist_ok=True)
-    archive = tree.with_suffix(".tar")
-    _git(reference, "archive", "--format=tar", "-o", str(archive), commit)
-    with tarfile.open(archive) as bundle:
-        bundle.extractall(tree, filter="data")
-    archive.unlink(missing_ok=True)
-    if not marker.is_file():
-        raise OracleError(f"the extracted tree at {tree} carries no `vibe` package")
-    return tree
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, override: Path | None, tree: Path
-) -> None:
-    """Re-runs this script under an interpreter importing the *pinned* tree."""
-
-    if os.environ.get(_REEXEC_MARKER) == str(tree):
-        if not _imports_pinned_vibe(tree):
-            raise OracleError(
-                f"the reference interpreter did not import `vibe` from {tree}"
-            )
-        return
-    candidates = [override] if override else []
-    candidates += [
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    interpreter = next((c for c in candidates if c and c.is_file()), None)
-    if interpreter is None:
-        raise OracleError(
-            f"no interpreter can import `vibe`; looked for a virtual environment in {reference}"
-        )
-    environment = dict(os.environ)
-    environment[_REEXEC_MARKER] = str(tree)
-    environment["PYTHONPATH"] = os.pathsep.join(
-        [str(tree), *([environment["PYTHONPATH"]] if environment.get("PYTHONPATH") else [])]
-    )
-    os.execve(str(interpreter), [str(interpreter), *sys.argv], environment)
-
-
-def _imports_pinned_vibe(tree: Path) -> bool:
-    try:
-        import vibe
-    except Exception:
-        return False
-    return Path(vibe.__file__).resolve().is_relative_to(tree.resolve())
 
 
 # --------------------------------------------------------------------------
@@ -813,11 +700,13 @@ def main() -> int:
     # key pins it in for every run, the Rust recapture probe included.
     os.environ["MISTRAL_API_KEY"] = CAPTURE_API_KEY
     try:
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        pinned = extract_pinned_tree(
-            arguments.reference, reference["commit"], arguments.cache
+        commit, pinned = reexecute_pinned(
+            arguments.reference,
+            arguments.expected_commit,
+            cache=arguments.cache,
+            override=arguments.python,
         )
-        reexecute_with_reference_interpreter(arguments.reference, arguments.python, pinned)
+        reference = {"commit": commit, "path": str(arguments.reference)}
         GUARD.install()
         records = capture(pinned)
         if GUARD.attempts:

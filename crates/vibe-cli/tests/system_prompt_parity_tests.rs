@@ -23,16 +23,17 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 use vibe_app_server::workspace::{
     PromptHost, SessionPromptScope, SystemPromptError, WorkspacePaths, WorkspaceService,
 };
-use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::replay::{
+    Capture, PatternDivergence, Prose, Tally, differences, entries, scenarios,
+};
 use vibe_core::prompt::library::PromptFileError;
 use vibe_core::system_prompt::{
     ComposedSystemPrompt, GitContext, ProjectContextSettings, ProjectInputs, SectionKind,
@@ -43,7 +44,11 @@ use vibe_core::tools::shell::WindowsShell;
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("system-prompt-parity/corpus.json");
 
-const CAPTURE_SCRIPT: &str = "scripts/parity/system_prompt.py";
+const CAPTURE: Capture = Capture {
+    script: "scripts/parity/system_prompt.py",
+    family: &[],
+    arguments: &[],
+};
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
@@ -53,95 +58,7 @@ const ROOT: &str = "<root>";
 const DATE: &str = "<DATE>";
 const CO_AUTHOR: &str = "Co-Authored-By: Mistral Vibe <vibe@mistral.ai>";
 
-/// A difference the replay accepts, and why.
-struct Divergence {
-    /// The scenario it applies to, or `*` for every one.
-    scenario: &'static str,
-    /// A JSON pointer inside the scenario's observation, where a `*` segment
-    /// matches any one segment.
-    pointer: &'static str,
-    reason: &'static str,
-}
-
-const LEDGER: &[Divergence] = &[];
-
-fn repository() -> PathBuf {
-    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
-        .expect("the workspace root resolves")
-}
-
-fn scenarios(corpus: &Value) -> BTreeMap<String, &Value> {
-    corpus["scenarios"]
-        .as_array()
-        .expect("the corpus holds a scenario list")
-        .iter()
-        .map(|entry| {
-            (
-                entry["name"]
-                    .as_str()
-                    .expect("every scenario is named")
-                    .to_owned(),
-                entry,
-            )
-        })
-        .collect()
-}
-
-fn is_prose(value: &Value) -> bool {
-    value.as_object().is_some_and(|object| {
-        object.len() == 2 && object.contains_key("prose") && object.contains_key("sha256")
-    })
-}
-
-/// Every JSON pointer at which `port` departs from `reference`.
-fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
-    if is_prose(reference) && is_prose(port) {
-        return;
-    }
-    match (reference, port) {
-        (Value::Object(left), Value::Object(right)) => {
-            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
-            for key in keys {
-                let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
-                match (left.get(key), right.get(key)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        (Value::Array(left), Value::Array(right)) => {
-            for index in 0..left.len().max(right.len()) {
-                let child = format!("{pointer}/{index}");
-                match (left.get(index), right.get(index)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        _ if reference != port => found.push(pointer.to_owned()),
-        _ => {}
-    }
-}
-
-fn pointer_matches(pattern: &str, pointer: &str) -> bool {
-    let pattern = pattern.split('/').collect::<Vec<_>>();
-    let pointer = pointer.split('/').collect::<Vec<_>>();
-    pattern.len() == pointer.len()
-        && pattern
-            .iter()
-            .zip(&pointer)
-            .all(|(pattern, segment)| *pattern == "*" || pattern == segment)
-}
-
-fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
-    Command::new("python3")
-        .arg(repository().join(CAPTURE_SCRIPT))
-        .args(arguments)
-        .current_dir(repository())
-        .env_remove("FORCE_COLOR")
-        .output()
-        .expect("python3 runs the system prompt capture script")
-}
+const LEDGER: &[PatternDivergence] = &[];
 
 /// Replaces the scenario root, however it is spelled, with the placeholder the
 /// corpus records.
@@ -441,7 +358,7 @@ fn replay_compose(scenario: &Value) -> Value {
         .to_str()
         .and_then(|root| root.strip_prefix(r"\\?\"))
         .map_or(root.clone(), PathBuf::from);
-    let output = capture(&[
+    let output = CAPTURE.run(&[
         "--materialize".as_ref(),
         name.as_ref(),
         "--root".as_ref(),
@@ -554,22 +471,10 @@ fn replay_os(scenario: &Value) -> Value {
 /// The port's live requests, captured by the script driving this crate's
 /// `vibe`.
 fn replay_live() -> BTreeMap<String, Value> {
-    let output_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("system-prompt-live-port.json");
-    let output = capture(&[
-        "--live-binary".as_ref(),
-        env!("CARGO_BIN_EXE_vibe").as_ref(),
-        "--output".as_ref(),
-        output_path.as_os_str(),
-    ]);
-    assert!(
-        output.status.success(),
-        "the port's live capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+    let captured = CAPTURE.port(
+        &["--live-binary", env!("CARGO_BIN_EXE_vibe")],
+        &Path::new(env!("CARGO_TARGET_TMPDIR")).join("system-prompt-live-port.json"),
     );
-    let captured: Value = serde_json::from_str(
-        &std::fs::read_to_string(&output_path).expect("the live capture is readable"),
-    )
-    .expect("the live capture parses");
     scenarios(&captured)
         .into_iter()
         .map(|(name, entry)| (name, entry["observed"].clone()))
@@ -591,9 +496,7 @@ fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_th
     );
     let live = replay_live();
 
-    let mut unexplained = Vec::new();
-    let mut reproduced = vec![0_usize; LEDGER.len()];
-    let mut conformant = 0;
+    let mut tally = Tally::new(entries(LEDGER));
     for (name, reference) in &recorded {
         let scenario = &reference["scenario"];
         let family = reference["family"].as_str();
@@ -607,66 +510,15 @@ fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_th
                     .expect("the live capture holds every live scenario")
             }
         };
-        let mut found = Vec::new();
-        differences(&reference["observed"], &port, "", &mut found);
-        if found.is_empty() {
-            conformant += 1;
-        }
-        for pointer in found {
-            match LEDGER.iter().position(|entry| {
-                (entry.scenario == "*" || entry.scenario == name)
-                    && pointer_matches(entry.pointer, &pointer)
-            }) {
-                Some(index) => reproduced[index] += 1,
-                None => unexplained.push(format!(
-                    "{name} {pointer}\n  reference: {}\n  port:      {}",
-                    pointer_value(&reference["observed"], &pointer),
-                    pointer_value(&port, &pointer),
-                )),
-            }
-        }
+        let found = differences(&reference["observed"], &port, Prose::OwnWords);
+        tally.record(name, &reference["observed"], &port, found);
     }
-    let stale: Vec<&str> = LEDGER
-        .iter()
-        .zip(&reproduced)
-        .filter(|(_, count)| **count == 0)
-        .map(|(entry, _)| entry.pointer)
-        .collect();
-    println!(
-        "system prompt parity: {conformant}/{} scenarios conformant, {} ledgered differences \
-         across {} entries",
-        recorded.len(),
-        reproduced.iter().sum::<usize>(),
-        LEDGER.len()
-    );
-    assert!(
-        unexplained.is_empty(),
-        "the port departs from the corpus where no ledger entry says it may:\n{}",
-        unexplained.join("\n")
-    );
-    assert!(
-        stale.is_empty(),
-        "these ledger entries no longer reproduce and should be removed: {stale:?}"
-    );
-}
-
-fn pointer_value(value: &Value, pointer: &str) -> String {
-    value
-        .pointer(pointer)
-        .map_or_else(|| "(absent)".to_owned(), ToString::to_string)
+    tally.conclude("system prompt parity:");
 }
 
 #[test]
 fn every_ledger_entry_states_a_pointer_and_a_reason() {
-    for entry in LEDGER {
-        assert!(
-            entry.pointer.starts_with('/')
-                && !entry.reason.is_empty()
-                && !entry.scenario.is_empty(),
-            "the ledger entry for {} needs a scenario, a pointer and a reason",
-            entry.pointer
-        );
-    }
+    PatternDivergence::assert_ledger(LEDGER);
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still
@@ -674,17 +526,5 @@ fn every_ledger_entry_states_a_pointer_and_a_reason() {
 /// missing checkout from failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "system prompt") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return;
-    }
-    let output = capture(&["--check".as_ref(), "--reference".as_ref(), root.as_os_str()]);
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT}`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    CAPTURE.probe("system prompt");
 }

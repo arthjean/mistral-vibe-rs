@@ -37,11 +37,11 @@ import enum
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import OracleError, reexecute_pinned
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/src/wire_validation/schema.json"
@@ -55,44 +55,6 @@ SCHEMA_VERSION = 1
 #: Longest string the file may carry: names, aliases, patterns and literals
 #: are all shorter, and anything longer would be prose.
 MAX_CAPTURED_STRING = 120
-
-
-class OracleError(RuntimeError):
-    pass
-
-
-def resolve_reference(reference: Path, expected: str) -> str:
-    if not reference.is_dir():
-        sys.exit(f"no reference checkout at {reference}; set VIBE_REFERENCE or pass --reference")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=reference, capture_output=True, text=True, check=False
-    )
-    if result.returncode != 0:
-        raise OracleError(f"git rev-parse failed in {reference}: {result.stderr.strip()}")
-    commit = result.stdout.strip()
-    if commit != expected:
-        raise OracleError(f"reference checkout is at {commit}, not the pinned {expected}")
-    return commit
-
-
-def reexecute(reference: Path) -> None:
-    if str(reference) not in sys.path:
-        sys.path.insert(0, str(reference))
-    try:
-        import vibe.app_server.protocol  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    for candidate in (reference / ".venv/bin/python", reference / ".venv/Scripts/python.exe"):
-        if candidate.is_file():
-            completed = subprocess.run(
-                [str(candidate), __file__, *sys.argv[1:]],
-                env={**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parent)},
-                check=False,
-            )
-            raise SystemExit(completed.returncode)
-    raise OracleError(f"no interpreter can import vibe from {reference}")
 
 
 class Reducer:
@@ -469,8 +431,7 @@ def main() -> int:
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     arguments = parser.parse_args()
     try:
-        commit = resolve_reference(arguments.reference, arguments.expected_commit)
-        reexecute(arguments.reference)
+        commit, _ = reexecute_pinned(arguments.reference, arguments.expected_commit)
         payload = capture() | {"reference": {"commit": commit}}
         cases = capture_cases(payload) | {"reference": {"commit": commit}}
         outputs = [(arguments.output, rendered(payload)), (arguments.cases, compact(cases))]

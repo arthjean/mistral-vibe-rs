@@ -24,6 +24,7 @@ vibe-voice = { path = "../vibe-voice" }
 vibe-protocol = { path = "../vibe-protocol" }
 
 [dev-dependencies]
+vibe-core = { path = "../vibe-core", features = ["parity-replay"] }
 hex.workspace = true
 sha2.workspace = true
 tempfile.workspace = true

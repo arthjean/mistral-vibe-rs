@@ -1,11 +1,12 @@
-"""What Windows needs in a child environment a driver builds from scratch.
+"""The child environment a driver builds from scratch, and what Windows needs in it.
 
 A driver hands the port (or the reference) an environment reduced to the
-variables a scenario controls. On Windows that reduction also removes what the
-operating system itself reads: without ``SystemRoot`` Winsock fails to
-initialize (``WSAStartup`` error 10106), so every loopback connection fails and
-the replay measures the driver instead of the port. Executable lookup, shells,
-and temporary files need the rest of the base set.
+variables a scenario controls, starting from :func:`isolated`. On Windows that
+reduction also removes what the operating system itself reads: without
+``SystemRoot`` Winsock fails to initialize (``WSAStartup`` error 10106), so
+every loopback connection fails and the replay measures the driver instead of
+the port. Executable lookup, shells, and temporary files need the rest of the
+base set.
 
 On every other platform :func:`windows_base` adds nothing, so a Linux capture
 builds byte-for-byte the environment it built before.
@@ -49,6 +50,33 @@ def windows_base(home: str | None = None) -> dict[str, str]:
     if home is not None:
         base["USERPROFILE"] = home
     return base
+
+
+def isolated(
+    home: str | os.PathLike[str], vibe_home: str | os.PathLike[str], **variables: str
+) -> dict[str, str]:
+    """The environment a fixture child starts from.
+
+    It carries this machine's ``PATH``, the fixture homes, ``variables`` (what
+    a scenario points the child at, such as its provider), and switches that
+    keep the host out of the run: no color, a dumb terminal, CI behavior, and a
+    session bus that does not exist, so no keyring answers. A caller adds
+    anything else after these.
+    """
+
+    home = str(home)
+    return {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": home,
+        **windows_base(home),
+        "VIBE_HOME": str(vibe_home),
+        **variables,
+        "LANG": "C.UTF-8",
+        "TERM": "dumb",
+        "NO_COLOR": "1",
+        "CI": "true",
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+    }
 
 
 def remove_tree(path: str | os.PathLike[str]) -> None:

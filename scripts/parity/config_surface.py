@@ -31,7 +31,6 @@ import asyncio
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
 import tomllib
 from typing import Any
@@ -39,6 +38,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 6
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
@@ -53,87 +53,9 @@ DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
 #: profile layer, the global dotenv file and the browser sign-in origin
 #: rewrite.
 UNREACHABLE_STRATEGIES = ("conflict",)
-INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: Stands in for the machine-dependent vibe home in the captured default
 #: document, so the corpus stays identical on every workstation.
 VIBE_HOME_PLACEHOLDER = "{vibe_home}"
-
-
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, interpreter: Path | None
-) -> None:
-    """Re-runs this script under an interpreter that can import ``vibe``.
-
-    ``subprocess`` rather than ``os.execv`` because this script is also run on
-    Windows, where an exec'd process loses the parent's console exit code.
-    """
-    # The reference source tree supplies the package; an interpreter only has to
-    # supply its dependencies.
-    if str(reference) not in sys.path:
-        sys.path.insert(0, str(reference))
-    try:
-        import vibe.core.config.vibe_schema  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidates = [
-        path
-        for path in (
-            interpreter,
-            Path(os.environ[INTERPRETER_VARIABLE])
-            if os.environ.get(INTERPRETER_VARIABLE)
-            else None,
-            reference / ".venv/bin/python",
-            reference / ".venv/Scripts/python.exe",
-        )
-        if path is not None
-    ]
-    for candidate in candidates:
-        if not candidate.is_file():
-            continue
-        if Path(sys.executable).resolve() == candidate.resolve():
-            raise OracleError(f"{candidate} cannot import `vibe`")
-        result = subprocess.run(
-            [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]],
-            check=False,
-        )
-        sys.exit(result.returncode)
-    raise OracleError(
-        "cannot import `vibe` and no usable interpreter among: "
-        + ", ".join(str(path) for path in candidates)
-    )
 
 
 # --------------------------------------------------------------------------
@@ -841,9 +763,8 @@ url = "https://docs.example/mcp"
 ]
 
 
-def capture_mcp(reference: Path) -> dict[str, Any]:
+def capture_mcp() -> dict[str, Any]:
     """How the reference names, addresses and decodes an MCP entry."""
-    sys.path.insert(0, str(reference))
     os.environ[MCP_TOKEN_VARIABLE] = MCP_TOKEN_VALUE
     from pydantic import TypeAdapter, ValidationError
 
@@ -1137,8 +1058,7 @@ def _scrubbed_environment_from(environment: dict[str, str]) -> dict[str, str]:
     }
 
 
-def capture_stack(reference: Path) -> dict[str, list[dict[str, Any]]]:
-    sys.path.insert(0, str(reference))
+def capture_stack() -> dict[str, list[dict[str, Any]]]:
 
     async def run(scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
         captured = []
@@ -1277,18 +1197,16 @@ ENCODING_CASES: list[str] = [
 ]
 
 
-def capture_encoding(reference: Path) -> list[dict[str, str]]:
+def capture_encoding() -> list[dict[str, str]]:
     import tomli_w
 
-    del reference
     return [
         {"document": document, "written": tomli_w.dumps(tomllib.loads(document))}
         for document in ENCODING_CASES
     ]
 
 
-def capture_environment(reference: Path) -> list[dict[str, Any]]:
-    sys.path.insert(0, str(reference))
+def capture_environment() -> list[dict[str, Any]]:
     from vibe.core.config.layers.environment import EnvironmentLayer
     from vibe.core.config.vibe_schema import VibeConfigSchema
 
@@ -1311,8 +1229,7 @@ def capture_environment(reference: Path) -> list[dict[str, Any]]:
     return asyncio.run(run())
 
 
-def capture_agent_profiles(reference: Path) -> list[dict[str, Any]]:
-    sys.path.insert(0, str(reference))
+def capture_agent_profiles() -> list[dict[str, Any]]:
     from vibe.core.config.layers.agent_profile import AgentProfileLayer
 
     async def run() -> list[dict[str, Any]]:
@@ -1325,10 +1242,9 @@ def capture_agent_profiles(reference: Path) -> list[dict[str, Any]]:
     return asyncio.run(run())
 
 
-def capture_dotenv(reference: Path) -> list[dict[str, Any]]:
+def capture_dotenv() -> list[dict[str, Any]]:
     import tempfile
 
-    sys.path.insert(0, str(reference))
     from vibe.core.config.vibe_schema import load_dotenv_values
 
     captured = []
@@ -1342,8 +1258,7 @@ def capture_dotenv(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_origin_rewrite(reference: Path) -> list[dict[str, Any]]:
-    sys.path.insert(0, str(reference))
+def capture_origin_rewrite() -> list[dict[str, Any]]:
     from vibe.setup.auth.browser_sign_in_gateway import (
         BrowserSignInError,
         BrowserSignInErrorCode,
@@ -1373,8 +1288,7 @@ def capture_origin_rewrite(reference: Path) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
-def capture_fields(reference: Path) -> list[dict[str, Any]]:
-    sys.path.insert(0, str(reference))
+def capture_fields() -> list[dict[str, Any]]:
     from vibe.app_server._config_introspect import POPULAR_SETTINGS, classify_annotation
     from vibe.core.config.schema import MergeFieldMetadata
     from vibe.core.config.vibe_schema import VibeConfigSchema
@@ -1396,8 +1310,7 @@ def capture_fields(reference: Path) -> list[dict[str, Any]]:
     return fields
 
 
-def capture_strategy_vocabulary(reference: Path) -> dict[str, list[str]]:
-    sys.path.insert(0, str(reference))
+def capture_strategy_vocabulary() -> dict[str, list[str]]:
     from vibe.core.config.vibe_schema import VibeConfigSchema
     from vibe.core.config.schema import MergeFieldMetadata
     from vibe.core.utils.merge import MergeStrategy
@@ -1415,10 +1328,7 @@ def capture_strategy_vocabulary(reference: Path) -> dict[str, list[str]]:
     }
 
 
-async def merge_scenario(
-    reference: Path, layers: list[tuple[str, str]]
-) -> tuple[dict[str, Any], list[str]]:
-    sys.path.insert(0, str(reference))
+async def merge_scenario(layers: list[tuple[str, str]]) -> tuple[dict[str, Any], list[str]]:
     from vibe.core.config.builder import ConfigBuilder, _LayerData
     from vibe.core.config.layers.overrides import OverridesLayer
     from vibe.core.config.vibe_schema import VibeConfigSchema
@@ -1886,10 +1796,7 @@ MODEL_SCENARIOS: list[dict[str, Any]] = [
 ]
 
 
-async def validated_models(
-    reference: Path, layers: list[tuple[str, str]]
-) -> dict[str, Any]:
-    sys.path.insert(0, str(reference))
+async def validated_models(layers: list[tuple[str, str]]) -> dict[str, Any]:
     from vibe.core.config.builder import ConfigBuilder
     from vibe.core.config.layers.default import DefaultConfigLayer
     from vibe.core.config.layers.overrides import OverridesLayer
@@ -2021,10 +1928,9 @@ async def settings_rows(config: Any, layers: list[Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def capture_settings_order(reference: Path) -> list[str]:
+def capture_settings_order() -> list[str]:
     """The rows ``config/fields/read`` answers over the shipped defaults, in
     the order it lists them."""
-    sys.path.insert(0, str(reference))
     from vibe.app_server._config_introspect import (
         HIDDEN_SETTINGS,
         POPULAR_SETTINGS,
@@ -2054,8 +1960,7 @@ def capture_settings_order(reference: Path) -> list[str]:
     return asyncio.run(run())
 
 
-def capture_model_scenarios(reference: Path) -> list[dict[str, Any]]:
-    sys.path.insert(0, str(reference))
+def capture_model_scenarios() -> list[dict[str, Any]]:
     from vibe.core.config.harness_files import init_harness_files_manager
 
     # The prompt-id validators reach the harness-files singleton; it resolves
@@ -2066,7 +1971,7 @@ def capture_model_scenarios(reference: Path) -> list[dict[str, Any]]:
     async def run() -> list[dict[str, Any]]:
         captured: list[dict[str, Any]] = []
         for scenario in MODEL_SCENARIOS:
-            result = await validated_models(reference, scenario["layers"])
+            result = await validated_models(scenario["layers"])
             captured.append({
                 "name": scenario["name"],
                 "layers": [
@@ -2080,9 +1985,8 @@ def capture_model_scenarios(reference: Path) -> list[dict[str, Any]]:
     return asyncio.run(run())
 
 
-def capture_defaults(reference: Path) -> dict[str, Any]:
+def capture_defaults() -> dict[str, Any]:
     """The document ``create_default_config`` ships, minus discovered tools."""
-    sys.path.insert(0, str(reference))
     from vibe.core.paths import SESSION_LOG_DIR
     from vibe.core.config.vibe_schema import create_default_config
 
@@ -2103,11 +2007,11 @@ def capture_defaults(reference: Path) -> dict[str, Any]:
     }
 
 
-def capture_scenarios(reference: Path) -> list[dict[str, Any]]:
+def capture_scenarios() -> list[dict[str, Any]]:
     async def run() -> list[dict[str, Any]]:
         captured: list[dict[str, Any]] = []
         for scenario in SCENARIOS:
-            merged, dropped = await merge_scenario(reference, scenario["layers"])
+            merged, dropped = await merge_scenario(scenario["layers"])
             captured.append({
                 "name": scenario["name"],
                 "layers": [
@@ -2122,9 +2026,9 @@ def capture_scenarios(reference: Path) -> list[dict[str, Any]]:
     return asyncio.run(run())
 
 
-def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
-    pin = resolve_reference(reference, expected_commit)
-    vocabulary = capture_strategy_vocabulary(reference)
+def build_corpus(commit: str) -> dict[str, Any]:
+    pin = {"commit": commit}
+    vocabulary = capture_strategy_vocabulary()
     if tuple(vocabulary["unused"]) != tuple(sorted(UNREACHABLE_STRATEGIES)):
         raise OracleError(
             "unused merge strategies changed: expected "
@@ -2140,18 +2044,18 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
             "recorded here."
         ),
         "strategies": vocabulary,
-        "fields": capture_fields(reference),
-        "defaults": capture_defaults(reference),
-        "scenarios": capture_scenarios(reference),
-        "modelScenarios": capture_model_scenarios(reference),
-        "settingsOrder": capture_settings_order(reference),
-        "mcp": capture_mcp(reference),
-        "stack": capture_stack(reference),
-        "environment": capture_environment(reference),
-        "agentProfiles": capture_agent_profiles(reference),
-        "dotenv": capture_dotenv(reference),
-        "originRewrite": capture_origin_rewrite(reference),
-        "encoding": capture_encoding(reference),
+        "fields": capture_fields(),
+        "defaults": capture_defaults(),
+        "scenarios": capture_scenarios(),
+        "modelScenarios": capture_model_scenarios(),
+        "settingsOrder": capture_settings_order(),
+        "mcp": capture_mcp(),
+        "stack": capture_stack(),
+        "environment": capture_environment(),
+        "agentProfiles": capture_agent_profiles(),
+        "dotenv": capture_dotenv(),
+        "originRewrite": capture_origin_rewrite(),
+        "encoding": capture_encoding(),
     }
 
 
@@ -2173,11 +2077,12 @@ def main() -> int:
     arguments = parser.parse_args()
 
     try:
-        reexecute_with_reference_interpreter(arguments.reference, arguments.interpreter)
-        corpus = build_corpus(
+        commit, _ = reexecute_pinned(
             arguments.reference,
             None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            override=arguments.interpreter,
         )
+        corpus = build_corpus(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

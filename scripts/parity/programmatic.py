@@ -51,8 +51,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -73,11 +74,7 @@ DURATION_KEYS = {"durationMs"}
 #: and are kept whatever the sentence after them says.
 STDERR_PREFIXES = ("Error: ", "Warning: ", "Teleport error: ")
 STOP_TAG = re.compile(r"^<vibe_stop_event>(.*)</vibe_stop_event>$", re.DOTALL)
-UUID = acp.UUID
-
-
-class OracleError(RuntimeError):
-    pass
+UUID = blackbox.UUID
 
 
 # --------------------------------------------------------------------------
@@ -141,7 +138,7 @@ class Backend:
                 model = str(body.get("model", "model"))
                 payload = b"".join(
                     b"data: " + json.dumps(item).encode() + b"\n\n"
-                    for item in acp.completion_chunks(response, model)
+                    for item in blackbox.completion_chunks(response, model)
                 ) + b"data: [DONE]\n\n"
                 self.send_response(200)
                 self.send_header("content-type", "text/event-stream")
@@ -569,7 +566,7 @@ def compose_config(scenario: dict[str, Any], backend: Backend) -> str:
         return line.split("=", 1)[0].strip()
 
     own_top, own_tables = split(scenario.get("config", "").replace("$BACKEND", backend.base))
-    shared_top, shared_tables = split(acp.base_config(backend))
+    shared_top, shared_tables = split(blackbox.base_config(backend))
     named = {key(line) for line in own_top if "=" in line}
     kept = [line for line in shared_top if "=" not in line or key(line) not in named]
     return "".join(own_top + kept) + shared_tables + ("\n" + own_tables if own_tables else "")
@@ -672,18 +669,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]
         backend.whoami = scenario.get("whoami")
         write_tree(world.workspace, scenario.get("files", {}))
         write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
-        env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(world.home),
-            **host_env.windows_base(str(world.home)),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": "oracle-key",
-            "LANG": "C.UTF-8",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
-        }
+        env = host_env.isolated(world.home, world.vibe_home, MISTRAL_API_KEY="oracle-key")
         for key, value in scenario.get("env", {}).items():
             if value is None:
                 env.pop(key, None)
@@ -721,7 +707,7 @@ def digest(value: str) -> dict[str, Any]:
 
 class Normalizer:
     def __init__(self, scenario: dict[str, Any], paths: dict[str, str]) -> None:
-        self.authored = acp.authored_strings(scenario)
+        self.authored = blackbox.authored_strings(scenario)
         self.paths = sorted(
             (
                 (spelling, placeholder)
@@ -753,7 +739,7 @@ class Normalizer:
             if len(original) >= 8:
                 value = value.replace(original, placeholder)
         value = UUID.sub(lambda match: self.identity(match.group(0)), value)
-        value = acp.APPROX_CHARS.sub(r"\1<n>", value)
+        value = blackbox.APPROX_CHARS.sub(r"\1<n>", value)
         return value
 
     def prose(self, value: str) -> Any:
@@ -940,7 +926,7 @@ def main() -> int:
             reference = {"commit": "binary-override"}
             dialect = "port"
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
@@ -981,10 +967,10 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
-    except (OracleError, acp.OracleError, subprocess.TimeoutExpired) as error:
+    except (OracleError, subprocess.TimeoutExpired) as error:
         print(f"programmatic capture failed: {error}", file=sys.stderr)
         return 1
     return 0

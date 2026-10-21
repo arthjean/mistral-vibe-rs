@@ -83,28 +83,21 @@ import logging
 import os
 from pathlib import Path
 import platform
-import shutil
 import socket
-import subprocess
 import sys
-import tarfile
 import tempfile
 from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, RESTORE_COMMAND
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path(".parity/experiments-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/experiments/corpus.json")
 DEFAULT_PROMO_CORPUS = Path("crates/vibe-cli/tests/promo/corpus.json")
 DEFAULT_STARTUP_CORPUS = Path("crates/vibe-app-server/tests/experiments/corpus.json")
-DEFAULT_CACHE = Path(".parity")
-
-#: Set on the re-executed process so it does not extract and re-exec forever.
-_REEXEC_MARKER = "VIBE_PARITY_PINNED_TREE"
-
 #: Stands in for the platform identifier, which differs per workstation. The
 #: replay substitutes what its own host answers before comparing.
 PLATFORM_ID_PLACEHOLDER = "{platformId}"
@@ -131,126 +124,6 @@ SENTINELS: dict[str, str] = {
 #: Named but deliberately left unset, so the "no credential" branch is reached
 #: through a variable the corpus can name.
 UNSET_VARIABLES = ("ORACLE_ABSENT_KEY",)
-
-
-class OracleError(RuntimeError):
-    """Raised when a corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def _git(reference: Path, *arguments: str) -> str:
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git {' '.join(arguments)} failed in {reference}: {result.stderr.strip()}"
-        )
-    return result.stdout.strip()
-
-
-def resolve_reference(reference: Path, expected: str) -> dict[str, str]:
-    """The pinned commit, read out of the checkout without depending on its HEAD.
-
-    Everything downstream reads the pinned tree through ``git archive``, so a
-    checkout parked on another revision is still an oracle as long as it holds
-    the commit. A checkout that is absent, unreadable or missing the pin is not,
-    and the refusal happens here, before a byte of any corpus is written.
-    """
-
-    if not reference.is_dir():
-        raise OracleError(
-            f"no reference checkout at {reference}; set VIBE_REFERENCE or pass --reference"
-        )
-    try:
-        _git(reference, "cat-file", "-e", f"{expected}^{{commit}}")
-    except OracleError as error:
-        raise OracleError(
-            f"{reference} does not contain the pinned commit {expected}: {error}. "
-            f"Restore it with `{RESTORE_COMMAND}`"
-        ) from error
-    return {"commit": expected, "path": str(reference)}
-
-
-def extract_pinned_tree(reference: Path, commit: str, cache: Path) -> Path:
-    """The pinned source tree, materialized out of tree and reused across runs.
-
-    Two Rust probes drive this script, one per crate, and `cargo test` may run
-    them at the same time. The extraction therefore lands in a per-process
-    directory and is moved into place at the end, so a concurrent run reads a
-    complete tree or builds its own rather than importing a half-written one.
-    """
-
-    tree = (cache / f"reference-{commit[:12]}").resolve()
-    marker = Path("vibe") / "__init__.py"
-    if (tree / marker).is_file():
-        return tree
-    staged = tree.with_name(f"{tree.name}.{os.getpid()}.partial")
-    staged.mkdir(parents=True, exist_ok=True)
-    archive = staged.with_suffix(".tar")
-    _git(reference, "archive", "--format=tar", "-o", str(archive), commit)
-    with tarfile.open(archive) as bundle:
-        bundle.extractall(staged, filter="data")
-    archive.unlink(missing_ok=True)
-    if not (staged / marker).is_file():
-        raise OracleError(f"the extracted tree at {staged} carries no `vibe` package")
-    try:
-        staged.rename(tree)
-    except OSError:
-        # Another run finished first, which is the only way the destination
-        # exists by now. Its tree is the same commit, so theirs wins.
-        shutil.rmtree(staged, ignore_errors=True)
-    if not (tree / marker).is_file():
-        raise OracleError(f"the extracted tree at {tree} carries no `vibe` package")
-    return tree
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, override: Path | None, tree: Path
-) -> None:
-    """Re-runs this script under an interpreter importing the *pinned* tree."""
-
-    if os.environ.get(_REEXEC_MARKER) == str(tree):
-        if not _imports_pinned_vibe(tree):
-            raise OracleError(
-                f"the reference interpreter did not import `vibe` from {tree}"
-            )
-        return
-    candidates = [override] if override else []
-    candidates += [
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    interpreter = next((c for c in candidates if c and c.is_file()), None)
-    if interpreter is None:
-        raise OracleError(
-            f"no interpreter can import `vibe`; looked for a virtual environment in {reference}"
-        )
-    environment = dict(os.environ)
-    environment[_REEXEC_MARKER] = str(tree)
-    environment["PYTHONPATH"] = os.pathsep.join(
-        [
-            str(tree),
-            *([environment["PYTHONPATH"]] if environment.get("PYTHONPATH") else []),
-        ]
-    )
-    os.execve(str(interpreter), [str(interpreter), *sys.argv], environment)
-
-
-def _imports_pinned_vibe(tree: Path) -> bool:
-    try:
-        import vibe
-    except Exception:
-        return False
-    return Path(vibe.__file__).resolve().is_relative_to(tree.resolve())
 
 
 # --------------------------------------------------------------------------
@@ -2219,11 +2092,6 @@ def capture_promo_prose() -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------
-# Assembly
-# --------------------------------------------------------------------------
-
-
-# --------------------------------------------------------------------------
 # surfaces
 # --------------------------------------------------------------------------
 
@@ -3141,13 +3009,13 @@ def write_json(path: Path, document: dict[str, Any]) -> None:
 def main() -> int:
     arguments = parse_arguments()
     try:
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        pinned = extract_pinned_tree(
-            arguments.reference, reference["commit"], arguments.cache
+        commit, _ = reexecute_pinned(
+            arguments.reference,
+            arguments.expected_commit,
+            cache=arguments.cache,
+            override=arguments.python,
         )
-        reexecute_with_reference_interpreter(
-            arguments.reference, arguments.python, pinned
-        )
+        reference = {"commit": commit, "path": str(arguments.reference)}
         install_sentinels()
         GUARD.install()
         with tempfile.TemporaryDirectory(prefix="experiments-oracle-") as scratch_name:

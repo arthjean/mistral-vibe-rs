@@ -41,7 +41,6 @@ import copy
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import sys
 import tempfile
@@ -50,10 +49,20 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
-import rewind  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
+from hook_recorder import (  # noqa: E402
+    answer,
+    hook,
+    host_commands,
+    host_recorder,
+    write_hooks,
+    write_responses,
+)
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+from subagent_client import Backend, Normalizer, transcript  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/hooks-parity/corpus.json"
@@ -61,81 +70,8 @@ SCHEMA_VERSION = 1
 
 QUIET_SECONDS = 0.5
 
-#: The recorder every hook command runs. It is this script's own code: it
-#: appends the invocation to `stdin/<name>.jsonl` and answers with the entry of
-#: `responses/<name>.json` at the index of that invocation, the last entry
-#: repeating once the list runs out.
-RECORDER = r'''
-import fcntl, json, os, sys, time
-name = sys.argv[1]
-root = os.path.dirname(os.path.abspath(__file__))
-data = sys.stdin.buffer.read()
-os.makedirs(os.path.join(root, "stdin"), exist_ok=True)
-with open(os.path.join(root, "stdin", name + ".jsonl"), "ab+") as log:
-    fcntl.flock(log, fcntl.LOCK_EX)
-    log.seek(0)
-    index = log.read().count(b"\n")
-    log.write(data + b"\n")
-try:
-    with open(os.path.join(root, "responses", name + ".json"), encoding="utf-8") as spec:
-        responses = json.load(spec)
-except FileNotFoundError:
-    responses = [{}]
-answer = responses[min(index, len(responses) - 1)]
-if answer.get("sleep"):
-    time.sleep(answer["sleep"])
-    # Only a hook that outlived its wait gets here: a killed one never does.
-    with open(os.path.join(root, "finished.log"), "a", encoding="utf-8", newline="") as finished:
-        finished.write(name + "\n")
-sys.stdout.write(answer.get("stdout", ""))
-sys.stderr.write(answer.get("stderr", ""))
-sys.stdout.flush()
-sys.stderr.flush()
-sys.exit(answer.get("exit", 0))
-'''
-
-
-def host_recorder() -> str:
-    """The recorder as this host runs it.
-
-    Windows has no ``fcntl`` and writes text streams through the console code
-    page with CRLF line endings, so there the recorder locks with ``msvcrt``
-    and answers in UTF-8 bytes. Elsewhere it is :data:`RECORDER`.
-    """
-
-    if os.name != "nt":
-        return RECORDER
-    return (
-        RECORDER.replace(
-            "import fcntl, json, os, sys, time",
-            "import json, msvcrt, os, sys, time",
-        )
-        .replace(
-            "    fcntl.flock(log, fcntl.LOCK_EX)\n",
-            "    log.seek(0)\n    msvcrt.locking(log.fileno(), msvcrt.LK_LOCK, 1)\n",
-        )
-        .replace(
-            'sys.stdout.write(answer.get("stdout", ""))\nsys.stderr.write(answer.get("stderr", ""))',
-            'sys.stdout.buffer.write(answer.get("stdout", "").encode("utf-8"))\n'
-            'sys.stderr.buffer.write(answer.get("stderr", "").encode("utf-8"))',
-        )
-    )
-
-
-def host_commands(text: str) -> str:
-    """Hook configuration whose ``python3`` is this interpreter on Windows.
-
-    A Windows ``python3`` is often the Store alias, which prints to the hook's
-    output or installs an interpreter instead of running the recorder.
-    """
-
-    if os.name != "nt" or " " in sys.executable:
-        return text
-    return text.replace("'python3 ", f"'{sys.executable} ")
-
-
 #: Transcript keys whose values are identities.
-ID_KEYS = rewind.ID_KEYS | {"tool_call_id", "session_id", "parent_session_id"}
+ID_KEYS = app_server_client.ID_KEYS | {"tool_call_id", "session_id", "parent_session_id"}
 
 
 # --------------------------------------------------------------------------
@@ -143,100 +79,15 @@ ID_KEYS = rewind.ID_KEYS | {"tool_call_id", "session_id", "parent_session_id"}
 # --------------------------------------------------------------------------
 
 
-class Backend(rewind.RecordingBackend):
-    """The recording stand-in, also answering a non-streaming request with the
-    tool calls its scripted response holds.
-
-    The reference runs a subagent's loop without streaming, and the shared
-    stand-in serves only text that way, so a child could never call a tool.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        handler = self.server.RequestHandlerClass
-        backend = self
-        streaming = handler.do_POST
-
-        def do_post(self: Any) -> None:
-            length = int(self.headers.get("content-length") or 0)
-            raw = self.rfile.read(length) if length else b""
-            try:
-                body = json.loads(raw or b"{}")
-            except json.JSONDecodeError:
-                body = {}
-            with backend.lock:
-                scripted = backend.responses[0] if backend.responses else {}
-                answers = not body.get("stream") and bool(scripted.get("toolCalls"))
-                if answers:
-                    backend.responses.pop(0)
-                    backend.requests += 1
-                    backend.conversations.append(rewind.conversation(body.get("messages", [])))
-                    backend.bodies.append(body)
-            if not answers:
-                # The body is handed back, and the socket after it.
-                stream = self.rfile
-                self.rfile = rewind._Replay(raw, stream)
-                try:
-                    streaming(self)
-                finally:
-                    self.rfile = stream
-                return
-            message = {
-                "role": "assistant",
-                "content": scripted.get("text") or "",
-                "tool_calls": [
-                    {
-                        "id": call.get("id", f"call_{index}"),
-                        "type": "function",
-                        "function": {"name": call["name"], "arguments": json.dumps(call.get("arguments", {}))},
-                    }
-                    for index, call in enumerate(scripted["toolCalls"])
-                ],
-            }
-            self.reply(200, {
-                "id": "cmpl-oracle",
-                "object": "chat.completion",
-                "created": 1_700_000_000,
-                "model": str(body.get("model", "model")),
-                "choices": [{"index": 0, "message": message, "finish_reason": "tool_calls"}],
-                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-            })
-
-        handler.do_POST = do_post
-
-
-def write_hooks(session: rewind.Session, hooks: dict[str, str]) -> None:
-    world = session.world
-    targets = {
-        "project": world.workspace / ".vibe/hooks.toml",
-        "user": world.vibe_home / "hooks.toml",
-    }
-    for where, text in hooks.items():
-        target = targets[where]
-        if text is None:
-            if target.exists():
-                target.unlink()
-            continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(host_commands(session.substitute(text)), encoding="utf-8", newline="")
-
-
-def write_responses(root: Path, responses: dict[str, list[dict[str, Any]]]) -> None:
-    directory = root / "responses"
-    directory.mkdir(parents=True, exist_ok=True)
-    for name, answers in responses.items():
-        (directory / f"{name}.json").write_text(json.dumps(answers), encoding="utf-8", newline="")
-
-
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend()
     root = Path(tempfile.mkdtemp(prefix="vibe-hooks-oracle-")).resolve()
-    session = rewind.Session(root)
+    session = app_server_client.Session(root)
     world = session.world
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         (world.vibe_home / "config.toml").write_text(
-            rewind.base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
+            app_server_client.base_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
         )
         if scenario.get("trusted", True):
             (world.vibe_home / "trusted_folders.toml").write_text(
@@ -244,32 +95,25 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
                 encoding="utf-8",
                 newline="",
             )
-        acp.write_tree(world.workspace, scenario.get("files", {}))
+        blackbox.write_tree(world.workspace, scenario.get("files", {}))
         for relative, text in scenario.get("rootFiles", {}).items():
-            acp.write_tree(root, {relative: host_commands(session.substitute(text))})
+            blackbox.write_tree(root, {relative: host_commands(session.substitute(text))})
         (root / "hook.py").write_text(host_recorder(), encoding="utf-8", newline="")
         write_responses(root, scenario.get("responses", {}))
         write_hooks(session, scenario.get("hooks", {}))
-        env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(world.home),
-            **host_env.windows_base(str(world.home)),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": "oracle-key",
-            "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-            "LANG": "C.UTF-8",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
-        }
-        server = rewind.Server(command, env, world.workspace, {}, world)
+        env = host_env.isolated(
+            world.home,
+            world.vibe_home,
+            MISTRAL_API_KEY="oracle-key",
+            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+        )
+        server = app_server_client.Server(command, env, world.workspace, {}, world)
         steps: list[dict[str, Any]] = []
         try:
             run_steps(scenario, server, session, backend, steps, quiet)
             # Long enough for a hook nobody killed to finish its wait.
             time.sleep(scenario.get("linger", 0))
-        except rewind.OracleError as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             server.stop()
@@ -315,37 +159,7 @@ def recorded_stdin(root: Path) -> dict[str, list[Any]]:
     return found
 
 
-def transcript(messages: list[Any]) -> list[dict[str, Any]]:
-    """The conversation a request sends, the system prompt aside."""
-
-    turns: list[dict[str, Any]] = []
-    for message in messages:
-        if not isinstance(message, dict) or message.get("role") == "system":
-            continue
-        content = message.get("content")
-        if isinstance(content, list):
-            content = "".join(
-                part.get("text", "") for part in content if isinstance(part, dict)
-            )
-        entry: dict[str, Any] = {"role": message.get("role"), "content": content or ""}
-        if message.get("tool_calls"):
-            # A request nests the call under `function`; the port's own
-            # `messages.jsonl` does not, a layout row 16 answers for.
-            entry["toolCalls"] = [
-                {
-                    "id": call.get("id"),
-                    "name": call.get("function", call).get("name"),
-                    "arguments": call.get("function", call).get("arguments"),
-                }
-                for call in message["tool_calls"]
-            ]
-        if message.get("tool_call_id") or message.get("call_id"):
-            entry["toolCallId"] = message.get("tool_call_id") or message.get("call_id")
-        turns.append(entry)
-    return turns
-
-
-def persisted(world: acp.World) -> list[Any]:
+def persisted(world: blackbox.World) -> list[Any]:
     """The messages every session wrote to its `messages.jsonl`, in the order
     the sessions were created."""
 
@@ -371,9 +185,9 @@ def persisted(world: acp.World) -> list[Any]:
 
 def run_steps(
     scenario: dict[str, Any],
-    server: rewind.Server,
-    session: rewind.Session,
-    backend: rewind.RecordingBackend,
+    server: app_server_client.Server,
+    session: app_server_client.Session,
+    backend: app_server_client.RecordingBackend,
     steps: list[dict[str, Any]],
     quiet: float,
 ) -> None:
@@ -403,7 +217,7 @@ def run_steps(
             # The turn is left running until an `interrupt` step ends it.
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": rewind.render_turn("reference", target, step["turn"])})
+                         "params": app_server_client.render_turn("reference", target, step["turn"])})
             time.sleep(step.get("settle", 1.0))
             pending = server.collect(None, quiet)
             for message in pending:
@@ -416,7 +230,7 @@ def run_steps(
             turn_id = ((started.get("params") or {}).get("turn") or {}).get("id")
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/interrupt",
                          "params": {"sessionId": session.substitute("$S1"), "expectedTurnId": turn_id}})
-            observed = pending + server.wait_for(rewind.settles({}))
+            observed = pending + server.wait_for(app_server_client.settles({}))
             observed += server.collect(None, quiet)
             for message in observed:
                 session.learn(message)
@@ -426,8 +240,8 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": rewind.render_turn("reference", target, step["turn"])})
-            observed = server.wait_for(rewind.settles({}))
+                         "params": app_server_client.render_turn("reference", target, step["turn"])})
+            observed = server.wait_for(app_server_client.settles({}))
             observed += server.collect(None, quiet)
             for message in observed:
                 session.learn(message)
@@ -440,7 +254,7 @@ def run_steps(
             write_responses(world.root, step["responses"])
             continue
         if "write" in step:
-            acp.write_tree(world.workspace, step["write"])
+            blackbox.write_tree(world.workspace, step["write"])
             continue
         if "persisted" in step:
             steps.append({"persisted": persisted(world)})
@@ -466,46 +280,6 @@ def run_steps(
 # --------------------------------------------------------------------------
 
 
-#: A subagent's log directory under its parent's, ending in eight hex digits
-#: of its identifier.
-CHILD_DIRECTORY = re.compile(r"(/agents/[A-Za-z0-9_-]+_<time>_)[0-9a-f]{8}")
-
-
-class Normalizer(rewind.Normalizer):
-    def text(self, value: str) -> str:
-        return CHILD_DIRECTORY.sub(r"\1<short>", super().text(value))
-
-    def value(self, value: Any, key: str | None = None) -> Any:
-        if key == "duration_ms" and isinstance(value, int | float):
-            return "<duration>"
-        if key in HOOK_ID_KEYS and isinstance(value, str) and value:
-            if value in self.authored:
-                return value
-            return self.identity(value)
-        if isinstance(value, str) and value.startswith(TOML_FAILURE):
-            # The TOML reader's own words are the library's, not the hook
-            # contract's (the ledger row on library error text).
-            return TOML_FAILURE + "<toml-error>"
-        return super().value(value, key)
-
-    def collect_ids(self, value: Any, key: str | None = None) -> None:
-        if key in HOOK_ID_KEYS and isinstance(value, str) and value:
-            if value not in self.authored:
-                self.identity(value)
-            return
-        if isinstance(value, dict):
-            for name, item in sorted(value.items()):
-                self.collect_ids(item, name)
-            return
-        super().collect_ids(value, key)
-
-
-#: The identifiers a hook invocation carries under its own snake_case keys.
-HOOK_ID_KEYS = {"tool_call_id", "session_id", "parent_session_id"}
-
-#: How a hook file that is not TOML is reported, before the reader's message.
-TOML_FAILURE = "Failed to parse: "
-
 #: Notification fields that count or date events, which every other part of
 #: the server moves.
 DROPPED = {"emittedAt", "eventId"}
@@ -515,7 +289,7 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any]:
     params = {k: v for k, v in (message.get("params") or {}).items() if k not in DROPPED}
     for operation in params.get("patch") or []:
         # A patch that stamps a time names the key in its path.
-        if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in rewind.TIME_KEYS:
+        if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS:
             operation["value"] = "<time>"
     return {"method": message.get("method"), "params": params}
 
@@ -602,25 +376,6 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
 
 def call(name: str, arguments: dict[str, Any], identifier: str) -> dict[str, Any]:
     return {"id": identifier, "name": name, "arguments": arguments}
-
-
-def hook(name: str, kind: str, recorder: str | None = None, **extra: Any) -> str:
-    """One `[[hooks]]` entry running the recorder under `recorder` (the hook's
-    own name by default)."""
-
-    lines = [
-        "[[hooks]]",
-        f"name = {json.dumps(name)}",
-        f"type = {json.dumps(kind)}",
-        f"command = 'python3 \"$ROOT/hook.py\" {recorder or name}'",
-    ]
-    for key, value in extra.items():
-        lines.append(f"{key} = {json.dumps(value)}")
-    return "\n".join(lines) + "\n\n"
-
-
-def answer(**fields: Any) -> dict[str, Any]:
-    return {"stdout": json.dumps(fields)}
 
 
 SILENT: dict[str, Any] = {}
@@ -1140,10 +895,10 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
-                raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
+                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
             command = [str(binary), *HARNESS_FLAGS]
         selected = [
             scenario
@@ -1185,15 +940,15 @@ def main() -> int:
                 if by_name.get(entry["name"], {}).get("observed") != entry["observed"]
             ]
             if differing:
-                raise rewind.OracleError("a fresh capture differs for " + ", ".join(differing))
+                raise OracleError("a fresh capture differs for " + ", ".join(differing))
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (rewind.OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"hooks oracle: {error}", file=sys.stderr)
         return 1
 

@@ -32,9 +32,7 @@ from __future__ import annotations
 import argparse
 import enum
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 import types
 import typing
@@ -42,13 +40,13 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
+from reference import OracleError, reexecute_pinned
 
 #: 2 since v2.25.7: a declared method may carry no model (``null`` params and
 #: response), which ``shell/interrupt`` does once its models were deleted.
 SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-app-server/tests/app-server-surface/corpus.json")
-INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: Longest string the corpus may carry. A name, alias, pointer or enum value is
 #: far shorter; anything longer would be prose, which ``NOTICE`` forbids.
 MAX_CAPTURED_STRING = 200
@@ -58,83 +56,6 @@ NOTE = (
     "Names, aliases, required flags, type kinds, enum values and discriminator "
     "values only: no reference-authored prose."
 )
-
-
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected_commit: str) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, interpreter: Path | None
-) -> None:
-    """Re-runs this script under an interpreter that can import ``vibe``.
-
-    ``subprocess`` rather than ``os.execv`` because this script is also run on
-    Windows, where an exec'd process loses the parent's console exit code.
-    """
-    # The reference source tree supplies the package; an interpreter only has to
-    # supply its dependencies.
-    if str(reference) not in sys.path:
-        sys.path.insert(0, str(reference))
-    try:
-        import vibe.app_server.protocol  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidates = [
-        path
-        for path in (
-            interpreter,
-            Path(os.environ[INTERPRETER_VARIABLE])
-            if os.environ.get(INTERPRETER_VARIABLE)
-            else None,
-            reference / ".venv/bin/python",
-            reference / ".venv/Scripts/python.exe",
-        )
-        if path is not None
-    ]
-    for candidate in candidates:
-        if not candidate.is_file():
-            continue
-        if Path(sys.executable).resolve() == candidate.resolve():
-            raise OracleError(f"{candidate} cannot import `vibe`")
-        result = subprocess.run(
-            [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]],
-            check=False,
-        )
-        sys.exit(result.returncode)
-    raise OracleError(
-        "cannot import `vibe` and no usable interpreter among: "
-        + ", ".join(str(path) for path in candidates)
-    )
 
 
 # --------------------------------------------------------------------------
@@ -969,9 +890,8 @@ def main() -> int:
 
     reference = arguments.reference.expanduser()
     try:
-        pin = resolve_reference(reference, EXPECTED_COMMIT)
-        reexecute_with_reference_interpreter(reference, arguments.interpreter)
-        corpus = capture(pin["commit"])
+        commit, _ = reexecute_pinned(reference, override=arguments.interpreter)
+        corpus = capture(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

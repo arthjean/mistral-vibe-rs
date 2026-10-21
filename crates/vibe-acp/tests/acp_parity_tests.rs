@@ -27,27 +27,31 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::replay::{
+    Capture, Entry, Prose, Tally, differences, entries, pinned_reference, scenarios, scorecard_rows,
+};
 
 /// The corpora, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("acp-parity/corpus.json");
 const UNIFIED_CORPUS: &str = include_str!("acp-parity/unified-corpus.json");
 
-/// Each backend the capture script drives, with the corpus it recorded there.
-const HARNESSES: [(&str, &str, &str); 2] = [
-    ("legacy", CORPUS, "acp-parity/corpus.json"),
-    ("unified", UNIFIED_CORPUS, "acp-parity/unified-corpus.json"),
-];
+/// The script's two families, one per backend.
+const LEGACY: Capture = Capture {
+    script: "scripts/parity/acp.py",
+    family: &["--harness", "legacy"],
+    arguments: JOBS,
+};
+const UNIFIED: Capture = Capture {
+    script: "scripts/parity/acp.py",
+    family: &["--harness", "unified"],
+    arguments: JOBS,
+};
 
 /// The scorecard the ledger's `row` values point into.
 const SCORECARD: &str = include_str!("../../../docs/parity.md");
-
-const CAPTURE_SCRIPT: &str = "scripts/parity/acp.py";
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
@@ -56,7 +60,7 @@ const ARGV_FLOOR: usize = 23;
 
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and agent process.
-const JOBS: &str = "6";
+const JOBS: &[&str] = &["--jobs", "6"];
 
 /// A difference this port keeps, and the row of `docs/parity.md` that
 /// answers for it.
@@ -66,6 +70,24 @@ struct Divergence {
     pointer: &'static str,
     row: &'static str,
     reason: &'static str,
+}
+
+impl Entry for Divergence {
+    fn covers(&self, scenario: &str, pointer: &str) -> bool {
+        self.scenario == scenario
+            && (pointer == self.pointer
+                || pointer
+                    .strip_prefix(self.pointer)
+                    .is_some_and(|rest| rest.starts_with('/')))
+    }
+
+    fn label(&self) -> String {
+        self.pointer.to_owned()
+    }
+
+    fn scenarios(&self) -> &[&str] {
+        std::slice::from_ref(&self.scenario)
+    }
 }
 
 const LEDGER: &[Divergence] = &[
@@ -87,94 +109,17 @@ const LEDGER: &[Divergence] = &[
     },
 ];
 
-fn repository() -> PathBuf {
-    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
-        .expect("the workspace root resolves")
-}
-
-fn scenarios(corpus: &Value) -> BTreeMap<String, &Value> {
-    corpus["scenarios"]
-        .as_array()
-        .expect("the corpus holds a scenario list")
-        .iter()
-        .map(|entry| {
-            (
-                entry["name"]
-                    .as_str()
-                    .expect("every scenario is named")
-                    .to_owned(),
-                entry,
-            )
-        })
-        .collect()
-}
-
-fn is_prose(value: &Value) -> bool {
-    value.as_object().is_some_and(|object| {
-        object.len() == 2 && object.contains_key("prose") && object.contains_key("sha256")
-    })
-}
-
-/// Every JSON pointer at which `port` departs from `reference`.
-fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
-    if is_prose(reference) && is_prose(port) {
-        return;
-    }
-    match (reference, port) {
-        (Value::Object(left), Value::Object(right)) => {
-            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
-            for key in keys {
-                let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
-                match (left.get(key), right.get(key)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        (Value::Array(left), Value::Array(right)) => {
-            for index in 0..left.len().max(right.len()) {
-                let child = format!("{pointer}/{index}");
-                match (left.get(index), right.get(index)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        _ if reference != port => found.push(pointer.to_owned()),
-        _ => {}
-    }
-}
-
-fn covers(entry: &Divergence, scenario: &str, pointer: &str) -> bool {
-    entry.scenario == scenario
-        && (pointer == entry.pointer
-            || pointer
-                .strip_prefix(entry.pointer)
-                .is_some_and(|rest| rest.starts_with('/')))
-}
-
-fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
-    Command::new("python3")
-        .arg(repository().join(CAPTURE_SCRIPT))
-        .args(arguments)
-        .args(["--jobs", JOBS])
-        .current_dir(repository())
-        .env_remove("FORCE_COLOR")
-        .output()
-        .expect("python3 runs the ACP capture script")
-}
-
 #[test]
 fn the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    replay(CORPUS, "legacy");
+    replay(CORPUS, &LEGACY, "legacy");
 }
 
 #[test]
 fn the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    replay(UNIFIED_CORPUS, "unified");
+    replay(UNIFIED_CORPUS, &UNIFIED, "unified");
 }
 
-fn replay(corpus: &str, harness: &str) {
+fn replay(corpus: &str, capture: &Capture, harness: &str) {
     let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     assert!(
@@ -183,25 +128,10 @@ fn replay(corpus: &str, harness: &str) {
         recorded.len()
     );
 
-    let output_path =
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("acp-parity-port-{harness}.json"));
-    let output = capture(&[
-        "--harness".as_ref(),
-        harness.as_ref(),
-        "--agent".as_ref(),
-        env!("CARGO_BIN_EXE_vibe-acp").as_ref(),
-        "--output".as_ref(),
-        output_path.as_os_str(),
-    ]);
-    assert!(
-        output.status.success(),
-        "the port capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+    let replayed = capture.port(
+        &["--agent", env!("CARGO_BIN_EXE_vibe-acp")],
+        &Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("acp-parity-port-{harness}.json")),
     );
-    let replayed: Value = serde_json::from_str(
-        &std::fs::read_to_string(&output_path).expect("the port capture is readable"),
-    )
-    .expect("the port capture parses");
     // The command line answers before any scenario runs, and nothing about it
     // is ledgered: every vector exits the way the reference's argparse does.
     let argv = corpus["argv"]
@@ -212,86 +142,34 @@ fn replay(corpus: &str, harness: &str) {
         "the corpus holds {} argument vectors, below the floor of {ARGV_FLOOR}",
         argv.len()
     );
-    let mut argv_differences = Vec::new();
-    differences(
-        &corpus["argv"],
-        &replayed["argv"],
-        "/argv",
-        &mut argv_differences,
-    );
+    let argv_differences: Vec<String> =
+        differences(&corpus["argv"], &replayed["argv"], Prose::OwnWords)
+            .into_iter()
+            .map(|pointer| format!("/argv{pointer}"))
+            .collect();
     assert!(
         argv_differences.is_empty(),
         "the command line departs from the corpus at {argv_differences:?}"
     );
-    let replayed = scenarios(&replayed);
-    assert_eq!(
-        recorded.keys().collect::<Vec<_>>(),
-        replayed.keys().collect::<Vec<_>>(),
-        "the capture script declares other scenarios than the corpus records; recapture the \
-         reference with `{CAPTURE_SCRIPT}`"
-    );
 
-    let mut unexplained = Vec::new();
-    let mut reproduced = vec![0_usize; LEDGER.len()];
-    let mut conformant = 0;
-    for (name, reference) in &recorded {
-        let port = replayed[name];
-        assert_eq!(
-            reference["scenario"], port["scenario"],
-            "the capture script changed scenario {name} since the corpus was recorded; \
-             recapture the reference with `{CAPTURE_SCRIPT}`"
-        );
-        let mut found = Vec::new();
-        differences(&reference["observed"], &port["observed"], "", &mut found);
-        if found.is_empty() {
-            conformant += 1;
-        }
-        for pointer in found {
-            match LEDGER
-                .iter()
-                .position(|entry| covers(entry, name, &pointer))
-            {
-                Some(index) => reproduced[index] += 1,
-                None => unexplained.push(format!("{name} {pointer}")),
-            }
-        }
-    }
-    let stale: Vec<String> = LEDGER
-        .iter()
-        .zip(&reproduced)
-        .filter(|(_, count)| **count == 0)
-        .map(|(entry, _)| format!("{} {}", entry.scenario, entry.pointer))
-        .collect();
-    println!(
-        "acp parity ({harness}): {}/{} argument vectors and {conformant}/{} scenarios \
-         conformant, {} ledgered differences across {} entries",
+    let mut tally = Tally::new(entries(LEDGER));
+    tally.compare(
+        capture,
+        &recorded,
+        &scenarios(&replayed),
+        |reference, port| differences(reference, port, Prose::OwnWords),
+    );
+    tally.conclude(&format!(
+        "acp parity ({harness}): {}/{} argument vectors and",
         argv.len(),
-        argv.len(),
-        recorded.len(),
-        reproduced.iter().sum::<usize>(),
-        LEDGER.len()
-    );
-    assert!(
-        unexplained.is_empty(),
-        "the port departs from the corpus where no ledger entry says it may:\n{}",
-        unexplained.join("\n")
-    );
-    assert!(
-        stale.is_empty(),
-        "these ledger entries no longer reproduce and should be removed: {stale:?}"
-    );
+        argv.len()
+    ));
 }
 
 #[test]
 fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
-    let rows: BTreeSet<&str> = SCORECARD
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split_once(" |"))
-        .map(|(number, _)| number.trim())
-        .filter(|number| number.parse::<u32>().is_ok())
-        .collect();
-    for (_, corpus, _) in HARNESSES {
+    let rows = scorecard_rows(SCORECARD);
+    for corpus in [CORPUS, UNIFIED_CORPUS] {
         let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
         let recorded = scenarios(&corpus);
         for entry in LEDGER {
@@ -318,29 +196,12 @@ fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
 }
 
 /// Recaptures the pinned reference on each backend and asserts the committed
-/// corpora are still what it answers. The replay above runs regardless, which is what keeps a
-/// missing checkout from failing `cargo test`.
+/// corpora are still what it answers. The replay above runs regardless, which
+/// is what keeps a missing checkout from failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "ACP") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return;
-    }
-    for (harness, _, corpus) in HARNESSES {
-        let output = capture(&[
-            "--check".as_ref(),
-            "--harness".as_ref(),
-            harness.as_ref(),
-            "--reference".as_ref(),
-            root.as_os_str(),
-        ]);
-        assert!(
-            output.status.success(),
-            "the pinned reference no longer answers what {corpus} records; regenerate it with \
-             `{CAPTURE_SCRIPT} --harness {harness}`: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+    if let Some(root) = pinned_reference("ACP") {
+        LEGACY.check(&root, &[]);
+        UNIFIED.check(&root, &[]);
     }
 }

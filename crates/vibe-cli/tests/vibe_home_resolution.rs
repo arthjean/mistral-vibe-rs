@@ -12,35 +12,11 @@
     reason = "an integration failure must terminate with the output the launch produced"
 )]
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output, Stdio};
 
 mod support;
-use support::FixtureEnvironment;
-
-struct Layout {
-    _root: tempfile::TempDir,
-    profile: PathBuf,
-    /// What Git Bash exports as `HOME`, which Windows resolution ignores.
-    bash_home: PathBuf,
-    project: PathBuf,
-}
-
-fn layout() -> Layout {
-    let root = tempfile::tempdir().expect("fixture root");
-    let [profile, bash_home, project] =
-        ["profile", "bash-home", "project"].map(|name| root.path().join(name));
-    for directory in [&profile, &bash_home, &project] {
-        fs::create_dir_all(directory).expect("fixture directory");
-    }
-    Layout {
-        _root: root,
-        profile,
-        bash_home,
-        project,
-    }
-}
+use support::{FixtureEnvironment, home_layout, log_file};
 
 fn launch(project: &Path, environment: &[(&str, &Path)]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_vibe"));
@@ -57,22 +33,10 @@ fn launch(project: &Path, environment: &[(&str, &Path)]) -> Output {
     command.output().expect("vibe launched")
 }
 
-fn log_file(vibe_home: &Path) -> PathBuf {
-    vibe_home.join("logs").join("vibe.log")
-}
-
 #[test]
 fn the_profile_directory_holds_the_state() {
-    let layout = layout();
-    let environment: &[(&str, &Path)] = if cfg!(windows) {
-        &[
-            ("USERPROFILE", &layout.profile),
-            ("HOME", &layout.bash_home),
-        ]
-    } else {
-        &[("HOME", &layout.profile)]
-    };
-    let output = launch(&layout.project, environment);
+    let layout = home_layout();
+    let output = launch(&layout.project, &layout.profile_environment());
 
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(
@@ -85,7 +49,7 @@ fn the_profile_directory_holds_the_state() {
 
 #[test]
 fn vibe_home_wins_and_expands_its_tilde() {
-    let layout = layout();
+    let layout = home_layout();
     let home_variable = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
     let output = launch(
         &layout.project,
@@ -106,7 +70,7 @@ fn vibe_home_wins_and_expands_its_tilde() {
 #[cfg(windows)]
 #[test]
 fn a_windows_host_without_a_profile_refuses_to_start() {
-    let layout = layout();
+    let layout = home_layout();
     let output = launch(&layout.project, &[("HOME", &layout.bash_home)]);
 
     let stderr = String::from_utf8_lossy(&output.stderr);

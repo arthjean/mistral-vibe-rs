@@ -23,14 +23,14 @@ import argparse
 import contextlib
 import json
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
-from pin import EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
+from reference import require_pin  # noqa: E402
 
 # The argument shapes the corpus replays, keyed by trace id.
 CASES: dict[str, dict[str, Any]] = {
@@ -51,24 +51,6 @@ CASES: dict[str, dict[str, Any]] = {
     "direct-resume-without-picker": {"resume": "session-123"},
     "continue-without-picker": {"continue_session": True},
 }
-
-
-def resolve_reference(reference: Path, expected_commit: str) -> str:
-    if not reference.is_dir():
-        sys.exit(f"no reference checkout at {reference}; set VIBE_REFERENCE or pass --reference")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"git rev-parse failed in {reference}: {result.stderr.strip()}")
-    commit = result.stdout.strip()
-    if commit != expected_commit:
-        raise RuntimeError(f"reference is at {commit}, not the pinned {expected_commit}")
-    return commit
 
 
 def command_line(case: dict[str, Any]) -> list[str]:
@@ -195,12 +177,12 @@ def capture_post_mount_action(startup: Any) -> dict[str, Any] | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", type=Path, default=Path("/home/arthur/dev/mistral-vibe"))
+    parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--output", type=Path, default=None)
     arguments = parser.parse_args()
 
-    commit = resolve_reference(arguments.reference, arguments.expected_commit)
+    commit = require_pin(arguments.reference, arguments.expected_commit)
     sys.path.insert(0, str(arguments.reference))
     from vibe.core.config.harness_files import init_harness_files_manager
 

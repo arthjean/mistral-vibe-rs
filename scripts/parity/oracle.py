@@ -24,7 +24,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import sys
 import tempfile
 from typing import Any
@@ -32,6 +31,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import OracleError, reexecute_pinned
 
 #: Version 2 records completion descriptions as ``{length, digest}`` instead of
 #: their text.
@@ -39,47 +39,9 @@ SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/parity")
 
 
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
 # --------------------------------------------------------------------------
 # Reference pinning
 # --------------------------------------------------------------------------
-
-
-def _git(reference: Path, *arguments: str) -> str:
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git {' '.join(arguments)} failed in {reference}: {result.stderr.strip()}"
-        )
-    return result.stdout.strip()
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    commit = _git(reference, "rev-parse", "HEAD")
-    tracked_changes = _git(reference, "status", "--porcelain", "--untracked-files=no")
-    if tracked_changes:
-        raise OracleError(
-            f"reference checkout {reference} has uncommitted tracked changes; "
-            "the oracle revision must be reproducible"
-        )
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference commit mismatch: expected {expected_commit}, found {commit}"
-        )
-    # The checkout path is host specific and never enters the corpus: the
-    # commit and version identify the oracle reproducibly.
-    return {"commit": commit, "version": _reference_version(reference)}
 
 
 def _reference_version(reference: Path) -> str:
@@ -229,20 +191,6 @@ def parse_arguments(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def reexecute_with(interpreter: Path, argv: list[str]) -> int:
-    command = [str(interpreter), str(Path(__file__).resolve()), *argv]
-    return subprocess.run(command, check=False).returncode
-
-
-def reference_environment_available() -> bool:
-    try:
-        import textual  # noqa: F401
-        import vibe  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def main(argv: list[str]) -> int:
     arguments = parse_arguments(argv)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -254,17 +202,10 @@ def main(argv: list[str]) -> int:
         return 0
 
     reference = arguments.reference.resolve()
-    if not reference_environment_available():
-        interpreter = arguments.python or (reference / ".venv/bin/python")
-        if not interpreter.is_file():
-            raise OracleError(
-                "reference Python environment is unavailable; pass --python with an "
-                f"interpreter that can import vibe and textual (tried {interpreter})"
-            )
-        forwarded = [argument for argument in argv if not argument.startswith("--python")]
-        return reexecute_with(interpreter, forwarded)
-
-    pinned = resolve_reference(reference, arguments.expect_commit)
+    commit, tree = reexecute_pinned(reference, arguments.expect_commit, override=arguments.python)
+    # The checkout path is host specific and never enters the corpus: the
+    # commit and version identify the oracle reproducibly.
+    pinned = {"commit": commit, "version": _reference_version(tree)}
     selected = [
         scenario
         for scenario in SCENARIOS

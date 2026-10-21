@@ -59,20 +59,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/shell-policy/policy.json")
-INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
-
 #: Command strings whose grammar extraction is recorded. They cover the shapes
 #: a tokenizer decides differently from a grammar: a heredoc whose command node
 #: sits under a redirect, the four chain operators, quoting of every kind, a
@@ -635,77 +632,13 @@ STDIN_PERMISSION_CASES: tuple[tuple[str, str | None], ...] = (
 )
 
 
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, interpreter: Path | None
-) -> None:
-    """Re-runs this script under an interpreter that can import ``vibe``."""
-    try:
-        import vibe  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidates = [
-        interpreter,
-        Path(os.environ[INTERPRETER_VARIABLE])
-        if os.environ.get(INTERPRETER_VARIABLE)
-        else None,
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    candidate = next(
-        (path for path in candidates if path is not None and path.is_file()), None
-    )
-    if candidate is None:
-        raise OracleError(
-            f"cannot import `vibe` and no reference interpreter under {reference}"
-        )
-    if Path(sys.executable).resolve() == candidate.resolve():
-        raise OracleError(f"{candidate} cannot import `vibe`")
-    os.execv(
-        str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]]
-    )
-
-
 # --------------------------------------------------------------------------
 # Capture
 # --------------------------------------------------------------------------
 
 
-def capture_extraction(reference: Path) -> list[dict[str, Any]]:
+def capture_extraction() -> list[dict[str, Any]]:
     """What ``_extract_commands`` returns for the authored cases."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.builtins.bash import _extract_commands
 
     return [
@@ -714,9 +647,8 @@ def capture_extraction(reference: Path) -> list[dict[str, Any]]:
     ]
 
 
-def capture_command_sets(reference: Path) -> dict[str, Any]:
+def capture_command_sets() -> dict[str, Any]:
     """The sets that decide which commands have their operands inspected."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.builtins._shell_command_policy import (
         analyze_shell_command_policy,
     )
@@ -749,12 +681,10 @@ def capture_command_sets(reference: Path) -> dict[str, Any]:
 
 
 def _bash_tool(
-    reference: Path,
     workdir: Path,
     scratchpad: Path,
     allowlist: list[str] | None = None,
 ) -> Any:
-    sys.path.insert(0, str(reference))
     from vibe.core.config.harness_files import HarnessFilesManager
     from vibe.core.tools.builtins.bash import Bash, BashToolConfig
 
@@ -796,13 +726,12 @@ def _expand(text: str, placeholders: list[tuple[str, str]]) -> str:
     return text
 
 
-def capture_outside_paths(reference: Path) -> list[dict[str, Any]]:
+def capture_outside_paths() -> list[dict[str, Any]]:
     """What ``_collect_outside_paths`` answers for the authored operands.
 
     The reference keeps ``_collect_outside_dirs`` beside it only for its own
     tests; ``resolve_permission`` reads this one.
     """
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.builtins.bash import _collect_outside_paths, _extract_commands
@@ -883,9 +812,8 @@ def _resolution(
     }
 
 
-def capture_resolutions(reference: Path) -> list[dict[str, Any]]:
+def capture_resolutions() -> list[dict[str, Any]]:
     """What ``BashTool.resolve_permission`` decides for the authored commands."""
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.builtins.bash import BashArgs
@@ -893,7 +821,7 @@ def capture_resolutions(reference: Path) -> list[dict[str, Any]]:
     with tempfile.TemporaryDirectory() as root:
         workdir, outside, scratchpad = _operand_tree(Path(root))
         placeholders = _placeholders(workdir, outside, scratchpad)
-        tool = _bash_tool(reference, workdir, scratchpad)
+        tool = _bash_tool(workdir, scratchpad)
         return [
             _resolution(
                 command,
@@ -906,9 +834,8 @@ def capture_resolutions(reference: Path) -> list[dict[str, Any]]:
         ]
 
 
-def capture_repository_resolutions(reference: Path) -> list[dict[str, Any]]:
+def capture_repository_resolutions() -> list[dict[str, Any]]:
     """What the git readers resolve to in each repository fixture."""
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.builtins.bash import BashArgs
@@ -920,7 +847,7 @@ def capture_repository_resolutions(reference: Path) -> list[dict[str, Any]]:
             (workdir / ".git").mkdir()
             (workdir / ".git" / "config").write_text(config, encoding="utf-8", newline="")
             placeholders = _placeholders(workdir, outside, scratchpad)
-            tool = _bash_tool(reference, workdir, scratchpad)
+            tool = _bash_tool(workdir, scratchpad)
             for command in REPOSITORY_COMMANDS:
                 resolved = tool.resolve_permission(
                     BashArgs(command=_expand(command, placeholders))
@@ -931,9 +858,8 @@ def capture_repository_resolutions(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_managed_resolutions(reference: Path) -> list[dict[str, Any]]:
+def capture_managed_resolutions() -> list[dict[str, Any]]:
     """What the managed resolver decides for the authored calls."""
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.builtins.experimental_bash import ExperimentalBashArgs
@@ -941,7 +867,7 @@ def capture_managed_resolutions(reference: Path) -> list[dict[str, Any]]:
     with tempfile.TemporaryDirectory() as root:
         workdir, outside, scratchpad = _operand_tree(Path(root))
         placeholders = _placeholders(workdir, outside, scratchpad)
-        tool = _managed_tool(reference, workdir, scratchpad)
+        tool = _managed_tool(workdir, scratchpad)
         captured = []
         for command, cwd, shell, env in MANAGED_CASES:
             arguments = ExperimentalBashArgs(
@@ -964,12 +890,10 @@ def capture_managed_resolutions(reference: Path) -> list[dict[str, Any]]:
 
 
 def _managed_tool(
-    reference: Path,
     workdir: Path,
     scratchpad: Path,
     allowlist: list[str] | None = None,
 ) -> Any:
-    sys.path.insert(0, str(reference))
     from vibe.core.config.harness_files import HarnessFilesManager
     from vibe.core.tools.builtins.experimental_bash import (
         ExperimentalBash,
@@ -988,9 +912,8 @@ def _managed_tool(
     )
 
 
-def capture_allowlist_grants(reference: Path) -> list[dict[str, Any]]:
+def capture_allowlist_grants() -> list[dict[str, Any]]:
     """What both resolvers decide with path grants in the shell's allowlist."""
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.builtins.bash import BashArgs
@@ -1004,10 +927,10 @@ def capture_allowlist_grants(reference: Path) -> list[dict[str, Any]]:
             allowlist = [_expand(entry, placeholders) for entry in entries]
             expanded = _expand(command, placeholders)
             if resolver == "legacy":
-                tool = _bash_tool(reference, workdir, scratchpad, allowlist)
+                tool = _bash_tool(workdir, scratchpad, allowlist)
                 resolved = tool.resolve_permission(BashArgs(command=expanded))
             else:
-                tool = _managed_tool(reference, workdir, scratchpad, allowlist)
+                tool = _managed_tool(workdir, scratchpad, allowlist)
                 resolved = tool.resolve_permission(
                     ExperimentalBashArgs(
                         command=expanded,
@@ -1025,9 +948,8 @@ def capture_allowlist_grants(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_path_grant_matches(reference: Path) -> list[dict[str, Any]]:
+def capture_path_grant_matches() -> list[dict[str, Any]]:
     """What ``path_grant_pattern_matches`` answers for each authored pair."""
-    sys.path.insert(0, str(reference))
     from vibe.permissions import path_grant_pattern_matches
 
     return [
@@ -1040,9 +962,8 @@ def capture_path_grant_matches(reference: Path) -> list[dict[str, Any]]:
     ]
 
 
-def capture_stdin_permissions(reference: Path) -> list[dict[str, Any]]:
+def capture_stdin_permissions() -> list[dict[str, Any]]:
     """What ``BashStdin.resolve_permission`` decides for each session command."""
-    sys.path.insert(0, str(reference))
     from types import SimpleNamespace
 
     from vibe.core.tools.builtins.experimental_bash import (
@@ -1077,9 +998,8 @@ def capture_stdin_permissions(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_windows_grammar(reference: Path) -> dict[str, Any]:
+def capture_windows_grammar() -> dict[str, Any]:
     """What the PowerShell grammar helpers answer for the authored cases."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.builtins import windows_shell as windows
 
     commands = []
@@ -1171,18 +1091,18 @@ def committed_label(
     return describe(label)
 
 
-def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
-    pin = resolve_reference(reference, expected_commit)
-    extraction = capture_extraction(reference)
-    sets = capture_command_sets(reference)
-    outside = capture_outside_paths(reference)
-    resolutions = capture_resolutions(reference)
-    repository = capture_repository_resolutions(reference)
-    managed = capture_managed_resolutions(reference)
-    windows = capture_windows_grammar(reference)
-    stdin = capture_stdin_permissions(reference)
-    grants = capture_allowlist_grants(reference)
-    matches = capture_path_grant_matches(reference)
+def build_corpus(commit: str) -> dict[str, Any]:
+    pin = {"commit": commit}
+    extraction = capture_extraction()
+    sets = capture_command_sets()
+    outside = capture_outside_paths()
+    resolutions = capture_resolutions()
+    repository = capture_repository_resolutions()
+    managed = capture_managed_resolutions()
+    windows = capture_windows_grammar()
+    stdin = capture_stdin_permissions()
+    grants = capture_allowlist_grants()
+    matches = capture_path_grant_matches()
     return {
         "schemaVersion": SCHEMA_VERSION,
         "reference": pin,
@@ -1238,11 +1158,12 @@ def main() -> int:
     arguments = parser.parse_args()
 
     try:
-        reexecute_with_reference_interpreter(arguments.reference, arguments.interpreter)
-        corpus = build_corpus(
+        commit, _ = reexecute_pinned(
             arguments.reference,
             None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            override=arguments.interpreter,
         )
+        corpus = build_corpus(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

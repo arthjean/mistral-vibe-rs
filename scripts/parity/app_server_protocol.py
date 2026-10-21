@@ -70,10 +70,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
-import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/protocol-parity/corpus.json"
@@ -87,10 +88,6 @@ PING_TIMEOUT = 6.0
 UNKNOWN_SESSION = "probe-unknown-session"
 
 
-class OracleError(RuntimeError):
-    pass
-
-
 def inventory() -> list[str]:
     """The methods the pinned reference declares, from the committed census."""
     census = json.loads(CENSUS.read_text(encoding="utf-8"))
@@ -102,7 +99,7 @@ def inventory() -> list[str]:
 # --------------------------------------------------------------------------
 
 
-class Server(rewind.Server):
+class Server(app_server_client.Server):
     """A server whose silence is an observation rather than a failure.
 
     A server that stops serving is not required to close its output: the
@@ -120,7 +117,7 @@ class Server(rewind.Server):
         super()._answer(request)
 
     def drain(
-        self, request_id: Any, quiet: float, timeout: float = acp.RESPONSE_TIMEOUT
+        self, request_id: Any, quiet: float, timeout: float = blackbox.RESPONSE_TIMEOUT
     ) -> tuple[list[dict[str, Any]], bool]:
         """Everything written until the response and then silence, and whether
         the response arrived."""
@@ -167,7 +164,7 @@ class Server(rewind.Server):
 SETTLES = frozenset({"turn/completed", "turn/failed", "turn/interrupted"})
 
 
-class Session(rewind.Session):
+class Session(app_server_client.Session):
     """What a scenario learned, plus the callbacks and queue items it saw."""
 
     def __init__(self, root: Path) -> None:
@@ -231,15 +228,15 @@ def find_values(value: Any, key: str) -> list[str]:
     return found
 
 
-def start_params(world: acp.World, agent: str = "auto-approve") -> dict[str, Any]:
+def start_params(world: blackbox.World, agent: str = "auto-approve") -> dict[str, Any]:
     return {"agentConfig": {"cwd": str(world.workspace), "agent": agent}}
 
 
-def oracle_config(backend: acp.Backend, extra: str) -> str:
+def oracle_config(backend: blackbox.Backend, extra: str) -> str:
     """The rewind oracle's configuration, with every remote base URL the app
     server may reach pointed at the stand-in, so no probe leaves the host."""
     return (
-        rewind.base_config(backend, "")
+        app_server_client.base_config(backend, "")
         .replace(
             "enable_update_checks = false\n",
             "enable_update_checks = false\n"
@@ -251,7 +248,7 @@ def oracle_config(backend: acp.Backend, extra: str) -> str:
     )
 
 
-def serve_gets(backend: rewind.RecordingBackend, gets: dict[str, Any]) -> None:
+def serve_gets(backend: app_server_client.RecordingBackend, gets: dict[str, Any]) -> None:
     """Answers a GET for one of `gets`' paths with its payload, and any
     other with the stand-in's 404."""
     handler = backend.server.RequestHandlerClass
@@ -274,7 +271,7 @@ STORED_ACCOUNT = "OTHER_ORACLE_KEY"
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = rewind.RecordingBackend()
+    backend = app_server_client.RecordingBackend()
     serve_gets(backend, scenario.get("gets", {}))
     root = Path(tempfile.mkdtemp(prefix="vibe-protocol-oracle-")).resolve()
     session = Session(root)
@@ -287,21 +284,16 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         (world.vibe_home / "config.toml").write_text(
             oracle_config(backend, scenario.get("config", "")), encoding="utf-8", newline=""
         )
-        acp.write_tree(world.workspace, scenario.get("files", {}))
+        blackbox.write_tree(world.workspace, scenario.get("files", {}))
         if scenario.get("git"):
             init_repository(world.workspace, scenario.get("remote"))
         env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(world.home),
-            **host_env.windows_base(str(world.home)),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": "oracle-key",
-            "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-            "LANG": "C.UTF-8",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+            **host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY="oracle-key",
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            ),
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_AUTHOR_NAME": "Oracle",
             "GIT_AUTHOR_EMAIL": "oracle@example.invalid",
@@ -315,7 +307,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         steps: list[dict[str, Any]] = []
         try:
             run_steps(scenario, servers, spawn, session, steps, quiet)
-        except (OracleError, rewind.OracleError, acp.OracleError) as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             servers[-1].stop()
@@ -527,7 +519,7 @@ def run_steps(
                 for message in observed:
                     session.learn(message)
                 continue
-            for message in server.wait_for(rewind.settles({})):
+            for message in server.wait_for(app_server_client.settles({})):
                 session.learn(message)
             observed, _ = server.drain(None, quiet)
             for message in observed:
@@ -537,7 +529,7 @@ def run_steps(
             # A queued turn can start and settle inside the drain of the
             # request that queued it, so wait only for turns still running.
             while session.running:
-                for message in server.wait_for(rewind.settles({})):
+                for message in server.wait_for(app_server_client.settles({})):
                     session.learn(message)
             observed, _ = server.drain(None, quiet)
             for message in observed:
@@ -572,7 +564,7 @@ def run_steps(
             # driver's own working directory.
             if not target.is_absolute():
                 raise OracleError(f"the write target {into} never resolved to a path")
-            acp.write_tree(target, step["write"])
+            blackbox.write_tree(target, step["write"])
             continue
         if "raw" in step:
             server.raw(step["raw"].encode("utf-8"))
@@ -636,7 +628,7 @@ def managed_roots(value: Any) -> Any:
 
 
 def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[Any]:
-    normalizer = rewind.Normalizer(scenario, run["paths"])
+    normalizer = app_server_client.Normalizer(scenario, run["paths"])
     for identity in run["sessions"]:
         normalizer.identity(identity)
     for step in run["steps"]:
@@ -1311,7 +1303,7 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
@@ -1361,10 +1353,10 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (OracleError, acp.OracleError, rewind.OracleError) as error:
+    except OracleError as error:
         print(f"protocol oracle: {error}", file=sys.stderr)
         return 1
 

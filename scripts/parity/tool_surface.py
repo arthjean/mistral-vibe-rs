@@ -31,7 +31,6 @@ import json
 import os
 from pathlib import Path
 import platform
-import subprocess
 import sys
 import tempfile
 from typing import Any
@@ -39,6 +38,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 5
 DIGEST_SCHEMA_VERSION = 1
@@ -93,65 +93,12 @@ PROBE_MODEL = "mistral-medium-3.5"
 UNEXPECTED_KEY = "__unexpected__"
 
 
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(
-            f"no reference checkout at {reference}; set VIBE_REFERENCE to the checkout "
-            "path or pass --reference"
-        )
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"path": str(reference), "commit": commit}
-
-
-def reexecute_with_reference_interpreter(reference: Path, interpreter: Path | None) -> None:
-    """Re-runs this script under the reference virtualenv when ``vibe`` is absent."""
-    try:
-        import vibe  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidate = interpreter or reference / ".venv/bin/python"
-    if not candidate.is_file():
-        raise OracleError(
-            f"cannot import `vibe` and no reference interpreter at {candidate}"
-        )
-    if Path(sys.executable).resolve() == candidate.resolve():
-        raise OracleError(f"{candidate} cannot import `vibe`")
-    os.execv(str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]])
-
-
 # --------------------------------------------------------------------------
 # Surface capture
 # --------------------------------------------------------------------------
 
 
-def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    sys.path.insert(0, str(reference))
+def capture_tools() -> tuple[list[dict[str, Any]], dict[str, Any]]:
     from vibe.core.config import VibeConfigSchema
     from vibe.core.config.harness_files import init_harness_files_manager
     from vibe.core.tools.manager import ToolManager
@@ -891,9 +838,11 @@ def check_committed(corpus: dict[str, Any], arguments: argparse.Namespace) -> in
 def main() -> int:
     arguments = parse_arguments()
     try:
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        reexecute_with_reference_interpreter(arguments.reference, arguments.python)
-        tools, extra = capture_tools(arguments.reference)
+        commit, _ = reexecute_pinned(
+            arguments.reference, arguments.expected_commit, override=arguments.python
+        )
+        reference = {"path": str(arguments.reference), "commit": commit}
+        tools, extra = capture_tools()
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

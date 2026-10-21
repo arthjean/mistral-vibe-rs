@@ -19,16 +19,9 @@ use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-/// What Windows needs in any child environment, carried over from the parent.
-const WINDOWS_BASE: [&str; 7] = [
-    "SystemRoot",
-    "SystemDrive",
-    "windir",
-    "COMSPEC",
-    "PATHEXT",
-    "TEMP",
-    "TMP",
-];
+#[path = "../../vibe-cli/tests/support/mod.rs"]
+mod support;
+use support::FixtureEnvironment;
 
 /// The longest a launch may take to answer, so a hung agent fails the test.
 const ANSWER_TIMEOUT: Duration = Duration::from_secs(60);
@@ -40,8 +33,7 @@ const UNREACHABLE: &str = "http://127.0.0.1:9";
 fn agent(profile: &Path, project: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_vibe-acp"));
     command
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env_clear_keeping_base()
         .env("MISTRAL_API_KEY", "test-key")
         .env(
             "VIBE_API_BASE",
@@ -52,11 +44,6 @@ fn agent(profile: &Path, project: &Path) -> Command {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if cfg!(windows) {
-        for name in WINDOWS_BASE {
-            if let Some(value) = std::env::var_os(name) {
-                command.env(name, value);
-            }
-        }
         command.env("USERPROFILE", profile);
     } else {
         command.env("HOME", profile);

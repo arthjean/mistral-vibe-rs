@@ -70,12 +70,13 @@ from urllib.parse import parse_qsl, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
-import agents  # noqa: E402
-import hooks  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
+import loop_capture  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
-import rewind  # noqa: E402
+import subagent_client  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/connectors-parity/corpus.json"
@@ -97,7 +98,7 @@ AUTH_URL = re.compile(r"^/v1/connectors/(?P<id>[^/]+)/auth_url$")
 # --------------------------------------------------------------------------
 
 
-class Backend(hooks.Backend):
+class Backend(subagent_client.Backend):
     """The hooks stand-in, also serving the connector endpoints a scenario
     scripts, and logging every request they receive."""
 
@@ -265,7 +266,7 @@ def registry_key(base: str) -> str:
     return hashlib.sha256(f"{base}\0{API_KEY}\0supports_mcp=true".encode()).hexdigest()
 
 
-def seed_cache(world: acp.World, base: str, entries: dict[str, Any]) -> None:
+def seed_cache(world: blackbox.World, base: str, entries: dict[str, Any]) -> None:
     """Writes a cache file before the server starts. `$FP` and `$RK` name the
     two keys this provider's entries are filed under, and `$NOW` offsets are
     seconds from now."""
@@ -293,11 +294,11 @@ def seed_cache(world: acp.World, base: str, entries: dict[str, Any]) -> None:
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend(scenario.get("connectors", {}))
     root = Path(tempfile.mkdtemp(prefix="vibe-connectors-oracle-")).resolve()
-    session = rewind.Session(root)
+    session = app_server_client.Session(root)
     world = session.world
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-        base_config = scenario.get("base") or acp.base_config(backend)
+        base_config = scenario.get("base") or blackbox.base_config(backend)
         base_config = base_config.replace("$BACKEND", backend.base).replace(
             "enable_update_checks = false\n",
             "enable_update_checks = false\n" f'console_base_url = "{backend.base}"\n',
@@ -317,30 +318,23 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         )
         if "cache" in scenario:
             seed_cache(world, backend.base, scenario["cache"])
-        env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(world.home),
-            **host_env.windows_base(str(world.home)),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": API_KEY,
-            "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-            "LANG": "C.UTF-8",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
-        }
+        env = host_env.isolated(
+            world.home,
+            world.vibe_home,
+            MISTRAL_API_KEY=API_KEY,
+            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+        )
         for key, value in scenario.get("env", {}).items():
             if value is None:
                 env.pop(key, None)
             else:
                 env[key] = value
-        server = agents.Server(command, env, world.workspace, {}, world,
+        server = subagent_client.Server(command, env, world.workspace, {}, world,
                                callbacks=copy.deepcopy(scenario.get("callbacks", [])))
         steps: list[dict[str, Any]] = []
         try:
             run_steps(scenario, server, session, backend, steps, quiet)
-        except (rewind.OracleError, acp.OracleError) as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             server.stop()
@@ -370,8 +364,8 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
 
 def run_steps(
     scenario: dict[str, Any],
-    server: rewind.Server,
-    session: rewind.Session,
+    server: app_server_client.Server,
+    session: app_server_client.Session,
     backend: Backend,
     steps: list[dict[str, Any]],
     quiet: float,
@@ -403,7 +397,7 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": rewind.render_turn("reference", target, step["turn"])})
+                         "params": app_server_client.render_turn("reference", target, step["turn"])})
             if step.get("background"):
                 time.sleep(step.get("settle", 0.5))
                 observed = server.collect(None, quiet)
@@ -412,14 +406,14 @@ def run_steps(
                 steps.append({"turn": [m for m in observed if "method" in m and "id" not in m],
                               "background": True})
                 continue
-            observed = server.wait_for(rewind.settles({}))
+            observed = server.wait_for(app_server_client.settles({}))
             observed += server.collect(None, quiet)
             for message in observed:
                 session.learn(message)
             steps.append({"turn": [m for m in observed if "method" in m and "id" not in m]})
             continue
         if "await" in step:
-            observed = server.wait_for(rewind.settles({}))
+            observed = server.wait_for(app_server_client.settles({}))
             observed += server.collect(None, quiet)
             for message in observed:
                 session.learn(message)
@@ -529,7 +523,7 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any] | None:
             return None
         patch = [
             {**operation, "value": "<time>"}
-            if str(operation.get("path", "")).rsplit("/", 1)[-1] in rewind.TIME_KEYS
+            if str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS
             else operation
             for operation in params.get("patch") or []
             if isinstance(operation, dict)
@@ -563,11 +557,11 @@ def request_view(body: dict[str, Any]) -> dict[str, Any]:
         })
     return {
         "connectorTools": tools,
-        "conversation": hooks.transcript(body.get("messages", [])),
+        "conversation": subagent_client.transcript(body.get("messages", [])),
     }
 
 
-class Normalizer(hooks.Normalizer):
+class Normalizer(subagent_client.Normalizer):
     def __init__(self, scenario: dict[str, Any], run: dict[str, Any]) -> None:
         super().__init__(scenario, run["paths"])
         self.keys = {run["fingerprint"]: "<fingerprint>", run["registryKey"]: "<registry-key>"}
@@ -1358,20 +1352,18 @@ def unified_view(run: dict[str, Any]) -> dict[str, Any]:
     the clock's operations dropped, and a program's failure without the frames
     that name lines of each side's own sandbox."""
 
-    import unified_harness  # noqa: PLC0415 - only the unified family reads it
-
     for step in run["steps"]:
         for key in ("turn", "notifications"):
             if isinstance(step.get(key), list):
-                step[key] = unified_harness.reduce_patches(step[key])
+                step[key] = loop_capture.reduce_patches(step[key])
     for body in run["requests"]:
         for message in (body.get("messages") or []) if isinstance(body, dict) else []:
             if (message.get("role") == "tool" and message.get("name") == "run_typescript"
                     and isinstance(message.get("content"), str)):
-                message["content"] = unified_harness.program_failure_view(message["content"])
+                message["content"] = loop_capture.program_failure_view(message["content"])
             elif (message.get("role") == "tool" and message.get("name") == "search_tool_functions"
                     and isinstance(message.get("content"), str)):
-                message["content"] = unified_harness.search_view(message["content"])
+                message["content"] = loop_capture.search_view(message["content"])
     return run
 
 
@@ -1402,10 +1394,10 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *flags]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
-                raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
+                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
             command = [str(binary), *flags]
         selected = [
             scenario
@@ -1452,15 +1444,15 @@ def main() -> int:
                 != json.loads(json.dumps(entry["observed"]))
             ]
             if differing:
-                raise rewind.OracleError("a fresh capture differs for " + ", ".join(differing))
+                raise OracleError("a fresh capture differs for " + ", ".join(differing))
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (rewind.OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"connectors oracle: {error}", file=sys.stderr)
         return 1
 

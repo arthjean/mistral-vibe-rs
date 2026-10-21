@@ -56,17 +56,11 @@ from urllib.parse import parse_qsl, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from compaction import (  # noqa: E402
-    OracleError,
-    extract_pinned_tree,
-    reexecute_with_reference_interpreter,
-    resolve_reference,
-)
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
 
 SCHEMA_VERSION = 1
 DEFAULT_CORPUS = Path("crates/vibe-app-server/tests/mcp-oauth/corpus.json")
-DEFAULT_CACHE = Path(".parity")
 FIXTURE_VARIABLE = "VIBE_OAUTH_PARITY_FIXTURE"
 REPOSITORY = Path(__file__).resolve().parents[2]
 SERVICE = "ai.mistral.vibe"
@@ -751,9 +745,13 @@ def main() -> int:
         if not os.environ.get(FIXTURE_VARIABLE):
             fixture = (arguments.fixture or build_fixture()).resolve()
             os.environ[FIXTURE_VARIABLE] = str(fixture)
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        pinned = extract_pinned_tree(arguments.reference, reference["commit"], arguments.cache)
-        reexecute_with_reference_interpreter(arguments.reference, arguments.python, pinned)
+        commit, _ = reexecute_pinned(
+            arguments.reference,
+            arguments.expected_commit,
+            cache=arguments.cache,
+            override=arguments.python,
+        )
+        reference = {"commit": commit, "path": str(arguments.reference)}
         fixture = Path(os.environ[FIXTURE_VARIABLE])
         if arguments.only:
             global all_scenarios  # noqa: PLW0603

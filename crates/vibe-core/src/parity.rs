@@ -110,6 +110,9 @@ pub fn pinned_interpreter(root: &Path) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
+#[cfg(any(test, feature = "parity-replay"))]
+pub mod replay;
+
 #[cfg(test)]
 mod ledger_tests;
 #[cfg(test)]

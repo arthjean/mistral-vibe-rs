@@ -54,8 +54,9 @@ from urllib.parse import parse_qsl, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -111,10 +112,6 @@ class FileKeyring(keyring.backend.KeyringBackend):
         del entries[service][username]
         self._store(entries)
 '''
-
-
-class OracleError(RuntimeError):
-    pass
 
 
 def digest(text: str) -> dict[str, Any]:
@@ -270,8 +267,8 @@ class Run:
         self.dialect = dialect
         self.quiet = quiet
         self.root = Path(tempfile.mkdtemp(prefix="vibe-mcp-catalog-oracle-")).resolve()
-        self.world = acp.World(self.root)
-        self.backend = acp.Backend()
+        self.world = blackbox.World(self.root)
+        self.backend = blackbox.Backend()
         self.fixtures: dict[str, Fixture] = {}
         self.redirects: dict[str, int] = {}
         self.browser = Browser()
@@ -281,7 +278,7 @@ class Run:
             for name, script in scenario.get("servers", {}).items():
                 self.redirects[name] = free_port()
                 self.fixtures[name] = Fixture(fixture, self.root, name, script, self.redirects[name])
-            config = acp.base_config(self.backend) + self.substitute(scenario.get("config", ""))
+            config = blackbox.base_config(self.backend) + self.substitute(scenario.get("config", ""))
             (self.world.vibe_home / "config.toml").write_text(config, encoding="utf-8", newline="")
             if "keyring" in scenario:
                 entries = {
@@ -295,22 +292,17 @@ class Run:
             module.mkdir()
             (module / "oracle_keyring.py").write_text(KEYRING_MODULE, encoding="utf-8", newline="")
             env = {
-                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-                "HOME": str(self.world.home),
-                **host_env.windows_base(str(self.world.home)),
-                "VIBE_HOME": str(self.world.vibe_home),
-                "MISTRAL_API_KEY": "oracle-key",
-                "VIBE_API_BASE": f"{self.backend.base}/v1/chat/completions",
-                "LANG": "C.UTF-8",
-                "TERM": "dumb",
-                "NO_COLOR": "1",
-                "CI": "true",
-                "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+                **host_env.isolated(
+                    self.world.home,
+                    self.world.vibe_home,
+                    MISTRAL_API_KEY="oracle-key",
+                    VIBE_API_BASE=f"{self.backend.base}/v1/chat/completions",
+                ),
                 "PYTHONPATH": str(module),
                 "PYTHON_KEYRING_BACKEND": "oracle_keyring.FileKeyring",
                 KEYRING_VARIABLE: str(self.keyring),
             }
-            self.server = acp.Agent(command, env, self.world.workspace, {}, self.world)
+            self.server = blackbox.Agent(command, env, self.world.workspace, {}, self.world)
         except BaseException:
             self.close()
             raise
@@ -937,7 +929,7 @@ def main() -> int:
             reference = {"commit": "server-override"}
             dialect = "port"
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
@@ -975,10 +967,10 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
-    except (OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"MCP catalog capture failed: {error}", file=sys.stderr)
         return 1
     return 0

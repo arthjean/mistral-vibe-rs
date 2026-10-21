@@ -45,10 +45,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
-import agent_loop  # noqa: E402
-import rewind  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
+import loop_capture  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/unified-harness-parity/corpus.json"
@@ -58,10 +59,10 @@ SCHEMA_VERSION = 1
 #: store generation before it settles.
 QUIET_SECONDS = 0.8
 
-call = agent_loop.call
-send = agent_loop.send
-START = agent_loop.START
-PERSISTED = agent_loop.PERSISTED
+call = loop_capture.call
+send = loop_capture.send
+START = loop_capture.START
+PERSISTED = loop_capture.PERSISTED
 
 
 # --------------------------------------------------------------------------
@@ -200,7 +201,7 @@ def session_store(directory: Path) -> dict[str, Any]:
     }
 
 
-def persisted(world: acp.World) -> dict[str, Any]:
+def persisted(world: blackbox.World) -> dict[str, Any]:
     """Every unified session the store holds, in the order they started, and
     any legacy session directory beside them."""
 
@@ -245,7 +246,7 @@ TODAYS_DATE = re.compile(
     r"\b\d{4}-\d{2}-\d{2} \((?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day\)")
 
 
-class Normalizer(agent_loop.Normalizer):
+class Normalizer(loop_capture.Normalizer):
     def text(self, value: str) -> str:
         value = ELIDED_LOOP.sub("{<loop>}", value)
         value = LOOP_ID_TEXT.sub(lambda match: self.identity(match.group(0)), value)
@@ -267,135 +268,16 @@ class Normalizer(agent_loop.Normalizer):
 
 
 #: Keys whose string values are identities, beyond the loop's.
-ID_KEYS = agent_loop.ID_KEYS | {"message_id", "action_id", "lease_id", "inputEntryId",
+ID_KEYS = loop_capture.ID_KEYS | {"message_id", "action_id", "lease_id", "inputEntryId",
                                 "queueItemId", "latestTurnId", "processId"}
-agent_loop.ID_KEYS.update(ID_KEYS)
+loop_capture.ID_KEYS.update(ID_KEYS)
 #: A unified session's archive mark is a time like its pin, in this capture's
 #: process only.
-rewind.TIME_KEYS.update({"archivedAt", "retryAt"})
-
-
-#: Patch keys whose operations depend on the clock alone. Every Core step
-#: stamps the session's ``updatedAt`` with the millisecond it was observed in,
-#: and a committed entry is rebuilt with that stamp, so whether two steps move
-#: them depends on whether they landed in the same millisecond. ``bumpedAt``
-#: is published by the host once it has answered a callback, racing the
-#: harness's own publication of the state that answer produced: it lands in a
-#: patch of its own or inside that state's, from one run to the next. The
-#: persisted ``bumped_at`` still records that the bump happened.
-CLOCK_KEYS = {"updatedAt", "createdAt", "bumpedAt"}
-
-
-def reduce_patches(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Notifications whose patches list their operations by path, with the
-    clock's own operations dropped, and a notification left with nothing to
-    patch dropped with them.
-
-    The reference diffs two states with the ``jsonpatch`` package, which walks
-    an object's keys in the order of a Python set, so the same change comes out
-    in another order from one process to the next.
-    """
-
-    kept = []
-    for message in messages:
-        patch = (message.get("params") or {}).get("patch")
-        if isinstance(patch, list):
-            patch[:] = [
-                operation
-                for operation in patch
-                if str(operation.get("path", "")).rsplit("/", 1)[-1] not in CLOCK_KEYS
-            ]
-            if not patch:
-                continue
-            patch.sort(key=lambda operation: str(operation.get("path", "")))
-        kept.append(message)
-    return kept
+app_server_client.TIME_KEYS.update({"archivedAt", "retryAt"})
 
 
 def reduce_turn(scenario: dict[str, Any], messages: list[dict[str, Any]]) -> list[Any]:
-    return reduce_patches(agent_loop.reduce_turn(scenario, messages))
-
-
-#: A ``best_match`` answer's front matter counts, which its BM25 ranking
-#: decides.
-RANKED_COUNTS = ("relevantFunctionCount", "relatedFunctionCount", "relatedConnectorCount",
-                 "relevantConnectorNoticeCount")
-GUIDANCE_ENTRY = re.compile(r"<name>(.*?)</name>\s*<status>(.*?)</status>", re.S)
-
-
-def search_view(text: str) -> str:
-    """A ``search_tool_functions`` answer without the prose it quotes.
-
-    Function descriptions and connector guidance are each server's own words,
-    and a ``best_match`` ranking is BM25 over them, so the ranking, its counts
-    and the descriptions are left out: what stays is the layout, the names,
-    the modes and every declaration's types.
-    """
-
-    lines = text.split("\n")
-    ranked = "# Best Matching Tool Candidates" in lines
-    kept: list[str] = []
-    in_description = False
-    in_doc: list[str] | None = None
-    index = 0
-    while index < len(lines):
-        line = lines[index]
-        index += 1
-        stripped = line.strip()
-        if ranked and any(line.startswith(f"{key}: ") for key in RANKED_COUNTS):
-            kept.append(line.split(":")[0] + ": <ranked>")
-            continue
-        if ranked and re.fullmatch(r"\d+\. \S+ - [0-9.]+", line):
-            if not kept or kept[-1] != "<ranked candidates>":
-                kept.append("<ranked candidates>")
-            continue
-        if stripped.startswith("<connector-guidance>"):
-            block = [line]
-            while index < len(lines) and "</connector-guidance>" not in block[-1]:
-                block.append(lines[index])
-                index += 1
-            entries = sorted(set(GUIDANCE_ENTRY.findall("\n".join(block))))
-            kept.append("<connector-guidance " + ", ".join(f"{name}={status}" for name, status in entries) + ">")
-            continue
-        if line == "// description:":
-            kept.append(line)
-            in_description = True
-            continue
-        if in_description:
-            if line == "":
-                in_description = False
-                kept.append(line)
-            continue
-        if stripped == "/**":
-            in_doc = [line]
-            continue
-        if in_doc is not None:
-            if stripped == "*/":
-                if len(in_doc) > 1:
-                    kept.extend([in_doc[0], *in_doc[1:], line])
-                in_doc = None
-            elif stripped.startswith("* @"):
-                in_doc.append(line)
-            continue
-        kept.append(line)
-    return "\n".join(kept)
-
-
-def program_failure_view(text: str) -> str:
-    """A ``run_typescript`` failure without its stack's frames, which name
-    lines of each server's own sandbox source."""
-
-    prefix = "run_typescript failed: "
-    if not text.startswith(prefix):
-        return text
-    head, separator, logs = text[len(prefix):].partition("\n\n")
-    try:
-        error = json.loads(head)
-    except json.JSONDecodeError:
-        return text
-    if isinstance(error, dict) and isinstance(error.get("stack"), str):
-        error["stack"] = error["stack"].split("\n", 1)[0] + "\n<frames>"
-    return prefix + json.dumps(error, separators=(",", ":")) + separator + logs
+    return loop_capture.reduce_patches(loop_capture.reduce_turn(scenario, messages))
 
 
 def reduce_code_mode(requests: list[dict[str, Any]], steps: list[Any]) -> None:
@@ -407,9 +289,9 @@ def reduce_code_mode(requests: list[dict[str, Any]], steps: list[Any]) -> None:
             if message.get("role") != "tool" or not isinstance(message.get("content"), str):
                 continue
             if message.get("name") == "search_tool_functions":
-                message["content"] = search_view(message["content"])
+                message["content"] = loop_capture.search_view(message["content"])
             elif message.get("name") == "run_typescript":
-                message["content"] = program_failure_view(message["content"])
+                message["content"] = loop_capture.program_failure_view(message["content"])
 
     def walk(value: Any) -> None:
         if isinstance(value, dict):
@@ -502,7 +384,7 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
         else:
             response = copy.deepcopy(step["response"])
             if "result" in response:
-                response["result"] = agent_loop.reduce_result(response["result"], step.get("pick"))
+                response["result"] = loop_capture.reduce_result(response["result"], step.get("pick"))
                 # The reference lists a runtime's tools in the order of a
                 # Python set.
                 runtime = response["result"].get("runtime") if isinstance(response["result"], dict) else None
@@ -563,14 +445,14 @@ def shared_tools(requests: list[Any]) -> list[Any]:
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    return agent_loop.run_scenario(scenario, [*command, *scenario.get("flags", [])], quiet)
+    return loop_capture.run_scenario(scenario, [*command, *scenario.get("flags", [])], quiet)
 
 
 # A scheduled loop's ID is random: a step names the loops a response
 # created as `$L1`, `$L2`, ... in the order they appeared, the turns that
 # started as `$R1`, `$R2`, ... and the queued turns as `$Q1`, `$Q2`, ...
-_learn = agent_loop.Session.learn
-_substitute = agent_loop.Session.substitute
+_learn = loop_capture.Session.learn
+_substitute = loop_capture.Session.substitute
 
 
 def _learn_loops(self: Any, message: dict[str, Any]) -> None:
@@ -620,13 +502,13 @@ def _substitute_loops(self: Any, value: Any) -> Any:
     return value
 
 
-agent_loop.Session.learn = _learn_loops
-agent_loop.Session.substitute = _substitute_loops
+loop_capture.Session.learn = _learn_loops
+loop_capture.Session.substitute = _substitute_loops
 
 # The loop capture reads these module globals at call time, so the unified
 # views replace the legacy ones for every scenario this script runs.
-agent_loop.persisted = persisted
-agent_loop.request_view = request_view
+loop_capture.persisted = persisted
+loop_capture.request_view = request_view
 
 
 # --------------------------------------------------------------------------
@@ -1178,22 +1060,22 @@ def scenarios() -> list[dict[str, Any]]:
         },
         # -- background titles -----------------------------------------------
         {
-            **agent_loop.TITLES,
+            **loop_capture.TITLES,
             "name": "titles/first-answer",
             "backend": [{"text": "Answer one."}],
             "utility": [{"text": "Parser plan"}],
             "steps": [START, {"turn": "Plan the parser", "linger": 1.5}, PERSISTED],
         },
         {
-            **agent_loop.TITLES,
+            **loop_capture.TITLES,
             "name": "titles/tool-heavy-turn",
             "backend": [{**step, "delay": 0.6} if index in (2, 9) else step
-                        for index, step in enumerate(agent_loop.echo_steps(8))],
+                        for index, step in enumerate(loop_capture.echo_steps(8))],
             "utility": [{"text": "Echo marathon"}, {"text": "Echo marathon two"}],
             "steps": [START, {"turn": "Echo many times", "linger": 1.5}, PERSISTED],
         },
         {
-            **agent_loop.TITLES,
+            **loop_capture.TITLES,
             "name": "titles/after-compaction",
             "backend": [{"text": "Answer one."}, {"text": "A summary of the session."},
                         {"text": "Answer two."}],
@@ -1203,14 +1085,14 @@ def scenarios() -> list[dict[str, Any]]:
                       {"turn": "Second question", "linger": 1.5}, PERSISTED],
         },
         {
-            **agent_loop.TITLES,
+            **loop_capture.TITLES,
             "name": "titles/manual-title-wins",
             "backend": [{"text": "Answer one."}],
             "steps": [START, send("session/rename", sessionId="$S1", title="Mine"),
                       {"turn": "First question", "linger": 1.5}, PERSISTED],
         },
         {
-            **agent_loop.TITLES,
+            **loop_capture.TITLES,
             "name": "titles/generic-answer",
             "backend": [{"text": "Answer one."}, {"text": "Answer two."}],
             "utility": [{"text": "\"New session\""}, {"text": "  Second   try\nignored"}],
@@ -1892,10 +1774,10 @@ def main() -> int:
             command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
-                raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
+                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
             command = [str(binary)]
         selected = [
             scenario
@@ -1937,15 +1819,15 @@ def main() -> int:
                 if by_name.get(entry["name"], {}).get("observed") != entry["observed"]
             ]
             if differing:
-                raise rewind.OracleError("a fresh capture differs for " + ", ".join(differing))
+                raise OracleError("a fresh capture differs for " + ", ".join(differing))
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (rewind.OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"unified harness oracle: {error}", file=sys.stderr)
         return 1
 

@@ -57,13 +57,14 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
-import agents  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
-import rewind  # noqa: E402
-import teleport  # noqa: E402
-from teleport import GITHUB_URL, ok, page, project  # noqa: E402
+import subagent_client  # noqa: E402
+from vibe_code import GITHUB_URL, git_env, ok, page, project  # noqa: E402
+import vibe_code  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/project-links-parity/corpus.json"
@@ -78,29 +79,17 @@ STORE = "projects.toml"
 # --------------------------------------------------------------------------
 
 
-def git(world: acp.World, directory: Path, *args: str, check: bool = True) -> str:
+def git(world: blackbox.World, directory: Path, *args: str, check: bool = True) -> str:
     result = subprocess.run(
         ["git", *args], cwd=directory, env=git_env(world),
         capture_output=True, text=True, check=False,
     )
     if check and result.returncode != 0:
-        raise rewind.OracleError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+        raise OracleError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
 
 
-def git_env(world: acp.World) -> dict[str, str]:
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(world.home),
-        **host_env.windows_base(str(world.home)),
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "LANG": "C.UTF-8",
-        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
-        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
-    }
-
-
-def make_repository(world: acp.World, path: Path, spec: dict[str, Any]) -> None:
+def make_repository(world: blackbox.World, path: Path, spec: dict[str, Any]) -> None:
     """A checkout at ``path``: a commit on ``main`` unless ``commits`` is off,
     the remotes ``spec`` names (one GitHub ``origin`` by default), and
     ``origin/HEAD`` naming ``origin/main`` unless ``originHead`` is off."""
@@ -131,11 +120,11 @@ def make_repository(world: acp.World, path: Path, spec: dict[str, Any]) -> None:
         (path / nested).mkdir(parents=True, exist_ok=True)
 
 
-def lay_out(world: acp.World, layout: dict[str, Any]) -> None:
+def lay_out(world: blackbox.World, layout: dict[str, Any]) -> None:
     (world.home / ".gitconfig").write_text(
         "[user]\n\tname = Oracle\n\temail = oracle@example.com\n"
         "[init]\n\tdefaultBranch = main\n"
-        f"[http]\n\tproxy = {teleport.DEAD_PROXY}\n"
+        f"[http]\n\tproxy = {vibe_code.DEAD_PROXY}\n"
         "[advice]\n\tdetachedHead = false\n",
         encoding="utf-8",
         newline="",
@@ -151,7 +140,7 @@ def lay_out(world: acp.World, layout: dict[str, Any]) -> None:
             make_repository(world, path, spec)
 
 
-def substitute(value: Any, world: acp.World, session: rewind.Session,
+def substitute(value: Any, world: blackbox.World, session: app_server_client.Session,
                picker: str | None = None) -> Any:
     if isinstance(value, dict):
         return {key: substitute(item, world, session, picker) for key, item in value.items()}
@@ -173,7 +162,7 @@ def substitute(value: Any, world: acp.World, session: rewind.Session,
 # --------------------------------------------------------------------------
 
 
-def store_view(world: acp.World) -> dict[str, Any]:
+def store_view(world: blackbox.World) -> dict[str, Any]:
     path = world.vibe_home / STORE
     if not path.exists():
         return {"exists": False}
@@ -185,14 +174,14 @@ def store_view(world: acp.World) -> dict[str, Any]:
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = teleport.Backend(scenario.get("code", {}))
+    backend = vibe_code.Backend(scenario.get("code", {}))
     root = Path(tempfile.mkdtemp(prefix="vibe-project-links-oracle-")).resolve()
-    session = rewind.Session(root)
+    session = app_server_client.Session(root)
     world = session.world
     try:
         lay_out(world, scenario.get("layout", {}))
         (world.vibe_home / "config.toml").write_text(
-            teleport.base_config(backend, scenario), encoding="utf-8", newline=""
+            vibe_code.base_config(backend, scenario), encoding="utf-8", newline=""
         )
         trusted = ", ".join(json.dumps(str(path)) for path in (world.workspace, world.root / "repo"))
         (world.vibe_home / "trusted_folders.toml").write_text(
@@ -212,24 +201,23 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
             path.chmod(int(scenario.get("storeMode", 0o600)))
         env = {
             **git_env(world),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": teleport.API_KEY,
-            "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+            **host_env.isolated(
+                world.home,
+                world.vibe_home,
+                MISTRAL_API_KEY=vibe_code.API_KEY,
+                VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+            ),
         }
         for key, value in scenario.get("env", {}).items():
             if value is None:
                 env.pop(key, None)
             else:
                 env[key] = value
-        server = agents.Server(command, env, world.workspace, {}, world, callbacks=[])
+        server = subagent_client.Server(command, env, world.workspace, {}, world, callbacks=[])
         steps: list[dict[str, Any]] = []
         try:
             run_steps(scenario, server, session, steps, quiet)
-        except (rewind.OracleError, acp.OracleError) as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             server.stop()
@@ -257,8 +245,8 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
 
 def run_steps(
     scenario: dict[str, Any],
-    server: rewind.Server,
-    session: rewind.Session,
+    server: app_server_client.Server,
+    session: app_server_client.Session,
     steps: list[dict[str, Any]],
     quiet: float,
 ) -> None:
@@ -319,7 +307,7 @@ def run_steps(
 # --------------------------------------------------------------------------
 
 
-class Normalizer(teleport.Normalizer):
+class Normalizer(vibe_code.Normalizer):
     pass
 
 
@@ -341,7 +329,7 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
             steps.append(normalizer.value(copy.deepcopy(step)))
     return {
         "steps": steps,
-        "code": [normalizer.value(teleport.code_view(entry)) for entry in run["code"]],
+        "code": [normalizer.value(vibe_code.code_view(entry)) for entry in run["code"]],
     }
 
 
@@ -782,10 +770,10 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
-                raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
+                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
             command = [str(binary), *HARNESS_FLAGS]
         selected = [
             scenario
@@ -828,15 +816,15 @@ def main() -> int:
                 != json.loads(json.dumps(entry["observed"]))
             ]
             if differing:
-                raise rewind.OracleError("a fresh capture differs for " + ", ".join(differing))
+                raise OracleError("a fresh capture differs for " + ", ".join(differing))
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (rewind.OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"project links oracle: {error}", file=sys.stderr)
         return 1
 

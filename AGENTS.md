@@ -50,12 +50,15 @@ documentation use the Linux form; read them relative to the local checkout.
 - Capture behavior with the oracle that owns the surface: an entry point in
   `scripts/parity/`, which takes `--reference <path>` and re-executes itself
   under the reference interpreter, or the `*-oracle.py` beside its corpus in
-  `crates/vibe-cli/tests/runtime-parity/`.
+  `crates/vibe-cli/tests/runtime-parity/`. `scripts/parity/reference.py` is
+  the one place that checks the pin and re-executes a driver; a driver never
+  imports another driver.
 - Rust parity tests replay committed corpora unconditionally and gate only the
   live probe on `vibe_core::parity::off_pin_reason`, so a missing or off-pin
-  checkout skips instead of failing `cargo test`. A new parity test resolves
-  the checkout through `vibe_core::parity::reference_root` and gates the same
-  way.
+  checkout skips instead of failing `cargo test`. A new parity test builds on
+  `vibe_core::parity::replay` (the `parity-replay` feature of a dev-dependency
+  on `vibe-core`), whose `Replay` compares and ledgers a corpus and whose
+  `Capture::probe` and `pinned_reference` resolve and gate the checkout.
 - A committed corpus changes only in a re-pin, which edits both pin sources and
   regenerates every corpus in the same change. A replay that drifts outside a
   re-pin is a regression or an environment leak (see Quality gates); fix the

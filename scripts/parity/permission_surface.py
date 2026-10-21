@@ -39,20 +39,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
-import subprocess
 import sys
 from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 6
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/permission-surface/vocabulary.json")
-INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
-
 #: Token lists whose session pattern is recorded. They cover the three shapes
 #: the table produces (a prefix longer than the arity, a prefix equal to it, a
 #: first token absent from the table) plus the empty list, which the reference
@@ -317,82 +314,18 @@ PATH_SCOPE_SELECTIONS: tuple[str | None, ...] = (None, "exact", "directory_recur
 OUTSIDE_TARGETS: tuple[str, ...] = ("missing-file", "file", "directory")
 
 
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
-    if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git rev-parse failed in {reference}: {result.stderr.strip()}"
-        )
-    commit = result.stdout.strip()
-    if expected_commit and commit != expected_commit:
-        raise OracleError(
-            f"reference checkout is at {commit}, not the pinned {expected_commit}"
-        )
-    return {"commit": commit}
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, interpreter: Path | None
-) -> None:
-    """Re-runs this script under an interpreter that can import ``vibe``."""
-    try:
-        import vibe  # noqa: F401
-
-        return
-    except ImportError:
-        pass
-    candidates = [
-        interpreter,
-        Path(os.environ[INTERPRETER_VARIABLE])
-        if os.environ.get(INTERPRETER_VARIABLE)
-        else None,
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    candidate = next(
-        (path for path in candidates if path is not None and path.is_file()), None
-    )
-    if candidate is None:
-        raise OracleError(
-            f"cannot import `vibe` and no reference interpreter under {reference}"
-        )
-    if Path(sys.executable).resolve() == candidate.resolve():
-        raise OracleError(f"{candidate} cannot import `vibe`")
-    os.execv(
-        str(candidate), [str(candidate), str(Path(__file__).resolve()), *sys.argv[1:]]
-    )
-
-
 # --------------------------------------------------------------------------
 # Capture
 # --------------------------------------------------------------------------
 
 
-def capture_vocabulary(reference: Path) -> dict[str, Any]:
+def capture_vocabulary() -> dict[str, Any]:
     """The scope values and the requirement fields, with their wire aliases.
 
     A field the model excludes from serialization is recorded with
     ``excluded`` set, since it is declared on the model and read on input but
     never crosses the wire: ``literal`` at ``vibe/permissions.py:27``.
     """
-    sys.path.insert(0, str(reference))
     from vibe.permissions import PathGrantScope, PermissionScope, RequiredPermission
 
     scopes = [str(member.value) for member in PermissionScope]
@@ -419,9 +352,8 @@ def capture_vocabulary(reference: Path) -> dict[str, Any]:
     }
 
 
-def capture_arity(reference: Path) -> dict[str, int]:
+def capture_arity() -> dict[str, int]:
     """The arity table, keyed by the command prefix it answers for."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.arity import ARITY
 
     if not ARITY:
@@ -429,9 +361,8 @@ def capture_arity(reference: Path) -> dict[str, int]:
     return {prefix: int(ARITY[prefix]) for prefix in sorted(ARITY)}
 
 
-def capture_session_patterns(reference: Path) -> list[dict[str, Any]]:
+def capture_session_patterns() -> list[dict[str, Any]]:
     """What ``build_session_pattern`` answers for the recorded cases."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.arity import build_session_pattern
 
     return [
@@ -440,9 +371,8 @@ def capture_session_patterns(reference: Path) -> list[dict[str, Any]]:
     ]
 
 
-def capture_wildcard_matches(reference: Path) -> list[dict[str, Any]]:
+def capture_wildcard_matches() -> list[dict[str, Any]]:
     """What ``wildcard_match`` answers for the recorded cases."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.permissions import wildcard_match
 
     return [
@@ -451,7 +381,7 @@ def capture_wildcard_matches(reference: Path) -> list[dict[str, Any]]:
     ]
 
 
-def capture_file_tool_labels(reference: Path) -> dict[str, Any]:
+def capture_file_tool_labels() -> dict[str, Any]:
     """The requirements the shared file-tool chain composes.
 
     They are recorded as format strings this repository re-derives rather than
@@ -467,7 +397,6 @@ def capture_file_tool_labels(reference: Path) -> dict[str, Any]:
     requirement builds on it. One case is asked per target shape, each under a
     directory of its own.
     """
-    sys.path.insert(0, str(reference))
     import glob
     import tempfile
 
@@ -547,7 +476,7 @@ def capture_file_tool_labels(reference: Path) -> dict[str, Any]:
         }
 
 
-def capture_sensitive_matches(reference: Path) -> list[dict[str, Any]]:
+def capture_sensitive_matches() -> list[dict[str, Any]]:
     """What each matcher answers for the recorded pattern and path pairs.
 
     ``resolve_file_tool_permission`` runs ``matches_sensitive_pattern`` over
@@ -558,7 +487,6 @@ def capture_sensitive_matches(reference: Path) -> list[dict[str, Any]]:
     rather than as a verdict, which is what says the sensitive branch has an
     unmatchable input to survive.
     """
-    sys.path.insert(0, str(reference))
     import fnmatch
 
     from vibe.core.tools.utils import matches_sensitive_pattern
@@ -578,7 +506,7 @@ def capture_sensitive_matches(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_sensitive_chain(reference: Path) -> list[dict[str, Any]]:
+def capture_sensitive_chain() -> list[dict[str, Any]]:
     """Whether the whole file-tool chain requires a permission for each case.
 
     Every path here is inside the working directory, so the workdir branch adds
@@ -586,7 +514,6 @@ def capture_sensitive_chain(reference: Path) -> list[dict[str, Any]]:
     is recorded is the resolved permission and the scope of each requirement,
     which are enum values rather than authored text.
     """
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.base import ToolPermission
@@ -627,13 +554,12 @@ def capture_sensitive_chain(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_path_grants(reference: Path) -> dict[str, Any]:
+def capture_path_grants() -> dict[str, Any]:
     """What ``path_grant_pattern`` and ``path_pattern_matches`` answer.
 
     Both are pure functions of strings, so the cases are recorded as written
     and replayed without a filesystem.
     """
-    sys.path.insert(0, str(reference))
     from vibe.permissions import PathGrantScope, path_grant_pattern, path_pattern_matches
 
     return {
@@ -652,9 +578,8 @@ def capture_path_grants(reference: Path) -> dict[str, Any]:
     }
 
 
-def capture_covers(reference: Path) -> list[dict[str, Any]]:
+def capture_covers() -> list[dict[str, Any]]:
     """What ``PermissionStore.covers`` answers for one stored rule."""
-    sys.path.insert(0, str(reference))
     from vibe.core.tools.models import ApprovedRule
     from vibe.core.tools.permissions import PermissionStore
     from vibe.permissions import PermissionScope, RequiredPermission
@@ -689,7 +614,7 @@ def capture_covers(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_list_chain(reference: Path) -> list[dict[str, Any]]:
+def capture_list_chain() -> list[dict[str, Any]]:
     """What the whole file-tool chain answers with one list entry configured.
 
     The answer is the resolved permission and the scope of each requirement,
@@ -697,7 +622,6 @@ def capture_list_chain(reference: Path) -> list[dict[str, Any]]:
     would. The working directory and the outside directory are temporary, so
     the cases are recorded with their placeholders rather than their paths.
     """
-    sys.path.insert(0, str(reference))
     import tempfile
 
     from vibe.core.tools.base import ToolPermission
@@ -741,7 +665,7 @@ def capture_list_chain(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def capture_path_scopes(reference: Path) -> list[dict[str, Any]]:
+def capture_path_scopes() -> list[dict[str, Any]]:
     """Which scopes an approval offers and what each choice grants.
 
     For every requirement list: what ``available_path_scopes`` offers, the
@@ -750,7 +674,6 @@ def capture_path_scopes(reference: Path) -> list[dict[str, Any]]:
     ``approval_grant_permissions`` grants or which of its two refusals it
     raises. The refusal is recorded by its cause, never by its sentence.
     """
-    sys.path.insert(0, str(reference))
     from types import SimpleNamespace
 
     from vibe.app_server._approval_permissions import (
@@ -828,10 +751,10 @@ def capture_path_scopes(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
-def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
-    pin = resolve_reference(reference, expected_commit)
-    vocabulary = capture_vocabulary(reference)
-    arity = capture_arity(reference)
+def build_corpus(commit: str) -> dict[str, Any]:
+    pin = {"commit": commit}
+    vocabulary = capture_vocabulary()
+    arity = capture_arity()
     return {
         "schemaVersion": SCHEMA_VERSION,
         "reference": pin,
@@ -862,15 +785,15 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         "pathGrantScopes": vocabulary["pathGrantScopes"],
         "requirement": vocabulary["requirement"],
         "arity": arity,
-        "sessionPatterns": capture_session_patterns(reference),
-        "wildcardMatches": capture_wildcard_matches(reference),
-        "fileToolChain": capture_file_tool_labels(reference),
-        "sensitiveMatches": capture_sensitive_matches(reference),
-        "sensitiveChain": capture_sensitive_chain(reference),
-        "pathGrants": capture_path_grants(reference),
-        "covers": capture_covers(reference),
-        "listChain": capture_list_chain(reference),
-        "pathScopes": capture_path_scopes(reference),
+        "sessionPatterns": capture_session_patterns(),
+        "wildcardMatches": capture_wildcard_matches(),
+        "fileToolChain": capture_file_tool_labels(),
+        "sensitiveMatches": capture_sensitive_matches(),
+        "sensitiveChain": capture_sensitive_chain(),
+        "pathGrants": capture_path_grants(),
+        "covers": capture_covers(),
+        "listChain": capture_list_chain(),
+        "pathScopes": capture_path_scopes(),
     }
 
 
@@ -892,11 +815,12 @@ def main() -> int:
     arguments = parser.parse_args()
 
     try:
-        reexecute_with_reference_interpreter(arguments.reference, arguments.interpreter)
-        corpus = build_corpus(
+        commit, _ = reexecute_pinned(
             arguments.reference,
             None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            override=arguments.interpreter,
         )
+        corpus = build_corpus(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

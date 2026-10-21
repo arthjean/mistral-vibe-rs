@@ -30,30 +30,28 @@
 //! of the summary this file prints.
 
 #![cfg(feature = "test-fixtures")]
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::parity::replay::{Capture, Entry, Prose, Replay, entries, scenarios};
 
-/// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("unified-harness-parity/corpus.json");
 
 /// The scorecard the accepted divergence below is decided in.
 const SCORECARD: &str = include_str!("../../../docs/parity.md");
 
-const CAPTURE_SCRIPT: &str = "scripts/parity/unified_harness.py";
+const CAPTURE: Capture = Capture {
+    script: "scripts/parity/unified_harness.py",
+    family: &[],
+    // How many scenarios the capture script runs side by side. Each owns its
+    // directories, backend and server processes.
+    arguments: &["--jobs", "4"],
+};
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
 const SCENARIO_FLOOR: usize = 91;
-
-/// How many scenarios the capture script runs side by side. Each owns its
-/// directories, backend and server processes.
-const JOBS: &str = "4";
 
 /// The accepted divergence every entry below stands on.
 const OWN_PROSE: &str = "The Unified Harness's own prose";
@@ -64,6 +62,20 @@ struct Divergence {
     /// Every difference whose JSON pointer starts with this prefix is covered.
     pointer: &'static str,
     reason: &'static str,
+}
+
+impl Entry for Divergence {
+    fn covers(&self, scenario: &str, pointer: &str) -> bool {
+        self.scenarios.contains(&scenario) && pointer.starts_with(self.pointer)
+    }
+
+    fn label(&self) -> String {
+        self.pointer.to_owned()
+    }
+
+    fn scenarios(&self) -> &[&str] {
+        self.scenarios
+    }
 }
 
 const SELECTIONS: &[&str] = &["selection/default", "selection/experimental-flag"];
@@ -151,6 +163,16 @@ struct FieldDivergence {
     reason: &'static str,
 }
 
+impl Entry for FieldDivergence {
+    fn covers(&self, _scenario: &str, pointer: &str) -> bool {
+        pointer.ends_with(self.suffix)
+    }
+
+    fn label(&self) -> String {
+        self.suffix.to_owned()
+    }
+}
+
 const FIELDS: &[FieldDivergence] = &[
     FieldDivergence {
         suffix: "/system/0/prose",
@@ -170,182 +192,25 @@ const FIELDS: &[FieldDivergence] = &[
     },
 ];
 
-fn repository() -> PathBuf {
-    vibe_core::platform::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
-        .expect("the workspace root resolves")
-}
-
-fn scenarios(corpus: &Value) -> BTreeMap<String, &Value> {
-    corpus["scenarios"]
-        .as_array()
-        .expect("the corpus holds a scenario list")
-        .iter()
-        .map(|entry| {
-            (
-                entry["name"]
-                    .as_str()
-                    .expect("every scenario is named")
-                    .to_owned(),
-                entry,
-            )
-        })
-        .collect()
-}
-
-/// Every JSON pointer at which `port` departs from `reference`.
-fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
-    match (reference, port) {
-        (Value::Object(left), Value::Object(right)) => {
-            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
-            for key in keys {
-                let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
-                match (left.get(key), right.get(key)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        (Value::Array(left), Value::Array(right)) => {
-            for index in 0..left.len().max(right.len()) {
-                let child = format!("{pointer}/{index}");
-                match (left.get(index), right.get(index)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        _ if reference != port => found.push(pointer.to_owned()),
-        _ => {}
-    }
-}
-
-fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
-    Command::new("python3")
-        .arg(repository().join(CAPTURE_SCRIPT))
-        .args(arguments)
-        .args(["--jobs", JOBS])
-        .current_dir(repository())
-        .env_remove("FORCE_COLOR")
-        .output()
-        .expect("python3 runs the Unified Harness capture script")
-}
-
 #[test]
 #[cfg_attr(
     windows,
     ignore = "windows by design: the mcp/* fixture servers are #! scripts CreateProcess cannot launch"
 )]
 fn the_port_runs_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    let recorded = scenarios(&corpus);
-    assert!(
-        recorded.len() >= SCENARIO_FLOOR,
-        "the corpus holds {} scenarios, below the floor of {SCENARIO_FLOOR}",
-        recorded.len()
-    );
-
-    let output_path =
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("unified-harness-parity-port.json");
-    let output = capture(&[
-        "--server".as_ref(),
-        env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture").as_ref(),
-        "--output".as_ref(),
-        output_path.as_os_str(),
-    ]);
-    assert!(
-        output.status.success(),
-        "the port capture failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let replayed: Value = serde_json::from_str(
-        &std::fs::read_to_string(&output_path).expect("the port capture is readable"),
-    )
-    .expect("the port capture parses");
-    let replayed = scenarios(&replayed);
-    assert_eq!(
-        recorded.keys().collect::<Vec<_>>(),
-        replayed.keys().collect::<Vec<_>>(),
-        "the capture script declares other scenarios than the corpus records; recapture the \
-         reference with `{CAPTURE_SCRIPT}`"
-    );
-
-    let mut unexplained = Vec::new();
-    // One count per entry and scenario it names, so an entry that stopped
-    // reproducing in one of its scenarios is reported for that one.
-    let mut reproduced = BTreeMap::<(usize, &str), usize>::new();
-    let mut fields = vec![0_usize; FIELDS.len()];
-    let mut conformant = 0;
-    for (name, reference) in &recorded {
-        let port = replayed[name];
-        assert_eq!(
-            reference["scenario"], port["scenario"],
-            "the capture script changed scenario {name} since the corpus was recorded; \
-             recapture the reference with `{CAPTURE_SCRIPT}`"
-        );
-        let mut found = Vec::new();
-        differences(&reference["observed"], &port["observed"], "", &mut found);
-        if found.is_empty() {
-            conformant += 1;
-        }
-        for pointer in found {
-            match LEDGER.iter().position(|entry| {
-                entry.scenarios.contains(&name.as_str()) && pointer.starts_with(entry.pointer)
-            }) {
-                Some(index) => {
-                    let scenario = LEDGER[index]
-                        .scenarios
-                        .iter()
-                        .find(|scenario| **scenario == name.as_str())
-                        .expect("the entry names the scenario it matched");
-                    *reproduced.entry((index, scenario)).or_default() += 1;
-                }
-                None => match FIELDS
-                    .iter()
-                    .position(|field| pointer.ends_with(field.suffix))
-                {
-                    Some(index) => fields[index] += 1,
-                    None => unexplained.push(format!(
-                        "{name} {pointer}\n  reference: {}\n  port:      {}",
-                        reference["observed"]
-                            .pointer(&pointer)
-                            .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                        port["observed"]
-                            .pointer(&pointer)
-                            .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                    )),
-                },
-            }
-        }
+    Replay {
+        heading: "unified harness parity:",
+        corpus: CORPUS,
+        floor: SCENARIO_FLOOR,
+        capture: &CAPTURE,
+        port: &[
+            "--server",
+            env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
+        ],
+        output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("unified-harness-parity-port.json"),
+        prose: Prose::Compared,
     }
-    let mut stale = Vec::new();
-    for (index, entry) in LEDGER.iter().enumerate() {
-        for scenario in entry.scenarios {
-            if !reproduced.contains_key(&(index, *scenario)) {
-                stale.push(format!("{scenario} {}", entry.pointer));
-            }
-        }
-    }
-    for (field, count) in FIELDS.iter().zip(&fields) {
-        if *count == 0 {
-            stale.push(field.suffix.to_owned());
-        }
-    }
-    println!(
-        "unified harness parity: {conformant}/{} scenarios conformant, {} ledgered differences \
-         across {} entries",
-        recorded.len(),
-        reproduced.values().chain(&fields).sum::<usize>(),
-        LEDGER.len() + FIELDS.len()
-    );
-    assert!(
-        unexplained.is_empty(),
-        "the port departs from the corpus where no ledger entry says it may:\n{}",
-        unexplained.join("\n")
-    );
-    assert!(
-        stale.is_empty(),
-        "these ledger entries no longer reproduce and should be removed: {stale:?}"
-    );
+    .run(entries(LEDGER).chain(entries(FIELDS)));
 }
 
 #[test]
@@ -383,17 +248,5 @@ fn every_ledger_entry_stands_on_the_accepted_divergence_and_a_recorded_scenario(
 /// missing checkout from failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "unified harness") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return;
-    }
-    let output = capture(&["--check".as_ref(), "--reference".as_ref(), root.as_os_str()]);
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `{CAPTURE_SCRIPT}`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    CAPTURE.probe("unified harness");
 }

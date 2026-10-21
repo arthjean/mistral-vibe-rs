@@ -58,10 +58,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
-import rewind  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/session-parity/corpus.json"
@@ -95,16 +96,12 @@ TOKEN = re.compile(r"\$C(\d+)")
 TURN_BACKEND = [{"text": f"Answer {index}."} for index in range(1, 13)]
 
 
-class OracleError(RuntimeError):
-    pass
-
-
 # --------------------------------------------------------------------------
 # What a client learns from the answers
 # --------------------------------------------------------------------------
 
 
-class Sessions(rewind.Session):
+class Sessions(app_server_client.Session):
     """The rewind oracle's session, also learning page cursors and forks."""
 
     def __init__(self, root: Path) -> None:
@@ -142,20 +139,13 @@ class Sessions(rewind.Session):
 # --------------------------------------------------------------------------
 
 
-def environment(world: acp.World, backend: acp.Backend) -> dict[str, str]:
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(world.home),
-        **host_env.windows_base(str(world.home)),
-        "VIBE_HOME": str(world.vibe_home),
-        "MISTRAL_API_KEY": "oracle-key",
-        "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-        "LANG": "C.UTF-8",
-        "TERM": "dumb",
-        "NO_COLOR": "1",
-        "CI": "true",
-        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
-    }
+def environment(world: blackbox.World, backend: blackbox.Backend) -> dict[str, str]:
+    return host_env.isolated(
+        world.home,
+        world.vibe_home,
+        MISTRAL_API_KEY="oracle-key",
+        VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+    )
 
 
 class Connection:
@@ -165,11 +155,11 @@ class Connection:
         self,
         command: list[str],
         env: dict[str, str],
-        world: acp.World,
+        world: blackbox.World,
         quiet: float,
         client: dict[str, Any] | None = None,
     ) -> None:
-        self.server = rewind.Server(command, env, world.workspace, {}, world)
+        self.server = app_server_client.Server(command, env, world.workspace, {}, world)
         self.identifier = 1
         self.quiet = quiet
         client_info = {"name": "session-oracle", "version": "0", **(client or {})}
@@ -186,7 +176,7 @@ class Connection:
         self.server.stop()
 
 
-class Backend(rewind.RecordingBackend):
+class Backend(app_server_client.RecordingBackend):
     """The recording stand-in, answering a fast-model probe apart.
 
     Since v2.26.0 a root session opened with titles on first asks the provider
@@ -212,7 +202,7 @@ class Backend(rewind.RecordingBackend):
             if body.get("max_tokens") != 1 or body.get("tools") or body.get("stream"):
                 # The body is handed back, and the socket after it.
                 stream = self.rfile
-                self.rfile = rewind._Replay(raw, stream)
+                self.rfile = app_server_client.Replay(raw, stream)
                 try:
                     scripted(self)
                 finally:
@@ -249,15 +239,15 @@ def run_scenario(scenario: dict[str, Any], command: list[str], dialect: str, qui
                 config = config.replace(token, json.dumps(str(path))[1:-1])
         config = session.substitute(config)
         (world.vibe_home / "config.toml").write_text(
-            rewind.base_config(backend, config), encoding="utf-8", newline=""
+            app_server_client.base_config(backend, config), encoding="utf-8", newline=""
         )
-        acp.write_tree(world.workspace, scenario.get("files", {}))
+        blackbox.write_tree(world.workspace, scenario.get("files", {}))
         env = environment(world, backend)
         steps: list[dict[str, Any]] = []
         try:
             connections[1] = Connection(command, env, world, quiet, scenario.get("client"))
             run_steps(scenario, connections, command, env, session, steps, dialect, quiet)
-        except (OracleError, rewind.OracleError, acp.OracleError) as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             for connection in connections.values():
@@ -326,7 +316,7 @@ def run_steps(
         identifier = connection.next_id()
         server = connection.server
         if "start" in step:
-            params = rewind.render_start(dialect, world.workspace, step["start"].get("agent", "auto-approve"))
+            params = app_server_client.render_start(dialect, world.workspace, step["start"].get("agent", "auto-approve"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "session/start", "params": params})
             for message in server.collect(identifier, quiet):
                 session.learn(message)
@@ -334,8 +324,8 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": rewind.render_turn(dialect, target, step["turn"])})
-            for message in server.wait_for(rewind.settles({})):
+                         "params": app_server_client.render_turn(dialect, target, step["turn"])})
+            for message in server.wait_for(app_server_client.settles({})):
                 session.learn(message)
             for message in server.collect(None, quiet):
                 session.learn(message)
@@ -356,13 +346,13 @@ def run_steps(
         })
 
 
-def save_dir(world: acp.World, relative: str | None) -> Path:
+def save_dir(world: blackbox.World, relative: str | None) -> Path:
     """The save directory a step names relative to the scenario root, or the
     one the shipped configuration resolves."""
     return world.root / relative if relative else world.vibe_home / "logs/session"
 
 
-def seed(world: acp.World, spec: dict[str, Any]) -> None:
+def seed(world: blackbox.World, spec: dict[str, Any]) -> None:
     """Writes one session the way the reference lays it out on disk."""
     directory = save_dir(world, spec.get("saveDir")) / spec["directory"]
     directory.mkdir(parents=True, exist_ok=True)
@@ -381,7 +371,7 @@ def seed(world: acp.World, spec: dict[str, Any]) -> None:
     )
 
 
-def store(world: acp.World, spec: Any) -> dict[str, Any]:
+def store(world: blackbox.World, spec: Any) -> dict[str, Any]:
     """What the session store holds: every path under the save directory, each
     session's metadata and the roles its log records."""
     relative = spec if isinstance(spec, str) else None
@@ -430,7 +420,7 @@ def store(world: acp.World, spec: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-class Normalizer(rewind.Normalizer):
+class Normalizer(app_server_client.Normalizer):
     def cursor(self, value: str) -> str:
         padded = value + "=" * (-len(value) % 4)
         try:
@@ -953,7 +943,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw answers")
-    parser.add_argument("--quiet", type=float, default=rewind.QUIET_SECONDS)
+    parser.add_argument("--quiet", type=float, default=app_server_client.QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
@@ -968,7 +958,7 @@ def main() -> int:
             reference = {"commit": "server-override"}
             dialect = arguments.dialect or "port"
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
@@ -1019,10 +1009,10 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (OracleError, acp.OracleError, rewind.OracleError) as error:
+    except OracleError as error:
         print(f"session oracle: {error}", file=sys.stderr)
         return 1
 

@@ -19,6 +19,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
+use crate::parity::replay::{Capture, Prose, differences};
 use crate::plugins::compatibility::PluginMcpServer;
 use crate::plugins::diagnostics::PluginConfigIssue;
 use crate::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
@@ -382,32 +383,6 @@ async fn resolve_case(case: &Value) -> Value {
     summarize(&home, &resolved, &materialized)
 }
 
-fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
-    match (reference, port) {
-        (Value::Object(left), Value::Object(right)) => {
-            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
-            for key in keys {
-                let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
-                match (left.get(key), right.get(key)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        (Value::Array(left), Value::Array(right)) => {
-            for index in 0..left.len().max(right.len()) {
-                let child = format!("{pointer}/{index}");
-                match (left.get(index), right.get(index)) {
-                    (Some(left), Some(right)) => differences(left, right, &child, found),
-                    _ => found.push(child),
-                }
-            }
-        }
-        _ if reference != port => found.push(pointer.to_owned()),
-        _ => {}
-    }
-}
-
 #[tokio::test]
 async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledger_names() {
     let fixtures: Value = serde_json::from_str(FIXTURES).unwrap();
@@ -430,8 +405,7 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
     let mut conformant = 0;
     for (name, reference) in recorded {
         let port = resolve_case(&declared[name]).await;
-        let mut found = Vec::new();
-        differences(reference, &port, "", &mut found);
+        let found = differences(reference, &port, Prose::Compared);
         if found.is_empty() {
             conformant += 1;
         }
@@ -479,28 +453,10 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
 /// missing checkout from failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = crate::parity::reference_root();
-    if let Some(reason) = crate::parity::off_pin_reason(&root, "plugins resolve") {
-        eprintln!("{reason}");
-        eprintln!(
-            "the committed corpus replayed regardless; restore with `{}`",
-            crate::parity::RESTORE_COMMAND
-        );
-        return;
+    Capture {
+        script: "scripts/parity/plugins.py",
+        family: &["--family", "resolve"],
+        arguments: &[],
     }
-    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = std::process::Command::new("python3")
-        .arg(repository.join("scripts/parity/plugins.py"))
-        .args(["--family", "resolve", "--check", "--reference"])
-        .arg(&root)
-        .current_dir(&repository)
-        .env_remove("FORCE_COLOR")
-        .output()
-        .expect("python3 runs the plugins capture script");
-    assert!(
-        output.status.success(),
-        "the pinned reference no longer answers what the corpus records; regenerate it with \
-         `scripts/parity/plugins.py --family resolve`: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    .probe("plugins resolve");
 }

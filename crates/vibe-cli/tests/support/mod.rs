@@ -6,6 +6,9 @@
 //! failure the product never produces on a real host. Without `PATHEXT`,
 //! `COMSPEC`, `TEMP`, and `TMP`, executable lookup, shells, and temporary files
 //! misbehave the same way.
+//!
+//! The `vibe-acp` tests compile this module too, through a `#[path]`
+//! attribute, so both binaries launch from the same base set.
 
 #![allow(
     dead_code,
@@ -56,6 +59,49 @@ impl FixtureEnvironment for Command {
         }
         self
     }
+}
+
+/// A launch root holding the profile directory a binary resolves its home
+/// under, what Git Bash exports as `HOME`, which Windows resolution ignores,
+/// and a project to start in.
+pub struct HomeLayout {
+    _root: tempfile::TempDir,
+    pub profile: PathBuf,
+    pub bash_home: PathBuf,
+    pub project: PathBuf,
+}
+
+pub fn home_layout() -> HomeLayout {
+    let root = tempfile::tempdir().expect("fixture root");
+    let [profile, bash_home, project] =
+        ["profile", "bash-home", "project"].map(|name| root.path().join(name));
+    for directory in [&profile, &bash_home, &project] {
+        std::fs::create_dir_all(directory).expect("fixture directory");
+    }
+    HomeLayout {
+        _root: root,
+        profile,
+        bash_home,
+        project,
+    }
+}
+
+impl HomeLayout {
+    /// The environment that names the profile as the home: `USERPROFILE` on
+    /// Windows, with Git Bash's `HOME` beside it, and `HOME` elsewhere.
+    pub fn profile_environment(&self) -> Vec<(&'static str, &Path)> {
+        if cfg!(windows) {
+            vec![("USERPROFILE", &self.profile), ("HOME", &self.bash_home)]
+        } else {
+            vec![("HOME", &self.profile)]
+        }
+    }
+}
+
+/// The log file a launch opens first, under `vibe_home`, which shows where the
+/// home resolved even when the launch fails right after.
+pub fn log_file(vibe_home: &Path) -> PathBuf {
+    vibe_home.join("logs").join("vibe.log")
 }
 
 /// `path` resolved through the filesystem, in the form a user types and the

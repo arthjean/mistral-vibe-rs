@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+# `parity::replay`, the corpus replay the parity tests of the other crates share.
+parity-replay = []
+
 [dependencies]
 aws-lc-rs.workspace = true
 base64.workspace = true

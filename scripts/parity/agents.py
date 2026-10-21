@@ -55,11 +55,12 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
-import hooks  # noqa: E402
-import rewind  # noqa: E402
+import app_server_client  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
+import subagent_client  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/agents-parity/corpus.json"
@@ -69,105 +70,11 @@ QUIET_SECONDS = 0.5
 
 
 # --------------------------------------------------------------------------
-# One server process
-# --------------------------------------------------------------------------
-
-
-class Server(rewind.Server):
-    """A server whose callbacks the scenario answers from a script.
-
-    A ``callback/call`` is acknowledged at once and answered with the next
-    scripted output, the last one repeating, so an approval or a question the
-    session raises settles without a step of its own.
-    """
-
-    def __init__(self, *args: Any, callbacks: list[dict[str, Any]], **kwargs: Any) -> None:
-        self.callbacks = callbacks
-        self.answered_callbacks = 0
-        self.callback_log: list[dict[str, Any]] = []
-        super().__init__(*args, **kwargs)
-
-    def _answer(self, request: dict[str, Any]) -> None:
-        if request.get("method") != "callback/call":
-            super()._answer(request)
-            return
-        params = request.get("params") or {}
-        self.callback_log.append(params)
-        callback_id = (params.get("callback") or {}).get("callbackId")
-        self.send({"jsonrpc": "2.0", "id": request["id"],
-                   "result": {"callbackId": callback_id, "accepted": True}})
-        if not self.callbacks:
-            return
-        script = self.callbacks[min(self.answered_callbacks, len(self.callbacks) - 1)]
-        self.answered_callbacks += 1
-        self.send({"jsonrpc": "2.0", "id": f"callback-{self.answered_callbacks}",
-                   "method": "callback/result",
-                   "params": {
-                       "sessionId": (params.get("callback") or {}).get("sessionId"),
-                       "result": {"callbackId": callback_id, **callback_output(script, params)},
-                   }})
-
-
-def callback_output(script: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    """The answer a scripted client gives one callback.
-
-    ``approve`` and ``deny`` settle an approval; ``choose`` answers every
-    question of a user input callback with the option carrying that label.
-    """
-
-    if "approve" in script:
-        decision = "approve" if script["approve"] else "deny"
-        return {"output": {"type": "approval", "decision": {"type": decision}}}
-    if "choose" in script:
-        detail = (params.get("callback") or {}).get("detail") or {}
-        questions = (detail.get("request") or {}).get("questions") or []
-        return {"output": {"type": "user_input", "result": {
-            "answers": [
-                {"question": question.get("question", ""), "answer": script["choose"],
-                 "isOther": False}
-                for question in questions
-            ],
-            "cancelled": False,
-        }}}
-    return script
-
-
-# --------------------------------------------------------------------------
 # Running a scenario
 # --------------------------------------------------------------------------
 
 
-class Session(rewind.Session):
-    """What a scenario learned, plus the child sessions a parent linked."""
-
-    def __init__(self, root: Path) -> None:
-        super().__init__(root)
-        self.children: list[str] = []
-
-    def learn(self, message: dict[str, Any]) -> None:
-        super().learn(message)
-        for operation in (message.get("params") or {}).get("patch") or []:
-            if (
-                isinstance(operation, dict)
-                and operation.get("path") == "/detail/childSessionId"
-                and isinstance(operation.get("value"), str)
-                and operation["value"] not in self.children
-            ):
-                self.children.append(operation["value"])
-
-    def substitute(self, value: Any) -> Any:
-        value = super().substitute(value)
-        if isinstance(value, str):
-            for index in range(len(self.children), 0, -1):
-                value = value.replace(f"$K{index}", self.children[index - 1])
-        elif isinstance(value, dict):
-            return {key: self.substitute(item) for key, item in value.items()}
-        elif isinstance(value, list):
-            return [self.substitute(item) for item in value]
-        return value
-
-
-def write_agents(world: acp.World, root: Path, agents: dict[str, dict[str, str]]) -> None:
+def write_agents(world: blackbox.World, root: Path, agents: dict[str, dict[str, str]]) -> None:
     targets = {
         "project": world.workspace / ".vibe/agents",
         "user": world.vibe_home / "agents",
@@ -181,9 +88,9 @@ def write_agents(world: acp.World, root: Path, agents: dict[str, dict[str, str]]
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
-    backend = hooks.Backend()
+    backend = subagent_client.Backend()
     root = Path(tempfile.mkdtemp(prefix="vibe-agents-oracle-")).resolve()
-    session = Session(root)
+    session = subagent_client.Session(root)
     world = session.world
     try:
         backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
@@ -197,7 +104,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
                 "$WS", world.workspace.as_posix()
             )
         (world.vibe_home / "config.toml").write_text(
-            session.substitute(config) + acp.base_config(backend),
+            session.substitute(config) + blackbox.base_config(backend),
             encoding="utf-8",
             newline="",
         )
@@ -207,27 +114,20 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
                 encoding="utf-8",
                 newline="",
             )
-        acp.write_tree(world.workspace, scenario.get("files", {}))
+        blackbox.write_tree(world.workspace, scenario.get("files", {}))
         write_agents(world, root, scenario.get("agents", {}))
-        env = {
-            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-            "HOME": str(world.home),
-            **host_env.windows_base(str(world.home)),
-            "VIBE_HOME": str(world.vibe_home),
-            "MISTRAL_API_KEY": "oracle-key",
-            "VIBE_API_BASE": f"{backend.base}/v1/chat/completions",
-            "LANG": "C.UTF-8",
-            "TERM": "dumb",
-            "NO_COLOR": "1",
-            "CI": "true",
-            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
-        }
-        server = Server(command, env, world.workspace, {}, world,
+        env = host_env.isolated(
+            world.home,
+            world.vibe_home,
+            MISTRAL_API_KEY="oracle-key",
+            VIBE_API_BASE=f"{backend.base}/v1/chat/completions",
+        )
+        server = subagent_client.Server(command, env, world.workspace, {}, world,
                         callbacks=copy.deepcopy(scenario.get("callbacks", [])))
         steps: list[dict[str, Any]] = []
         try:
             run_steps(scenario, server, session, steps, quiet)
-        except (rewind.OracleError, acp.OracleError) as error:
+        except OracleError as error:
             steps.append({"failure": str(error)})
         finally:
             server.stop()
@@ -262,7 +162,7 @@ def request_view(body: dict[str, Any]) -> dict[str, Any]:
     view: dict[str, Any] = {
         "model": body.get("model"),
         "tools": tools,
-        "conversation": hooks.transcript(body.get("messages", [])),
+        "conversation": subagent_client.transcript(body.get("messages", [])),
     }
     for key in ("temperature", "reasoning_effort", "max_tokens"):
         if key in body:
@@ -272,8 +172,8 @@ def request_view(body: dict[str, Any]) -> dict[str, Any]:
 
 def run_steps(
     scenario: dict[str, Any],
-    server: Server,
-    session: Session,
+    server: subagent_client.Server,
+    session: subagent_client.Session,
     steps: list[dict[str, Any]],
     quiet: float,
 ) -> None:
@@ -296,14 +196,14 @@ def run_steps(
             observed = server.collect(identifier, quiet)
             for message in observed:
                 session.learn(message)
-            response = response_to(observed, identifier)
+            response = subagent_client.response_to(observed, identifier)
             steps.append({"method": "session/start", "response": start_view(response)})
             continue
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": rewind.render_turn("reference", target, step["turn"])})
-            observed = server.wait_for(rewind.settles({}))
+                         "params": app_server_client.render_turn("reference", target, step["turn"])})
+            observed = server.wait_for(app_server_client.settles({}))
             observed += server.collect(None, quiet)
             for message in observed:
                 session.learn(message)
@@ -324,15 +224,9 @@ def run_steps(
         steps.append({
             "method": request["method"],
             "pick": step.get("pick"),
-            "response": {k: v for k, v in (response_to(observed, identifier) or {}).items()
+            "response": {k: v for k, v in (subagent_client.response_to(observed, identifier) or {}).items()
                          if k != "jsonrpc"},
         })
-
-
-def response_to(observed: list[dict[str, Any]], identifier: int) -> dict[str, Any] | None:
-    return next(
-        (m for m in observed if "method" not in m and m.get("id") == identifier), None
-    )
 
 
 def start_view(response: dict[str, Any] | None) -> dict[str, Any]:
@@ -356,7 +250,7 @@ def read_toml(path: Path) -> Any:
         return {"unparsed": True}
 
 
-def saved_tree(world: acp.World) -> list[Any]:
+def saved_tree(world: blackbox.World) -> list[Any]:
     """The saved sessions: every directory's files, and each `meta.json`'s
     child links."""
 
@@ -573,7 +467,7 @@ class Reducer:
                 {**operation, "value": self.state(operation.get("value"))}
                 for operation in params.get("patch") or []
                 if isinstance(operation, dict)
-                and str(operation.get("path", "")).rsplit("/", 1)[-1] not in rewind.TIME_KEYS
+                and str(operation.get("path", "")).rsplit("/", 1)[-1] not in app_server_client.TIME_KEYS
             ]
             return {"method": method, "entryId": params.get("entryId"), "patch": patch}
         return None
@@ -618,7 +512,7 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
     }
 
 
-class Normalizer(hooks.Normalizer):
+class Normalizer(subagent_client.Normalizer):
     def text(self, value: str) -> str:
         value = CHILD_DIRECTORY.sub(r"\1<time>_<short>", super().text(value))
         return PLAN_FILE.sub(r"\1<plan>.md", value)
@@ -1040,10 +934,10 @@ def main() -> int:
             command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
-                raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
+                raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
             command = [str(binary), *HARNESS_FLAGS]
         selected = [
             scenario
@@ -1085,15 +979,15 @@ def main() -> int:
                 if by_name.get(entry["name"], {}).get("observed") != entry["observed"]
             ]
             if differing:
-                raise rewind.OracleError("a fresh capture differs for " + ", ".join(differing))
+                raise OracleError("a fresh capture differs for " + ", ".join(differing))
             print(f"{len(captured)} scenarios match the committed corpus")
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         return 0
-    except (rewind.OracleError, acp.OracleError) as error:
+    except OracleError as error:
         print(f"agents oracle: {error}", file=sys.stderr)
         return 1
 

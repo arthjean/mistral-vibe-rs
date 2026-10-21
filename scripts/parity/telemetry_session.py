@@ -61,8 +61,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import acp  # noqa: E402
+import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from reference import OracleError, require_pin  # noqa: E402
 import host_env  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -81,10 +82,6 @@ TUI_QUIET_SECONDS = 2.0
 TUI_SIZE = (40, 120)
 
 SURFACES = ("programmatic", "acp", "tui")
-
-
-class OracleError(RuntimeError):
-    pass
 
 
 # --------------------------------------------------------------------------
@@ -214,7 +211,7 @@ class Stand:
                 if body.get("stream", True):
                     payload = b"".join(
                         b"data: " + json.dumps(item).encode() + b"\n\n"
-                        for item in acp.completion_chunks(response, model)
+                        for item in blackbox.completion_chunks(response, model)
                     ) + b"data: [DONE]\n\n"
                     self.send_response(200)
                     self.send_header("content-type", "text/event-stream")
@@ -535,10 +532,10 @@ def programmatic_scenarios() -> list[dict[str, Any]]:
 
 
 def acp_prompt(identifier: int, value: str, session: str = "$S1") -> dict[str, Any]:
-    return acp.prompt(identifier, value, session)
+    return blackbox.prompt(identifier, value, session)
 
 
-ACP_OPEN = [acp.INITIALIZE, acp.NEW_SESSION]
+ACP_OPEN = [blackbox.INITIALIZE, blackbox.NEW_SESSION]
 BASH = call("call_shell", "bash", command="true")
 
 
@@ -561,19 +558,19 @@ def acp_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "acp/approval-approved",
-            "client": {"session/request_permission": acp.APPROVE_ONCE},
+            "client": {"session/request_permission": blackbox.APPROVE_ONCE},
             "steps": [*ACP_OPEN, {"backend": [BASH, text("Ran.")]}, acp_prompt(2, "run it")],
         },
         {
             "name": "acp/approval-rejected",
-            "client": {"session/request_permission": acp.REJECT},
+            "client": {"session/request_permission": blackbox.REJECT},
             "steps": [*ACP_OPEN, {"backend": [BASH, text("No.")]}, acp_prompt(2, "run it")],
         },
         {
             "name": "acp/second-session",
             "steps": [
                 *ACP_OPEN,
-                acp.new_session(2),
+                blackbox.new_session(2),
                 {"backend": [text("Hi.")]},
                 acp_prompt(3, "hello", "$S2"),
             ],
@@ -585,8 +582,8 @@ def acp_scenarios() -> list[dict[str, Any]]:
                 {"backend": [text("One.")]},
                 acp_prompt(2, "first"),
                 {"restart": True},
-                acp.INITIALIZE,
-                acp.request(
+                blackbox.INITIALIZE,
+                blackbox.request(
                     1, "session/load", {"sessionId": "$S1", "cwd": "$WS", "mcpServers": []}
                 ),
                 {"backend": [text("Two.")]},
@@ -678,20 +675,13 @@ class World:
 
 
 def environment(world: World, scenario: dict[str, Any], stand: Stand) -> dict[str, str]:
-    env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": str(world.home),
-        **host_env.windows_base(str(world.home)),
-        "VIBE_HOME": str(world.vibe_home),
-        "MISTRAL_API_KEY": "oracle-key",
-        "VIBE_API_BASE": f"{stand.base}/v1/chat/completions",
-        "VIBE_ORACLE_TELEMETRY": "1",
-        "LANG": "C.UTF-8",
-        "TERM": "dumb",
-        "NO_COLOR": "1",
-        "CI": "true",
-        "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
-    }
+    env = host_env.isolated(
+        world.home,
+        world.vibe_home,
+        MISTRAL_API_KEY="oracle-key",
+        VIBE_API_BASE=f"{stand.base}/v1/chat/completions",
+        VIBE_ORACLE_TELEMETRY="1",
+    )
     for key, value in scenario.get("env", {}).items():
         if value is None:
             env.pop(key, None)
@@ -743,7 +733,7 @@ def run_acp(
 
     runs = []
     policy = copy.deepcopy(scenario.get("client", {}))
-    agent = acp.Agent(command, env, world.workspace, policy, world)
+    agent = blackbox.Agent(command, env, world.workspace, policy, world)
 
     def close() -> None:
         code = agent.stop()
@@ -754,7 +744,7 @@ def run_acp(
         for step in scenario["steps"]:
             if "restart" in step:
                 close()
-                agent = acp.Agent(command, env, world.workspace, policy, world)
+                agent = blackbox.Agent(command, env, world.workspace, policy, world)
                 continue
             if "backend" in step:
                 stand.responses.extend(copy.deepcopy(step["backend"]))
@@ -873,12 +863,12 @@ def run_tui(
 def run_scenario(scenario: dict[str, Any], commands: dict[str, list[str]]) -> dict[str, Any]:
     stand = Stand()
     root = Path(tempfile.mkdtemp(prefix="vibe-telemetry-session-oracle-")).resolve()
-    world = acp.World(root) if scenario["surface"] == "acp" else World(root)
+    world = blackbox.World(root) if scenario["surface"] == "acp" else World(root)
     try:
         for name, value in scenario.get("stand", {}).items():
             setattr(stand, name, copy.deepcopy(value))
         (world.vibe_home / "config.toml").write_text(compose_config(scenario, stand.base), encoding="utf-8", newline="")
-        acp.write_tree(world.workspace, scenario.get("files", {}))
+        blackbox.write_tree(world.workspace, scenario.get("files", {}))
         env = environment(world, scenario, stand)
         surface = scenario["surface"]
         if surface == "programmatic":
@@ -915,7 +905,7 @@ ID_KEYS = {
     "recording_id",
 }
 #: The version the scripted editor declares in its `clientInfo`.
-ORACLE_CLIENT_VERSION = acp.INITIALIZE["send"]["params"]["clientInfo"]["version"]
+ORACLE_CLIENT_VERSION = blackbox.INITIALIZE["send"]["params"]["clientInfo"]["version"]
 #: Keys whose values are this build's own version.
 VERSION_KEYS = {"agent_version", "client_version", "version"}
 #: Keys whose values describe the machine the capture ran on.
@@ -1086,7 +1076,7 @@ def main() -> int:
             }
             reference = {"commit": "binary-override"}
         else:
-            reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
+            reference = {"commit": require_pin(arguments.reference, arguments.expected_commit)}
             bin_dir = arguments.reference / ".venv/bin"
             commands = {
                 "programmatic": [str(bin_dir / "vibe")],
@@ -1141,10 +1131,10 @@ def main() -> int:
             return 0
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
-        staged.write_text(acp.rendered(corpus), encoding="utf-8", newline="")
+        staged.write_text(blackbox.rendered(corpus), encoding="utf-8", newline="")
         os.replace(staged, arguments.output)
         print(f"captured {len(captured)} scenarios into {arguments.output}")
-    except (OracleError, acp.OracleError, subprocess.TimeoutExpired) as error:
+    except (OracleError, subprocess.TimeoutExpired) as error:
         print(f"telemetry session capture failed: {error}", file=sys.stderr)
         return 1
     return 0

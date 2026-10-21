@@ -50,7 +50,6 @@ from pathlib import Path
 import platform
 import re
 import signal
-import subprocess
 import sys
 import tempfile
 import time
@@ -58,18 +57,12 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, RESTORE_COMMAND
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path(".parity/shell-session-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/shell-session/corpus.json")
-
-#: Where the extracted pinned tree is cached between runs. Gitignored, and keyed
-#: by commit so a re-pin extracts a new one instead of reusing the old.
-DEFAULT_CACHE = Path(".parity")
-
-#: Set on the re-executed process so it does not extract and re-exec forever.
-_REEXEC_MARKER = "VIBE_PARITY_PINNED_TREE"
 
 #: Stands in for the scenario's temporary root, which is a fresh directory on
 #: every run and on every machine. Every absolute path a record carries is
@@ -138,114 +131,6 @@ AUTHORED_TEXT = frozenset({
     "/bin/sh",
     "posix",
 })
-
-
-class OracleError(RuntimeError):
-    """Raised when the corpus cannot be produced from an authoritative state."""
-
-
-# --------------------------------------------------------------------------
-# Reference pinning
-# --------------------------------------------------------------------------
-
-
-def _git(reference: Path, *arguments: str) -> str:
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git {' '.join(arguments)} failed in {reference}: {result.stderr.strip()}"
-        )
-    return result.stdout.strip()
-
-
-def resolve_reference(reference: Path, expected: str) -> dict[str, str]:
-    """The pinned commit, refusing a checkout sitting anywhere else.
-
-    The corpus is only an oracle for the commit it was captured from, so a
-    checkout at another revision is refused by name rather than measured, and
-    the restore command is printed with the mismatch.
-    """
-
-    if not reference.is_dir():
-        raise OracleError(
-            f"no reference checkout at {reference}; set VIBE_REFERENCE to the checkout "
-            "path or pass --reference"
-        )
-    commit = _git(reference, "rev-parse", "HEAD")
-    if commit != expected:
-        raise OracleError(
-            f"reference commit mismatch: expected {expected}, found {commit}; "
-            f"restore it with: {RESTORE_COMMAND}"
-        )
-    return {"commit": commit, "path": str(reference)}
-
-
-def extract_pinned_tree(reference: Path, commit: str, cache: Path) -> Path:
-    """The pinned source tree, materialized out of tree and reused across runs.
-
-    ``git archive`` writes the commit's contents without moving HEAD, creating a
-    branch or adding a worktree, so the reference checkout is observed and never
-    modified.
-    """
-
-    import tarfile
-
-    tree = (cache / f"reference-{commit[:12]}").resolve()
-    marker = tree / "vibe" / "__init__.py"
-    if marker.is_file():
-        return tree
-    tree.mkdir(parents=True, exist_ok=True)
-    archive = tree.with_suffix(".tar")
-    _git(reference, "archive", "--format=tar", "-o", str(archive), commit)
-    with tarfile.open(archive) as bundle:
-        bundle.extractall(tree, filter="data")
-    archive.unlink(missing_ok=True)
-    if not marker.is_file():
-        raise OracleError(f"the extracted tree at {tree} carries no `vibe` package")
-    return tree
-
-
-def reexecute_with_reference_interpreter(
-    reference: Path, override: Path | None, tree: Path
-) -> None:
-    """Re-runs this script under an interpreter importing the *pinned* tree."""
-
-    if os.environ.get(_REEXEC_MARKER) == str(tree):
-        if not _imports_pinned_vibe(tree):
-            raise OracleError(
-                f"the reference interpreter did not import `vibe` from {tree}"
-            )
-        return
-    candidates = [override] if override else []
-    candidates += [
-        reference / ".venv/bin/python",
-        reference / ".venv/Scripts/python.exe",
-    ]
-    interpreter = next((c for c in candidates if c and c.is_file()), None)
-    if interpreter is None:
-        raise OracleError(
-            f"no interpreter can import `vibe`; looked for a virtual environment in {reference}"
-        )
-    environment = dict(os.environ)
-    environment[_REEXEC_MARKER] = str(tree)
-    environment["PYTHONPATH"] = os.pathsep.join(
-        [str(tree), *([environment["PYTHONPATH"]] if environment.get("PYTHONPATH") else [])]
-    )
-    os.execve(str(interpreter), [str(interpreter), *sys.argv], environment)
-
-
-def _imports_pinned_vibe(tree: Path) -> bool:
-    try:
-        import vibe
-    except Exception:
-        return False
-    return Path(vibe.__file__).resolve().is_relative_to(tree.resolve())
 
 
 # --------------------------------------------------------------------------
@@ -1194,10 +1079,10 @@ def project_case(record: dict[str, Any]) -> dict[str, Any]:
     return projected
 
 
-def build_corpus(records: list[dict[str, Any]], reference: dict[str, str]) -> dict[str, Any]:
+def build_corpus(records: list[dict[str, Any]], commit: str) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
-        "referenceCommit": reference["commit"],
+        "referenceCommit": commit,
         "platform": platform.system().lower(),
         "note": (
             "Managed shell session corpus: what the pinned reference's five shell handlers "
@@ -1361,15 +1246,16 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     arguments = parse_arguments(argv)
     try:
-        reference = resolve_reference(arguments.reference.resolve(), arguments.expected_commit)
-        tree = extract_pinned_tree(
-            Path(reference["path"]), reference["commit"], arguments.cache.resolve()
+        commit, _ = reexecute_pinned(
+            arguments.reference.resolve(),
+            arguments.expected_commit,
+            cache=arguments.cache,
+            override=arguments.python,
         )
-        reexecute_with_reference_interpreter(Path(reference["path"]), arguments.python, tree)
         real_shell_tool = real_shell_tool_directory()
         with tempfile.TemporaryDirectory(prefix="vibe-shell-parity-") as workspace:
             records = run_capture(Path(workspace).resolve(), real_shell_tool)
-        document = build_corpus(records, reference)
+        document = build_corpus(records, commit)
     except OracleError as failure:
         print(f"shell session oracle: {failure}", file=sys.stderr)
         return 1
@@ -1399,7 +1285,7 @@ def main(argv: list[str] | None = None) -> int:
     counts = ", ".join(f"{name} {per_tool[name]}" for name in TOOL_NAMES)
     print(
         f"captured {len(records)} cases over {len(scenarios())} scenarios "
-        f"from {reference['commit'][:12]} ({counts})\n"
+        f"from {commit[:12]} ({counts})\n"
         f"  full capture: {arguments.output}\n"
         f"  committed projection: {arguments.corpus}"
     )

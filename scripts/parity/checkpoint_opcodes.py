@@ -49,20 +49,10 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
-
-#: The pinned-tree mechanics are the tool-execution oracle's, reused rather than
-#: copied: both scripts must read the same commit the same way, and two copies
-#: of that logic would be two things to keep in agreement.
-from tool_execution import (
-    OracleError,
-    extract_pinned_tree,
-    reexecute_with_reference_interpreter,
-    resolve_reference,
-)
+from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/checkpoints/opcodes.json")
-DEFAULT_CACHE = Path(".parity")
 
 #: The floor the replay asserts, so a regeneration that captured almost nothing
 #: fails instead of reporting a clean but empty run.
@@ -385,12 +375,13 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     try:
-        reference = resolve_reference(arguments.reference, arguments.expected_commit)
-        pinned = extract_pinned_tree(
-            arguments.reference, reference["commit"], arguments.cache
+        commit, _ = reexecute_pinned(
+            arguments.reference,
+            arguments.expected_commit,
+            cache=arguments.cache,
+            override=arguments.python,
         )
-        reexecute_with_reference_interpreter(arguments.reference, arguments.python, pinned)
-        corpus = build_corpus(reference["commit"])
+        corpus = build_corpus(commit)
     except OracleError as error:
         print(f"checkpoint-opcode capture failed: {error}", file=sys.stderr)
         return 1
@@ -405,7 +396,7 @@ def main() -> int:
     print(
         f"captured {len(corpus['lineFixtures'])} line fixtures and "
         f"{len(corpus['opcodeFixtures'])} opcode fixtures from "
-        f"{reference['commit'][:12]} into {arguments.output}"
+        f"{commit[:12]} into {arguments.output}"
     )
     return 0
 
