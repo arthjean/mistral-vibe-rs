@@ -208,10 +208,9 @@ pub(super) fn resolve_workspace_cwd(
     root: &Path,
     requested: Option<&str>,
 ) -> Result<PathBuf, ProtocolFault> {
-    let root = vibe_core::platform::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let root = vibe_core::platform::resolve_lenient(root);
     let requested = requested.map(|path| {
-        let expanded = vibe_core::platform::expand_home(Path::new(path));
-        vibe_core::platform::canonicalize(&expanded).unwrap_or(expanded)
+        vibe_core::platform::resolve_lenient(&vibe_core::platform::expand_home(Path::new(path)))
     });
     let cwd = requested.unwrap_or_else(|| root.clone());
     if !cwd.is_dir() {

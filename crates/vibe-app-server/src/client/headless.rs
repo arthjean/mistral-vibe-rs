@@ -52,6 +52,29 @@ type TurnUpdates = (
     tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
 );
 
+/// A field of the state a unified session publishes to its client, reference
+/// `ClientState`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PublishedField {
+    /// The session record, as `session/updated` replaces it.
+    Session,
+    /// The history entries, oldest first.
+    History,
+    /// The child sessions its delegations opened.
+    ChildSessions,
+}
+
+impl PublishedField {
+    /// The field's name in the published state.
+    pub(super) const fn key(self) -> &'static str {
+        match self {
+            Self::Session => "session",
+            Self::History => "history",
+            Self::ChildSessions => "childSessions",
+        }
+    }
+}
+
 /// The calls a session takes on the backend that runs it.
 trait SessionBackend {
     /// The session as the server holds it, its history the one the backend
@@ -60,11 +83,11 @@ trait SessionBackend {
 
     /// The session's accounting and its context window, reference
     /// `runtime.stats`.
-    fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError>;
+    fn stats(&mut self, session_id: &str) -> Result<(AgentStatsSnapshot, u64), ClientError>;
 
-    /// One field of the state the session last published to this client, as
-    /// the wire spells it (reference `ClientState`), when it publishes one.
-    fn published(&mut self, session_id: &str, field: &str) -> Option<Value>;
+    /// One field of the state the session last published to this client
+    /// (reference `ClientState`), when it publishes one.
+    fn published(&mut self, session_id: &str, field: PublishedField) -> Option<Value>;
 
     /// Starts `turn`, its images already prepared, and answers the turn it
     /// reserved.
@@ -400,14 +423,13 @@ where
     /// The accounting of `session_id` and its context window, reference
     /// `runtime.stats`: what `stats/read` answers for a legacy session, and
     /// what a unified session last published.
-    pub fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError> {
+    pub fn stats(&mut self, session_id: &str) -> Result<(AgentStatsSnapshot, u64), ClientError> {
         self.backend(session_id).stats(session_id)
     }
 
-    /// One field of the state `session_id` last published to this client, as
-    /// the wire spells it: a unified session's `session`, `history` or
-    /// `childSessions`. A legacy session publishes none.
-    pub fn published_state(&mut self, session_id: &str, field: &str) -> Option<Value> {
+    /// One field of the state `session_id` last published to this client. A
+    /// legacy session publishes none.
+    pub fn published_state(&mut self, session_id: &str, field: PublishedField) -> Option<Value> {
         self.backend(session_id).published(session_id, field)
     }
 

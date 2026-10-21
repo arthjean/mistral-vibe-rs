@@ -125,11 +125,7 @@ pub(super) fn skill_output(
     already_loaded: bool,
 ) -> ToolExecutionOutput {
     let content = if already_loaded {
-        format!(
-            "The skill `{}` was already loaded earlier in this conversation; reuse those \
-             instructions.",
-            skill.name
-        )
+        crate::skills::skill_already_loaded_message(&skill.name)
     } else {
         render_skill(skill, directory)
     };
@@ -238,7 +234,7 @@ pub(super) fn render_skill(skill: &SkillDefinition, base: Option<&Path>) -> Stri
         "<skill_files>".to_owned(),
         file_lines,
         "</skill_files>".to_owned(),
-        "</skill_content>".to_owned(),
+        crate::skills::SKILL_CONTENT_CLOSING.to_owned(),
     ]);
     lines.join("\n")
 }

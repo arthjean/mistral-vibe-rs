@@ -45,8 +45,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::parity::replay::{ValuedDifference, valued_differences};
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
+use crate::parity::replay::{self, ValuedDifference, pinned_reference, valued_differences};
 
 use super::paths::{
     managed_worktree_root, target_cwd, validate_branch_name, validate_worktree_name,
@@ -224,17 +224,9 @@ impl Case {
     }
 }
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the crate sits two levels below the repository root")
-        .to_path_buf()
-}
-
 fn corpus() -> Corpus {
-    let raw =
-        fs::read_to_string(repo_root().join(CORPUS_RELATIVE)).expect("the corpus is committed");
+    let raw = fs::read_to_string(replay::repository().join(CORPUS_RELATIVE))
+        .expect("the corpus is committed");
     let corpus: Corpus = serde_json::from_str(&raw).expect("the corpus parses");
     assert_eq!(
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
@@ -1362,7 +1354,7 @@ fn a_ledger_entry_whose_divergence_is_fixed_fails_the_suite() {
 
 #[test]
 fn every_ledger_entry_names_what_closes_it() {
-    let scorecard = fs::read_to_string(repo_root().join(SCORECARD_RELATIVE))
+    let scorecard = fs::read_to_string(replay::repository().join(SCORECARD_RELATIVE))
         .expect("the scorecard is committed");
     for entry in LEDGER {
         assert!(
@@ -1599,13 +1591,10 @@ fn the_scripted_repositories_are_deterministic() {
 /// `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "worktree") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = pinned_reference("worktree") else {
         return;
-    }
-    let repository = repo_root();
+    };
+    let repository = replay::repository();
     let recaptured = repository.join("target/worktree-corpus.json");
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))

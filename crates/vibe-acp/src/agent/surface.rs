@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use vibe_app_server::client::TurnDriver;
+use vibe_app_server::client::{AgentStatsSnapshot, TurnDriver};
+use vibe_core::engine::session_token_cost;
 
 use crate::agent::AcpAgent;
 use crate::protocol::AcpError;
@@ -231,9 +232,8 @@ where
     /// The token usage a prompt response reports: the session's totals.
     pub(crate) async fn usage(&self, harness: &AcpHarness<D>) -> Value {
         let stats = self.stats(harness).await.0;
-        let number = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or(0);
-        let input = number("sessionPromptTokens");
-        let output = number("sessionCompletionTokens");
+        let input = stats.session_prompt_tokens;
+        let output = stats.session_completion_tokens;
         json!({
             "inputTokens": input,
             "outputTokens": output,
@@ -242,13 +242,13 @@ where
     }
 
     /// Reference `runtime.stats`, or nothing when the session cannot be read.
-    async fn stats(&self, harness: &AcpHarness<D>) -> (Value, u64) {
+    async fn stats(&self, harness: &AcpHarness<D>) -> (AgentStatsSnapshot, u64) {
         harness
             .service
             .lock()
             .await
             .stats(&harness.session_id)
-            .unwrap_or((Value::Null, 0))
+            .unwrap_or_default()
     }
 
     /// The `usage_update` the session's statistics read as now.
@@ -285,59 +285,38 @@ where
 }
 
 /// The `usage_update` `stats` and `context_window` read as.
-pub(crate) fn usage_update_of(stats: &Value, context_window: u64) -> Value {
-    let number = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or(0);
-    let float = |key: &str| stats.get(key).and_then(Value::as_f64).unwrap_or(0.0);
-    let prompt = number("sessionPromptTokens");
-    let completion = number("sessionCompletionTokens");
-    let cached = number("sessionCachedTokens");
-    let cost = session_cost(
+pub(crate) fn usage_update_of(stats: &AgentStatsSnapshot, context_window: u64) -> Value {
+    let prompt = stats.session_prompt_tokens;
+    let completion = stats.session_completion_tokens;
+    let cost = session_token_cost(
         prompt,
         completion,
-        cached,
-        float("inputPricePerMillion"),
-        float("outputPricePerMillion"),
-        stats
-            .get("cachedInputPricePerMillion")
-            .and_then(Value::as_f64),
+        stats.session_cached_tokens,
+        (
+            stats.input_price_per_million,
+            stats.output_price_per_million,
+            stats.cached_input_price_per_million,
+        ),
     );
     let mut update = json!({
         "sessionUpdate": "usage_update",
-        "used": number("contextTokens"),
+        "used": stats.context_tokens,
         "size": context_window,
         "_meta": {
-            "steps": number("steps"),
+            "steps": stats.steps,
             "promptTokens": prompt,
             "completionTokens": completion,
-            "cachedTokens": cached,
+            "cachedTokens": stats.session_cached_tokens,
             "totalTokens": prompt.saturating_add(completion),
-            "tokensPerSecond": stats.get("tokensPerSecond").cloned().unwrap_or(json!(0.0)),
-            "lastTurnDuration": stats.get("lastTurnDuration").cloned().unwrap_or(json!(0.0)),
-            "lastTurnTotalTokens": number("lastTurnPromptTokens")
-                .saturating_add(number("lastTurnCompletionTokens")),
+            "tokensPerSecond": stats.tokens_per_second,
+            "lastTurnDuration": stats.last_turn_duration,
+            "lastTurnTotalTokens": stats
+                .last_turn_prompt_tokens
+                .saturating_add(stats.last_turn_completion_tokens),
         },
     });
     if cost > 0.0 {
         update["cost"] = json!({"amount": cost, "currency": "USD"});
     }
     update
-}
-
-/// Reference `session_token_cost`: cached tokens, clamped to the prompt, are
-/// billed at the cached price when the model declares one and at the input
-/// price otherwise.
-fn session_cost(
-    prompt: u64,
-    completion: u64,
-    cached: u64,
-    input_price: f64,
-    output_price: f64,
-    cached_price: Option<f64>,
-) -> f64 {
-    let as_float = |value: u64| u32::try_from(value).map_or(f64::from(u32::MAX), f64::from);
-    let cached = cached.min(prompt);
-    let cached_price = cached_price.unwrap_or(input_price);
-    let input_cost = as_float(prompt - cached) * input_price + as_float(cached) * cached_price;
-    let output_cost = as_float(completion) * output_price;
-    (input_cost + output_cost) / 1_000_000.0
 }

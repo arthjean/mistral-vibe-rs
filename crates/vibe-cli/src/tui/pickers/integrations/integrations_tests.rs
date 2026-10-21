@@ -47,7 +47,7 @@ fn rows_show_and_sort_by_the_display_name() {
             (
                 "integration:mcp:local",
                 "local",
-                "stdio · no tools · error - check your config"
+                "stdio · tool discovery failed · error - check your config"
             ),
             (
                 "integration:connector:zeta",
@@ -78,5 +78,157 @@ fn the_detail_title_uses_the_display_name() {
     assert_eq!(
         mcp_detail_overlay(&published(), &target).title,
         "Connector: Alpha Docs"
+    );
+}
+
+fn server_target(source: &str) -> IntegrationTarget {
+    IntegrationTarget {
+        kind: IntegrationKind::McpServer,
+        source: source.to_owned(),
+        tool: None,
+        enabled: true,
+        requires_auth: false,
+        requires_setup: false,
+    }
+}
+
+fn detail_rows(overlay: &Overlay) -> Vec<(&str, bool)> {
+    overlay
+        .items
+        .iter()
+        .map(|item| (item.label.as_str(), item.disabled))
+        .collect()
+}
+
+/// Reference `_add_source_group`: an unavailable server without a tool
+/// reports a failed discovery, and a plugin-owned source names its plugin.
+#[test]
+fn rows_report_a_failed_discovery_and_the_owning_plugin() {
+    let sources = McpSource::published(&json!({"mcp": {"sources": [
+        {"name": "broken", "kind": "server", "transport": "stdio",
+         "status": "unavailable", "tools": []},
+        {"name": "linear", "kind": "server", "transport": "http",
+         "status": "connected", "pluginName": "linear-plugin",
+         "tools": [{"name": "create_issue", "description": "", "enabled": true}]},
+    ]}}))
+    .expect("the sources decode");
+    let descriptions = mcp_overlay(&sources)
+        .items
+        .into_iter()
+        .filter(|item| !item.disabled)
+        .map(|item| item.description)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        descriptions,
+        [
+            "http · plugin:linear-plugin · 1 tool · connected",
+            "stdio · tool discovery failed · error - check your config",
+        ]
+    );
+}
+
+/// Reference `_show_detail_view`: a source that failed to bootstrap shows its
+/// error before anything its status would show, and opens on it rather than on
+/// the sign-in.
+#[test]
+fn a_bootstrap_error_replaces_the_detail_view() {
+    let sources = McpSource::published(&json!({"mcp": {"sources": [
+        {"name": "drive", "kind": "connector", "transport": "connector",
+         "status": "needs_auth", "error": "catalog refused the token",
+         "tools": [{"name": "search", "description": "", "enabled": false}]},
+    ]}}))
+    .expect("the sources decode");
+    let row = mcp_overlay(&sources)
+        .items
+        .into_iter()
+        .find(|item| !item.disabled)
+        .expect("the connector row");
+    assert!(matches!(
+        row.action,
+        OverlayAction::Integration(IntegrationTarget {
+            requires_auth: false,
+            ..
+        })
+    ));
+    let target = IntegrationTarget {
+        kind: IntegrationKind::Connector,
+        ..server_target("drive")
+    };
+    assert_eq!(
+        detail_rows(&mcp_detail_overlay(&sources, &target)),
+        [
+            ("Failed to bootstrap", true),
+            ("catalog refused the token", true)
+        ]
+    );
+}
+
+/// Reference `_show_detail_view`: an unavailable server without a tool says
+/// its discovery failed, with the error the state published for it.
+#[test]
+fn a_failed_discovery_shows_the_published_error() {
+    let sources = McpSource::published(&json!({"mcp": {
+        "sources": [
+            {"name": "broken", "kind": "server", "transport": "stdio",
+             "status": "unavailable", "tools": []},
+            {"name": "quiet", "kind": "server", "transport": "stdio",
+             "status": "unavailable", "tools": []},
+            {"name": "idle", "kind": "server", "transport": "stdio",
+             "status": "enabled", "tools": []},
+        ],
+        "discoveryErrors": {"broken": "spawn failed: no such file"},
+    }}))
+    .expect("the sources decode");
+    assert_eq!(
+        detail_rows(&mcp_detail_overlay(&sources, &server_target("broken"))),
+        [
+            ("Tool discovery failed", true),
+            ("spawn failed: no such file", true)
+        ]
+    );
+    assert_eq!(
+        detail_rows(&mcp_detail_overlay(&sources, &server_target("quiet"))),
+        [("Tool discovery failed", true)]
+    );
+    assert_eq!(
+        detail_rows(&mcp_detail_overlay(&sources, &server_target("idle"))),
+        [("No tools discovered", true)]
+    );
+}
+
+/// Reference `MCPResource.read`: the connector catalog's rows, labeled by
+/// their bootstrap display name, replace the connectors `mcp/read` published;
+/// a failed read keeps them and an answer without a session drops them.
+#[test]
+fn the_connector_catalog_replaces_the_published_connectors() {
+    let catalog = json!({"session": {"sources": [
+        {"alias": "Google_Drive", "displayName": "Google Drive", "status": "connected",
+         "tools": [{"name": "search", "description": null, "enabled": true}],
+         "error": null},
+    ]}});
+    let rows = |sources: Vec<McpSource>| {
+        sources
+            .into_iter()
+            .map(|source| (source.name, source.display_name, source.tools.len()))
+            .collect::<Vec<_>>()
+    };
+    let merged = McpSource::with_catalog_connectors(published(), Some(&catalog))
+        .expect("the catalog decodes");
+    assert_eq!(
+        rows(merged),
+        [
+            ("local".to_owned(), "local".to_owned(), 0),
+            ("Google_Drive".to_owned(), "Google Drive".to_owned(), 1),
+        ]
+    );
+    assert_eq!(
+        McpSource::with_catalog_connectors(published(), None).expect("kept"),
+        published()
+    );
+    let sessionless = McpSource::with_catalog_connectors(published(), Some(&json!({})))
+        .expect("an answer without a session");
+    assert_eq!(
+        rows(sessionless),
+        [("local".to_owned(), "local".to_owned(), 0)]
     );
 }

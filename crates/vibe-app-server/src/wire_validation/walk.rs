@@ -5,7 +5,6 @@ use serde_json::{Number, Value};
 use vibe_core::pycompat::{self, pydantic};
 use vibe_protocol::PathSegment;
 
-use super::coercion::{self, Refusal};
 use super::schema::{Extra, Node, SCHEMA};
 use super::{Issue, Json, custom};
 
@@ -26,7 +25,7 @@ impl Walk {
     }
 
     /// The scalar a coercion read, or nothing once its refusal is recorded.
-    fn read<T>(&mut self, read: Result<T, Refusal>, path: &[PathSegment]) -> Option<T> {
+    fn read<T>(&mut self, read: Result<T, pydantic::Refusal>, path: &[PathSegment]) -> Option<T> {
         match read {
             Ok(value) => Some(value),
             Err(refusal) => {
@@ -202,7 +201,10 @@ impl Walk {
                 le,
                 lt,
             } => {
-                let value = self.read(coercion::integer(input, *strict), path)?;
+                let value = self.read(
+                    pydantic::integer(&input.clone().into_value(), *strict),
+                    path,
+                )?;
                 // Bounds compare the integer exactly while it fits a float's
                 // mantissa, which every bound the reference declares does.
                 #[expect(
@@ -223,7 +225,8 @@ impl Walk {
                 le,
                 lt,
             } => {
-                let value = self.read(coercion::float(input, *strict), path)?;
+                let value =
+                    self.read(pydantic::float(&input.clone().into_value(), *strict), path)?;
                 if !value.is_finite() && self.finite.last().copied().unwrap_or(false) {
                     self.fail(path, "finite_number", "Input should be a finite number");
                     return None;
@@ -234,7 +237,10 @@ impl Walk {
                 Some(Number::from_f64(value).map_or(Value::Null, Value::Number))
             }
             Node::Bool { strict } => self
-                .read(coercion::boolean(input, *strict), path)
+                .read(
+                    pydantic::boolean(&input.clone().into_value(), *strict),
+                    path,
+                )
                 .map(Value::Bool),
             Node::None => match input {
                 Json::Null => Some(Value::Null),

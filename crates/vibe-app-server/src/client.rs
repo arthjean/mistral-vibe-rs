@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
-use vibe_core::engine::{EngineError, SessionStats, TurnOutcome};
+use vibe_core::engine::{EngineError, SessionStats, TurnOutcome, TurnStopReason};
 use vibe_core::events::{
     ApplyOutcome, EventEnvelope, LifecycleState, ModelMessage, ProjectionReducer,
 };
@@ -36,14 +36,13 @@ use crate::server::{
 };
 
 pub use vibe_core::engine::EventObserver;
-pub use vibe_core::engine::TurnOutcome as PublicTurnOutcome;
-pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
 pub use vibe_core::events::{
     ApprovalDecisionType, CallbackDetail, EffectDetail, EffectResultDisplay, HookNotice, HookScope,
     HookSeverity, NoticeDetail, PublicCallbackState, PublicContentBlock, PublicEffectState,
     PublicEntryGenerationStatus, PublicEntryMetadata, PublicError, PublicHistoryEntry,
     PublicMessageRole, PublicNoticeLevel, ToolEffectKind, TurnErrorCode, UserQuestionRequest,
 };
+pub use vibe_harness::reconcile::AgentStatsSnapshot;
 
 pub type DriverFuture<'a> =
     Pin<Box<dyn Future<Output = Result<TurnOutcome, DriverError>> + Send + 'a>>;
@@ -427,7 +426,7 @@ pub struct ProgrammaticTurn {
     pub context_tokens: u64,
     pub steps: u32,
     pub checkpoints: u32,
-    pub stop_reason: PublicTurnStopReason,
+    pub stop_reason: TurnStopReason,
     #[serde(default)]
     pub teleport_events: Vec<ProgrammaticTeleportEvent>,
 }
@@ -592,7 +591,7 @@ pub enum ProgrammaticUpdate {
     /// The accounting a Unified Harness session's `session/statsUpdated`
     /// published, whole.
     Accounting {
-        stats: Value,
+        stats: AgentStatsSnapshot,
         context_window: u64,
     },
     /// A Unified Harness session's title or preview changed, as its
@@ -729,25 +728,25 @@ fn session_stats(metadata: &vibe_core::storage::SessionMetadata) -> SessionStats
 
 /// The failure a turn that stopped for `reason` publishes, if it failed.
 #[must_use]
-pub fn public_turn_error(reason: &PublicTurnStopReason) -> Option<PublicError> {
+pub fn public_turn_error(reason: &TurnStopReason) -> Option<PublicError> {
     match reason {
-        PublicTurnStopReason::Refusal => Some(public_turn_failure(
+        TurnStopReason::Refusal => Some(public_turn_failure(
             TurnErrorCode::Refusal,
             "Provider refused the request",
         )),
-        PublicTurnStopReason::ResponseLength => Some(public_turn_failure(
+        TurnStopReason::ResponseLength => Some(public_turn_failure(
             TurnErrorCode::ResponseTooLong,
             "The model's response exceeded the maximum output token limit.",
         )),
-        PublicTurnStopReason::Failed => Some(public_turn_failure(
+        TurnStopReason::Failed => Some(public_turn_failure(
             TurnErrorCode::BackendError,
             "Turn failed",
         )),
-        PublicTurnStopReason::Complete
-        | PublicTurnStopReason::MaxSteps
-        | PublicTurnStopReason::TokenLimit
-        | PublicTurnStopReason::PriceLimit
-        | PublicTurnStopReason::Cancelled => None,
+        TurnStopReason::Complete
+        | TurnStopReason::MaxSteps
+        | TurnStopReason::TokenLimit
+        | TurnStopReason::PriceLimit
+        | TurnStopReason::Cancelled => None,
     }
 }
 
@@ -934,7 +933,7 @@ pub(crate) mod live;
 pub(crate) mod unified;
 
 pub use echo::EchoTurnDriver;
-pub use headless::{HeadlessService, TeleportEvents};
+pub use headless::{HeadlessService, PublishedField, TeleportEvents};
 pub use in_process::{InProcessClient, LiveNotificationListener, PendingPublicCall};
 
 use in_process::ProgrammaticEventObserver;

@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -12,6 +13,7 @@ use super::{
     MESSAGES_FILE, METADATA_FILE, SessionStore, StorageError, registry, validate_session_id,
 };
 use crate::atomic_file::{FileMode, write_atomically};
+use crate::child::output_with_deadline;
 use crate::platform::BackgroundCommand as _;
 use crate::time::format_iso_millis;
 use crate::time::parse_iso_millis;
@@ -414,34 +416,50 @@ where
 
 /// Reference `getpass.getuser`: the first of `LOGNAME`, `USER`, `LNAME` and
 /// `USERNAME` that is set.
-fn current_username() -> String {
+#[must_use]
+pub fn current_username() -> String {
     ["LOGNAME", "USER", "LNAME", "USERNAME"]
         .into_iter()
         .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
         .unwrap_or_else(unknown_username)
 }
 
-/// Reference `SessionLogger._fetch_git_metadata`: the commit and branch the
-/// working directory is on, when it is a git checkout.
+/// How long the reference waits for `git rev-parse` before it records no
+/// commit and no branch.
+const GIT_METADATA_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How often that wait checks whether git has exited.
+const GIT_METADATA_POLL: Duration = Duration::from_millis(10);
+
+/// Reference `SessionLogger._fetch_git_metadata`
+/// (`vibe/core/session/session_logger.py:138-160`): the commit and branch the
+/// working directory is on, when it is a git checkout and a trusted git runs
+/// there within the timeout.
 fn git_metadata(working_directory: &Path) -> (Option<String>, Option<String>) {
-    if !working_directory.is_dir() {
+    let Some(git) = crate::worktree::trusted_git_executable(working_directory) else {
         return (None, None);
-    }
-    let output = std::process::Command::new("git")
+    };
+    let mut command = std::process::Command::new(git);
+    command
         .in_background()
         .args(["rev-parse", "HEAD", "--abbrev-ref", "HEAD"])
         .current_dir(working_directory)
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .output();
-    let Ok(output) = output else {
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    // The reference detaches stdin on Windows only and lets the child inherit
+    // it elsewhere.
+    if cfg!(windows) {
+        command.stdin(std::process::Stdio::null());
+    }
+    let output = output_with_deadline(&mut command, GIT_METADATA_TIMEOUT, GIT_METADATA_POLL);
+    let Ok(Some(output)) = output else {
         return (None, None);
     };
     if !output.status.success() {
         return (None, None);
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    let mut lines = text.trim().lines();
+    let mut lines = crate::pycompat::splitlines(crate::pycompat::strip(&text), false).into_iter();
     (
         lines.next().map(ToOwned::to_owned),
         lines.next().map(ToOwned::to_owned),

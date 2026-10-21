@@ -6,7 +6,7 @@
 //! invented by a typo. The corpus replay compares every set here against the
 //! reference vocabulary of the same name.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// How an account stands with the service serving its model.
 ///
@@ -74,7 +74,7 @@ impl McpSourceKind {
 /// reported yet, which is what distinguishes it from `Connected`; `Disabled` is
 /// a deliberate switch and never a failure, which is what keeps a source the
 /// operator turned off from being rendered as broken.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum McpSourceStatus {
     Disabled,
@@ -95,8 +95,9 @@ impl McpSourceStatus {
         Self::Unavailable,
     ];
 
-    /// The wire value, for a caller that matches on it as text.
-    pub(crate) const fn as_str(self) -> &'static str {
+    /// The wire word, which the terminal's `/mcp status` prints verbatim.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Disabled => "disabled",
             Self::Connected => "connected",

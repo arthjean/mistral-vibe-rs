@@ -22,6 +22,17 @@ pub fn strip(text: &str) -> &str {
     text.trim_matches(isspace)
 }
 
+/// `text[:limit].rstrip() + "…"` when `text` is longer than `limit`
+/// characters, and `text` itself otherwise: how the reference cuts a title
+/// or a preview down to length.
+#[must_use]
+pub fn clip(text: &str, limit: usize) -> String {
+    match text.char_indices().nth(limit) {
+        Some((end, _)) => format!("{}…", text[..end].trim_end_matches(isspace)),
+        None => text.to_owned(),
+    }
+}
+
 /// Whether `character` ends a line for `str.splitlines`.
 #[must_use]
 pub const fn is_line_boundary(character: char) -> bool {

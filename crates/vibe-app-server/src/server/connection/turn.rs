@@ -13,6 +13,16 @@ use crate::server::session_callbacks::{
     settled_callback_frame,
 };
 use crate::server::turns::preview_updated_frame;
+use crate::server::unified::params::CallbackResultParams;
+
+/// Reference `CallbackResultParams`, as the routing validated it.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CallbackResultRequest {
+    session_id: String,
+    #[serde(flatten)]
+    result: CallbackResultParams,
+}
 
 /// What an accepted steer answers.
 #[derive(Clone, Copy)]
@@ -490,31 +500,26 @@ impl ServerConnection {
         &mut self,
         request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let session_id = request
-            .params
-            .get("sessionId")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
-        let result = request.params.get("result").cloned().unwrap_or(Value::Null);
-        let callback_id = result
-            .get("callbackId")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
+        let CallbackResultRequest {
+            session_id,
+            result:
+                CallbackResultParams {
+                    callback_id,
+                    output,
+                    error,
+                    ..
+                },
+        } = from_params(&request.params)?;
         let mut outbound = Vec::new();
         let deferred;
-        if let Some(error) = result.get("error").filter(|error| !error.is_null()) {
-            let message = error
-                .get("message")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let (status, work) = self.reject_named_callback(&session_id, &callback_id, message)?;
+        if let Some(error) = error {
+            let (status, work) =
+                self.reject_named_callback(&session_id, &callback_id, &error.message)?;
             outbound.extend(status);
             deferred = work;
-        } else if let Some(output) = result.get("output").filter(|output| !output.is_null()) {
+        } else if let Some(output) = output {
             let output =
-                wire_validation::validate_nested_field("callback/result", "output", output)
+                wire_validation::validate_nested_field("callback/result", "output", &output)
                     .map_err(|issues| self.rejected("callback/result", &issues))?;
             let (frames, work) = self.answer_named_callback(&session_id, &callback_id, output)?;
             outbound = frames;

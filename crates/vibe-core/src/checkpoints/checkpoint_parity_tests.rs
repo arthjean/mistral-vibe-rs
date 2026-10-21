@@ -37,7 +37,8 @@ use sha2::{Digest, Sha256};
 
 use super::lines::{FileState, decode_lines};
 use super::matcher::SequenceMatcher;
-use crate::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use crate::parity::replay::{pinned_reference, repository};
+use crate::parity::{REFERENCE_COMMIT, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/checkpoint_opcodes.py";
 const CORPUS_RELATIVE: &str = "tests/checkpoints/opcodes.json";
@@ -125,14 +126,6 @@ fn render(opcodes: &[RecordedOpcode]) -> String {
         .map(ToString::to_string)
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the crate sits two levels below the repository root")
-        .to_path_buf()
 }
 
 fn corpus_path() -> PathBuf {
@@ -483,11 +476,9 @@ fn a_divergent_line_fixture_is_reported_by_name() {
 
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "checkpoint opcode oracle") {
-        eprintln!("{reason}");
+    let Some(root) = pinned_reference("checkpoint opcode oracle") else {
         return;
-    }
+    };
     let Some(interpreter) = pinned_interpreter(&root) else {
         eprintln!(
             "skipping the live checkpoint opcode probe: no interpreter that can import the \
@@ -495,7 +486,7 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         );
         return;
     };
-    let workspace = repo_root();
+    let workspace = repository();
     let temporary = tempfile::tempdir().expect("temporary root");
     let captured = temporary.path().join("opcodes.json");
     let output = Command::new(&interpreter)
@@ -1326,11 +1317,9 @@ fn a_ledger_entry_nothing_diverges_on_is_reported_as_stale() {
 
 #[test]
 fn the_committed_engine_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "checkpoint engine oracle") {
-        eprintln!("{reason}");
+    let Some(root) = pinned_reference("checkpoint engine oracle") else {
         return;
-    }
+    };
     let Some(interpreter) = pinned_interpreter(&root) else {
         eprintln!(
             "skipping the live checkpoint engine probe: no interpreter that can import the \
@@ -1338,7 +1327,7 @@ fn the_committed_engine_corpus_still_matches_the_pinned_reference() {
         );
         return;
     };
-    let workspace = repo_root();
+    let workspace = repository();
     let temporary = tempfile::tempdir().expect("temporary root");
     let captured = temporary.path().join("engine.json");
     let output = Command::new(&interpreter)

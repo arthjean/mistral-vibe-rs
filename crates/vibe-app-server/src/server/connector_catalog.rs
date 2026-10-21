@@ -10,6 +10,7 @@
 use crate::connector_catalog::{
     self as catalog, CACHE_FILE, CatalogProvider, ConnectorSelection, Disposition, ResolvedCatalog,
 };
+use crate::vocabulary::McpSourceStatus;
 
 use super::*;
 
@@ -525,7 +526,7 @@ impl AppServer {
         &self,
         session_id: &str,
         alias: &str,
-    ) -> Result<(String, String, &'static str, &'static str), ProtocolFault> {
+    ) -> Result<(String, String, ConnectorAuthAction, McpSourceStatus), ProtocolFault> {
         let sessions = self.lock_sessions();
         let session = sessions
             .get(session_id)
@@ -536,7 +537,10 @@ impl AppServer {
                 format!("Connector not found: {alias}"),
             )
         })?;
-        if !matches!(status, "needs_auth" | "needs_setup") {
+        if !matches!(
+            status,
+            McpSourceStatus::NeedsAuth | McpSourceStatus::NeedsSetup
+        ) {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,
                 format!("Connector authorization is not actionable: {alias}"),
@@ -606,7 +610,7 @@ impl AppServer {
             session_id.to_owned(),
             raw_id.clone(),
             revision.clone(),
-            action.to_owned(),
+            action,
         );
         if !lock(&self.connector_auth_requests).insert(key.clone()) {
             return Err(ProtocolFault::plain(

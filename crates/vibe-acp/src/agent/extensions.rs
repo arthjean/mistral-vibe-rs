@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use serde_json::{Map, Value, json};
-use vibe_app_server::client::{HeadlessService, TurnDriver};
+use vibe_app_server::client::{HeadlessService, PublishedField, TurnDriver};
 use vibe_core::observability::{
     LogLevel, log_level_chain, set_config_log_level, set_session_log_level,
 };
@@ -128,7 +128,7 @@ where
                 .service
                 .lock()
                 .await
-                .published_state(&harness.session_id, "session");
+                .published_state(&harness.session_id, PublishedField::Session);
             if let Some(session) = published {
                 let name = |key: &str| session[key].as_str().map(ToOwned::to_owned);
                 if let Some(shown) =
@@ -145,9 +145,6 @@ where
             }
             harness.set_display_title(&title);
         }
-        let target = live
-            .as_ref()
-            .map_or(session_id, |harness| harness.session_id.clone());
         let mut update = json!({
             "sessionUpdate": "session_info_update",
             "title": title,
@@ -155,7 +152,7 @@ where
         if let Some(updated_at) = updated_at {
             update["updatedAt"] = json!(updated_at);
         }
-        self.session_update(&target, update);
+        self.session_update(&session_id, update);
         Ok(json!({}))
     }
 

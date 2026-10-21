@@ -2,6 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use serde_json::{Value, json};
+use vibe_app_server::vocabulary::McpSourceStatus;
 
 use super::super::clipboard::copy_text_bounded;
 use super::super::command_handlers::mcp::mcp_authenticated;
@@ -10,8 +11,7 @@ use super::super::interaction::{
     OverlayItem, OverlayKind,
 };
 use super::super::pickers::{
-    McpSource, McpSourceStatus, mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay,
-    mcp_overlay,
+    McpSource, mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay, mcp_overlay,
 };
 use super::super::runtime::{schedule_ui_background, schedule_ui_call, schedule_ui_external};
 use super::super::state::{EntryStatus, TuiState};
@@ -61,6 +61,13 @@ pub(in crate::tui) enum McpEffect {
 #[derive(Debug, Clone)]
 pub(in crate::tui) enum McpPendingOperation {
     ReadIntegrations {
+        filter: Option<String>,
+        detail: Option<IntegrationTarget>,
+    },
+    /// The sources `mcp/read` published, waiting on the connector catalog
+    /// whose rows replace their connectors.
+    ReadConnectorCatalog {
+        sources: Vec<McpSource>,
         filter: Option<String>,
         detail: Option<IntegrationTarget>,
     },
@@ -346,6 +353,32 @@ fn schedule_read_integrations(
     );
 }
 
+/// Opens the browser on `sources`, or on the detail of `detail`.
+fn show_integrations(
+    sources: &[McpSource],
+    filter: Option<String>,
+    detail: Option<IntegrationTarget>,
+    state: &mut TuiState,
+) {
+    if let Some(target) = detail {
+        state.overlay = Some(mcp_detail_overlay(sources, &target));
+        return;
+    }
+    let mut overlay = mcp_overlay(sources);
+    if let Some(filter) = filter {
+        overlay.set_query(filter);
+    }
+    if overlay.items.is_empty() {
+        push_local_notice(
+            state,
+            "No MCP servers or connectors configured.",
+            EntryStatus::Completed,
+        );
+    } else {
+        state.overlay = Some(overlay);
+    }
+}
+
 pub(in crate::tui) fn apply_pending_operation(
     operation: McpPendingOperation,
     result: Result<vibe_app_server::client::PublicDispatch, String>,
@@ -355,6 +388,17 @@ pub(in crate::tui) fn apply_pending_operation(
     let dispatch = match result {
         Ok(dispatch) => dispatch,
         Err(error) => {
+            // Reference `MCPResource.read`: a connector catalog that cannot be
+            // read keeps the connectors `mcp/read` published.
+            if let McpPendingOperation::ReadConnectorCatalog {
+                sources,
+                filter,
+                detail,
+            } = operation
+            {
+                show_integrations(&sources, filter, detail, state);
+                return;
+            }
             // Reference `MCPOAuthApp._on_login_failed`: the panel stays, says
             // so, and `r` retries.
             if let McpPendingOperation::LoginFinished {
@@ -449,24 +493,26 @@ pub(in crate::tui) fn apply_pending_operation(
                     return;
                 }
             };
-            if let Some(target) = detail {
-                state.overlay = Some(mcp_detail_overlay(&sources, &target));
-            } else {
-                let mut overlay = mcp_overlay(&sources);
-                if let Some(filter) = filter {
-                    overlay.set_query(filter);
-                }
-                if overlay.items.is_empty() {
-                    push_local_notice(
-                        state,
-                        "No MCP servers or connectors configured.",
-                        EntryStatus::Completed,
-                    );
-                } else {
-                    state.overlay = Some(overlay);
-                }
-            }
+            schedule_ui_call(
+                runtime,
+                "connector_catalog/read",
+                json!({}),
+                UiOperation::Mcp(McpPendingOperation::ReadConnectorCatalog {
+                    sources,
+                    filter,
+                    detail,
+                }),
+                state,
+            );
         }
+        McpPendingOperation::ReadConnectorCatalog {
+            sources,
+            filter,
+            detail,
+        } => match McpSource::with_catalog_connectors(sources, Some(&value)) {
+            Ok(sources) => show_integrations(&sources, filter, detail, state),
+            Err(error) => state.push_diagnostic(error),
+        },
         McpPendingOperation::BeginAuth {
             kind,
             source,

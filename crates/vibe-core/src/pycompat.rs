@@ -20,7 +20,7 @@ pub use json::{Dumps, dumps, python_eq, truthy};
 pub use number::{parse_float, parse_int, repr_float, thousands};
 pub use os_error::os_error;
 pub use repr::{repr_json, repr_str, str_json};
-pub use text::{is_line_boundary, isprintable, isspace, splitlines, strip, title};
+pub use text::{clip, is_line_boundary, isprintable, isspace, splitlines, strip, title};
 
 #[cfg(test)]
 mod pycompat_tests;

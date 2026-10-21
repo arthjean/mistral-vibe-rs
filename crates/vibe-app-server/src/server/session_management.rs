@@ -515,12 +515,7 @@ fn switch_unified_agent(
     request: ServerRequest,
     session_id: &str,
 ) -> Result<Answered, DispatchBatch> {
-    let Some(name) = request
-        .params
-        .get("agentName")
-        .or_else(|| request.params.get("name"))
-        .and_then(Value::as_str)
-    else {
+    let Some(name) = agent_name(&request) else {
         return Err(ProtocolFault::invalid_params("agentName is required").into_batch(request.id));
     };
     let switched = {
@@ -558,14 +553,21 @@ fn switch_unified_agent(
     }
 }
 
+/// The profile a `session/agent/update` switches to: reference
+/// `AgentSwitchParams` names it `agentName`, and this port's own clients send
+/// `name` (`WorkspaceService::agent_update`).
+fn agent_name(request: &ServerRequest) -> Option<&str> {
+    request
+        .params
+        .get("agentName")
+        .or_else(|| request.params.get("name"))
+        .and_then(Value::as_str)
+}
+
 fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) {
     let (Some(session_id), Some(agent)) = (
         request.params.get("sessionId").and_then(Value::as_str),
-        request
-            .params
-            .get("agentName")
-            .or_else(|| request.params.get("name"))
-            .and_then(Value::as_str),
+        agent_name(request),
     ) else {
         return;
     };

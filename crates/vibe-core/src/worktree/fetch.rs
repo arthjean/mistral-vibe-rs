@@ -19,7 +19,6 @@
 //!   directory are pinned to locations outside the checkout.
 
 use std::collections::BTreeMap;
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{LazyLock, Mutex};
@@ -29,13 +28,16 @@ use regex::Regex;
 
 use super::WorktreeError;
 use super::git::{GitRepo, NO_HOOKS_PATH, search_trusted_path};
-use crate::child::wait_with_deadline;
+use crate::child::output_with_deadline;
 use crate::platform::BackgroundCommand as _;
 use crate::sync::lock;
 
 /// How long a refresh may take before it is abandoned, which the reference
 /// bounds the same way (`vibe/core/git/repo.py:29,440-456`).
 const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How often a bounded git call checks whether git has exited.
+const POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 /// How long the one-shot configuration reads may take
 /// (`vibe/core/git/fetch.py:271-280,383-393`).
@@ -121,23 +123,19 @@ pub(crate) fn fetch_branch(
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
-    let (status, stderr) =
-        run_bounded(command, FETCH_TIMEOUT).map_err(|failure| match failure {
-            Bounded::TimedOut => WorktreeError::git(format!(
-                "timed out fetching {remote}/{branch} after {}s",
-                FETCH_TIMEOUT.as_secs()
-            )),
-            Bounded::Spawn(error) => {
-                WorktreeError::git(format!("failed to fetch {remote}/{branch}: {error}"))
-            }
-        })?;
-    if status {
-        Ok(())
-    } else {
-        Err(WorktreeError::git(format!(
+    match output_with_deadline(&mut command, FETCH_TIMEOUT, POLL_INTERVAL) {
+        Ok(Some(output)) if output.status.success() => Ok(()),
+        Ok(Some(output)) => Err(WorktreeError::git(format!(
             "failed to fetch {remote}/{branch}: {}",
-            stderr.trim()
-        )))
+            String::from_utf8_lossy(&output.stderr).trim()
+        ))),
+        Ok(None) => Err(WorktreeError::git(format!(
+            "timed out fetching {remote}/{branch} after {}s",
+            FETCH_TIMEOUT.as_secs()
+        ))),
+        Err(error) => Err(WorktreeError::git(format!(
+            "failed to fetch {remote}/{branch}: {error}"
+        ))),
     }
 }
 
@@ -173,45 +171,15 @@ pub fn fetch_remote_heads(working_dir: &Path, remote: &str) -> Result<(), String
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
-    match run_bounded(command, REMOTE_FETCH_TIMEOUT) {
-        Ok((true, _)) => Ok(()),
-        Ok((false, stderr)) => Err(stderr.trim().to_owned()),
-        Err(Bounded::TimedOut) => Err(format!(
+    match output_with_deadline(&mut command, REMOTE_FETCH_TIMEOUT, POLL_INTERVAL) {
+        Ok(Some(output)) if output.status.success() => Ok(()),
+        Ok(Some(output)) => Err(String::from_utf8_lossy(&output.stderr).trim().to_owned()),
+        Ok(None) => Err(format!(
             "fetching {remote} took longer than {}s",
             REMOTE_FETCH_TIMEOUT.as_secs()
         )),
-        Err(Bounded::Spawn(error)) => Err(error.to_string()),
+        Err(error) => Err(error.to_string()),
     }
-}
-
-enum Bounded {
-    TimedOut,
-    Spawn(std::io::Error),
-}
-
-/// Runs `command` to completion or kills it at `limit`, draining stderr on a
-/// thread so a chatty fetch cannot block on a full pipe.
-fn run_bounded(mut command: Command, limit: Duration) -> Result<(bool, String), Bounded> {
-    let mut child = command.spawn().map_err(Bounded::Spawn)?;
-    let reader = child.stderr.take().map(|mut stderr| {
-        std::thread::spawn(move || {
-            let mut text = String::new();
-            let _ = stderr.read_to_string(&mut text);
-            text
-        })
-    });
-    let Some(status) =
-        wait_with_deadline(&mut child, limit, Duration::from_millis(20)).map_err(Bounded::Spawn)?
-    else {
-        if let Some(reader) = reader {
-            let _ = reader.join();
-        }
-        return Err(Bounded::TimedOut);
-    };
-    let stderr = reader
-        .and_then(|reader| reader.join().ok())
-        .unwrap_or_default();
-    Ok((status.success(), stderr))
 }
 
 /// Resolves `remote` without letting repository configuration execute code
@@ -558,7 +526,10 @@ fn inspect_fetch_config(
         }
     }
     ensure_global_config_paths_are_trusted(&project)?;
-    let output = run_capturing(command, CONFIG_TIMEOUT).ok_or_else(unreadable)?;
+    let output = output_with_deadline(&mut command, CONFIG_TIMEOUT, POLL_INTERVAL)
+        .ok()
+        .flatten()
+        .ok_or_else(unreadable)?;
     if !output.status.success() {
         return Err(unreadable());
     }
@@ -599,26 +570,6 @@ fn inspect_fetch_config(
         }
     }
     Ok(trusted)
-}
-
-fn run_capturing(mut command: Command, limit: Duration) -> Option<std::process::Output> {
-    let mut child = command.spawn().ok()?;
-    let reader = child.stdout.take().map(|mut stdout| {
-        std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            let _ = stdout.read_to_end(&mut bytes);
-            bytes
-        })
-    });
-    let status = wait_with_deadline(&mut child, limit, Duration::from_millis(10)).ok()??;
-    let stdout = reader
-        .and_then(|reader| reader.join().ok())
-        .unwrap_or_default();
-    Some(std::process::Output {
-        status,
-        stdout,
-        stderr: Vec::new(),
-    })
 }
 
 fn is_trusted_fetch_config_key(key: &str) -> bool {
@@ -697,7 +648,10 @@ fn trusted_git_exec_path(executable: &Path) -> Result<String, UnsafeFetch> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let output = run_capturing(command, CONFIG_TIMEOUT).ok_or_else(unresolved)?;
+    let output = output_with_deadline(&mut command, CONFIG_TIMEOUT, POLL_INTERVAL)
+        .ok()
+        .flatten()
+        .ok_or_else(unresolved)?;
     let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     if !output.status.success() || path.is_empty() {
         return Err(unresolved());

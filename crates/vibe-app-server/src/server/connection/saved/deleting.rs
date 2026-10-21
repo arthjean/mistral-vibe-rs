@@ -13,17 +13,39 @@ impl ServerConnection {
     ) -> Result<DispatchBatch, ProtocolFault> {
         let SessionParams { session_id } =
             wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
-        if self.server.harness_selection().use_unified
-            && let Some(deleted) = self.unified_delete(&session_id)
-        {
+        self.delete_transcript(request, &session_id, false)
+    }
+
+    /// Reference `delete` on the unified host: a session the harness stores is
+    /// removed from its store, and any other from the legacy transcripts,
+    /// where a missing one is reported.
+    pub(in crate::server::connection) fn unified_delete_session(
+        &self,
+        request: &ServerRequest,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let SessionParams { session_id } =
+            wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
+        if let Some(deleted) = self.unified_delete(&session_id) {
             deleted?;
             return Ok(success_batch(request.id.clone(), BTreeMap::new()));
         }
-        let held = self.root_id().as_deref() == Some(session_id.as_str())
+        self.delete_transcript(request, &session_id, true)
+    }
+
+    /// Deletes the saved transcript of `session_id` with whatever links to
+    /// it, unless a connection holds it. A missing transcript is reported
+    /// when `report_missing`, and quietly deleted otherwise.
+    fn delete_transcript(
+        &self,
+        request: &ServerRequest,
+        session_id: &str,
+        report_missing: bool,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let held = self.root_id().as_deref() == Some(session_id)
             || self
                 .server
                 .lock_sessions()
-                .get(&session_id)
+                .get(session_id)
                 .is_some_and(|session| {
                     session.id == session_id
                         && session.attachments > 0
@@ -36,31 +58,27 @@ impl ServerConnection {
             ));
         }
         let store = self.store();
-        // Reference `delete` on the unified host looks for a legacy transcript
-        // only once the harness holds no such session, and reports a missing
-        // one; the legacy host deletes nothing quietly.
-        let unified = self.server.harness_selection().use_unified;
         crate::session_lifecycle::delete_session_transactionally(
             &self.server.projects,
-            &session_id,
+            session_id,
             || {
                 store
-                    .delete(&session_id)
+                    .delete(session_id)
                     .and_then(|deleted| {
-                        if unified && !deleted {
-                            Err(StorageError::SessionNotFound(session_id.clone()))
+                        if report_missing && !deleted {
+                            Err(StorageError::SessionNotFound(session_id.to_owned()))
                         } else {
                             Ok(())
                         }
                     })
                     .or_else(|error| match error {
                         StorageError::SessionNotFound(_) | StorageError::InvalidSessionId(_)
-                            if !unified =>
+                            if !report_missing =>
                         {
                             Ok(())
                         }
                         StorageError::SessionNotFound(_) | StorageError::InvalidSessionId(_) => {
-                            Err(StorageError::SessionNotFound(session_id.clone()))
+                            Err(StorageError::SessionNotFound(session_id.to_owned()))
                         }
                         error => Err(error),
                     })

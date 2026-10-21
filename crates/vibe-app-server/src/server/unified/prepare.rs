@@ -243,7 +243,7 @@ impl AppServer {
             .into_iter()
             .map(|(name, body)| {
                 if history.iter().any(|entry| loaded_skill(entry, &name)) {
-                    let note = invocation::already_loaded_message(&name);
+                    let note = vibe_core::skills::skill_already_loaded_message(&name);
                     (name, note)
                 } else {
                     (name, body)
@@ -412,7 +412,7 @@ fn text_of(content: &[Value]) -> String {
 /// Reference `_entry_loaded_skill`: a public entry that carries the body of
 /// `name`, typed into a message or loaded by the `skill` tool.
 fn loaded_skill(entry: &Value, name: &str) -> bool {
-    let marker = invocation::content_marker(name);
+    let marker = vibe_core::skills::skill_content_marker(name);
     if entry["type"] == "message" {
         return entry["content"]
             .as_array()

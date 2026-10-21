@@ -154,10 +154,19 @@ fn success(value: Value) -> ToolResult {
     }
 }
 
+const UNKNOWN_PROCESS: &str = "Unknown background process";
+const STOP_FAILED: &str = "Background process did not reach a terminal PTY-root state";
+
+/// Why a stop answers no terminal state.
+enum StopFailure {
+    Unknown,
+    StillRunning,
+}
+
 fn unknown(process_id: &str) -> ToolResult {
     failure(
         "unknown_process",
-        "Unknown background process",
+        UNKNOWN_PROCESS,
         json!({"processId": process_id}),
     )
 }
@@ -649,19 +658,27 @@ impl ProcessManager {
     /// `process.stop`: the group is asked to end, then made to.
     pub fn stop(&self, arguments: &Value) -> ToolResult {
         let process_id = arguments["processId"].as_str().unwrap_or_default();
-        let Some(process) = self.find(process_id) else {
-            return unknown(process_id);
-        };
+        match self.stop_process(process_id) {
+            Ok(stopped) => success(stopped),
+            Err(StopFailure::Unknown) => unknown(process_id),
+            Err(StopFailure::StillRunning) => failure(
+                "process_stop_failed",
+                STOP_FAILED,
+                json!({"processId": process_id, "status": "running", "exitCode": null}),
+            ),
+        }
+    }
+
+    /// The stop `process.stop` and `session/backgroundProcess/stop` share:
+    /// the stopped process's `processId`, `status` and `exitCode`.
+    fn stop_process(&self, process_id: &str) -> Result<Value, StopFailure> {
+        let process = self.find(process_id).ok_or(StopFailure::Unknown)?;
         process.terminate();
         let (status, exit_code) = process.state();
         if status == Status::Running {
-            return failure(
-                "process_stop_failed",
-                "Background process did not reach a terminal PTY-root state",
-                json!({"processId": process.id, "status": "running", "exitCode": null}),
-            );
+            return Err(StopFailure::StillRunning);
         }
-        success(json!({"processId": process.id, "status": status.as_str(), "exitCode": exit_code}))
+        Ok(json!({"processId": process.id, "status": status.as_str(), "exitCode": exit_code}))
     }
 
     /// Stops every running process, as closing the session does.
@@ -685,12 +702,9 @@ impl ProcessManager {
         wait_ms: u64,
         max_bytes: usize,
     ) -> Result<Value, (String, String)> {
-        let process = self.find(process_id).ok_or_else(|| {
-            (
-                "not_found".to_owned(),
-                "Unknown background process".to_owned(),
-            )
-        })?;
+        let process = self
+            .find(process_id)
+            .ok_or_else(|| ("not_found".to_owned(), UNKNOWN_PROCESS.to_owned()))?;
         if !from_end && wait_ms > 0 {
             process.wait_past(cursor, Duration::from_millis(wait_ms));
         }
@@ -721,22 +735,13 @@ impl ProcessManager {
     ///
     /// # Errors
     ///
-    /// The process is unknown.
+    /// The process is unknown, or does not stop.
     pub fn stop_raw(&self, process_id: &str) -> Result<Value, (String, String)> {
-        match self.stop(&json!({"processId": process_id})) {
-            ToolResult::Success {
-                structured_content: Some(value),
-                ..
-            } => Ok(value),
-            ToolResult::Failure { code, message, .. } if code == "unknown_process" => {
-                let _ = code;
-                Err(("not_found".to_owned(), message))
-            }
-            ToolResult::Failure { message, .. } => Err(("internal_error".to_owned(), message)),
-            ToolResult::Success { .. } => {
-                Err(("internal_error".to_owned(), "no result".to_owned()))
-            }
-        }
+        self.stop_process(process_id)
+            .map_err(|reason| match reason {
+                StopFailure::Unknown => ("not_found".to_owned(), UNKNOWN_PROCESS.to_owned()),
+                StopFailure::StillRunning => ("internal_error".to_owned(), STOP_FAILED.to_owned()),
+            })
     }
 }
 

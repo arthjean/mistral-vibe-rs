@@ -42,9 +42,9 @@ fn nothing_to_continue() -> ProtocolFault {
 }
 
 /// The accounting a session opens with, priced by its model.
-fn opening_stats(session: &SessionRuntime) -> Stats {
+fn opening_stats(session: &SessionRuntime) -> AgentStatsSnapshot {
     let (input, output, cached) = session.pricing;
-    Stats::priced(input, output, cached)
+    AgentStatsSnapshot::priced(input, output, cached)
 }
 
 impl AppServer {
@@ -144,7 +144,7 @@ impl ServerConnection {
                     root,
                     meta,
                     Some(store),
-                    Stats::priced(0.0, 0.0, None),
+                    AgentStatsSnapshot::priced(0.0, 0.0, None),
                     context_window,
                 );
                 {
@@ -192,7 +192,7 @@ impl ServerConnection {
                     None,
                     &format_iso_millis(created_at),
                     &cwd,
-                    &store::username(),
+                    &vibe_core::storage::current_username(),
                 );
                 UnifiedSession::new(
                     session_id.to_owned(),
@@ -380,7 +380,7 @@ impl ServerConnection {
             None,
             &format_iso_millis(now),
             &cwd,
-            &store::username(),
+            &vibe_core::storage::current_username(),
         );
         SessionStore::create_imported(store::unified_root(&root).join(&session_id), &meta, &core)
             .map_err(|error| ProtocolFault::internal(format!("the import cannot be saved: {error}")))?;
@@ -513,7 +513,7 @@ impl ServerConnection {
             Some(&source_id),
             &format_iso_millis(now),
             &cwd,
-            &store::username(),
+            &vibe_core::storage::current_username(),
         );
         SessionStore::create(store::unified_root(&root).join(&session_id), &meta, &core).map_err(
             |error| ProtocolFault::internal(format!("the fork cannot be saved: {error}")),
@@ -565,19 +565,10 @@ impl ServerConnection {
         let new_id = vibe_core::session_id::generate_session_id(None);
         // The new identifier is leased, registered and opened before anything
         // lets go of the old one, so a refusal leaves the root as it stood.
-        self.server.acquire_lease(&new_id)?;
-        let opened = self
-            .server
-            .rekey_cleared_session(&key, &new_id)
-            .map_err(ProtocolFault::from)
-            .and_then(|()| self.open_unified(&new_id, None));
-        let session = match opened {
-            Ok(session) => session,
-            Err(fault) => {
-                self.server.release_lease(&new_id);
-                return Err(fault);
-            }
-        };
+        let lease = self.server.acquire_lease(&new_id)?;
+        self.server.rekey_cleared_session(&key, &new_id)?;
+        let session = self.open_unified(&new_id, None)?;
+        lease.keep();
         self.server.release_lease(&session_id);
         self.server.remove_unified(&session_id);
         self.root = Some(new_id.clone());

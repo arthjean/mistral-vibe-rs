@@ -3,6 +3,7 @@
 //! attaches, and settled by the client's response.
 
 use super::*;
+use crate::server::session_callbacks::RaisedCallback;
 
 impl ServerConnection {
     pub fn request_callback(
@@ -96,7 +97,7 @@ impl ServerConnection {
         session_id: &str,
         turn_id: &str,
         kind: EngineCallbackKind,
-        request: impl FnOnce(&AppServer) -> Result<(String, Vec<Vec<u8>>), ServerError>,
+        request: impl FnOnce(&AppServer) -> Result<RaisedCallback, ServerError>,
     ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
         if self.state != ConnectionState::Ready {
             return Err(ServerError::NotInitialized);
@@ -104,13 +105,11 @@ impl ServerConnection {
         if !self.answers_callback(kind) {
             return Err(ServerError::UnsupportedClientCallbackKind(kind));
         }
-        let (callback_id, frames) = request(&self.server)?;
-        // The delivery itself is the last frame: the status update precedes it.
-        let delivery = frames.last().ok_or(ServerError::InvalidCallbackRequest)?;
-        let request_id = match decode_frame(delivery)? {
-            Envelope::Request(request) => request.id,
-            _ => return Err(ServerError::InvalidCallbackRequest),
-        };
+        let RaisedCallback {
+            callback_id,
+            request_id,
+            frames,
+        } = request(&self.server)?;
         self.pending_server_requests.insert(
             request_id,
             CallbackRoute {

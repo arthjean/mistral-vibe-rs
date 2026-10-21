@@ -8,32 +8,18 @@
 //! reads. Reference `vibe/app_server/_skill_invocation.py`.
 
 use serde_json::{Value, json};
+use vibe_core::skills::{
+    SKILL_CONTENT_CLOSING, SKILL_CONTENT_MARKER_PREFIX, skill_already_loaded_name,
+    skill_content_marker,
+};
 
 /// The `userDisplayContent` block type that records an invoked skill.
 pub const DISPLAY_BLOCK: &str = "vibe.skill_invocation";
 
-const CONTENT_CLOSING: &str = "</skill_content>";
-const MARKER_PREFIX: &str = "<skill_content name=\"";
 const TRAILING_PUNCTUATION: &[char] =
     &['.', ',', ';', ':', '!', '?', ')', ']', '}', '\'', '"', '`'];
 /// What replaces a code span, so it never opens a new mention boundary.
 const REMOVED_CODE: char = '\0';
-
-const ALREADY_LOADED_PREFIX: &str = "The skill `";
-const ALREADY_LOADED_SUFFIX: &str =
-    "` was already loaded earlier in this conversation; reuse those instructions.";
-
-/// What an invocation appends for a skill the conversation already carries.
-#[must_use]
-pub fn already_loaded_message(name: &str) -> String {
-    format!("{ALREADY_LOADED_PREFIX}{name}{ALREADY_LOADED_SUFFIX}")
-}
-
-/// The opening tag a rendered body starts with.
-#[must_use]
-pub fn content_marker(name: &str) -> String {
-    format!("{MARKER_PREFIX}{name}\">")
-}
 
 /// The slash command's skill name, casefolded.
 #[must_use]
@@ -237,7 +223,7 @@ pub fn payloads(texts: &[Option<&str>], names: &[String]) -> Vec<(usize, String)
     let mut claimed: Vec<String> = Vec::new();
     for (index, text) in texts.iter().enumerate().rev() {
         let Some(text) = text else { continue };
-        let Some(payload) = content_name(text).or_else(|| already_loaded_name(text)) else {
+        let Some(payload) = content_name(text).or_else(|| skill_already_loaded_name(text)) else {
             continue;
         };
         let name = if names.is_empty() {
@@ -274,15 +260,9 @@ pub fn payloads(texts: &[Option<&str>], names: &[String]) -> Vec<(usize, String)
     found
 }
 
-fn already_loaded_name(text: &str) -> Option<&str> {
-    text.strip_prefix(ALREADY_LOADED_PREFIX)?
-        .strip_suffix(ALREADY_LOADED_SUFFIX)
-        .filter(|name| !name.is_empty())
-}
-
 fn content_name(text: &str) -> Option<&str> {
-    let rest = text.strip_prefix(MARKER_PREFIX)?;
-    if !text.trim_end().ends_with(CONTENT_CLOSING) {
+    let rest = text.strip_prefix(SKILL_CONTENT_MARKER_PREFIX)?;
+    if !text.trim_end().ends_with(SKILL_CONTENT_CLOSING) {
         return None;
     }
     let end = rest.find("\">")?;
@@ -439,7 +419,7 @@ fn starts_with_heading(content: &str, name: &str) -> bool {
 
 fn truncated_marker_start(text: &str, name: &str) -> Option<usize> {
     let at = text.rfind("<skill_content")?;
-    content_marker(name)
+    skill_content_marker(name)
         .to_lowercase()
         .starts_with(&text[at..].to_lowercase())
         .then_some(at)
@@ -453,12 +433,16 @@ fn content_start(text: &str, name: &str) -> Option<usize> {
     let mut completed: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
     let mut cursor = 0;
     while cursor < text.len() {
-        let marker = text[cursor..].find(MARKER_PREFIX).map(|at| cursor + at);
-        let closing = text[cursor..].find(CONTENT_CLOSING).map(|at| cursor + at);
+        let marker = text[cursor..]
+            .find(SKILL_CONTENT_MARKER_PREFIX)
+            .map(|at| cursor + at);
+        let closing = text[cursor..]
+            .find(SKILL_CONTENT_CLOSING)
+            .map(|at| cursor + at);
         if let Some(marker_at) = marker
             && closing.is_none_or(|closing_at| marker_at < closing_at)
         {
-            let name_start = marker_at + MARKER_PREFIX.len();
+            let name_start = marker_at + SKILL_CONTENT_MARKER_PREFIX.len();
             let Some(name_end) = text[name_start..].find("\">").map(|at| name_start + at) else {
                 break;
             };
@@ -480,9 +464,9 @@ fn content_start(text: &str, name: &str) -> Option<usize> {
             && let Some(root) = root
             && !stack.contains(&Some(root))
         {
-            completed.insert(root, closing_at + CONTENT_CLOSING.len());
+            completed.insert(root, closing_at + SKILL_CONTENT_CLOSING.len());
         }
-        cursor = closing_at + CONTENT_CLOSING.len();
+        cursor = closing_at + SKILL_CONTENT_CLOSING.len();
     }
     let end = text.trim_end().len();
     if let Some(last) = rendered
@@ -495,7 +479,7 @@ fn content_start(text: &str, name: &str) -> Option<usize> {
     if rendered.iter().any(|root| stack.contains(&Some(*root))) {
         return rendered.first().copied();
     }
-    if text.trim_end().ends_with(CONTENT_CLOSING) && !rendered.is_empty() {
+    if text.trim_end().ends_with(SKILL_CONTENT_CLOSING) && !rendered.is_empty() {
         return rendered.first().copied();
     }
     rendered

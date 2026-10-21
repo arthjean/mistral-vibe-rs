@@ -20,7 +20,7 @@ use vibe_harness::engine::{
     CallbackEvent, Publication, SessionCore, TurnEnd, TurnEnvironment, TurnRequest, run_turn,
 };
 use vibe_harness::gate::{CallbackAnswer, CallbackBook};
-use vibe_harness::reconcile::{Notification, Stats, Translator};
+use vibe_harness::reconcile::{AgentStatsSnapshot, Notification, Translator};
 use vibe_harness::state::{Advance, HarnessState};
 use vibe_harness::store::{self, SessionStore};
 use vibe_harness::wire::{
@@ -34,7 +34,7 @@ mod environment;
 mod gate;
 mod loops;
 mod marks;
-mod params;
+pub(in crate::server) mod params;
 mod prepare;
 mod provided;
 mod queue;
@@ -81,6 +81,14 @@ pub(crate) struct UnifiedDriver {
     delivery: CallbackDelivery,
 }
 
+/// What a unified session is busy with.
+pub(crate) enum Running {
+    /// The turn the identifier names.
+    Turn(String),
+    /// A compaction, which runs no turn a client can address.
+    Compaction,
+}
+
 /// What the host keeps beside the harness state.
 pub(crate) struct UnifiedHost {
     store: Option<SessionStore>,
@@ -90,7 +98,7 @@ pub(crate) struct UnifiedHost {
     pub(crate) translator: Translator,
     /// Turns to the reason the running turn is interrupted for.
     interrupt: Option<watch::Sender<Option<String>>>,
-    pub(crate) running: Option<String>,
+    pub(crate) running: Option<Running>,
     /// What the session knows of its subagents.
     children: vibe_harness::subagents::ChildDirectory,
     /// The turns queued to run next.
@@ -112,19 +120,22 @@ impl UnifiedHost {
     }
 
     /// Reference `_require_active_turn`: the turn running is the one the
-    /// client expects, and `stale` words the refusal of another one.
+    /// client expects, and `stale` words the refusal of another one. A
+    /// compaction is no active turn whatever the client expects, an empty
+    /// identifier included (the harness `interrupt_turn` and `steer_turn` read
+    /// `active_turn_id`, which a compaction leaves unset).
     fn require_turn(&self, expected: &str, stale: &str) -> Result<(), ProtocolFault> {
-        match self.running.as_deref() {
-            None => Err(ProtocolFault::plain(
+        match &self.running {
+            None | Some(Running::Compaction) => Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,
                 "No active turn",
             )),
-            Some(active) if active != expected => Err(ProtocolFault::with_data(
+            Some(Running::Turn(active)) if active != expected => Err(ProtocolFault::with_data(
                 ProtocolErrorCode::StaleTurn,
                 stale,
                 json!({"activeTurnId": active}),
             )),
-            Some(_) => Ok(()),
+            Some(Running::Turn(_)) => Ok(()),
         }
     }
 
@@ -156,7 +167,7 @@ impl UnifiedSession {
         session_root: Option<PathBuf>,
         meta: Map<String, Value>,
         store: Option<SessionStore>,
-        stats: Stats,
+        stats: AgentStatsSnapshot,
         context_window: u64,
     ) -> Self {
         let marks = marks_of(&meta);
@@ -730,3 +741,6 @@ pub async fn drive_unified_turn(work: UnifiedTurnWork, frames: mpsc::UnboundedSe
     }
     session.wake();
 }
+
+#[cfg(test)]
+mod unified_tests;

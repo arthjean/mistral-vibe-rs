@@ -13,9 +13,9 @@ use serde_json::json;
 use tokio::task::JoinHandle;
 use vibe_app_server::client::{
     DriverError, HeadlessService, InterruptOutcome, LiveTurnDriver, ProgrammaticUpdate,
-    PublicNoticeLevel, PublicTurnOutcome, TurnErrorCode, TurnReservation, turn_error_code,
+    PublicNoticeLevel, TurnErrorCode, TurnReservation, turn_error_code,
 };
-use vibe_core::engine::{CompositeEventObserver, EventObserver};
+use vibe_core::engine::{CompositeEventObserver, EventObserver, TurnOutcome};
 
 use super::callback::{
     cancel_open_callback_notices, fail_open_callback_notices, sync_active_callbacks,
@@ -45,7 +45,7 @@ pub(super) struct ActiveTurn {
     /// When the operator asked for the interrupt, until the slow hint fired.
     interrupted_at: Option<std::time::Instant>,
     updates: tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
-    task: JoinHandle<(TurnReservation, Result<PublicTurnOutcome, DriverError>)>,
+    task: JoinHandle<(TurnReservation, Result<TurnOutcome, DriverError>)>,
 }
 
 impl ActiveTurn {
@@ -56,7 +56,7 @@ impl ActiveTurn {
         turn_id: String,
         cancellation: CancellationPhase,
         updates: tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
-        task: JoinHandle<(TurnReservation, Result<PublicTurnOutcome, DriverError>)>,
+        task: JoinHandle<(TurnReservation, Result<TurnOutcome, DriverError>)>,
     ) -> Self {
         Self {
             turn_id,
@@ -527,7 +527,8 @@ fn settle_cancelled_reservation(
 
 #[cfg(test)]
 mod tests {
-    use vibe_app_server::client::{PublicTurnOutcome, TurnRequest};
+    use vibe_app_server::client::TurnRequest;
+    use vibe_core::engine::TurnOutcome;
 
     use super::super::hydration::canonical_session_projection;
     use super::super::runtime::interactive_test_runtime;
@@ -645,7 +646,7 @@ mod tests {
             let task = tokio::spawn(async move {
                 (
                     reservation,
-                    Err::<PublicTurnOutcome, _>(DriverError::UnsupportedControl("test turn")),
+                    Err::<TurnOutcome, _>(DriverError::UnsupportedControl("test turn")),
                 )
             });
             let mut active = Some(ActiveTurn::for_test(
@@ -718,7 +719,7 @@ mod tests {
                 panic!("canonical cancellation failed: {canonical_error}")
             }
         };
-        let outcome = PublicTurnOutcome {
+        let outcome = TurnOutcome {
             session_id: session_id.clone(),
             events: Vec::new(),
             snapshot: vibe_core::events::ProjectionReducer::for_turn(&session_id, &turn_id)

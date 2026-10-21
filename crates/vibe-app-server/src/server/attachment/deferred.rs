@@ -4,6 +4,16 @@
 
 use super::*;
 
+/// Reference `SkillsVersionsParams` and `SkillsDetailParams`: the skill a
+/// registry read is about, and for a detail the version it names.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SkillParams {
+    skill_id: String,
+    #[serde(default)]
+    version: Option<i64>,
+}
+
 impl AppServer {
     pub async fn invoke_tool(
         &self,
@@ -161,22 +171,17 @@ impl AppServer {
                     .collect(),
             );
         }
-        if method == "skills/versions" {
-            let skill_id = params
-                .get("skillId")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let versions = self.workspace.skills_versions(skill_id).await;
-            return success_batch(request_id, object(versions));
-        }
-        if method == "skills/detail" {
-            let skill_id = params
-                .get("skillId")
-                .and_then(Value::as_str)
-                .unwrap_or_default();
-            let version = params.get("version").and_then(Value::as_i64);
-            let detail = self.workspace.skills_detail(skill_id, version).await;
-            return success_batch(request_id, object(detail));
+        if method == "skills/versions" || method == "skills/detail" {
+            let SkillParams { skill_id, version } = match from_params(&params) {
+                Ok(params) => params,
+                Err(rejection) => return ProtocolFault::from(rejection).into_batch(request_id),
+            };
+            let answer = if method == "skills/versions" {
+                self.workspace.skills_versions(&skill_id).await
+            } else {
+                self.workspace.skills_detail(&skill_id, version).await
+            };
+            return success_batch(request_id, object(answer));
         }
         if crate::server::connection::SKILLS_MUTATIONS.contains(&method.as_str()) {
             return self

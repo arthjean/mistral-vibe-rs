@@ -60,17 +60,10 @@ impl ServerConnection {
             None => None,
         };
         let new_id = vibe_core::session_id::rotate_session_id(&source);
-        self.server.acquire_lease(&new_id)?;
-        let forked = workspace.fork_saved_session(&source, &new_id, keep);
-        let forked = match forked {
-            Ok(forked) => forked,
-            Err(error) => {
-                self.server.release_lease(&new_id);
-                return Err(error.into());
-            }
-        };
+        let lease = self.server.acquire_lease(&new_id)?;
+        let forked = workspace.fork_saved_session(&source, &new_id, keep)?;
         if !attach {
-            self.server.release_lease(&new_id);
+            drop(lease);
             let state = detached_fork_state(&self.server, &forked, history_limit);
             return Ok(success_batch(
                 request.id.clone(),
@@ -83,6 +76,7 @@ impl ServerConnection {
         }
         let attachment = crate::workspace::runtime_attachment(&forked);
         self.server.attach_workspace_runtime(&attachment, None)?;
+        lease.keep();
         if let Some(session) = self.server.lock_sessions().get_mut(&new_id) {
             session.snapshot = Some(persisted_projection(
                 &forked,

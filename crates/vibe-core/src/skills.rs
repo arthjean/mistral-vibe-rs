@@ -458,7 +458,31 @@ pub fn openai_invocation_policy(skill_path: &Path) -> Result<bool, String> {
 /// messages for it to decide whether a skill is already loaded.
 #[must_use]
 pub fn skill_content_marker(name: &str) -> String {
-    format!("<skill_content name=\"{name}\">")
+    format!("{SKILL_CONTENT_MARKER_PREFIX}{name}\">")
+}
+
+/// What [`skill_content_marker`] writes before the skill name.
+pub const SKILL_CONTENT_MARKER_PREFIX: &str = "<skill_content name=\"";
+/// The tag a rendered skill body ends with.
+pub const SKILL_CONTENT_CLOSING: &str = "</skill_content>";
+
+const ALREADY_LOADED_PREFIX: &str = "The skill `";
+const ALREADY_LOADED_SUFFIX: &str =
+    "` was already loaded earlier in this conversation; reuse those instructions.";
+
+/// What a repeated load of `name` answers instead of the rendered body.
+#[must_use]
+pub fn skill_already_loaded_message(name: &str) -> String {
+    format!("{ALREADY_LOADED_PREFIX}{name}{ALREADY_LOADED_SUFFIX}")
+}
+
+/// The skill a [`skill_already_loaded_message`] names, when `text` is exactly
+/// one.
+#[must_use]
+pub fn skill_already_loaded_name(text: &str) -> Option<&str> {
+    text.strip_prefix(ALREADY_LOADED_PREFIX)?
+        .strip_suffix(ALREADY_LOADED_SUFFIX)
+        .filter(|name| !name.is_empty())
 }
 
 /// What a slash invocation delivers, resolved once and carrying both possible

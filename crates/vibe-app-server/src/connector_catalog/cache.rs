@@ -7,7 +7,7 @@ use std::path::Path;
 use serde_json::{Map, Value, json};
 use vibe_core::atomic_file::{FileLock, FileMode, write_atomically};
 
-use super::{ResolvedCatalog, canonical_json, resolve_catalog};
+use super::{ConnectorAuthAction, ResolvedCatalog, canonical_json, resolve_catalog};
 
 const CACHE_FORMAT: i64 = 2;
 const CACHE_TTL_SECONDS: i64 = 10 * 60;
@@ -38,7 +38,7 @@ fn cache_entry(catalog: &ResolvedCatalog, stored_at: i64) -> Value {
                     "inputSchema": tool.input_schema,
                 })).collect::<Vec<_>>(),
             });
-            if connector.auth_action != "none" {
+            if connector.auth_action != ConnectorAuthAction::None {
                 payload["auth_action"] = json!({"type": connector.auth_action});
             }
             if !connector.diagnostics.is_empty() {

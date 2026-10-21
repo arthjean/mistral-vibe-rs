@@ -48,11 +48,11 @@ mod review;
 pub use checkpointer::{Checkpointer, LogView, RETAINED_BYTES_LIMIT};
 pub use files::{CheckpointFiles, FileAccessError, FileStore};
 pub use lines::FileState;
-pub use models::{CheckpointError, Decision, HunkSide, Owner, RegionId};
+pub use models::{CheckpointError, Decision, HunkAnchor, HunkSide, Owner, RegionId};
 pub use recorder::{CheckpointRecorder, RecorderError};
 pub use review::{
-    ReviewError, ReviewFileStatus, ReviewHunk, ReviewState, ReviewTarget, TurnFileDiff,
-    decide_target, project_scope_diff, project_state, state_text,
+    ReviewError, ReviewFileStatus, ReviewState, ReviewTarget, TurnFileDiff, decide_target,
+    project_scope_diff, project_state, state_text,
 };
 
 #[cfg(test)]

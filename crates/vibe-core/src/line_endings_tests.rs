@@ -9,13 +9,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("the crate sits two levels below the repository root")
-        .to_path_buf()
-}
+use crate::parity::replay::repository;
 
 /// A source file or directory that only builds under `cfg(test)`: its
 /// embedded corpora and fixtures may carry `\r` on purpose.
@@ -73,7 +67,7 @@ fn embedded_paths(source: &str) -> Vec<String> {
 
 #[test]
 fn no_production_asset_embeds_a_carriage_return() {
-    let root = repo_root();
+    let root = repository();
     let mut embedded = 0;
     let mut offenders = Vec::new();
     for source in production_sources(&root) {

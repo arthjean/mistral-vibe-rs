@@ -6,9 +6,7 @@ use std::path::PathBuf;
 use vibe_core::events::{LifecycleState, ModelMessage};
 use vibe_core::storage::SessionStore;
 
-use super::{
-    DriverError, DriverFuture, PublicTurnStopReason, TurnDriver, TurnOutcome, TurnReservation,
-};
+use super::{DriverError, DriverFuture, TurnDriver, TurnOutcome, TurnReservation, TurnStopReason};
 
 #[derive(Debug, Clone)]
 pub struct EchoTurnDriver {
@@ -98,7 +96,7 @@ impl TurnDriver for EchoTurnDriver {
                 price_micros: 0,
                 steps: 1,
                 checkpoints: 1,
-                stop_reason: PublicTurnStopReason::Complete,
+                stop_reason: TurnStopReason::Complete,
             };
             if let Some(session_root) = &self.session_root {
                 let store = SessionStore::new(session_root);

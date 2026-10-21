@@ -384,7 +384,6 @@ impl AppServer {
         &self,
         session_id: &str,
         turn_id: &str,
-        context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
         cached_tokens: u64,
@@ -393,7 +392,7 @@ impl AppServer {
         let session = sessions.active_turn_mut(session_id, turn_id)?;
         session
             .stats
-            .observe(context_tokens, input_tokens, output_tokens, cached_tokens);
+            .observe(input_tokens, output_tokens, cached_tokens);
         Ok(())
     }
 
@@ -489,14 +488,9 @@ impl AppServer {
         }
         // Reference `AgentLoop._reset_session`: the identifier the session
         // continues under is leased before the one it leaves is let go.
-        self.transfer_lease(old_session_id, new_session_id)
-            .map_err(|fault| {
-                ServerError::Resource(match fault {
-                    ProtocolFault::InvalidParams(_) => "the session lease was refused".to_owned(),
-                    ProtocolFault::Other { message, .. }
-                    | ProtocolFault::WithData { message, .. } => message,
-                })
-            })?;
+        let lease = self
+            .acquire_lease(new_session_id)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
         let mut sessions = self.lock_sessions();
         let source_key = sessions
             .key(old_session_id)
@@ -504,6 +498,8 @@ impl AppServer {
             .to_owned();
         let previous_id = { sessions.active_turn(old_session_id, turn_id)?.id.clone() };
         sessions.rename(&source_key, new_session_id)?;
+        lease.keep();
+        self.release_lease(old_session_id);
         self.projects
             .rebind_session(&previous_id, new_session_id)
             .map_err(|error| ServerError::Projects(error.to_string()))?;

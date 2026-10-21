@@ -28,9 +28,7 @@ use super::checkpointer::Checkpointer;
 use super::files::FileAccessError;
 use super::history::History;
 use super::lines::FileState;
-use super::models::{
-    Change, CheckpointError, Decision, HunkSide, OpaqueReason, Owner, RegionId, TurnRegion,
-};
+use super::models::{Change, CheckpointError, Decision, OpaqueReason, Owner, RegionId, TurnRegion};
 use crate::workspace::text_file::decode;
 
 /// What went wrong answering or deciding a review.
@@ -231,18 +229,6 @@ pub struct TurnFileDiff {
     pub baseline: String,
     /// The file as it stands with them.
     pub current: String,
-}
-
-/// One pending change located in a rendered diff.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ReviewHunk {
-    /// Which side of the diff the line belongs to.
-    pub side: HunkSide,
-    /// The zero-based index of the block's last line on that side.
-    pub line: usize,
-    /// The regions a control at this anchor decides together.
-    pub regions: Vec<RegionId>,
 }
 
 /// The granularity a decision addresses.

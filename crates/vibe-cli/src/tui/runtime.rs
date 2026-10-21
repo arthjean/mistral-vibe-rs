@@ -11,7 +11,8 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{
-    HeadlessService, LiveTurnDriver, PendingPublicCall, PublicDispatch, PublicNotification,
+    AgentStatsSnapshot, HeadlessService, LiveTurnDriver, PendingPublicCall, PublicDispatch,
+    PublicNotification,
 };
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::telemetry::TelemetryRecord;
@@ -336,10 +337,11 @@ pub(super) fn apply_ui_operation_completion(
 
 impl InteractiveRuntime {
     /// The session's accounting, reference `runtime.stats`.
-    pub(super) fn session_stats(&mut self) -> Value {
+    pub(super) fn session_stats(&mut self) -> AgentStatsSnapshot {
         self.service
             .stats(&self.session_id)
-            .map_or(Value::Null, |(stats, _)| stats)
+            .map(|(stats, _)| stats)
+            .unwrap_or_default()
     }
 
     /// The events this runtime was handed since the last call, oldest first.

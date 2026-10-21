@@ -11,12 +11,12 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::PublicDispatch;
+use vibe_core::engine::session_token_cost;
 use vibe_core::identity::{HttpIdentityGateway, IdentityCache};
 use vibe_core::telemetry::TelemetryRecord;
 
 use super::super::chat_input::ChatInputState;
 use super::super::clipboard::copy_text_verified;
-use super::super::command_handlers::status::session_cost;
 use super::super::command_handlers::{
     CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpState, Panel, ProviderAuth,
     Reloaded, ScheduledLoop, SessionLog, Stats,
@@ -74,7 +74,8 @@ pub(in crate::tui) struct LiveBackend<'a> {
     echo: Option<String>,
     /// The picker the saved-session list was read into.
     sessions: Option<Overlay>,
-    /// The sources `mcp/read` published, which the MCP browser opens on.
+    /// The sources `mcp/read` and the connector catalog published, which the
+    /// MCP browser opens on.
     mcp: Option<Vec<McpSource>>,
 }
 
@@ -445,30 +446,32 @@ impl CommandBackend for LiveBackend<'_> {
         let stats = self
             .runtime
             .as_mut()
-            .map_or(Value::Null, |runtime| runtime.session_stats());
-        let count = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or_default();
-        let price = |key: &str| stats.get(key).and_then(Value::as_f64);
+            .map(InteractiveRuntime::session_stats)
+            .unwrap_or_default();
         let (prompt, completion, cached) = (
-            count("sessionPromptTokens"),
-            count("sessionCompletionTokens"),
-            count("sessionCachedTokens"),
+            stats.session_prompt_tokens,
+            stats.session_completion_tokens,
+            stats.session_cached_tokens,
         );
         Stats {
-            steps: count("steps"),
+            steps: stats.steps,
             session_prompt_tokens: prompt,
             session_cached_tokens: cached,
             session_completion_tokens: completion,
             session_total_llm_tokens: prompt.saturating_add(completion),
-            last_turn_total_tokens: count("lastTurnPromptTokens")
-                .saturating_add(count("lastTurnCompletionTokens")),
-            last_turn_cached_tokens: count("lastTurnCachedTokens"),
-            session_cost: session_cost(
+            last_turn_total_tokens: stats
+                .last_turn_prompt_tokens
+                .saturating_add(stats.last_turn_completion_tokens),
+            last_turn_cached_tokens: stats.last_turn_cached_tokens,
+            session_cost: session_token_cost(
                 prompt,
                 completion,
                 cached,
-                price("inputPricePerMillion").unwrap_or_default(),
-                price("outputPricePerMillion").unwrap_or_default(),
-                price("cachedInputPricePerMillion"),
+                (
+                    stats.input_price_per_million,
+                    stats.output_price_per_million,
+                    stats.cached_input_price_per_million,
+                ),
             ),
         }
     }
@@ -608,7 +611,14 @@ impl CommandBackend for LiveBackend<'_> {
             .await
             .map(|dispatch| map_value(dispatch.result))
             .unwrap_or(Value::Null);
-        let sources = match McpSource::published(&value) {
+        let catalog = self
+            .call_deferred("connector_catalog/read", json!({}))
+            .await
+            .ok()
+            .map(|dispatch| map_value(dispatch.result));
+        let sources = match McpSource::published(&value)
+            .and_then(|sources| McpSource::with_catalog_connectors(sources, catalog.as_ref()))
+        {
             Ok(sources) => sources,
             Err(error) => {
                 self.state.push_diagnostic(error);

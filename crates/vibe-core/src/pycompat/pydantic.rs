@@ -1,8 +1,10 @@
-//! What pydantic answers for a payload: how its lax mode reads a string as a
-//! boolean or a number, and how `str(ValidationError)` reports a refusal.
+//! What pydantic answers for a payload: how its lax mode reads a string or a
+//! JSON scalar as a boolean or a number, and how `str(ValidationError)`
+//! reports a refusal.
 //!
 //! The lax readers were measured against the pinned checkout's pydantic
-//! (`TypeAdapter(bool | int | float).validate_python(text)`).
+//! (`TypeAdapter(bool | int | float).validate_python(text)`, and an ACP
+//! model's `int`, `float` and `bool` fields for the scalar readers).
 
 use std::fmt::Write as _;
 
@@ -26,16 +28,7 @@ pub fn lax_bool(text: &str) -> Option<bool> {
 /// is zero or one, and a string as [`lax_bool`] reads it.
 #[must_use]
 pub fn lax_bool_value(value: &Value) -> Option<bool> {
-    match value {
-        Value::Bool(flag) => Some(*flag),
-        Value::Number(number) => match number.as_f64()? {
-            0.0 => Some(false),
-            1.0 => Some(true),
-            _ => None,
-        },
-        Value::String(text) => lax_bool(text),
-        _ => None,
-    }
+    boolean(value, false).ok()
 }
 
 /// A string read as an `int`: surrounding `White_Space`, a sign, ASCII digits
@@ -92,6 +85,145 @@ pub fn lax_float(text: &str) -> Option<f64> {
         return None;
     }
     trimmed.replace('_', "").parse::<f64>().ok()
+}
+
+/// Why pydantic refuses a scalar: its error type and its message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Refusal {
+    pub kind: &'static str,
+    pub message: &'static str,
+}
+
+const INT_TYPE: Refusal = Refusal {
+    kind: "int_type",
+    message: "Input should be a valid integer",
+};
+
+const FLOAT_TYPE: Refusal = Refusal {
+    kind: "float_type",
+    message: "Input should be a valid number",
+};
+
+const BOOL_TYPE: Refusal = Refusal {
+    kind: "bool_type",
+    message: "Input should be a valid boolean",
+};
+
+const BOOL_PARSING: Refusal = Refusal {
+    kind: "bool_parsing",
+    message: "Input should be a valid boolean, unable to interpret input",
+};
+
+/// `input` read as an `int`: lax mode also takes a boolean, a float with no
+/// fractional part and a string [`lax_int`] reads. Pydantic's integers are
+/// unbounded; this one saturates at the `i128` range.
+///
+/// # Errors
+///
+/// The refusal pydantic reports for an input it does not read as an `int`.
+pub fn integer(input: &Value, strict: bool) -> Result<i128, Refusal> {
+    match input {
+        Value::Number(number) => {
+            if let Some(value) = number.as_i64() {
+                return Ok(i128::from(value));
+            }
+            if let Some(value) = number.as_u64() {
+                return Ok(i128::from(value));
+            }
+            if strict {
+                return Err(INT_TYPE);
+            }
+            integral(number.as_f64().unwrap_or(f64::NAN))
+        }
+        Value::Bool(value) if !strict => Ok(i128::from(*value)),
+        Value::String(text) if !strict => lax_int(text).ok_or(Refusal {
+            kind: "int_parsing",
+            message: "Input should be a valid integer, unable to parse string as an integer",
+        }),
+        _ => Err(INT_TYPE),
+    }
+}
+
+/// A float read as an `int`, which it is only when finite and integral.
+fn integral(value: f64) -> Result<i128, Refusal> {
+    if !value.is_finite() {
+        return Err(Refusal {
+            kind: "finite_number",
+            message: "Input should be a finite number",
+        });
+    }
+    if value.fract() != 0.0 {
+        return Err(Refusal {
+            kind: "int_from_float",
+            message: "Input should be a valid integer, got a number with a fractional part",
+        });
+    }
+    // An integer literal past the 64-bit range reaches here as a float, which
+    // is then the only way to tell it holds no fraction. Pydantic refuses a
+    // float past the `i64` range as too large, but an integer literal that
+    // size it takes, and the two read alike here, so both are taken.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the value is finite and integral; past the i128 range it saturates"
+    )]
+    Ok(value as i128)
+}
+
+/// `input` read as a `float`: lax mode also takes a boolean and a string
+/// [`lax_float`] reads. Whether an infinity or NaN is refused is the model's
+/// to say.
+///
+/// # Errors
+///
+/// The refusal pydantic reports for an input it does not read as a `float`.
+pub fn float(input: &Value, strict: bool) -> Result<f64, Refusal> {
+    match input {
+        Value::Number(number) => number.as_f64().ok_or(FLOAT_TYPE),
+        Value::Bool(value) if !strict => Ok(if *value { 1.0 } else { 0.0 }),
+        Value::String(text) if !strict => lax_float(text).ok_or(Refusal {
+            kind: "float_parsing",
+            message: "Input should be a valid number, unable to parse string as a number",
+        }),
+        _ => Err(FLOAT_TYPE),
+    }
+}
+
+/// `input` read as a `bool`: lax mode also takes 0 and 1, as integers or
+/// floats, and a string [`lax_bool`] reads. Any other whole number in the
+/// `i64` range cannot be read as a boolean; a fractional float or a number
+/// past that range is not a boolean at all.
+///
+/// # Errors
+///
+/// The refusal pydantic reports for an input it does not read as a `bool`.
+pub fn boolean(input: &Value, strict: bool) -> Result<bool, Refusal> {
+    match input {
+        Value::Bool(value) => Ok(*value),
+        Value::Number(number) if !strict => match whole_i64(number) {
+            Some(0) => Ok(false),
+            Some(1) => Ok(true),
+            Some(_) => Err(BOOL_PARSING),
+            None => Err(BOOL_TYPE),
+        },
+        Value::String(text) if !strict => lax_bool(text).ok_or(BOOL_PARSING),
+        _ => Err(BOOL_TYPE),
+    }
+}
+
+/// `number` as an `i64` when it is a whole number in that range, written as
+/// an integer or as a float.
+fn whole_i64(number: &serde_json::Number) -> Option<i64> {
+    if let Some(value) = number.as_i64() {
+        return Some(value);
+    }
+    let value = number.as_f64()?;
+    // -2^63 and 2^63, the `i64` range as floats hold it.
+    let bound = 9_223_372_036_854_775_808.0;
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the value is whole and inside the i64 range"
+    )]
+    (value.fract() == 0.0 && (-bound..bound).contains(&value)).then_some(value as i64)
 }
 
 /// The name of the Python type `json.loads` returns for `value`, which is

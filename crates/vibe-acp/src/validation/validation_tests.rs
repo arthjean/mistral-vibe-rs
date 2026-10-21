@@ -67,6 +67,23 @@ fn lax_conversions_accept_what_the_validator_accepts() {
 }
 
 #[test]
+fn numeric_strings_read_the_way_the_validator_reads_them() {
+    let link = |size: Value| {
+        json!({"sessionId": "s", "prompt": [{
+            "type": "resource_link", "name": "n", "uri": "u", "size": size,
+            "annotations": {"priority": "1_000"},
+        }]})
+    };
+    assert!(validate_request("session/prompt", &link(json!("12.0"))).is_ok());
+    assert!(validate_request("session/prompt", &link(json!("1_000"))).is_ok());
+    let errors = errors(
+        "initialize",
+        json!({"protocolVersion": 1, "clientCapabilities": {"terminal": 0.5}}),
+    );
+    assert_eq!(errors[0]["type"], "bool_type");
+}
+
+#[test]
 fn a_non_object_payload_is_a_model_type_error() {
     let errors = errors("session/new", Value::Null);
     assert_eq!(errors[0]["type"], "model_type");

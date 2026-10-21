@@ -15,6 +15,8 @@ use crate::gate::{
 };
 use crate::processes::Operation;
 use crate::state::{Advance, ToolAction, ToolResult};
+use crate::tools::files::FileTool;
+use crate::tools::vibe::VibeTool;
 
 /// How one call ended for the turn.
 pub(super) enum CallOutcome {
@@ -27,16 +29,14 @@ pub(super) enum CallOutcome {
 #[derive(Debug, Clone, Copy)]
 enum HarnessTool<'a> {
     AskUserQuestion,
-    /// One of the `file_system` tools [`crate::tools::files::execute`] runs
-    /// by this name.
-    File(&'a str),
+    File(FileTool),
     Bash,
     Process(Operation),
     Subagent(&'a str),
     Sleep,
     SkillRead,
     Cron,
-    Vibe(&'a str),
+    Vibe(VibeTool),
     /// A tool the host provides, or one nothing here runs.
     Other(&'a str),
 }
@@ -45,19 +45,20 @@ impl<'a> HarnessTool<'a> {
     fn parse(name: &'a str) -> Self {
         match name {
             "ui.ask_user_question" => Self::AskUserQuestion,
-            "file_system.read_file" | "file_system.write_file" | "file_system.search_replace" => {
-                Self::File(name)
-            }
+            "file_system.read_file" => Self::File(FileTool::ReadFile),
+            "file_system.write_file" => Self::File(FileTool::WriteFile),
+            "file_system.search_replace" => Self::File(FileTool::SearchReplace),
             "file_system.bash" => Self::Bash,
             "self.sleep" => Self::Sleep,
             "skill.read" => Self::SkillRead,
             "vibe.cron" => Self::Cron,
+            "vibe.todo" => Self::Vibe(VibeTool::Todo),
+            "vibe.unified_harness_scratchpad" => Self::Vibe(VibeTool::Scratchpad),
             _ => match name.split_once('.') {
                 Some(("process", operation)) => {
                     Operation::parse(operation).map_or(Self::Other(name), Self::Process)
                 }
                 Some(("subagent", operation)) => Self::Subagent(operation),
-                Some(("vibe", tool)) => Self::Vibe(tool),
                 _ => Self::Other(name),
             },
         }
@@ -215,11 +216,10 @@ async fn execute(
     let arguments = action.arguments.clone();
     Ok(match tool {
         HarnessTool::AskUserQuestion => return ask_user(core, sink, call_id, action).await,
-        HarnessTool::File(name) => {
-            let name = name.to_owned();
+        HarnessTool::File(file_tool) => {
             let workspace = environment.workspace.clone();
             tokio::task::spawn_blocking(move || {
-                crate::tools::files::execute(&name, &arguments, &workspace)
+                crate::tools::files::execute(file_tool, &arguments, &workspace)
             })
             .await
             .unwrap_or_else(|error| ToolResult::failed("tool_failed", error.to_string()))

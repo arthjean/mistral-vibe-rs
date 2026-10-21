@@ -7,6 +7,7 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use serde::Deserialize;
 use serde_json::Value;
+use vibe_app_server::vocabulary::McpSourceStatus;
 use vibe_core::config::{ProxyEnvironmentStore, ProxyKey};
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
@@ -18,8 +19,8 @@ use crate::tui::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, Overlay, OverlayAction,
 };
 use crate::tui::pickers::{
-    McpSource, McpSourceStatus, McpTool, config_overlay, mcp_auth_overlay, mcp_overlay,
-    proxy_overlay, remote_projects_overlay, teleport_push_overlay,
+    McpSource, McpTool, config_overlay, mcp_auth_overlay, mcp_overlay, proxy_overlay,
+    remote_projects_overlay, teleport_push_overlay,
 };
 use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
 use crate::tui::setup::{DetectedTheme, Theme, resolve_theme};
@@ -288,6 +289,9 @@ fn fixture_sources(mcp: &Value, connectors: &Value) -> (Vec<McpSource>, BTreeMap
                     enabled: enabled(tool),
                 })
                 .collect(),
+            error: None,
+            plugin_name: None,
+            discovery_error: None,
         })
         .collect::<Vec<_>>();
     let mut connector_names = BTreeMap::new();
@@ -323,6 +327,9 @@ fn fixture_sources(mcp: &Value, connectors: &Value) -> (Vec<McpSource>, BTreeMap
                         .any(|candidate| candidate.as_str() == Some(tool)),
                 })
                 .collect(),
+            error: None,
+            plugin_name: None,
+            discovery_error: None,
         });
     }
     (sources, connector_names)
@@ -674,6 +681,9 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
                     description: String::new(),
                     enabled: true,
                 }],
+                error: None,
+                plugin_name: None,
+                discovery_error: None,
             }]),
             "MCP",
         ),

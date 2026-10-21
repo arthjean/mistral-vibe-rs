@@ -8,7 +8,7 @@
 //! what a restore puts back.
 
 use super::*;
-use crate::server::connection::rewind::{RewindParams, rewind_params};
+use crate::server::connection::rewind::RewindParams;
 
 /// Reference `_rewind` pages: the history and turns an in-place rewind
 /// answers with.
@@ -32,7 +32,7 @@ impl ServerConnection {
         request: &ServerRequest,
         unified: &Arc<UnifiedSession>,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let params = rewind_params(&request.params, false)?;
+        let params = RewindParams::read(request)?;
         require_root(unified, &params)?;
         anchor(unified, &params.entry_id)?;
         let paths = unified.host().rewind.restorable_paths(&params.entry_id);
@@ -51,7 +51,7 @@ impl ServerConnection {
         request: &ServerRequest,
         unified: Arc<UnifiedSession>,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let params = rewind_params(&request.params, true)?;
+        let params = RewindParams::read(request)?;
         require_root(&unified, &params)?;
         require_settled(&unified)?;
         let anchor = anchor(&unified, &params.entry_id)?;
@@ -151,7 +151,7 @@ impl ServerConnection {
             Some(&unified.id),
             &format_iso_millis(now),
             &unified.cwd,
-            &store::username(),
+            &vibe_core::storage::current_username(),
         );
         SessionStore::create(store::unified_root(&root).join(&session_id), &meta, &core).map_err(
             |error| ProtocolFault::internal(format!("the fork cannot be saved: {error}")),
@@ -225,13 +225,13 @@ fn require_root(unified: &UnifiedSession, params: &RewindParams) -> Result<(), P
 
 /// Reference `_require_settled`.
 fn require_settled(unified: &UnifiedSession) -> Result<(), ProtocolFault> {
-    match unified.host().running.as_deref() {
+    match &unified.host().running {
         None => Ok(()),
-        Some("") => Err(ProtocolFault::plain(
+        Some(Running::Compaction) => Err(ProtocolFault::plain(
             ProtocolErrorCode::Conflict,
             "Context compaction is already running",
         )),
-        Some(turn_id) => Err(ProtocolFault::with_data(
+        Some(Running::Turn(turn_id)) => Err(ProtocolFault::with_data(
             ProtocolErrorCode::Conflict,
             format!("A turn is already running: {turn_id}"),
             json!({"activeTurnId": turn_id}),

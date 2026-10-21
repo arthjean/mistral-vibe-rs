@@ -9,6 +9,7 @@
 //! `connector_bootstrap_cache.json` under the Vibe home. A read never fetches:
 //! it answers what memory or the cache hold, or `not_loaded`.
 
+use serde::Serialize;
 use serde_json::{Map, Value, json};
 use toml::Value as TomlValue;
 use vibe_core::config::ConfigSnapshot;
@@ -48,13 +49,25 @@ pub(crate) struct ResolvedTool {
     pub(crate) input_schema: Map<String, Value>,
 }
 
+/// What a connector waits on before a session can use it, reference
+/// `ConnectorAuthAction` (`vibe/app_server/_session_backend_port.py`): an
+/// action type the catalog does not know reads as `Unknown`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ConnectorAuthAction {
+    None,
+    Oauth,
+    CredentialsSetup,
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ResolvedConnector {
     pub(crate) raw_id: String,
     pub(crate) alias: String,
     pub(crate) display_name: String,
     pub(crate) ready: bool,
-    pub(crate) auth_action: &'static str,
+    pub(crate) auth_action: ConnectorAuthAction,
     pub(crate) tools: Vec<ResolvedTool>,
     pub(crate) diagnostics: Vec<String>,
 }
@@ -241,10 +254,10 @@ pub(crate) struct CatalogError(pub(crate) String);
 
 /// Reference `_connector_readiness`: the catalog's own word for how a
 /// connector stands, `ready` where a session would read it connected.
-fn readiness(connector: &ResolvedConnector) -> &'static str {
+fn readiness(connector: &ResolvedConnector) -> Value {
     match source_status(true, connector.ready, Some(connector.auth_action)) {
-        McpSourceStatus::Connected => "ready",
-        status => status.as_str(),
+        McpSourceStatus::Connected => json!("ready"),
+        status => json!(status),
     }
 }
 

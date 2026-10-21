@@ -20,9 +20,8 @@
 
 use serde_json::{Map, Value};
 use vibe_core::checkpoints::{Owner, RegionId, ReviewTarget};
+use vibe_core::pycompat::pydantic;
 use vibe_protocol::{InvalidParamsIssue, PathSegment};
-
-use crate::wire_validation::{self, Json};
 
 use std::collections::BTreeMap;
 
@@ -212,7 +211,7 @@ impl Checker {
             self.missing(parent, field);
             return None;
         };
-        match wire_validation::integer(&Json::from_value(value), false) {
+        match pydantic::integer(value, false) {
             Ok(number) if ge_zero && number < 0 => {
                 self.report(path, "Input should be greater than or equal to 0");
                 None

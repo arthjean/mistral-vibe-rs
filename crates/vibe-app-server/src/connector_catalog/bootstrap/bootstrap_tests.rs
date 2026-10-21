@@ -19,7 +19,10 @@ fn a_bootstrap_resolves_to_id_ordered_connectors_with_unique_aliases() {
         .map(|c| c.alias.as_str())
         .collect::<Vec<_>>();
     assert_eq!(aliases, ["Drive", "Drive_2"]);
-    assert_eq!(catalog.connectors[0].auth_action, "oauth");
+    assert_eq!(
+        catalog.connectors[0].auth_action,
+        ConnectorAuthAction::Oauth
+    );
     assert_eq!(
         catalog.connectors[0].diagnostics,
         [

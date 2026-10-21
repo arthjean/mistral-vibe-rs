@@ -44,14 +44,56 @@ pub(super) fn public_session_status(session: &SessionRuntime) -> Value {
     }
 }
 
+/// Reference `message_preview` (`vibe/app_server/_state.py`) over a
+/// transcript: its first user message that was not injected, cut at 160
+/// characters.
+pub(crate) fn message_preview(messages: &[vibe_core::events::ModelMessage]) -> Option<String> {
+    messages.iter().find_map(|message| match message {
+        vibe_core::events::ModelMessage::User {
+            content,
+            injected: false,
+            ..
+        } if !content.is_empty() => Some(content.chars().take(160).collect()),
+        _ => None,
+    })
+}
+
+/// The content of `entry` when it is a user message that can preview its
+/// session, and whether it was replayed. Context the harness injected during
+/// a turn never names a session; a replayed message, which carries no turn,
+/// does, and so does a message injected between turns, which the reference's
+/// loop holds as an ordinary user message.
+fn previewing_message(entry: &PublicHistoryEntry) -> Option<(&[PublicContentBlock], bool)> {
+    match entry {
+        PublicHistoryEntry::Message {
+            metadata,
+            role: PublicMessageRole::User,
+            content,
+            source,
+            ..
+        } => {
+            let harness = *source == Some(PublicMessageSource::Harness);
+            let turn_id = metadata.turn_id.as_deref();
+            (!harness || turn_id.is_none_or(|turn_id| turn_id.starts_with("injection:")))
+                .then_some((content.as_slice(), harness && turn_id.is_none()))
+        }
+        _ => None,
+    }
+}
+
+/// Reference `message_preview` read off one history entry: the text of a
+/// user message that can preview its session, cut at 160 characters.
+#[must_use]
+pub fn entry_preview(entry: &PublicHistoryEntry) -> Option<String> {
+    let (content, _) = previewing_message(entry)?;
+    Some(content_text(content))
+        .filter(|text| !text.is_empty())
+        .map(|text| text.chars().take(160).collect())
+}
+
 /// The session's preview: reference `message_preview`, over the projected
 /// history first and the stored transcript second.
 pub(super) fn session_preview(session: &SessionRuntime, history: &[PublicHistoryEntry]) -> String {
-    // Reference `message_preview`: the first user message the operator typed,
-    // cut at 160 characters. Context the harness injected during a turn never
-    // names a session; a replayed message, which carries no turn, does, and
-    // so does a message injected between turns, which the reference's loop
-    // holds as an ordinary user message.
     // A cleared conversation starts over, so nothing said before the clear
     // previews it: the reference reads the preview from the loop's messages,
     // which the clear emptied.
@@ -61,49 +103,20 @@ pub(super) fn session_preview(session: &SessionRuntime, history: &[PublicHistory
             |entry| matches!(entry, PublicHistoryEntry::Checkpoint { kind, .. } if kind == "clear"),
         )
         .map_or(0, |index| index + 1);
-    let persisted = || {
-        session
-            .persisted
-            .as_ref()?
-            .messages
-            .iter()
-            .find_map(|message| match message {
-                vibe_core::events::ModelMessage::User {
-                    content,
-                    injected: false,
-                    ..
-                } if !content.is_empty() => Some(content.clone()),
-                _ => None,
-            })
-    };
+    let persisted = || message_preview(&session.persisted.as_ref()?.messages);
     history
         .get(since_clear..)
         .unwrap_or_default()
         .iter()
-        .find_map(|entry| match entry {
-            PublicHistoryEntry::Message {
-                metadata,
-                role: PublicMessageRole::User,
-                content,
-                source,
-                ..
-            } if *source != Some(PublicMessageSource::Harness)
-                || metadata
-                    .turn_id
-                    .as_deref()
-                    .is_none_or(|turn_id| turn_id.starts_with("injection:")) =>
-            {
-                // A replayed entry shows the words typed, while the reference
-                // previews the message the model read, attached resources
-                // included.
-                let replayed =
-                    metadata.turn_id.is_none() && *source == Some(PublicMessageSource::Harness);
-                replayed
-                    .then(persisted)
-                    .flatten()
-                    .or_else(|| Some(content_text(content)).filter(|text| !text.is_empty()))
-            }
-            _ => None,
+        .find_map(|entry| {
+            let (content, replayed) = previewing_message(entry)?;
+            // A replayed entry shows the words typed, while the reference
+            // previews the message the model read, attached resources
+            // included.
+            replayed
+                .then(persisted)
+                .flatten()
+                .or_else(|| Some(content_text(content)).filter(|text| !text.is_empty()))
         })
         .or_else(persisted)
         .map(|text| text.chars().take(160).collect::<String>())
@@ -212,6 +225,22 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
     })
 }
 
+/// A projection of `session_id` with nothing in it yet, at `lifecycle`.
+pub(super) fn empty_projection(
+    session_id: &str,
+    turn_id: Option<&str>,
+    lifecycle: LifecycleState,
+) -> ProjectionSnapshot {
+    ProjectionSnapshot {
+        session_id: session_id.to_owned(),
+        turn_id: turn_id.map(ToOwned::to_owned),
+        handoff_cause: None,
+        watermark: 0,
+        lifecycle,
+        title: None,
+        history: Vec::new(),
+    }
+}
 /// Reference `rebind_history_with_checkpoint`
 /// (`vibe/app_server/_root_session.py`): the entry that closes a history a
 /// resume, a rewind or a clearing replaced, under a fresh identity.

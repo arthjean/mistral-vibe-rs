@@ -6,6 +6,14 @@
 
 use super::*;
 
+/// A callback the server raised: its identifier, the `callback/call` request
+/// that delivers it, and the frames that publish it, the delivery last.
+pub(in crate::server) struct RaisedCallback {
+    pub(in crate::server) callback_id: String,
+    pub(in crate::server) request_id: RequestId,
+    pub(in crate::server) frames: Vec<Vec<u8>>,
+}
+
 impl AppServer {
     /// The effect an approval raised from a bare prompt presents.
     ///
@@ -17,13 +25,15 @@ impl AppServer {
         effect
     }
 
-    pub fn request_callback(
+    /// Raises a callback from a bare prompt; see
+    /// [`Self::request_callback_with_detail`].
+    pub(in crate::server) fn request_callback(
         &self,
         session_id: &str,
         turn_id: &str,
         kind: EngineCallbackKind,
         prompt: impl Into<String>,
-    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
+    ) -> Result<RaisedCallback, ServerError> {
         if kind == EngineCallbackKind::ConnectorAuth {
             return Err(ServerError::UnsupportedCallbackKind(kind));
         }
@@ -66,14 +76,17 @@ impl AppServer {
         self.request_callback_with_detail(session_id, turn_id, kind, prompt, detail)
     }
 
-    pub fn request_callback_with_detail(
+    /// Raises a callback the turn `turn_id` waits on, which only a connection
+    /// may do: the answer reaches the turn through the route it records for
+    /// the delivery request.
+    pub(in crate::server) fn request_callback_with_detail(
         &self,
         session_id: &str,
         turn_id: &str,
         kind: EngineCallbackKind,
         title: impl Into<String>,
         detail: Value,
-    ) -> Result<(String, Vec<Vec<u8>>), ServerError> {
+    ) -> Result<RaisedCallback, ServerError> {
         if kind == EngineCallbackKind::ConnectorAuth {
             return Err(ServerError::UnsupportedCallbackKind(kind));
         }
@@ -116,14 +129,8 @@ impl AppServer {
             kind,
             entry: callback.clone(),
         });
-        let snapshot = session.snapshot.get_or_insert_with(|| ProjectionSnapshot {
-            session_id: session.id.clone(),
-            turn_id: Some(turn_id.to_owned()),
-            handoff_cause: None,
-            watermark: 0,
-            lifecycle: LifecycleState::Running,
-            title: None,
-            history: Vec::new(),
+        let snapshot = session.snapshot.get_or_insert_with(|| {
+            empty_projection(&session.id, Some(turn_id), LifecycleState::Running)
         });
         // The reference publishes a plan review as its own notice rather than as
         // a field on the callback, so the entry that names the plan lands ahead
@@ -177,14 +184,18 @@ impl AppServer {
             },
         ));
         frames.push(session_updated_frame(session));
-        let request = encode_frame(&Envelope::Request(ServerRequest {
+        let request_id = RequestId::Integer(i64::try_from(callback_sequence).unwrap_or(i64::MAX));
+        frames.push(encode_frame(&Envelope::Request(ServerRequest {
             jsonrpc: JsonRpcVersion::V2,
-            id: RequestId::Integer(i64::try_from(callback_sequence).unwrap_or(i64::MAX)),
+            id: request_id.clone(),
             method: "callback/call".to_owned(),
             params: result_map([("callback", json!(callback))]),
-        }));
-        frames.push(request);
-        Ok((callback_id, frames))
+        })));
+        Ok(RaisedCallback {
+            callback_id,
+            request_id,
+            frames,
+        })
     }
 
     /// Reference `TurnController.reject_callback`: the callback the turn

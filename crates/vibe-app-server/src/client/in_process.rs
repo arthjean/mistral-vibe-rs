@@ -132,17 +132,16 @@ impl EventObserver for ServerProjectionObserver {
                 .map_err(|error| error.to_string())?;
         }
         if let vibe_core::events::EngineEvent::Stats {
-            context_tokens,
             input_tokens,
             output_tokens,
             cached_tokens,
+            ..
         } = event.event
         {
             self.server
                 .record_turn_stats(
                     &self.session_id,
                     &self.turn_id,
-                    context_tokens,
                     input_tokens,
                     output_tokens,
                     cached_tokens,

@@ -8,6 +8,8 @@ use serde_json::Value;
 use tokio::task::AbortHandle;
 use vibe_app_server::client::{HeadlessService, TurnDriver};
 use vibe_app_server::experiments::SessionExperiments;
+use vibe_app_server::server::entry_preview;
+use vibe_core::events::{NoticeDetail, PublicHistoryEntry};
 use vibe_core::sync::lock;
 
 use crate::client_tools::UpdateBarrier;
@@ -140,8 +142,6 @@ where
         title.shown = title.title.clone().or_else(|| title.preview.clone());
     }
 
-    /// Takes the title and preview a Unified Harness session published, and
-    /// returns the label when it changed.
     /// The title and preview the session last published, which a listing
     /// prefers to the stored ones while the session is open.
     pub(crate) fn names(&self) -> (Option<String>, Option<String>) {
@@ -149,6 +149,8 @@ where
         (title.title.clone(), title.preview.clone())
     }
 
+    /// Takes the title and preview a Unified Harness session published, and
+    /// returns the label when it changed.
     pub(crate) fn observe_names(
         &self,
         published_title: Option<&str>,
@@ -171,37 +173,16 @@ where
     /// changed. Reference `session_updates_for_event` on `SessionUpdated`: a
     /// title notice names the session, and its first operator message
     /// previews it until one does.
-    pub(crate) fn observe_display_title(&self, entry: &Value) -> Option<String> {
+    pub(crate) fn observe_display_title(&self, entry: &PublicHistoryEntry) -> Option<String> {
         let mut title = lock(&self.title);
-        match entry.get("type").and_then(Value::as_str) {
-            Some("notice")
-                if entry.pointer("/detail/kind").and_then(Value::as_str)
-                    == Some("session_title_updated") =>
-            {
-                title.title = entry
-                    .pointer("/detail/title")
-                    .and_then(Value::as_str)
-                    .filter(|text| !text.is_empty())
-                    .map(ToOwned::to_owned);
+        match entry {
+            PublicHistoryEntry::Notice {
+                detail: NoticeDetail::SessionTitleUpdated { title: named },
+                ..
+            } => {
+                title.title = Some(named.clone()).filter(|text| !text.is_empty());
             }
-            Some("message")
-                if title.preview.is_none()
-                    && entry.get("role").and_then(Value::as_str) == Some("user")
-                    && entry.get("source").and_then(Value::as_str) != Some("harness") =>
-            {
-                let text = entry
-                    .get("content")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-                    .filter_map(|block| block.get("text").and_then(Value::as_str))
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                if !text.is_empty() {
-                    title.preview = Some(text.chars().take(160).collect());
-                }
-            }
+            _ if title.preview.is_none() => title.preview = Some(entry_preview(entry)?),
             _ => return None,
         }
         let shown = title.title.clone().or_else(|| title.preview.clone());

@@ -17,6 +17,7 @@ use vibe_core::engine::CompletionProvider;
 use vibe_core::provider::config::ModelConfig;
 use vibe_core::provider::{ProviderInput, RequestLimits};
 use vibe_core::pycompat::{self, Dumps};
+use vibe_core::session_title::{clean_title, elide_transcript};
 
 use crate::utility_call::UtilityCall;
 
@@ -24,18 +25,10 @@ use crate::utility_call::UtilityCall;
 const CONFIRM_AFTER_STEPS: usize = 6;
 const MAX_GENERATIONS: u32 = 2;
 const INITIAL_MAX_STEPS: usize = 3;
-const MAX_TRANSCRIPT_CHARS: usize = 6_000;
-const HEAD_TRANSCRIPT_CHARS: usize = 1_500;
 const MAX_MESSAGE_CHARS: usize = 2_000;
 const MAX_TOOL_CHARS: usize = 400;
 const TOTAL_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_TOKENS: u32 = 96;
-const MAX_TITLE_CHARS: usize = 72;
-const GENERIC_TITLES: [&str; 3] = ["new session", "untitled session", "untitled"];
-/// Reference `_ELISION`.
-const ELISION: &str = "\n\n[…]\n\n";
-/// Reference `_WRAPPING_QUOTES`.
-const WRAPPING_QUOTES: [char; 7] = ['"', '\'', '`', '“', '”', '‘', '’'];
 
 /// What the title model is told it is for.
 const SYSTEM_PROMPT: &str = "Name a coding-agent session. You read a transcript of a user working \
@@ -156,17 +149,7 @@ pub fn transcript(entries: &[Value]) -> String {
             _ => None,
         })
         .collect();
-    let joined = blocks.join("\n\n");
-    let transcript = joined.trim();
-    let chars: Vec<char> = transcript.chars().collect();
-    if chars.len() <= MAX_TRANSCRIPT_CHARS {
-        return transcript.to_owned();
-    }
-    let head: String = chars[..HEAD_TRANSCRIPT_CHARS].iter().collect();
-    let tail: String = chars[chars.len() - (MAX_TRANSCRIPT_CHARS - HEAD_TRANSCRIPT_CHARS)..]
-        .iter()
-        .collect();
-    format!("{}{ELISION}{}", head.trim_end(), tail.trim_start())
+    elide_transcript(blocks.join("\n\n").trim())
 }
 
 fn truncated(text: &str, limit: usize) -> String {
@@ -238,26 +221,6 @@ fn tool_block(entry: &Value) -> Option<String> {
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
-/// Reference `clean_title`.
-#[must_use]
-pub fn clean(content: &str) -> Option<String> {
-    let first = content.trim().lines().next().unwrap_or_default();
-    let visible: String = first
-        .chars()
-        .filter(|ch| !matches!(u32::from(*ch), 0x00..=0x1f | 0x7f..=0x9f))
-        .collect();
-    let collapsed = visible.split_whitespace().collect::<Vec<_>>().join(" ");
-    let collapsed = collapsed.trim_matches(WRAPPING_QUOTES).trim().to_owned();
-    if collapsed.is_empty() || GENERIC_TITLES.contains(&collapsed.to_lowercase().as_str()) {
-        return None;
-    }
-    if collapsed.chars().count() > MAX_TITLE_CHARS {
-        let cut: String = collapsed.chars().take(MAX_TITLE_CHARS).collect();
-        return Some(format!("{}…", cut.trim_end()));
-    }
-    Some(collapsed)
-}
-
 /// Where a title is asked for.
 pub struct TitleRoute {
     pub provider: Arc<dyn CompletionProvider>,
@@ -302,7 +265,7 @@ impl TitleRoute {
             .await
             .ok()?
             .ok()?;
-        clean(&answer.text)
+        clean_title(Some(&answer.text))
     }
 }
 

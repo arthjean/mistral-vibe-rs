@@ -26,7 +26,6 @@ use crate::state::{HarnessState, Projector};
 
 pub const STORE_FORMAT: &str = "mistral.vibe.unified-session-store/v1";
 pub const STORE_FORMAT_MINOR: u64 = 8;
-const LOOPS_FORMAT: &str = "vibe.scheduled-loops/v1";
 
 /// The directory every unified session lives under.
 #[must_use]
@@ -143,17 +142,19 @@ impl SessionStore {
         })
     }
 
-    /// Rewrites `meta.json` as the reference does, indented by two.
+    /// Rewrites `meta.json` as the reference does, indented by two, its
+    /// fields in the order [`new_meta`] declares them.
     ///
     /// # Errors
     ///
     /// The file cannot be written.
     pub fn write_meta(&self, meta: &Map<String, Value>) -> std::io::Result<()> {
+        let declared = new_meta("", None, "", "", "");
         let mut fields: Vec<(&String, &Value)> = meta.iter().collect();
         fields.sort_by_key(|(key, _)| {
-            META_ORDER
-                .iter()
-                .position(|known| known == key)
+            declared
+                .keys()
+                .position(|known| known == *key)
                 .unwrap_or(usize::MAX)
         });
         let ordered = fields
@@ -169,17 +170,6 @@ impl SessionStore {
             },
         );
         write_atomic(&self.dir.join("meta.json"), text.as_bytes())
-    }
-
-    /// Rewrites `scheduled-loops.json`.
-    ///
-    /// # Errors
-    ///
-    /// The file cannot be written.
-    pub fn write_loops(&self, loops: &[Value]) -> std::io::Result<()> {
-        let text = serde_json::to_string_pretty(&json!({"format": LOOPS_FORMAT, "loops": loops}))
-            .unwrap_or_default();
-        write_atomic(&self.dir.join("scheduled-loops.json"), text.as_bytes())
     }
 
     /// Reads `meta.json`.
@@ -457,32 +447,6 @@ impl SessionStore {
     }
 }
 
-/// The order `meta.json` declares its fields in.
-const META_ORDER: &[&str] = &[
-    "session_id",
-    "parent_session_id",
-    "start_time",
-    "end_time",
-    "git_commit",
-    "git_branch",
-    "environment",
-    "origin_directory",
-    "username",
-    "child_sessions",
-    "loops",
-    "title",
-    "title_source",
-    "bumped_at",
-    "pinned_at",
-    "archived_at",
-    "unseen_at",
-    "seen_at",
-    "experiments",
-    "config",
-    "import_provenance",
-    "created_worktree",
-];
-
 /// A session directory's `meta.json`.
 #[must_use]
 pub fn read_meta(dir: &Path) -> Option<Map<String, Value>> {
@@ -491,7 +455,8 @@ pub fn read_meta(dir: &Path) -> Option<Map<String, Value>> {
 }
 
 /// What `meta.json` holds for a session that has just been promoted, in the
-/// reference's key order.
+/// reference's key order: every field it declares, which is also the order
+/// [`SessionStore::write_meta`] writes.
 #[must_use]
 pub fn new_meta(
     session_id: &str,
@@ -538,13 +503,4 @@ pub fn list(session_root: &Path) -> Vec<SessionStore> {
         .filter(|entry| entry.path().is_dir())
         .filter_map(|entry| SessionStore::open(entry.path()))
         .collect()
-}
-
-/// Reference `getpass.getuser`.
-#[must_use]
-pub fn username() -> String {
-    ["LOGNAME", "USER", "LNAME", "USERNAME"]
-        .into_iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
-        .unwrap_or_else(|| "unknown".to_owned())
 }

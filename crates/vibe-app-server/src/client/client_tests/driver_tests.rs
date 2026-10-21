@@ -641,7 +641,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
         })
         .await
         .expect("live turn completes");
-    assert_eq!(outcome.stop_reason, PublicTurnStopReason::Complete);
+    assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
     assert!(saw_definition.load(Ordering::Acquire));
 }
 

@@ -8,12 +8,12 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vibe_core::engine::TurnOutcome;
 
-use super::{ClientFuture, SessionBackend, TurnUpdates};
+use super::{ClientFuture, PublishedField, SessionBackend, TurnUpdates};
 use crate::client::unified::UnifiedLink;
 use crate::client::{
-    AppServer, ClientError, EventObserver, InterruptOutcome, PendingPublicCall, PreparedImages,
-    ProgrammaticTurn, PublicContentBlock, PublicError, ScheduledTurn, SessionView, TurnRequest,
-    TurnReservation,
+    AgentStatsSnapshot, AppServer, ClientError, EventObserver, InterruptOutcome, PendingPublicCall,
+    PreparedImages, ProgrammaticTurn, PublicContentBlock, PublicError, ScheduledTurn, SessionView,
+    TurnRequest, TurnReservation,
 };
 
 pub(super) struct UnifiedSessions<'a> {
@@ -105,14 +105,17 @@ impl SessionBackend for UnifiedSessions<'_> {
 
     /// Reference `runtime.stats` on a unified session: what its last
     /// `session/statsUpdated` carried, and its runtime before that.
-    fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError> {
+    fn stats(&mut self, session_id: &str) -> Result<(AgentStatsSnapshot, u64), ClientError> {
         if let Some(accounting) = self.link.accounting(session_id) {
             return Ok(accounting);
         }
         let mut result = self.call(session_id, "runtime/read", json!({"sessionId": session_id}))?;
         let runtime = result.remove("runtime").unwrap_or(Value::Null);
         Ok((
-            runtime.get("stats").cloned().unwrap_or(Value::Null),
+            runtime
+                .get("stats")
+                .and_then(|stats| serde_json::from_value(stats.clone()).ok())
+                .unwrap_or_default(),
             runtime
                 .get("contextWindow")
                 .and_then(Value::as_u64)
@@ -120,7 +123,7 @@ impl SessionBackend for UnifiedSessions<'_> {
         ))
     }
 
-    fn published(&mut self, session_id: &str, field: &str) -> Option<Value> {
+    fn published(&mut self, session_id: &str, field: PublishedField) -> Option<Value> {
         self.link.published(session_id, field)
     }
 

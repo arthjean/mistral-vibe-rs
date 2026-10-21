@@ -330,6 +330,12 @@ pub(super) fn session_missing(message: &'static str) -> ProtocolFault {
     ProtocolFault::new(ProtocolErrorCode::NotFound, message)
 }
 
+/// The refusal of parameters a handler validated itself, with every issue
+/// the validation found.
+pub(super) fn rejected(issues: Vec<InvalidParamsIssue>) -> ProtocolFault {
+    ProtocolFault::InvalidParams(ParamsRejection::with_issues(issues))
+}
+
 /// Answers `outcome`, converting a refusal into the frame it publishes.
 pub(super) fn answered(
     id: RequestId,

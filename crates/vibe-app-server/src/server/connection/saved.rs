@@ -10,7 +10,6 @@
 use super::*;
 use crate::wire_validation;
 use serde_json::Map;
-use vibe_core::storage::lease::{LeaseError, SessionLease};
 use vibe_core::storage::{SessionInfo, SessionStore, StorageError};
 use vibe_core::time::parse_iso_millis;
 
@@ -27,49 +26,6 @@ mod titles;
 /// answers without one.
 pub(in crate::server) const NO_ROOT: &str =
     "Start, resume, or continue a session before using this method";
-
-impl AppServer {
-    /// Takes the lease on `session_id` for this process, or reports who holds
-    /// it (reference `_acquire_session_lease`). Nothing is leased while session
-    /// logging is off, and a session this process holds already stays held.
-    pub(in crate::server) fn acquire_lease(&self, session_id: &str) -> Result<(), ProtocolFault> {
-        if !self.workspace.session_logging().enabled {
-            return Ok(());
-        }
-        let mut leases = lock(&self.leases);
-        if leases.contains_key(session_id) {
-            return Ok(());
-        }
-        match SessionLease::acquire(self.workspace.session_root(), session_id) {
-            Ok(lease) => {
-                leases.insert(session_id.to_owned(), lease);
-                Ok(())
-            }
-            Err(error @ LeaseError::Busy(_)) => Err(ProtocolFault::plain(
-                ProtocolErrorCode::Conflict,
-                error.to_string(),
-            )),
-            Err(error) => Err(ProtocolFault::internal(error.to_string())),
-        }
-    }
-
-    /// Lets `session_id` go, so another process may open it.
-    pub(in crate::server) fn release_lease(&self, session_id: &str) {
-        let lease = lock(&self.leases).remove(session_id);
-        drop(lease);
-    }
-
-    /// Moves the lease a session holds onto the identifier it continues under.
-    pub(in crate::server) fn transfer_lease(
-        &self,
-        from: &str,
-        to: &str,
-    ) -> Result<(), ProtocolFault> {
-        self.acquire_lease(to)?;
-        self.release_lease(from);
-        Ok(())
-    }
-}
 
 impl ServerConnection {
     pub(super) fn saved_session_request(&mut self, request: ServerRequest) -> DispatchBatch {
@@ -92,14 +48,8 @@ impl ServerConnection {
             "session/log/read" => self.read_session_log(&request),
             "session/resume" => self.reopen_session(request, Reopen::Resume),
             "session/continue" => self.reopen_session(request, Reopen::Continue),
-            "session/fork" if self.server.harness_selection().use_unified => {
-                self.unified_fork(&request)
-            }
             "session/fork" => self.fork_session(&request),
             "session/delete" => self.delete_saved_session(&request),
-            "session/history/clear" if self.server.harness_selection().use_unified => {
-                self.unified_clear(&request)
-            }
             "session/history/clear" => self.clear_history(&request),
             _ => Err(ProtocolFault::plain(
                 ProtocolErrorCode::MethodNotFound,
@@ -291,22 +241,6 @@ pub(in crate::server) fn reopen_start_params(
     params
 }
 
-fn absolute(path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf())
-    }
-}
-
-/// `Path.expanduser().resolve()`, as far as the directory exists.
-fn resolve(cwd: &str) -> PathBuf {
-    let expanded = crate::host::expand_home(Path::new(cwd));
-    vibe_core::platform::canonicalize(&expanded).unwrap_or_else(|_| absolute(&expanded))
-}
-
 /// Reference `time_ms`.
 fn time_ms(value: Option<&str>) -> u64 {
     value.and_then(parse_iso_millis).unwrap_or_else(now_millis)
@@ -425,10 +359,6 @@ fn not_found(session_id: &str) -> ProtocolFault {
         ProtocolErrorCode::NotFound,
         format!("Session not found: {session_id}"),
     )
-}
-
-fn rejected(issues: Vec<InvalidParamsIssue>) -> ProtocolFault {
-    ProtocolFault::InvalidParams(ParamsRejection::with_issues(issues))
 }
 
 fn storage_fault(error: StorageError) -> ProtocolFault {

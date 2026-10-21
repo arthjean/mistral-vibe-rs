@@ -2359,3 +2359,11 @@ fn the_synthetic_pair_round_trips_through_serialization() {
     let reloaded: Vec<ModelMessage> = serde_json::from_value(stored).expect("deserializes");
     assert_eq!(reloaded, messages);
 }
+
+#[test]
+fn the_session_cost_bills_cached_tokens_at_the_cached_price_within_the_prompt() {
+    let cost = session_token_cost(1_000_000, 0, 400_000, (2.0, 6.0, Some(0.5)));
+    assert!((cost - 1.4).abs() < 1e-9);
+    let cost = session_token_cost(10, 1_000_000, 50, (2.0, 6.0, None));
+    assert!((cost - 6.00002).abs() < 1e-9);
+}

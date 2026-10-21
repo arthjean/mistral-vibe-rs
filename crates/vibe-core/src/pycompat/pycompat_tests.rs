@@ -4,8 +4,8 @@ use serde_json::{Value, json};
 
 use super::pydantic::{self, LineError};
 use super::{
-    Dumps, dumps, isprintable, isspace, os_error, parse_float, parse_int, python_eq, repr_float,
-    repr_json, repr_str, splitlines, str_json, strip, thousands, title, truthy,
+    Dumps, clip, dumps, isprintable, isspace, os_error, parse_float, parse_int, python_eq,
+    repr_float, repr_json, repr_str, splitlines, str_json, strip, thousands, title, truthy,
 };
 
 #[test]
@@ -13,6 +13,14 @@ fn whitespace_counts_the_four_information_separators() {
     assert!(isspace('\u{1c}') && isspace('\u{1f}') && isspace('\u{85}') && isspace('\u{3000}'));
     assert!(!isspace('\u{200b}'));
     assert_eq!(strip("\u{1c} text \u{1f}\n"), "text");
+}
+
+#[test]
+fn clip_cuts_past_the_limit_and_strips_the_cut_python_style() {
+    assert_eq!(clip("abc", 3), "abc");
+    assert_eq!(clip("abcd", 3), "abc…");
+    assert_eq!(clip("ab  cd", 4), "ab…");
+    assert_eq!(clip("ab\u{1c}def", 3), "ab…");
 }
 
 #[test]
@@ -374,4 +382,53 @@ fn values_of_different_kinds_never_compare_equal() {
     assert!(!python_eq(&json!([]), &json!({})));
     assert!(!python_eq(&Value::Null, &json!(false)));
     assert!(!python_eq(&json!(["a", "b"]), &json!(["b", "a"])));
+}
+
+#[test]
+fn lax_mode_reads_json_scalars_the_way_pydantic_does() {
+    let kind = |read: Result<(), pydantic::Refusal>| read.map_or_else(|r| r.kind, |()| "ok");
+    // Each row: the JSON input, then what an ACP model's `int`, `float` and
+    // `bool` field answered it under the pinned checkout's pydantic.
+    let rows = [
+        ("5.5", "int_from_float", "ok", "bool_type"),
+        ("2.0", "ok", "ok", "bool_parsing"),
+        ("-1", "ok", "ok", "bool_parsing"),
+        ("1.0", "ok", "ok", "ok"),
+        ("-0.0", "ok", "ok", "ok"),
+        ("9223372036854775807", "ok", "ok", "bool_parsing"),
+        ("9223372036854775808", "ok", "ok", "bool_type"),
+        ("9.3e18", "ok", "ok", "bool_type"),
+        (r#""12.0""#, "ok", "ok", "bool_parsing"),
+        (r#""1_000""#, "ok", "ok", "bool_parsing"),
+        (r#""1_.5""#, "int_parsing", "ok", "bool_parsing"),
+        (r#""_1""#, "int_parsing", "float_parsing", "bool_parsing"),
+        (r#""yes""#, "int_parsing", "float_parsing", "ok"),
+        (r#"" yes""#, "int_parsing", "float_parsing", "bool_parsing"),
+        ("true", "ok", "ok", "ok"),
+        ("[]", "int_type", "float_type", "bool_type"),
+        ("{}", "int_type", "float_type", "bool_type"),
+    ];
+    for (raw, int, float, boolean) in rows {
+        let input = decode(raw);
+        assert_eq!(
+            kind(pydantic::integer(&input, false).map(drop)),
+            int,
+            "{raw}"
+        );
+        assert_eq!(
+            kind(pydantic::float(&input, false).map(drop)),
+            float,
+            "{raw}"
+        );
+        assert_eq!(
+            kind(pydantic::boolean(&input, false).map(drop)),
+            boolean,
+            "{raw}"
+        );
+    }
+    assert_eq!(pydantic::integer(&json!(" 5 "), false), Ok(5));
+    assert_eq!(
+        pydantic::boolean(&json!(0), true).map_err(|r| r.kind),
+        Err("bool_type")
+    );
 }

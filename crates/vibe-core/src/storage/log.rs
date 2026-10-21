@@ -126,8 +126,7 @@ impl SessionStore {
         if let Some(record) = messages
             .iter()
             .find(|message| matches!(message, ModelMessage::System { .. }))
-            .map(system_prompt_record)
-            .transpose()?
+            .map(record::system_prompt)
         {
             metadata.system_prompt = Some(record);
         }
@@ -214,7 +213,7 @@ impl SessionStore {
                 });
             }
             let message =
-                decode_message(&line).map_err(|message| StorageError::CorruptMessages {
+                record::from_line(&line).map_err(|message| StorageError::CorruptMessages {
                     path: path.clone(),
                     line: index,
                     message,
@@ -259,7 +258,7 @@ impl<'a> LogAppend<'a> {
         };
         for message in messages {
             if matches!(message, ModelMessage::System { .. }) {
-                metadata.system_prompt = Some(system_prompt_record(message)?);
+                metadata.system_prompt = Some(record::system_prompt(message));
                 continue;
             }
             appended.encoded.extend(encode_message(message)?);
@@ -317,14 +316,4 @@ fn message_record(message: &ModelMessage) -> Result<Value, StorageError> {
 
 fn encode_message(message: &ModelMessage) -> Result<Vec<u8>, StorageError> {
     record::to_line(message).map_err(StorageError::Json)
-}
-
-fn decode_message(line: &str) -> Result<ModelMessage, String> {
-    record::from_line(line)
-}
-
-/// What `meta.json` records as the system prompt.
-#[allow(clippy::unnecessary_wraps)]
-fn system_prompt_record(message: &ModelMessage) -> Result<Value, StorageError> {
-    Ok(record::system_prompt(message))
 }

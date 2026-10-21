@@ -389,6 +389,24 @@ impl SessionTranscriptSink {
     }
 }
 
+/// Reference `session_token_cost` (`vibe/utils/pricing.py`): the session's
+/// cost in dollars at `(input, output, cached input)` prices per million
+/// tokens. Cached tokens, clamped to the prompt, bill at the cached price when
+/// the model declares one and at the input price otherwise.
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
+pub fn session_token_cost(
+    prompt_tokens: u64,
+    completion_tokens: u64,
+    cached_tokens: u64,
+    (input_price, output_price, cached_price): (f64, f64, Option<f64>),
+) -> f64 {
+    let cached = cached_tokens.min(prompt_tokens);
+    let input_cost = (prompt_tokens - cached) as f64 * input_price
+        + cached as f64 * cached_price.unwrap_or(input_price);
+    (input_cost + completion_tokens as f64 * output_price) / 1_000_000.0
+}
+
 /// Reference `AgentStats.model_dump()`: every counter, the prices, and the
 /// three computed totals, as `meta.json` saves them.
 #[allow(clippy::cast_precision_loss)]
@@ -405,13 +423,12 @@ fn stats_record(
         0.0
     };
     let usage = &stats.usage;
-    // Reference `session_token_cost`: cached tokens are billed at the cached
-    // rate when the model names one, and never beyond the prompt.
-    let cached = usage.cached_tokens.min(usage.input_tokens);
-    let cost = ((usage.input_tokens - cached) as f64 * input_price
-        + cached as f64 * cached_price.unwrap_or(input_price)
-        + usage.output_tokens as f64 * output_price)
-        / 1_000_000.0;
+    let cost = session_token_cost(
+        usage.input_tokens,
+        usage.output_tokens,
+        usage.cached_tokens,
+        (input_price, output_price, cached_price),
+    );
     let tools = stats.tool_calls;
     vec![
         ("steps", json!(stats.steps)),

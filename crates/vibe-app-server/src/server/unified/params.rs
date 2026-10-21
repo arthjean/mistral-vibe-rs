@@ -107,17 +107,17 @@ pub(super) struct InjectParams {
 /// answer is compared against, and what it says.
 #[derive(Deserialize)]
 #[serde(try_from = "SentCallbackResult")]
-pub(super) struct CallbackResultParams {
+pub(in crate::server) struct CallbackResultParams {
     pub(super) sent: Value,
-    pub(super) callback_id: String,
-    pub(super) output: Option<Value>,
-    pub(super) error: Option<CallbackResultError>,
+    pub(in crate::server) callback_id: String,
+    pub(in crate::server) output: Option<Value>,
+    pub(in crate::server) error: Option<CallbackResultError>,
 }
 
 /// Reference `CallbackResultError`, for its message.
 #[derive(Deserialize)]
-pub(super) struct CallbackResultError {
-    pub(super) message: String,
+pub(in crate::server) struct CallbackResultError {
+    pub(in crate::server) message: String,
 }
 
 #[derive(Deserialize)]

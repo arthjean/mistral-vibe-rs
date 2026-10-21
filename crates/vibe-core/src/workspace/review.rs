@@ -6,9 +6,8 @@ use super::edit::{EditOperation, apply_edit_operations};
 use super::{MutationResult, Workspace, WorkspaceError, path_display, text_file, unified_diff};
 use crate::checkpoints::{
     CheckpointError, CheckpointFiles, CheckpointRecorder, Checkpointer, Decision, FileAccessError,
-    FileState, FileStore, Owner, RecorderError, ReviewError, ReviewHunk as AnchoredHunk,
-    ReviewState, ReviewTarget, TurnFileDiff, decide_target, project_scope_diff, project_state,
-    state_text,
+    FileState, FileStore, HunkAnchor, Owner, RecorderError, ReviewError, ReviewState, ReviewTarget,
+    TurnFileDiff, decide_target, project_scope_diff, project_state, state_text,
 };
 use crate::sync::lock;
 
@@ -128,7 +127,7 @@ impl ReviewManager {
     }
 
     /// Runs `body` against the checkpoint log.
-    pub fn with_log<T>(&self, body: impl FnOnce(&mut Checkpointer) -> T) -> T {
+    pub(crate) fn with_log<T>(&self, body: impl FnOnce(&mut Checkpointer) -> T) -> T {
         body(&mut lock(&self.log))
     }
 
@@ -232,22 +231,12 @@ impl ReviewManager {
         &self,
         path: &str,
         owner: Option<Owner>,
-    ) -> Result<Vec<AnchoredHunk>, ReviewError> {
+    ) -> Result<Vec<HunkAnchor>, ReviewError> {
         let current = [(path.to_owned(), self.recorder.files().read(path)?)];
         let (hunks, refused) = self.with_log(|log| {
             let mut refused = None;
             reconcile_tracked(log, path, current[0].1.clone(), &mut refused);
-            let hunks = log
-                .view(&current)
-                .history()
-                .pending_hunks(path, owner)
-                .into_iter()
-                .map(|anchor| AnchoredHunk {
-                    side: anchor.side,
-                    line: anchor.line,
-                    regions: anchor.regions,
-                })
-                .collect();
+            let hunks = log.view(&current).history().pending_hunks(path, owner);
             (hunks, refused)
         });
         self.note_retention(refused);

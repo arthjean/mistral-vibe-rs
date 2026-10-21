@@ -12,6 +12,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Value, json};
+use vibe_app_server::client::PublishedField;
 use vibe_core::events::{
     PublicHistoryEntry, PublicMessageRole, PublicMessageSource, PublicNoticeLevel, ToolEffectKind,
 };
@@ -695,7 +696,7 @@ pub(super) fn poll(
 ) {
     let children = runtime
         .service
-        .published_state(&runtime.session_id, "childSessions")
+        .published_state(&runtime.session_id, PublishedField::ChildSessions)
         .map(|children| children_of(&json!({"childSessions": children})))
         .unwrap_or_default();
     state.subagents.sync(children);

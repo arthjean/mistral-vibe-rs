@@ -14,13 +14,12 @@
 //! when the first prompt of that root was built, errors included.
 
 use std::collections::HashMap;
-use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use crate::child::wait_with_deadline;
+use crate::child::output_with_deadline;
 use crate::platform::BackgroundCommand as _;
 use crate::sync;
 
@@ -245,46 +244,24 @@ pub fn parse_git_log(output: &str) -> Vec<String> {
 /// Runs one metadata call with the two options that keep a repository from
 /// running a command of its choosing, and waits for it up to `timeout`.
 fn run_git(git: &Path, root: &Path, arguments: &[&str], timeout: Duration) -> CallOutcome {
-    let spawned = Command::new(git)
+    let mut command = Command::new(git);
+    command
         .in_background()
         .args(["-c", "core.fsmonitor=", "--no-optional-locks"])
         .args(arguments)
         .current_dir(root)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn();
-    let mut child = match spawned {
-        Ok(child) => child,
+        .stderr(Stdio::null());
+    let output = match output_with_deadline(&mut command, timeout, POLL_INTERVAL) {
+        Ok(Some(output)) => output,
+        Ok(None) => return CallOutcome::TimedOut,
         Err(error) => return CallOutcome::Broken(error.to_string()),
     };
-    let Some(mut stdout) = child.stdout.take() else {
-        let _ = child.kill();
-        return CallOutcome::Broken("git produced no output pipe".to_owned());
-    };
-    // Read on a thread of its own so a large log cannot fill the pipe and
-    // stall the child while this one waits for it to exit.
-    let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = stdout.read_to_end(&mut bytes);
-        bytes
-    });
-    let status = match wait_with_deadline(&mut child, timeout, POLL_INTERVAL) {
-        Ok(Some(status)) => status,
-        Ok(None) => {
-            let _ = reader.join();
-            return CallOutcome::TimedOut;
-        }
-        Err(error) => {
-            let _ = child.kill();
-            return CallOutcome::Broken(error.to_string());
-        }
-    };
-    let bytes = reader.join().unwrap_or_default();
-    if status.success() {
+    if output.status.success() {
         // Text mode in the reference: undecodable bytes are replaced and every
         // line ending is read as `\n`.
-        let text = String::from_utf8_lossy(&bytes)
+        let text = String::from_utf8_lossy(&output.stdout)
             .replace("\r\n", "\n")
             .replace('\r', "\n");
         CallOutcome::Success(text)

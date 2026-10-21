@@ -48,6 +48,18 @@
   field or holds one of the wrong type, as the reference does, instead of
   listing it with blank or verbatim values.
 
+- A session start, reopen, fork or history clear that fails partway releases
+  the session lease it took, so the session can be opened again without
+  restarting the server.
+
+- `turn/interrupt`, `turn/steer` and a queued steer sent while a Unified
+  Harness session compacts answer `No active turn`, as the reference does; an
+  empty `expectedTurnId` used to act on the compaction.
+
+- Paths the app server resolves (saved session working directories, moves,
+  manual shell directories) follow Python's `Path.resolve()` for a path that
+  does not exist yet, collapsing `..` and symlinked prefixes.
+
 - Pinning, archiving or marking a Unified Harness session as seen fails when
   its metadata cannot be written, instead of reporting success; renaming stays
   best effort, as in the reference.
@@ -57,6 +69,19 @@
   unavailable server (`error - check your config`) from an unavailable
   connector (`error - try refreshing`). `vibe mcp` quotes an invalid value as
   argparse does.
+
+- The `/mcp` browser reads connectors from the connector catalog, as the
+  reference client does, so legacy sessions label them by their display name
+  too. A local server whose tool discovery failed reads `tool discovery
+  failed` and shows the discovery error in its detail view, a plugin's source
+  names its plugin, and a source that failed to bootstrap opens on its error
+  instead of its tools or the sign-in.
+
+- Editor (ACP) requests read lax numbers and booleans as the reference
+  validator does: `"12.0"` and `"1_000"` are integers, underscored numbers are
+  floats, and a fractional number given for a boolean is a `bool_type` error.
+  An untitled editor session's label also counts a message injected between
+  turns and joins text blocks with one newline.
 
 - Output of a manual `!` command is cleaned as the reference cleans it: a
   carriage-return redraw keeps its last write and stray escape sequences and
@@ -82,6 +107,15 @@
 - After a panic, configuration, permission, hook, keyring cache, telemetry and
   session state recover their lock instead of silently dropping updates or
   failing with a "lock is poisoned" error.
+
+- Starting a session reads its git commit and branch through the trusted git
+  executable, as the reference does, never a `git` found through a relative
+  `PATH` entry, and gives up after five seconds instead of waiting forever.
+
+- Generated session titles keep only the first line under Python's line
+  rules, so a model answer split by a form feed, a vertical tab, a file or
+  record separator, `\x85`, U+2028 or U+2029 no longer runs its lines
+  together.
 
 - Session metadata timestamps written on an exact second carry no zero
   fraction, as Python's `isoformat` writes them, in legacy and Unified Harness

@@ -198,15 +198,7 @@ impl AppServer {
         let mut snapshot = session
             .snapshot
             .clone()
-            .unwrap_or_else(|| ProjectionSnapshot {
-                session_id: session.id.clone(),
-                turn_id: Some(turn_id.to_owned()),
-                handoff_cause: None,
-                watermark: 0,
-                lifecycle: LifecycleState::Idle,
-                title: None,
-                history: Vec::new(),
-            });
+            .unwrap_or_else(|| empty_projection(&session.id, None, LifecycleState::Idle));
         snapshot.session_id.clone_from(&session.id);
         snapshot.turn_id = Some(turn_id.to_owned());
         snapshot.watermark = 0;

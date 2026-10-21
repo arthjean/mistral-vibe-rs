@@ -323,20 +323,11 @@ impl ServerConnection {
         }
     }
 
-    /// `providerAuth/read`, which only a unified session serves: the legacy
-    /// backend declines the whole namespace (reference `_dispatch` in
-    /// `vibe/app_server/_handler.py`), and the unified one answers the
-    /// redacted view of the provider the session's active model is sent to
+    /// `providerAuth/read` on a unified session: the redacted view of the
+    /// provider the session's active model is sent to
     /// (`_dispatch_session_reads` in
     /// `vibe/app_server/_unified_harness_backend_adapter.py`).
     pub(super) fn provider_auth_request(&self, request: ServerRequest) -> DispatchBatch {
-        if !self.server.harness_selection().use_unified {
-            return error_batch(
-                request.id,
-                ProtocolErrorCode::NotImplemented,
-                &format!("Provider auth is not supported: {}", request.method),
-            );
-        }
         let Some(session_id) = request
             .params
             .get("sessionId")

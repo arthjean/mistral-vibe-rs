@@ -50,6 +50,13 @@ fn succeeded(payload: Value) -> ToolResult {
     }
 }
 
+/// The `vibe` tools [`VibeTools::execute`] runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VibeTool {
+    Todo,
+    Scratchpad,
+}
+
 /// What the `vibe` group keeps for one session.
 #[derive(Debug, Clone, Default)]
 pub struct VibeTools {
@@ -69,11 +76,10 @@ impl VibeTools {
     }
 
     /// Runs one `vibe.*` call.
-    pub fn execute(&mut self, tool: &str, arguments: &Value) -> ToolResult {
+    pub fn execute(&mut self, tool: VibeTool, arguments: &Value) -> ToolResult {
         let outcome = match tool {
-            "todo" => self.todo(arguments),
-            "unified_harness_scratchpad" => scratchpad(arguments, &self.scratchpad),
-            other => Err(format!("Unsupported vibe tool: {other}")),
+            VibeTool::Todo => self.todo(arguments),
+            VibeTool::Scratchpad => scratchpad(arguments, &self.scratchpad),
         };
         outcome.unwrap_or_else(|message| ToolResult::failed("tool_failed", message))
     }
@@ -278,7 +284,7 @@ fn scratchpad(arguments: &Value, directory: &Path) -> Result<ToolResult, String>
 fn resolve_within(directory: &Path, path: &str) -> Result<PathBuf, String> {
     let root =
         vibe_core::platform::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
-    let resolved = resolve(&root.join(path));
+    let resolved = vibe_core::platform::resolve_lenient(&root.join(path));
     if resolved == root {
         return Err("Path must name a file inside the scratchpad".to_owned());
     }
@@ -286,29 +292,6 @@ fn resolve_within(directory: &Path, path: &str) -> Result<PathBuf, String> {
         return Err(format!("Path escapes the scratchpad directory: {path}"));
     }
     Ok(resolved)
-}
-
-/// `Path.resolve()` for a path that may not exist yet.
-fn resolve(path: &Path) -> PathBuf {
-    if let Ok(canonical) = vibe_core::platform::canonicalize(path) {
-        return canonical;
-    }
-    let mut out = PathBuf::new();
-    for component in path.components() {
-        match component {
-            std::path::Component::ParentDir => {
-                out.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => {
-                out.push(other);
-                if let Ok(canonical) = vibe_core::platform::canonicalize(&out) {
-                    out = canonical;
-                }
-            }
-        }
-    }
-    out
 }
 
 fn hard_linked(path: &Path) -> bool {

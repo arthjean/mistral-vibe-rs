@@ -107,7 +107,7 @@ pub(super) fn project_web_fetch(name: &str, input: &Value) -> Option<Projected> 
                 "Fetched",
                 format!(
                     "{url} ({} chars, {})",
-                    pycompat::thousands(u64::try_from(content.chars().count()).unwrap_or(u64::MAX)),
+                    pycompat::thousands(content.chars().count()),
                     content_type.split(';').next().unwrap_or_default()
                 ),
             );

@@ -4,24 +4,6 @@ use vibe_core::pycompat::thousands;
 
 use super::{CommandBackend, Effect, ProviderAuth, Stats};
 
-/// Reference `session_token_cost`: cached prompt tokens bill at the cached
-/// price when the model declares one, and never beyond the prompt count.
-pub(in crate::tui) fn session_cost(
-    prompt_tokens: u64,
-    completion_tokens: u64,
-    cached_tokens: u64,
-    input_price: f64,
-    output_price: f64,
-    cached_input_price: Option<f64>,
-) -> f64 {
-    let cached = cached_tokens.min(prompt_tokens);
-    let cached_price = cached_input_price.unwrap_or(input_price);
-    let input =
-        prompt_tokens.saturating_sub(cached) as f64 * input_price + cached as f64 * cached_price;
-    let output = completion_tokens as f64 * output_price;
-    (input + output) / 1_000_000.0
-}
-
 /// Reference `_show_status`.
 pub(super) fn status_document(stats: &Stats) -> String {
     let cached = |tokens: u64| {

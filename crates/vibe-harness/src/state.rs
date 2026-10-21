@@ -452,9 +452,5 @@ fn content_preview(content: &[Value]) -> String {
 #[must_use]
 pub fn text_preview(parts: &[&str]) -> String {
     let text = parts.join("\n").trim().replace('\n', " ");
-    if text.chars().count() > PREVIEW_MAX_CHARS {
-        let cut: String = text.chars().take(PREVIEW_MAX_CHARS).collect();
-        return format!("{}…", cut.trim_end());
-    }
-    text
+    vibe_core::pycompat::clip(&text, PREVIEW_MAX_CHARS)
 }

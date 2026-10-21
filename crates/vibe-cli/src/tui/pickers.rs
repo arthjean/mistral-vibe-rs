@@ -6,8 +6,7 @@ mod integrations;
 mod remote_projects;
 
 pub use integrations::{
-    McpSource, McpSourceStatus, McpTool, mcp_auth_failed_overlay, mcp_auth_overlay,
-    mcp_detail_overlay, mcp_overlay,
+    McpSource, McpTool, mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay, mcp_overlay,
 };
 pub use remote_projects::{
     remote_project_create_overlay, remote_projects_overlay, teleport_push_overlay,

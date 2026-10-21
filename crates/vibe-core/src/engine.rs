@@ -41,7 +41,7 @@ pub use compact::SummaryRequestRecorder;
 pub use contracts::{
     Compactor, CompletionProvider, CompositeEventObserver, EventObserver, NoTools,
     NoopEventObserver, NoopTranscriptSink, RejectCompaction, SessionTranscriptSink, ToolExecutor,
-    TranscriptSink, chunks_of,
+    TranscriptSink, chunks_of, session_token_cost,
 };
 pub use controls::{CancellationToken, TurnControl, TurnControlHandle};
 

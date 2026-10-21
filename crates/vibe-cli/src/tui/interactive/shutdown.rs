@@ -3,7 +3,6 @@
 
 use std::time::Duration;
 
-use serde_json::Value;
 use vibe_core::telemetry::TelemetryRecord;
 
 use super::super::runtime::InteractiveRuntime;
@@ -115,12 +114,11 @@ pub(super) async fn shut_down(
 /// tokens spent since the session baseline.
 fn session_exit_summary(runtime: &mut InteractiveRuntime) -> exit::SessionExitSummary {
     let stats = runtime.session_stats();
-    let tokens = |key: &str| stats.get(key).and_then(Value::as_u64).unwrap_or_default();
     exit::SessionExitSummary {
         session_id: Some(runtime.session_id.clone()),
         usage: exit::SessionUsage {
-            input_tokens: tokens("sessionPromptTokens"),
-            output_tokens: tokens("sessionCompletionTokens"),
+            input_tokens: stats.session_prompt_tokens,
+            output_tokens: stats.session_completion_tokens,
         },
     }
 }

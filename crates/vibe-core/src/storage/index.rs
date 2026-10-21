@@ -257,7 +257,8 @@ pub(super) fn first_user_message(store: &SessionStore, session_id: &str) -> Stri
             continue;
         }
         if let Some(text) = message.get("content").and_then(content_text) {
-            return preview_snippet(&text);
+            // Reference `_preview_snippet`.
+            return crate::pycompat::clip(&text, PREVIEW_MAX_CHARS);
         }
     }
     "(no user messages)".to_owned()
@@ -283,16 +284,6 @@ fn content_text(content: &Value) -> Option<String> {
     } else {
         cleaned
     })
-}
-
-/// Reference `_preview_snippet`.
-fn preview_snippet(text: &str) -> String {
-    if text.chars().count() > PREVIEW_MAX_CHARS {
-        let head: String = text.chars().take(PREVIEW_MAX_CHARS).collect();
-        format!("{}…", head.trim_end())
-    } else {
-        text.to_owned()
-    }
 }
 
 fn modified_ns(path: &Path) -> Option<u64> {

@@ -16,7 +16,7 @@ async fn thin_client_uses_only_serialized_app_server_contracts() {
     assert_eq!(turn.final_assistant, "hello back");
     assert_eq!(turn.history.len(), 2);
     assert_eq!(turn.events.len(), 3);
-    assert_eq!(turn.stop_reason, PublicTurnStopReason::Complete);
+    assert_eq!(turn.stop_reason, TurnStopReason::Complete);
     let mut update_count = 0;
     while let Ok(update) = updates.try_recv() {
         let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {

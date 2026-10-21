@@ -93,30 +93,6 @@ impl ServerConnection {
             turn_id,
             page,
         } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
-        if self.server.harness_selection().use_unified {
-            let state = self.unified_state(&session_id, None)?;
-            let history = state["history"].as_array().cloned().unwrap_or_default();
-            let entries: Vec<&Value> = history
-                .iter()
-                .filter(|entry| {
-                    turn_id
-                        .as_ref()
-                        .is_none_or(|turn_id| entry["turnId"].as_str() == Some(turn_id))
-                })
-                .collect();
-            let (items, next, previous) =
-                page_window(&entries, &page, ForwardStart::Latest, |entry| {
-                    entry["id"].as_str().unwrap_or_default().to_owned()
-                });
-            return Ok(success_batch(
-                request.id.clone(),
-                result_map([
-                    ("items", json!(items)),
-                    ("nextCursor", json!(next)),
-                    ("previousCursor", json!(previous)),
-                ]),
-            ));
-        }
         let live = (self.root_id().as_deref() == Some(session_id.as_str()))
             .then(|| {
                 self.server.lock_sessions().get(&session_id).map(|session| {
@@ -140,16 +116,42 @@ impl ServerConnection {
                     .is_none_or(|turn_id| entry.metadata().turn_id.as_ref() == Some(turn_id))
             })
             .collect();
-        let (items, next, previous) = page_window(&entries, &page, ForwardStart::Latest, |entry| {
-            entry.metadata().id.clone()
-        });
-        Ok(success_batch(
-            request.id.clone(),
-            result_map([
-                ("items", json!(items)),
-                ("nextCursor", json!(next)),
-                ("previousCursor", json!(previous)),
-            ]),
+        Ok(page_reply(
+            request,
+            &entries,
+            &page,
+            ForwardStart::Latest,
+            |entry| entry.metadata().id.clone(),
+        ))
+    }
+
+    /// Reference `_history_list` on the unified host: a page of the
+    /// session's history as the harness projects it.
+    pub(in crate::server::connection) fn unified_history_list(
+        &self,
+        request: &ServerRequest,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let PagedParams {
+            session_id,
+            turn_id,
+            page,
+        } = wire_validation::validate_params(&request.method, &request.params).map_err(rejected)?;
+        let state = self.unified_state(&session_id, None)?;
+        let history = state["history"].as_array().cloned().unwrap_or_default();
+        let entries: Vec<&Value> = history
+            .iter()
+            .filter(|entry| {
+                turn_id
+                    .as_ref()
+                    .is_none_or(|turn_id| entry["turnId"].as_str() == Some(turn_id))
+            })
+            .collect();
+        Ok(page_reply(
+            request,
+            &entries,
+            &page,
+            ForwardStart::Latest,
+            |entry| entry["id"].as_str().unwrap_or_default().to_owned(),
         ))
     }
 
@@ -158,35 +160,9 @@ impl ServerConnection {
         &self,
         request: &ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        let params = wire_validation::validate_params(&request.method, &request.params);
-        if self.root_key().is_none() {
-            return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
-        }
         let PagedParams {
             session_id, page, ..
-        } = params.map_err(rejected)?;
-        if self.server.harness_selection().use_unified {
-            let state = self.unified_state(&session_id, None)?;
-            let turns = turns_from_history(
-                state["history"]
-                    .as_array()
-                    .map(Vec::as_slice)
-                    .unwrap_or_default(),
-                &session_id,
-            );
-            let turns: Vec<&Value> = turns.iter().collect();
-            let (items, next, previous) = page_window(&turns, &page, ForwardStart::First, |turn| {
-                turn["id"].as_str().unwrap_or_default().to_owned()
-            });
-            return Ok(success_batch(
-                request.id.clone(),
-                result_map([
-                    ("items", json!(items)),
-                    ("nextCursor", json!(next)),
-                    ("previousCursor", json!(previous)),
-                ]),
-            ));
-        }
+        } = self.rooted_page(request)?;
         let turns = match self.require_root(&session_id) {
             Ok(_) => {
                 let sessions = self.server.lock_sessions();
@@ -201,16 +177,50 @@ impl ServerConnection {
             Err(fault) => self.child_turns(&session_id)?.ok_or(fault)?,
         };
         let turns: Vec<&PublicTurn> = turns.iter().collect();
-        let (items, next, previous) =
-            page_window(&turns, &page, ForwardStart::First, |turn| turn.id.clone());
-        Ok(success_batch(
-            request.id.clone(),
-            result_map([
-                ("items", json!(items)),
-                ("nextCursor", json!(next)),
-                ("previousCursor", json!(previous)),
-            ]),
+        Ok(page_reply(
+            request,
+            &turns,
+            &page,
+            ForwardStart::First,
+            |turn| turn.id.clone(),
         ))
+    }
+
+    /// Reference `_session_turns_list` on the unified host: the turns the
+    /// session's history spells.
+    pub(in crate::server::connection) fn unified_turns_list(
+        &self,
+        request: &ServerRequest,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let PagedParams {
+            session_id, page, ..
+        } = self.rooted_page(request)?;
+        let state = self.unified_state(&session_id, None)?;
+        let turns = turns_from_history(
+            state["history"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+            &session_id,
+        );
+        let turns: Vec<&Value> = turns.iter().collect();
+        Ok(page_reply(
+            request,
+            &turns,
+            &page,
+            ForwardStart::First,
+            |turn| turn["id"].as_str().unwrap_or_default().to_owned(),
+        ))
+    }
+
+    /// The page a turn listing asks for, which needs a root: without one the
+    /// refusal is the conflict, whatever the parameters say.
+    fn rooted_page(&self, request: &ServerRequest) -> Result<PagedParams, ProtocolFault> {
+        let params = wire_validation::validate_params(&request.method, &request.params);
+        if self.root_key().is_none() {
+            return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
+        }
+        params.map_err(rejected)
     }
 
     /// Whether `id` names a subagent of the root's unified session.
@@ -362,15 +372,17 @@ enum ForwardStart {
     First,
 }
 
-/// One page of `items`: going backward, the latest items or the ones before
-/// the cursor; going forward, the ones after the cursor, or where `start`
-/// says without one. Answers the page and its next and previous cursors.
-fn page_window<'a, T>(
-    items: &[&'a T],
+/// Answers `request` with one page of `items`: going backward, the latest
+/// items or the ones before the cursor; going forward, the ones after the
+/// cursor, or where `start` says without one. The reply carries the page and
+/// its next and previous cursors.
+fn page_reply<T: serde::Serialize>(
+    request: &ServerRequest,
+    items: &[&T],
     page: &Page,
     start: ForwardStart,
     id: impl Fn(&T) -> String,
-) -> (Vec<&'a T>, Option<String>, Option<String>) {
+) -> DispatchBatch {
     let limit = usize::from(page.limit);
     let position = |cursor: &str| items.iter().position(|item| id(item) == cursor);
     let (first, end) = match (page.cursor.as_deref(), page.forward, start) {
@@ -385,18 +397,26 @@ fn page_window<'a, T>(
         }
         (None, _, _) => (items.len().saturating_sub(limit), items.len()),
     };
-    let window: Vec<&'a T> = items.get(first..end).unwrap_or_default().to_vec();
+    let window = items.get(first..end).unwrap_or_default();
     let before = (first > 0)
         .then(|| window.first().map(|item| id(item)))
         .flatten();
     let after = (end < items.len())
         .then(|| window.last().map(|item| id(item)))
         .flatten();
-    if page.forward {
-        (window, after, before)
+    let (next, previous) = if page.forward {
+        (after, before)
     } else {
-        (window, before, after)
-    }
+        (before, after)
+    };
+    success_batch(
+        request.id.clone(),
+        result_map([
+            ("items", json!(window)),
+            ("nextCursor", json!(next)),
+            ("previousCursor", json!(previous)),
+        ]),
+    )
 }
 
 /// Reference `_turns_from_history`: a unified session's turns as its history

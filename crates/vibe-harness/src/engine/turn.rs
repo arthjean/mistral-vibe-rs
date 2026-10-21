@@ -32,6 +32,16 @@ enum Started {
     Program(String),
 }
 
+/// What the turn does before its next model call.
+enum NextCall {
+    /// Call the model with this input.
+    Call(Box<ProviderInput>),
+    /// Compact the conversation first.
+    Compact,
+    /// End the turn on this error without calling the model.
+    Refuse(PublicError),
+}
+
 /// Runs the turn `turn_id` to its end. `interrupt` turns to the reason the
 /// turn is interrupted for.
 pub async fn run_turn(
@@ -48,20 +58,25 @@ pub async fn run_turn(
     let mut iterations: u32 = 0;
     loop {
         let action_id = uuid_v4();
-        let prepared = {
+        let next = {
             let mut core = lock(&core);
             core.deliver_notifications();
             let message_id = core.latest_input_entry_id().unwrap_or_default();
             match unsupported_image(&core, &environment) {
-                Some(error) => Err(Some(error)),
-                None if needs_compaction(&core, &environment) => Err(None),
-                None => Ok(provider_input(&core, &environment, first_call, &message_id)),
+                Some(error) => NextCall::Refuse(error),
+                None if needs_compaction(&core, &environment) => NextCall::Compact,
+                None => NextCall::Call(Box::new(provider_input(
+                    &core,
+                    &environment,
+                    first_call,
+                    &message_id,
+                ))),
             }
         };
-        let input = match prepared {
-            Ok(prepared) => prepared,
-            Err(Some(error)) => return fail_turn(&core, &turn_id, &sink, error),
-            Err(None) => {
+        let input = match next {
+            NextCall::Call(input) => *input,
+            NextCall::Refuse(error) => return fail_turn(&core, &turn_id, &sink, error),
+            NextCall::Compact => {
                 let compacted = tokio::select! {
                     end = run_compaction(&core, &environment, &sink, "", Some(&turn_id)) => end,
                     reason = interrupted(&mut interrupt) => return interrupt_turn(&core, &turn_id, &sink, &reason),

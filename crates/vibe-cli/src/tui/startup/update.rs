@@ -143,10 +143,7 @@ fn configured_theme(
     working_directory: &Path,
 ) -> Result<Option<String>, String> {
     let host = super::startup_host(arguments, working_directory);
-    let trusted = arguments.trust
-        || host
-            .inspect_workspace_trust()
-            .is_ok_and(|inspection| inspection.trusted);
+    let trusted = arguments.trust || host.inspect_workspace_trust().trusted;
     let document = host
         .into_workspace(trusted)
         .map_err(|error| error.to_string())?

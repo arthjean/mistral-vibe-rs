@@ -172,16 +172,7 @@ impl ServerConnection {
                 if let Some(session) = sessions.get_mut(session_id) {
                     session.attachments = session.attachments.saturating_sub(1);
                     if session.attachments == 0 && session.status != SessionStatus::Closed {
-                        let unstarted_worktree =
-                            session.created_worktree.is_some() && session.latest_turn.is_none();
-                        if unstarted_worktree {
-                            session.release_workspace();
-                        }
-                        released.push((
-                            session.id.clone(),
-                            PathBuf::from(&session.working_directory),
-                            unstarted_worktree,
-                        ));
+                        released.push(session::Retired::of(session));
                     }
                 }
             }
@@ -189,17 +180,17 @@ impl ServerConnection {
         // A connection that goes away lets go of what it held, as the
         // reference's backend shutdown does: the lease, the worktree it stood
         // in, and the terminal's pointer to the session it leaves.
-        for (session_id, working_directory, unstarted_worktree) in released {
+        for retired in released {
+            let session_id = &retired.session_id;
             // Reference `VibeCodeController.close`: a push still waiting is
             // answered no and every run stops, so nothing ships after the
             // session is gone.
-            self.server.spawn_vibe_code_reset(&session_id);
-            self.server.release_lease(&session_id);
-            self.release_worktree(&working_directory, &session_id, unstarted_worktree);
+            self.server.spawn_vibe_code_reset(session_id);
+            self.release_retired(&retired);
             let _ = self
                 .server
                 .workspace
-                .close_saved_session(&session_id, now_millis());
+                .close_saved_session(session_id, now_millis());
         }
         self.root = None;
         self.attached_sessions.clear();
@@ -322,7 +313,15 @@ impl ServerConnection {
             method if review::is_review_method(method) => self.review_request(request),
             method if is_connector_method(method) => self.connector_request(request),
             "narration/summarize" => self.narration_request(request),
-            "providerAuth/read" => self.provider_auth_request(request),
+            // Only a unified session serves the provider view, which the
+            // routing hands it before this; the legacy backend declines the
+            // whole namespace (reference `_dispatch` in
+            // `vibe/app_server/_handler.py`).
+            "providerAuth/read" => error_batch(
+                request.id,
+                ProtocolErrorCode::NotImplemented,
+                &format!("Provider auth is not supported: {}", request.method),
+            ),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),

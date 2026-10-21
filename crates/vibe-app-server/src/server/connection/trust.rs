@@ -16,73 +16,41 @@ use crate::startup::{
 };
 use vibe_core::trust::{self, TrustStore};
 
-/// The parameters one of the three methods declares, read as the reference's
-/// pydantic models read them: camelCase keys only, a nullable string for the
-/// directory and the session, the decision one of three literals, and no other
-/// key.
-struct TrustParams {
+/// Reference `WorkspaceTrustStatusParams` and
+/// `WorkspaceUntrustedConfigParams`: the directory a read is about.
+#[derive(Deserialize)]
+struct TrustReadParams {
+    #[serde(default)]
     cwd: Option<String>,
+}
+
+/// Reference `WorkspaceTrustDecisionParams`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrustDecisionParams {
+    #[serde(deserialize_with = "decision")]
+    decision: WorkspaceTrustDecision,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
     session_id: Option<String>,
-    decision: Option<WorkspaceTrustDecision>,
 }
 
-const DECISION_LITERALS: &str = "Input should be 'trust_repo', 'trust_cwd' or 'decline'";
-
-fn trust_params(
-    params: &BTreeMap<String, Value>,
-    fields: &[&str],
-) -> Result<TrustParams, ParamsRejection> {
-    let mut issues = Vec::new();
-    let text = |field: &str, issues: &mut Vec<InvalidParamsIssue>| match params.get(field) {
-        None | Some(Value::Null) => None,
-        Some(Value::String(value)) => Some(value.clone()),
-        Some(_) => {
-            issues.push(issue(field, "Input should be a valid string"));
-            None
-        }
-    };
-    let decision = if fields.contains(&"decision") {
-        match params.get("decision") {
-            None => {
-                issues.push(issue("decision", "Field required"));
-                None
-            }
-            Some(value) => {
-                let parsed = value.as_str().and_then(WorkspaceTrustDecision::parse);
-                if parsed.is_none() {
-                    issues.push(issue("decision", DECISION_LITERALS));
-                }
-                parsed
-            }
-        }
-    } else {
-        None
-    };
-    let mut read = TrustParams {
-        cwd: text("cwd", &mut issues),
-        session_id: None,
-        decision,
-    };
-    if fields.contains(&"sessionId") {
-        read.session_id = text("sessionId", &mut issues);
-    }
-    for key in params.keys() {
-        if !fields.contains(&key.as_str()) {
-            issues.push(issue(key, "Extra inputs are not permitted"));
-        }
-    }
-    if issues.is_empty() {
-        Ok(read)
-    } else {
-        Err(ParamsRejection::with_issues(issues))
-    }
+/// Reads one of the three literals the reference's model accepts.
+fn decision<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<WorkspaceTrustDecision, D::Error> {
+    let value = String::deserialize(deserializer)?;
+    WorkspaceTrustDecision::parse(&value)
+        .ok_or_else(|| serde::de::Error::custom(format!("unknown trust decision `{value}`")))
 }
 
-fn issue(field: &str, message: &str) -> InvalidParamsIssue {
-    InvalidParamsIssue {
-        path: vec![PathSegment::Field(field.to_owned())],
-        message: message.to_owned(),
-    }
+/// Reads the parameters of `request` as the reference's model for its method
+/// validates them.
+fn trust_params<T: serde::de::DeserializeOwned>(
+    request: &ServerRequest,
+) -> Result<T, ProtocolFault> {
+    crate::wire_validation::validate_params(&request.method, &request.params).map_err(rejected)
 }
 
 /// A trust refusal, which upstream raises as `invalid_params` with no detail.
@@ -112,18 +80,16 @@ impl ServerConnection {
         let store = self.trust_store();
         let answer = match request.method.as_str() {
             "workspace/trust/status" => {
-                let params = trust_params(&request.params, &["cwd"])?;
+                let params: TrustReadParams = trust_params(&request)?;
                 read_workspace_trust(&store, &self.trust_directory(params.cwd.as_deref()))
             }
             "workspace/trust/untrustedConfig" => {
-                let params = trust_params(&request.params, &["cwd"])?;
+                let params: TrustReadParams = trust_params(&request)?;
                 read_untrusted_config_dirs(&store, &self.trust_directory(params.cwd.as_deref()))
             }
             _ => {
-                let params = trust_params(&request.params, &["decision", "cwd", "sessionId"])?;
-                let decision = params
-                    .decision
-                    .ok_or_else(|| ProtocolFault::invalid_params("decision is required"))?;
+                let params: TrustDecisionParams = trust_params(&request)?;
+                let decision = params.decision;
                 match params.session_id {
                     Some(session_id) => {
                         return self.decide_session_trust(

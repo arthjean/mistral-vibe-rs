@@ -49,14 +49,21 @@ fn succeeded(structured: Value, meta: Option<Map<String, Value>>) -> ToolResult 
     }
 }
 
+/// The `file_system` tools [`execute`] runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileTool {
+    ReadFile,
+    WriteFile,
+    SearchReplace,
+}
+
 /// Runs one `file_system` call.
 #[must_use]
-pub fn execute(name: &str, arguments: &Value, workspace: &Workspace) -> ToolResult {
-    let outcome = match name {
-        "file_system.read_file" => read_file(arguments, workspace),
-        "file_system.write_file" => write_file(arguments, workspace),
-        "file_system.search_replace" => search_replace(arguments, workspace),
-        other => Err(format!("Unsupported file tool: {other}")),
+pub fn execute(tool: FileTool, arguments: &Value, workspace: &Workspace) -> ToolResult {
+    let outcome = match tool {
+        FileTool::ReadFile => read_file(arguments, workspace),
+        FileTool::WriteFile => write_file(arguments, workspace),
+        FileTool::SearchReplace => search_replace(arguments, workspace),
     };
     outcome.unwrap_or_else(failed)
 }
@@ -316,6 +323,14 @@ fn open_regular(path: &Path) -> Result<(fs::File, fs::Metadata), String> {
         Err(error) => return Err(pycompat::os_error(&error, Some(path))),
     };
     if link.is_ok_and(|meta| meta.file_type().is_symlink()) {
+        // Reference `_open_bytes` opens with `O_NOFOLLOW`, which refuses a
+        // link with the platform's `ELOOP`.
+        #[cfg(unix)]
+        return Err(pycompat::os_error(
+            &std::io::Error::from_raw_os_error(nix::errno::Errno::ELOOP as i32),
+            Some(path),
+        ));
+        #[cfg(not(unix))]
         return Err(format!(
             "[Errno 40] Too many levels of symbolic links: {}",
             pycompat::repr_str(&path.to_string_lossy())

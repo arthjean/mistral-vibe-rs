@@ -26,11 +26,23 @@ struct RewindTarget {
 
 /// Reference `SessionRewindParams`, which `SessionRewindReadParams` is the
 /// first two fields of.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(in crate::server) struct RewindParams {
     pub(in crate::server) session_id: String,
     pub(in crate::server) entry_id: String,
+    #[serde(default)]
     pub(in crate::server) restore_files: bool,
+    #[serde(default)]
     pub(in crate::server) inplace: bool,
+}
+
+impl RewindParams {
+    /// Reads the parameters of `session/rewind` or `session/rewind/read` as
+    /// the reference's model for the method validates them.
+    pub(in crate::server) fn read(request: &ServerRequest) -> Result<Self, ProtocolFault> {
+        crate::wire_validation::validate_params(&request.method, &request.params).map_err(rejected)
+    }
 }
 
 impl ServerConnection {
@@ -45,7 +57,7 @@ impl ServerConnection {
     }
 
     fn read_rewind(&self, request: &ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
-        let params = rewind_params(&request.params, false)?;
+        let params = RewindParams::read(request)?;
         let (review, working_directory) = {
             let sessions = self.server.lock_sessions();
             let session = current_session(&sessions, &params.session_id)?;
@@ -69,7 +81,7 @@ impl ServerConnection {
     }
 
     fn rewind(&self, request: &ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
-        let params = rewind_params(&request.params, true)?;
+        let params = RewindParams::read(request)?;
         let mut sessions = self.server.lock_sessions();
         current_session(&sessions, &params.session_id)?;
         // The registry keeps a session under the identifier it opened with,
@@ -269,77 +281,4 @@ fn absolute_paths(working_directory: &str, paths: Vec<String>) -> Vec<String> {
                 .into_owned()
         })
         .collect()
-}
-
-/// Reads the parameters as the reference's pydantic model does: every field
-/// under its camelCase alias or its own name, booleans in lax mode, no other
-/// key, and every violation reported rather than the first.
-pub(in crate::server) fn rewind_params(
-    params: &BTreeMap<String, Value>,
-    with_options: bool,
-) -> Result<RewindParams, ParamsRejection> {
-    let mut fields = vec![("sessionId", "session_id"), ("entryId", "entry_id")];
-    if with_options {
-        fields.extend([("restoreFiles", "restore_files"), ("inplace", "inplace")]);
-    }
-    let mut issues = Vec::new();
-    let field = |alias: &str, name: &str| params.get(alias).or_else(|| params.get(name));
-    let mut text = |alias: &str, name: &str| match field(alias, name) {
-        Some(Value::String(value)) => value.clone(),
-        Some(_) => {
-            issues.push(issue(alias, "Input should be a valid string"));
-            String::new()
-        }
-        None => {
-            issues.push(issue(alias, "Field required"));
-            String::new()
-        }
-    };
-    let session_id = text("sessionId", "session_id");
-    let entry_id = text("entryId", "entry_id");
-    let mut flag = |alias: &str, name: &str| match field(alias, name) {
-        None => false,
-        Some(value) => vibe_core::pycompat::pydantic::lax_bool_value(value).unwrap_or_else(|| {
-            let message = if matches!(value, Value::String(_) | Value::Number(_)) {
-                "Input should be a valid boolean, unable to interpret input"
-            } else {
-                "Input should be a valid boolean"
-            };
-            issues.push(issue(alias, message));
-            false
-        }),
-    };
-    let (restore_files, inplace) = if with_options {
-        (
-            flag("restoreFiles", "restore_files"),
-            flag("inplace", "inplace"),
-        )
-    } else {
-        (false, false)
-    };
-    for key in params.keys() {
-        if !fields
-            .iter()
-            .any(|(alias, name)| key == alias || key == name)
-        {
-            issues.push(issue(key, "Extra inputs are not permitted"));
-        }
-    }
-    if issues.is_empty() {
-        Ok(RewindParams {
-            session_id,
-            entry_id,
-            restore_files,
-            inplace,
-        })
-    } else {
-        Err(ParamsRejection::with_issues(issues))
-    }
-}
-
-fn issue(field: &str, message: &str) -> InvalidParamsIssue {
-    InvalidParamsIssue {
-        path: vec![PathSegment::Field(field.to_owned())],
-        message: message.to_owned(),
-    }
 }

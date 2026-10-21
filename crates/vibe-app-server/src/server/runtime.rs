@@ -7,6 +7,7 @@
 
 use super::*;
 use vibe_core::engine::ToolCallTally;
+use vibe_harness::reconcile::AgentStatsSnapshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -230,16 +231,9 @@ impl SessionRuntime {
 
     /// The session's projection, opened empty when nothing was projected yet.
     pub(crate) fn projection(&mut self) -> &mut ProjectionSnapshot {
-        let session_id = self.id.clone();
-        self.snapshot.get_or_insert_with(|| ProjectionSnapshot {
-            session_id,
-            turn_id: None,
-            handoff_cause: None,
-            watermark: 0,
-            lifecycle: LifecycleState::Completed,
-            title: None,
-            history: Vec::new(),
-        })
+        let session_id = &self.id;
+        self.snapshot
+            .get_or_insert_with(|| empty_projection(session_id, None, LifecycleState::Completed))
     }
 
     /// Starts the session over as one with nothing said yet, created `now`:
@@ -316,14 +310,7 @@ pub(crate) struct SessionStats {
 impl SessionStats {
     /// Records the usage one provider round trip reported, as the running
     /// session totals.
-    pub(crate) fn observe(
-        &mut self,
-        context_tokens: u64,
-        input_tokens: u64,
-        output_tokens: u64,
-        cached_tokens: u64,
-    ) {
-        let _ = context_tokens;
+    pub(crate) fn observe(&mut self, input_tokens: u64, output_tokens: u64, cached_tokens: u64) {
         self.count_user_message();
         if self.pending_step {
             self.steps = self.steps.saturating_add(1);
@@ -459,26 +446,22 @@ pub(crate) fn public_stats(session: Option<&SessionRuntime>) -> Value {
             &owned
         }
     };
-    let seconds = as_f64(stats.last_turn_duration_ms) / 1_000.0;
-    let tokens_per_second = stats.tokens_per_second;
-    json!({
-        "steps": stats.steps,
-        "sessionPromptTokens": stats.session_prompt_tokens,
-        "sessionCompletionTokens": stats.session_completion_tokens,
-        "sessionCachedTokens": stats.session_cached_tokens,
-        "inputPricePerMillion": 0.0,
-        "outputPricePerMillion": 0.0,
-        "cachedInputPricePerMillion": null,
-        "toolCallsAgreed": stats.tool_calls.agreed,
-        "toolCallsRejected": stats.tool_calls.rejected,
-        "toolCallsFailed": stats.tool_calls.failed,
-        "toolCallsSucceeded": stats.tool_calls.succeeded,
-        "contextTokens": stats.context_tokens,
-        "lastTurnPromptTokens": stats.last_turn_prompt_tokens,
-        "lastTurnCompletionTokens": stats.last_turn_completion_tokens,
-        "lastTurnCachedTokens": stats.last_turn_cached_tokens,
-        "lastTurnDuration": seconds,
-        "tokensPerSecond": tokens_per_second,
+    json!(AgentStatsSnapshot {
+        steps: stats.steps,
+        session_prompt_tokens: stats.session_prompt_tokens,
+        session_completion_tokens: stats.session_completion_tokens,
+        session_cached_tokens: stats.session_cached_tokens,
+        tool_calls_agreed: stats.tool_calls.agreed,
+        tool_calls_rejected: stats.tool_calls.rejected,
+        tool_calls_failed: stats.tool_calls.failed,
+        tool_calls_succeeded: stats.tool_calls.succeeded,
+        context_tokens: stats.context_tokens,
+        last_turn_prompt_tokens: stats.last_turn_prompt_tokens,
+        last_turn_completion_tokens: stats.last_turn_completion_tokens,
+        last_turn_cached_tokens: stats.last_turn_cached_tokens,
+        last_turn_duration: as_f64(stats.last_turn_duration_ms) / 1_000.0,
+        tokens_per_second: stats.tokens_per_second,
+        ..AgentStatsSnapshot::default()
     })
 }
 

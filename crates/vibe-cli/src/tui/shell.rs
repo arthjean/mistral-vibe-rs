@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{Value, json};
-use vibe_app_server::client::{ClientError, PublicDispatch, PublicHistoryEntry};
+use vibe_app_server::client::{ClientError, PublicDispatch, PublicHistoryEntry, PublishedField};
 use vibe_core::process::{ProcessChunk, ProcessStream};
 
 use super::hydration::history_entry;
@@ -209,7 +209,7 @@ async fn follow_unified_shell(
 ) {
     let published = runtime
         .service
-        .published_state(&runtime.session_id, "history")
+        .published_state(&runtime.session_id, PublishedField::History)
         .and_then(|history| {
             history
                 .as_array()?

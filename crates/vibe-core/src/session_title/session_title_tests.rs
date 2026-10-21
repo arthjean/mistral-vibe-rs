@@ -97,6 +97,35 @@ fn a_title_is_one_clean_line_and_a_generic_one_is_none() {
 }
 
 #[test]
+fn the_first_line_ends_at_every_python_line_boundary() {
+    // Printed by both reference cleaners (`title_model.py` `_clean_title` and
+    // the harness runtime's `clean_title`) under the pinned interpreter.
+    for boundary in [
+        "\n", "\r", "\r\n", "\u{b}", "\u{c}", "\u{1c}", "\u{1d}", "\u{1e}", "\u{85}", "\u{2028}",
+        "\u{2029}",
+    ] {
+        assert_eq!(
+            clean_title(Some(&format!("Fix parser{boundary}second line"))).as_deref(),
+            Some("Fix parser"),
+            "{boundary:?}"
+        );
+        assert_eq!(
+            clean_title(Some(&format!("\u{1c}{boundary}Fix parser"))).as_deref(),
+            Some("Fix parser"),
+            "{boundary:?}"
+        );
+    }
+    assert_eq!(
+        clean_title(Some("Fix parser\u{1f}second line")).as_deref(),
+        Some("Fix parsersecond line")
+    );
+    assert_eq!(
+        clean_title(Some("Fix parser\u{a0}second line")).as_deref(),
+        Some("Fix parser second line")
+    );
+}
+
+#[test]
 fn a_previous_title_is_offered_for_refinement() {
     assert_eq!(user_prompt("user: hi", None), "user: hi");
     assert!(user_prompt("user: hi", Some("Greeting")).starts_with("Previous title: Greeting"));

@@ -430,9 +430,9 @@ fn validate_value(ty: &Ty, value: &Value, loc: &[Value], errors: &mut Vec<Value>
                 ));
             }
         }
-        Ty::Int => validate_int(value, loc, errors),
-        Ty::Float => validate_float(value, loc, errors),
-        Ty::Bool => validate_bool(value, loc, errors),
+        Ty::Int => refuse(pydantic::integer(value, false), value, loc, errors),
+        Ty::Float => refuse(pydantic::float(value, false), value, loc, errors),
+        Ty::Bool => refuse(pydantic::boolean(value, false), value, loc, errors),
         Ty::Dict => {
             if !value.is_object() {
                 errors.push(error(
@@ -489,79 +489,16 @@ fn validate_value(ty: &Ty, value: &Value, loc: &[Value], errors: &mut Vec<Value>
     }
 }
 
-/// The lax integer conversion: an integral number, a float without a
-/// fractional part, a boolean, or a string that parses as one.
-fn validate_int(value: &Value, loc: &[Value], errors: &mut Vec<Value>) {
-    match value {
-        Value::Bool(_) => {}
-        Value::Number(number) => {
-            if number.is_f64() && number.as_f64().is_some_and(|float| float.fract() != 0.0) {
-                errors.push(error(
-                    "int_from_float",
-                    loc,
-                    "Input should be a valid integer, got a number with a fractional part",
-                    value,
-                    None,
-                ));
-            }
-        }
-        Value::String(text) => {
-            if text.trim().parse::<i64>().is_err() {
-                errors.push(error(
-                    "int_parsing",
-                    loc,
-                    "Input should be a valid integer, unable to parse string as an integer",
-                    value,
-                    None,
-                ));
-            }
-        }
-        _ => errors.push(error(
-            "int_type",
-            loc,
-            "Input should be a valid integer",
-            value,
-            None,
-        )),
+/// Records the refusal of pydantic's lax reading, if it refused.
+fn refuse<T>(
+    read: Result<T, pydantic::Refusal>,
+    value: &Value,
+    loc: &[Value],
+    errors: &mut Vec<Value>,
+) {
+    if let Err(refusal) = read {
+        errors.push(error(refusal.kind, loc, refusal.message, value, None));
     }
-}
-
-fn validate_float(value: &Value, loc: &[Value], errors: &mut Vec<Value>) {
-    match value {
-        Value::Bool(_) | Value::Number(_) => {}
-        Value::String(text) => {
-            if text.trim().parse::<f64>().is_err() {
-                errors.push(error(
-                    "float_parsing",
-                    loc,
-                    "Input should be a valid number, unable to parse string as a number",
-                    value,
-                    None,
-                ));
-            }
-        }
-        _ => errors.push(error(
-            "float_type",
-            loc,
-            "Input should be a valid number",
-            value,
-            None,
-        )),
-    }
-}
-
-fn validate_bool(value: &Value, loc: &[Value], errors: &mut Vec<Value>) {
-    if pydantic::lax_bool_value(value).is_some() {
-        return;
-    }
-    let (kind, message) = match value {
-        Value::String(_) | Value::Number(_) => (
-            "bool_parsing",
-            "Input should be a valid boolean, unable to interpret input",
-        ),
-        _ => ("bool_type", "Input should be a valid boolean"),
-    };
-    errors.push(error(kind, loc, message, value, None));
 }
 
 fn error(kind: &str, loc: &[Value], message: &str, input: &Value, ctx: Option<Value>) -> Value {

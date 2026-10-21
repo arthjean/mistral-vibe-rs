@@ -34,7 +34,7 @@ pub fn resolve_workspace_trust(
             dangerous_warning,
         });
     }
-    let inspection = host.inspect_workspace_trust()?;
+    let inspection = host.inspect_workspace_trust();
     if inspection.trusted {
         arguments.trust = true;
         return Ok(TrustResolution {

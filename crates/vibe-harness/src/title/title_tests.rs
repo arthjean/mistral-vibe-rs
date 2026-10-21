@@ -17,20 +17,6 @@ fn a_title_is_due_once_early_then_after_six_more_steps() {
 }
 
 #[test]
-fn an_answer_is_reduced_to_one_short_line() {
-    assert_eq!(
-        clean("  \"Parser   plan\"\nmore").as_deref(),
-        Some("Parser plan")
-    );
-    assert_eq!(clean("New Session"), None);
-    assert_eq!(clean(""), None);
-    let long = "word ".repeat(30);
-    let cleaned = clean(&long).unwrap();
-    assert_eq!(cleaned.chars().count(), 73);
-    assert!(cleaned.ends_with('…'));
-}
-
-#[test]
 fn the_transcript_reads_messages_and_calls() {
     let entries = [
         json!({"type": "message", "role": "user", "content": [{"type": "text", "text": "Run it"}]}),

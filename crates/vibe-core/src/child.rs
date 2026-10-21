@@ -408,3 +408,56 @@ pub(crate) fn wait_with_deadline(
         std::thread::sleep(poll);
     }
 }
+
+/// Runs a synchronous `command` to completion like [`std::process::Command::output`],
+/// bounded by `limit` through [`wait_with_deadline`], and answers [`None`]
+/// when the deadline killed it.
+///
+/// Each piped stream is drained on a thread of its own, so a chatty child
+/// cannot block on a full pipe while this one waits for it to exit. A stream
+/// the command does not pipe reads as empty.
+///
+/// # Errors
+///
+/// Fails when the child cannot start or its status cannot be read; the child
+/// is killed in the second case.
+pub(crate) fn output_with_deadline(
+    command: &mut std::process::Command,
+    limit: Duration,
+    poll: Duration,
+) -> std::io::Result<Option<std::process::Output>> {
+    fn drain(
+        stream: Option<impl std::io::Read + Send + 'static>,
+    ) -> Option<std::thread::JoinHandle<Vec<u8>>> {
+        stream.map(|mut stream| {
+            std::thread::spawn(move || {
+                let mut bytes = Vec::new();
+                let _ = stream.read_to_end(&mut bytes);
+                bytes
+            })
+        })
+    }
+    fn join(reader: Option<std::thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+        reader
+            .and_then(|reader| reader.join().ok())
+            .unwrap_or_default()
+    }
+    let mut child = command.spawn()?;
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let status = match wait_with_deadline(&mut child, limit, poll) {
+        Ok(Some(status)) => status,
+        // The readers are left to finish on their own: a grandchild that
+        // inherited a pipe can hold it open past the kill.
+        Ok(None) => return Ok(None),
+        Err(error) => {
+            let _ = child.kill();
+            return Err(error);
+        }
+    };
+    Ok(Some(std::process::Output {
+        status,
+        stdout: join(stdout),
+        stderr: join(stderr),
+    }))
+}

@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 use thiserror::Error;
-use vibe_core::events::ModelMessage;
 use vibe_core::storage::{SessionStore, StorageError};
 use vibe_core::trust::{self, TrustError, TrustStatus, TrustStore};
 
@@ -73,21 +72,22 @@ impl StartupHost {
     /// client shows about it. Reference `_resolve_workspace_trust` over
     /// `read_workspace_trust`: a session grant counts as trust, and a folder
     /// declined earlier is asked about again rather than refused.
-    pub fn inspect_workspace_trust(&self) -> Result<WorkspaceTrustInspection, StartupHostError> {
+    #[must_use]
+    pub fn inspect_workspace_trust(&self) -> WorkspaceTrustInspection {
         let store = self.trust_store();
         let cwd = trust::resolve(&self.paths.working_directory);
         if store.trust_status(&cwd) != TrustStatus::Untrusted {
-            return Ok(WorkspaceTrustInspection {
+            return WorkspaceTrustInspection {
                 trusted: true,
                 prompt: None,
-            });
+            };
         }
         let settings_path = store.settings_path();
-        Ok(WorkspaceTrustInspection {
+        WorkspaceTrustInspection {
             trusted: false,
             prompt: trust::build_trust_prompt(&cwd, true, &store)
                 .map(|prompt| WorkspaceTrustPrompt::from_core(prompt, settings_path)),
-        })
+        }
     }
 
     /// Records `decision` about the directory `prompt` asked about, as
@@ -355,24 +355,19 @@ pub enum StartupHostError {
 /// holds none.
 #[must_use]
 pub fn saved_session_preview(session_root: &Path, session_id: &str) -> Option<String> {
-    SessionStore::new(session_root)
-        .load(session_id)
-        .ok()?
-        .messages
-        .into_iter()
-        .find_map(|message| match message {
-            ModelMessage::User {
-                content,
-                injected: false,
-                ..
-            } if !content.is_empty() => Some(content.chars().take(160).collect()),
-            _ => None,
-        })
+    crate::server::message_preview(
+        &SessionStore::new(session_root)
+            .load(session_id)
+            .ok()?
+            .messages,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use std::fs;
+
+    use vibe_core::events::ModelMessage;
 
     use super::*;
 
@@ -389,14 +384,14 @@ mod tests {
         let root = tempfile::tempdir().expect("workspace");
         fs::create_dir_all(root.path().join(".vibe/prompts")).expect("project config");
         let host = StartupHost::new(paths(root.path()));
-        let inspection = host.inspect_workspace_trust().expect("trust inspection");
+        let inspection = host.inspect_workspace_trust();
         let prompt = inspection.prompt.expect("trust prompt");
         assert_eq!(prompt.detected_files, vec![".vibe/"]);
         assert!(
             host.decide_workspace_trust(&prompt, WorkspaceTrustDecision::TrustDirectory)
                 .expect("trust saved")
         );
-        let persisted = host.inspect_workspace_trust().expect("persisted trust");
+        let persisted = host.inspect_workspace_trust();
         assert!(persisted.trusted);
         assert!(persisted.prompt.is_none());
     }
@@ -406,11 +401,7 @@ mod tests {
         let root = tempfile::tempdir().expect("workspace");
         fs::create_dir_all(root.path().join(".vibe/prompts")).expect("project config");
         let host = StartupHost::new(paths(root.path()));
-        let prompt = host
-            .inspect_workspace_trust()
-            .expect("trust inspection")
-            .prompt
-            .expect("trust prompt");
+        let prompt = host.inspect_workspace_trust().prompt.expect("trust prompt");
         assert!(
             !host
                 .decide_workspace_trust(&prompt, WorkspaceTrustDecision::Decline)
@@ -418,7 +409,6 @@ mod tests {
         );
         let prompt = host
             .inspect_workspace_trust()
-            .expect("untrusted workspace remains actionable")
             .prompt
             .expect("trust prompt remains available");
         assert!(prompt.repo_explicitly_untrusted || prompt.repo_root.is_none());
@@ -450,9 +440,7 @@ mod tests {
         fs::create_dir_all(&malformed_paths.vibe_home).expect("vibe home");
         let settings = malformed_paths.vibe_home.join("trusted_folders.toml");
         fs::write(&settings, "trusted = [\n").expect("malformed settings");
-        let inspection = StartupHost::new(malformed_paths)
-            .inspect_workspace_trust()
-            .expect("a malformed file reads as empty");
+        let inspection = StartupHost::new(malformed_paths).inspect_workspace_trust();
         assert!(inspection.prompt.is_some());
         assert_eq!(
             fs::read_to_string(&settings).expect("rewritten"),
@@ -469,20 +457,12 @@ mod tests {
         )
         .expect("conflicting settings directory");
         let host = StartupHost::new(unwritable_paths);
-        let prompt = host
-            .inspect_workspace_trust()
-            .expect("trust inspection")
-            .prompt
-            .expect("trust prompt");
+        let prompt = host.inspect_workspace_trust().prompt.expect("trust prompt");
         assert!(
             host.decide_workspace_trust(&prompt, WorkspaceTrustDecision::TrustDirectory)
                 .expect("the decision holds in memory")
         );
-        assert!(
-            host.inspect_workspace_trust()
-                .expect("reinspection")
-                .trusted
-        );
+        assert!(host.inspect_workspace_trust().trusted);
     }
 
     #[test]

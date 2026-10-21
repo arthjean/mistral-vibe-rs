@@ -57,7 +57,7 @@ impl ServerConnection {
             batch.outbound.extend(self.runtime_updated_frame(&target));
             return Ok(batch);
         }
-        self.server.acquire_lease(&target)?;
+        let lease = self.server.acquire_lease(&target)?;
         let mut params = reopen_start_params(&agent_config);
         params.insert("resume".to_owned(), json!(target));
         params.insert("historyLimit".to_owned(), json!(history_limit));
@@ -69,11 +69,9 @@ impl ServerConnection {
             params.insert("agent".to_owned(), json!(agent));
         }
         let start = ServerRequest { params, ..request };
-        let opened = self.open_reopened(start, true);
-        if opened.is_err() {
-            self.server.release_lease(&target);
-        }
-        opened
+        let opened = self.open_reopened(start, true)?;
+        lease.keep();
+        Ok(opened)
     }
 
     /// Opens the session a reopening resolved, through the start path, and

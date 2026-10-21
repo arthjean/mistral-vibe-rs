@@ -88,7 +88,7 @@ impl ServerConnection {
         {
             let mut host = unified.host();
             host.require_idle()?;
-            host.running = Some(String::new());
+            host.running = Some(Running::Compaction);
             host.interrupt = Some(interrupt);
         }
         let environment = self
@@ -493,7 +493,7 @@ impl AppServer {
         let (interrupt, interrupted) = watch::channel(None);
         let event_id = {
             let mut host = unified.host();
-            host.running = Some(turn_id.clone());
+            host.running = Some(Running::Turn(turn_id.clone()));
             host.interrupt = Some(interrupt);
             host.pins = pins;
             host.translator.event_id

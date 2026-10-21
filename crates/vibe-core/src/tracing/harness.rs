@@ -19,6 +19,7 @@ use opentelemetry_sdk::error::OTelSdkResult;
 use opentelemetry_sdk::trace::{SdkTracerProvider, SimpleSpanProcessor, SpanData, SpanExporter};
 
 use super::redaction::{RedactingSpanExporter, RedactionPolicy};
+use crate::sync::lock;
 
 /// Whether a test currently owns the global provider, and the signal that says
 /// it stopped owning it.
@@ -34,7 +35,7 @@ static RELEASED: Condvar = Condvar::new();
 /// still hands it over: a panicking test must not turn into every other tracing
 /// test failing for a reason that has nothing to do with them.
 pub(crate) fn exclusive() -> Exclusive {
-    let mut owned = OWNED.lock().unwrap_or_else(PoisonError::into_inner);
+    let mut owned = lock(&OWNED);
     while *owned {
         owned = RELEASED.wait(owned).unwrap_or_else(PoisonError::into_inner);
     }
@@ -47,7 +48,7 @@ pub(crate) struct Exclusive;
 
 impl Drop for Exclusive {
     fn drop(&mut self) {
-        let mut owned = OWNED.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut owned = lock(&OWNED);
         *owned = false;
         drop(owned);
         RELEASED.notify_one();
@@ -69,24 +70,17 @@ impl Collector {
     /// The spans this thread exported, oldest first.
     pub(crate) fn spans(&self) -> Vec<SpanData> {
         let current = std::thread::current().id();
-        self.spans
-            .lock()
-            .map(|spans| {
-                spans
-                    .iter()
-                    .filter(|(thread, _)| *thread == current)
-                    .map(|(_, span)| span.clone())
-                    .collect()
-            })
-            .unwrap_or_default()
+        lock(&self.spans)
+            .iter()
+            .filter(|(thread, _)| *thread == current)
+            .map(|(_, span)| span.clone())
+            .collect()
     }
 
     /// Forgets what this thread exported, so the next case reads its own spans.
     pub(crate) fn clear(&self) {
         let current = std::thread::current().id();
-        if let Ok(mut spans) = self.spans.lock() {
-            spans.retain(|(thread, _)| *thread != current);
-        }
+        lock(&self.spans).retain(|(thread, _)| *thread != current);
     }
 
     fn exporter(&self) -> CollectingSpanExporter {
@@ -104,9 +98,7 @@ struct CollectingSpanExporter {
 impl SpanExporter for CollectingSpanExporter {
     async fn export(&self, batch: Vec<SpanData>) -> OTelSdkResult {
         let current = std::thread::current().id();
-        if let Ok(mut spans) = self.spans.lock() {
-            spans.extend(batch.into_iter().map(|span| (current, span)));
-        }
+        lock(&self.spans).extend(batch.into_iter().map(|span| (current, span)));
         Ok(())
     }
 }

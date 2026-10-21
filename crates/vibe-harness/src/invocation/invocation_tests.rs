@@ -29,7 +29,7 @@ fn the_command_and_its_mentions_name_skills_outside_code() {
 fn an_appended_body_becomes_a_settled_skill_effect() {
     let body = format!(
         "{}\n# Skill: review\n\nDo it.\n</skill_content>",
-        content_marker("review")
+        skill_content_marker("review")
     );
     let message = json!({
         "id": "user-1",
@@ -54,7 +54,7 @@ fn an_appended_body_becomes_a_settled_skill_effect() {
 fn a_preview_loses_the_body_appended_to_it() {
     let body = format!(
         "{}\n# Skill: review\n\nDo it.\n</skill_content>",
-        content_marker("review")
+        skill_content_marker("review")
     );
     assert_eq!(
         public_preview(&format!("/review now {body}")),

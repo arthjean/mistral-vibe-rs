@@ -11,12 +11,13 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use vibe_app_server::client::{HeadlessService, LiveTurnDriver};
 use vibe_app_server::experiments::SessionExperiments;
+use vibe_app_server::vocabulary::McpSourceStatus;
 use vibe_app_server::workspace::WorkspaceService;
 
 use super::clipboard_images::ImageModels;
 use super::cloud_workflow::CloudWorkflowState;
 use super::interaction::IntegrationKind;
-use super::pickers::{McpSource, McpSourceStatus};
+use super::pickers::McpSource;
 use super::runtime::{BannerMetrics, InteractiveRuntime, RuntimeSkill, UiOperationCompletion};
 use super::voice::{SpeechManager, VoiceManager, audio_credentials, audio_metadata};
 use super::{

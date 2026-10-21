@@ -44,7 +44,7 @@ pub(crate) mod time;
 
 pub use error::StorageError;
 pub use index::SessionInfo;
-pub use metadata::{SessionMetadata, relocate_metadata};
+pub use metadata::{SessionMetadata, current_username, relocate_metadata};
 use pointer::{current_tty_key, sanitize_pointer_key};
 pub use registry::register_session_prefix;
 use time::format_compact_timestamp;

@@ -12,6 +12,7 @@ mod callbacks;
 mod compaction;
 mod connection;
 mod connector_catalog;
+mod leases;
 mod manual_shell;
 mod methods;
 mod projection;
@@ -34,6 +35,8 @@ pub use methods::EMITTED_NOTIFICATIONS;
 pub(crate) use methods::notification_method;
 #[cfg(test)]
 pub(crate) use methods::{routed_methods, stdio_routed_methods};
+pub use projection::entry_preview;
+pub(crate) use projection::message_preview;
 pub use runtime::SessionView;
 pub(crate) use runtime::*;
 pub use unified::{UnifiedTurnWork, drive_unified_turn};
@@ -52,6 +55,7 @@ pub use vibe_code_host::{ClientLaunch, FrameSink};
 
 use crate::client::{TurnReservation, public_turn_failure};
 use crate::client_tools::ClientToolBridge;
+use crate::connector_catalog::ConnectorAuthAction;
 use crate::harness::HarnessSelection;
 use crate::host::{now_millis, vibe_home};
 use crate::projects::{
@@ -160,7 +164,7 @@ pub(crate) enum HandoffNotice {
 
 /// A brokered connector authorization: session, connector, accepted revision
 /// and action.
-type ConnectorAuthRequest = (String, String, String, String);
+type ConnectorAuthRequest = (String, String, String, ConnectorAuthAction);
 
 /// The parameter a routed connector call carries the connection's root in,
 /// which no client can send: the parameters were validated before it is added.
@@ -360,14 +364,13 @@ pub struct AppServer {
     secondary_provider: Option<Arc<dyn CompletionProvider>>,
     /// The harness this process resolved, which `config/read` reports.
     harness: Arc<HarnessSelection>,
-    next_session: Arc<AtomicU64>,
     /// Unit tests number turns so their fixtures can name them.
     #[cfg(test)]
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
     /// The sessions this process holds open, each under the lease that keeps a
     /// second process from opening it too (reference `SessionLease`).
-    leases: Arc<Mutex<BTreeMap<String, vibe_core::storage::lease::SessionLease>>>,
+    leases: leases::Leases,
     /// The connector catalogs this process fetched or read back, by provider
     /// fingerprint, with when each was stored (reference
     /// `ConnectorCatalogService._memory`).
@@ -423,7 +426,6 @@ impl Default for AppServer {
             utility_provider: None,
             secondary_provider: None,
             harness: Arc::new(HarnessSelection::default()),
-            next_session: Arc::new(AtomicU64::new(1)),
             #[cfg(test)]
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -716,8 +718,6 @@ pub enum ServerError {
     UnsupportedCallbackKind(EngineCallbackKind),
     #[error("client does not support callback kind `{0:?}`")]
     UnsupportedClientCallbackKind(EngineCallbackKind),
-    #[error("callback request did not encode as a server request")]
-    InvalidCallbackRequest,
     #[error("callback detail is invalid: {0}")]
     InvalidCallbackDetail(String),
     #[error("tool execution failed: {0}")]
@@ -894,12 +894,6 @@ impl AppServer {
             vibe_core::session_id::uuid_v4()
         }
     }
-}
-
-/// Reference `uuid4()`: a new session is named by a random UUID, whose first
-/// eight characters also name its directory.
-fn generated_session_id(_sequence: u64) -> String {
-    vibe_core::session_id::uuid_v4()
 }
 
 #[cfg(test)]

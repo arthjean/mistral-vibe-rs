@@ -126,9 +126,8 @@ fn relocation_target(
     current: &str,
     requested: &str,
 ) -> Result<String, ProtocolFault> {
-    let expanded = crate::host::expand_home(Path::new(requested));
     let target =
-        vibe_core::platform::canonicalize(&expanded).unwrap_or_else(|_| absolute(&expanded));
+        vibe_core::platform::resolve_lenient(&crate::host::expand_home(Path::new(requested)));
     if !target.is_dir() {
         return Err(ProtocolFault::plain(
             ProtocolErrorCode::InvalidParams,

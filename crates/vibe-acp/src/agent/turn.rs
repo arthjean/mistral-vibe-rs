@@ -13,10 +13,11 @@ use std::time::Duration;
 
 use serde_json::{Map, Value, json};
 use vibe_app_server::client::{
-    DriverError, ProgrammaticUpdate, PublicContentBlock, PublicTurnOutcome, PublicTurnStopReason,
-    TurnDriver, TurnErrorCode, TurnRequest, turn_error_code,
+    DriverError, ProgrammaticUpdate, PublicContentBlock, TurnDriver, TurnErrorCode, TurnRequest,
+    turn_error_code,
 };
 use vibe_core::clock::now_millis;
+use vibe_core::engine::{TurnOutcome, TurnStopReason};
 use vibe_core::provider::ProviderError;
 use vibe_core::session_id::uuid_v4;
 
@@ -145,7 +146,7 @@ where
             TurnEnd::Completed(turn) => turn,
         };
         let stop_reason = match turn.stop_reason {
-            PublicTurnStopReason::Cancelled => "cancelled",
+            TurnStopReason::Cancelled => "cancelled",
             reason if reason.is_limit() => "max_turn_requests",
             _ => "end_turn",
         };
@@ -296,7 +297,7 @@ where
         // the turn. A usage report waits for the same moment here.
         let mut usage_pending = false;
         let (mut flushes, _barrier) = harness.barrier.install();
-        let outcome: Result<PublicTurnOutcome, DriverError> = loop {
+        let outcome: Result<TurnOutcome, DriverError> = loop {
             tokio::select! {
                 biased;
                 outcome = &mut run => break outcome,
@@ -451,12 +452,12 @@ where
         let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
             return;
         };
-        let Ok(entry) = serde_json::to_value(entry.as_ref()) else {
+        let Ok(value) = serde_json::to_value(entry.as_ref()) else {
             return;
         };
-        let updates = match harness.remember_entry(&entry) {
-            Some(previous) => updated_entry_updates(&previous, &entry),
-            None => added_entry_updates(&entry),
+        let updates = match harness.remember_entry(&value) {
+            Some(previous) => updated_entry_updates(&previous, &value),
+            None => added_entry_updates(&value),
         };
         for update in updates {
             self.session_update(&harness.session_id, update);

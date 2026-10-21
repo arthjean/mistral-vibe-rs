@@ -8,6 +8,34 @@
 
 use super::*;
 
+/// What a closing session leaves for its connection to let go of once the
+/// registry lock is released.
+pub(super) struct Retired {
+    pub(super) session_id: String,
+    working_directory: PathBuf,
+    unstarted_worktree: bool,
+}
+
+impl Retired {
+    /// Retires `session` under the registry lock. A worktree this session
+    /// created and never ran a turn in is taken back, so a start the client
+    /// abandoned leaves nothing behind; any other worktree only loses this
+    /// session as a holder
+    /// (`vibe/app_server/_legacy_session_backend.py:923-941`).
+    pub(super) fn of(session: &mut SessionRuntime) -> Self {
+        let unstarted_worktree =
+            session.created_worktree.is_some() && session.latest_turn.is_none();
+        if unstarted_worktree {
+            session.release_workspace();
+        }
+        Self {
+            session_id: session.id.clone(),
+            working_directory: PathBuf::from(&session.working_directory),
+            unstarted_worktree,
+        }
+    }
+}
+
 impl ServerConnection {
     /// Reports what the session's tool surface could not honor: a filter entry
     /// that does not compile, and a registered tool whose runtime prerequisite
@@ -182,7 +210,7 @@ impl ServerConnection {
     ) -> Result<(String, Value, Vec<McpServerConfig>), ProtocolFault> {
         let started = std::time::Instant::now();
         let opening = self.open_session(params)?;
-        self.server.acquire_lease(&opening.session_id)?;
+        let lease = self.server.acquire_lease(&opening.session_id)?;
         let lifecycle = self.session_worktrees();
         // A reopened session runs where its transcript was written, so a
         // retained worktree it stood in is put back before anything reads the
@@ -329,6 +357,8 @@ impl ServerConnection {
             ClientEntrypoint::Cli | ClientEntrypoint::Desktop
         ) && self.server.workspace.session_logging().generate_titles;
         sessions.insert(session);
+        // A registered session holds its lease until it closes.
+        lease.keep();
         self.server.open_session_resources(
             &mut sessions,
             ResourceSession {
@@ -409,9 +439,9 @@ impl ServerConnection {
             .as_ref()
             .map(|attachment| attachment.id.clone())
             .or_else(|| params.session_id.clone())
-            .unwrap_or_else(|| {
-                generated_session_id(self.server.next_session.fetch_add(1, Ordering::Relaxed))
-            });
+            // Reference `uuid4()`: a new session is named by a random UUID,
+            // whose first eight characters also name its directory.
+            .unwrap_or_else(vibe_core::session_id::uuid_v4);
         let working_directory = attachment
             .as_ref()
             .map(|attachment| attachment.working_directory.clone())
@@ -600,17 +630,24 @@ impl ServerConnection {
         answered(id, self.close_session(request))
     }
 
-    /// Lets go of the worktree a closing session stood in, removing it when
-    /// this session created it and never used it. Best effort: the close has
+    /// Lets go of what a retired session held once the registry lock is
+    /// released: its lease, and the worktree it stood in, removed when this
+    /// session created it and never used it. Best effort: the close has
     /// already happened, and a worktree kept here is one retention reclaims
     /// later.
-    pub(super) fn release_worktree(&self, cwd: &Path, session_id: &str, roll_back: bool) {
+    pub(super) fn release_retired(&self, retired: &Retired) {
+        let Retired {
+            session_id,
+            working_directory,
+            unstarted_worktree,
+        } = retired;
+        self.server.release_lease(session_id);
         let lifecycle = self.session_worktrees();
-        if !roll_back {
-            lifecycle.release(cwd, session_id);
+        if !unstarted_worktree {
+            lifecycle.release(working_directory, session_id);
             return;
         }
-        let Some(held) = ManagedWorktree::at(lifecycle.managed(), cwd) else {
+        let Some(held) = ManagedWorktree::at(lifecycle.managed(), working_directory) else {
             return;
         };
         if let Err(error) = held.release(Some(session_id)) {
@@ -658,22 +695,12 @@ impl ServerConnection {
         let session_id = canonical_session_id;
         self.server.forget_session_plugins(session);
         let resource_generation = session.resource_generation;
-        let working_directory = PathBuf::from(&session.working_directory);
-        // A worktree this session created and never ran a turn in is taken
-        // back, so a start the client abandoned leaves nothing behind; any
-        // other worktree only loses this session as a holder
-        // (`vibe/app_server/_legacy_session_backend.py:923-941`).
-        let unstarted_worktree =
-            session.created_worktree.is_some() && session.latest_turn.is_none();
-        if unstarted_worktree {
-            session.release_workspace();
-        }
+        let retired = Retired::of(session);
         drop(sessions);
-        self.server.release_lease(&session_id);
         if self.root.as_deref() == Some(key.as_str()) {
             self.root = None;
         }
-        self.release_worktree(&working_directory, &session_id, unstarted_worktree);
+        self.release_retired(&retired);
         lock(&self.server.resources).close_session(&session_id);
         // The scratchpad is a capability of the runtime, not of the workspace,
         // so it goes with the session that opened it. Reference

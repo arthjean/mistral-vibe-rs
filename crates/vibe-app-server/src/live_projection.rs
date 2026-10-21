@@ -58,7 +58,6 @@ pub(crate) enum AppServerUpdate {
     Stats {
         session_id: String,
         turn_id: String,
-        context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
         cached_tokens: u64,
@@ -213,10 +212,10 @@ impl EventObserver for AppServerEventObserver {
             return Ok(());
         }
         if let EngineEvent::Stats {
-            context_tokens,
             input_tokens,
             output_tokens,
             cached_tokens,
+            ..
         } = event.event
         {
             let state = projection.reducer.state();
@@ -227,7 +226,6 @@ impl EventObserver for AppServerEventObserver {
                 .send(AppServerUpdate::Stats {
                     session_id: state.session_id.clone(),
                     turn_id,
-                    context_tokens,
                     input_tokens,
                     output_tokens,
                     cached_tokens,
@@ -590,7 +588,6 @@ pub(crate) fn app_server_notification(
         AppServerUpdate::Stats {
             session_id,
             turn_id,
-            context_tokens,
             input_tokens,
             output_tokens,
             cached_tokens,
@@ -598,7 +595,6 @@ pub(crate) fn app_server_notification(
             server.record_turn_stats(
                 &session_id,
                 &turn_id,
-                context_tokens,
                 input_tokens,
                 output_tokens,
                 cached_tokens,

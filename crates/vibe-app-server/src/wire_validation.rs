@@ -20,7 +20,6 @@
 //! the schema and implemented here in [`custom`]; the sentences they raise are
 //! this port's own, as `NOTICE` requires.
 
-mod coercion;
 mod custom;
 mod json;
 mod schema;
@@ -32,7 +31,6 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use vibe_protocol::{InvalidParamsIssue, PathSegment};
 
-pub(crate) use coercion::integer;
 pub(crate) use json::{Json, ordered_params};
 use schema::SCHEMA;
 use walk::Walk;

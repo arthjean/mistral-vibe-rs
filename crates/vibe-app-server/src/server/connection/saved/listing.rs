@@ -94,6 +94,10 @@ impl ServerConnection {
         let Some(cwd) = cwd else {
             return Ok(sessions);
         };
+        // Reference `Path(cwd).expanduser().resolve()`.
+        let resolve = |cwd: &str| {
+            vibe_core::platform::resolve_lenient(&vibe_core::platform::expand_home(Path::new(cwd)))
+        };
         let requested = resolve(cwd);
         let managed = self.server.workspace.managed_worktrees();
         let listed: BTreeSet<String> = sessions

@@ -22,12 +22,13 @@ use serde_json::{Value, json};
 use vibe_app_server::client::{
     CallbackDetail, ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientError,
     ClientInfo, DriverError, HeadlessService, ProgrammaticTeleportEvent, PublicCallbackState,
-    PublicContentBlock, PublicHistoryEntry, PublicMessageRole, PublicTurnStopReason, TurnDriver,
-    TurnErrorCode, TurnRequest, public_driver_error, public_turn_error,
+    PublicContentBlock, PublicHistoryEntry, PublicMessageRole, TurnDriver, TurnErrorCode,
+    TurnRequest, public_driver_error, public_turn_error,
 };
 use vibe_app_server::experiments::SessionExperiments;
 use vibe_app_server::server::AppServer;
 use vibe_app_server::workspace::WorkspaceService;
+use vibe_core::engine::TurnStopReason;
 use vibe_core::pycompat::{self, Dumps};
 use vibe_core::telemetry::TelemetryRecord;
 
@@ -421,7 +422,7 @@ struct Run<'a, D: TurnDriver> {
 
 /// How a turn settled.
 enum Settled {
-    Finished(PublicTurnStopReason),
+    Finished(TurnStopReason),
     Interrupted,
 }
 

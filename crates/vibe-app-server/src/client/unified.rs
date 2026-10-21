@@ -187,9 +187,6 @@ impl Hub {
                 return true;
             }
             Published::Stats {
-                context_tokens,
-                input_tokens,
-                output_tokens,
                 stats,
                 context_window,
             } => {
@@ -197,9 +194,9 @@ impl Hub {
                     self.deliver(
                         &turn_id,
                         ProgrammaticUpdate::Stats {
-                            context_tokens,
-                            input_tokens,
-                            output_tokens,
+                            context_tokens: stats.context_tokens,
+                            input_tokens: stats.session_prompt_tokens,
+                            output_tokens: stats.session_completion_tokens,
                         },
                     );
                     self.deliver(
@@ -612,20 +609,20 @@ impl UnifiedLink {
     }
 
     /// The accounting `session_id` last published, if it published any.
-    pub(super) fn accounting(&self, session_id: &str) -> Option<(Value, u64)> {
+    pub(super) fn accounting(&self, session_id: &str) -> Option<(AgentStatsSnapshot, u64)> {
         lock(&self.shared.hub)
             .sessions
             .get(session_id)
             .and_then(|mirror| mirror.accounting.clone())
     }
 
-    /// One field of the state `session_id` last published, as the wire
-    /// spells it, without copying the rest of it.
-    pub(super) fn published(&self, session_id: &str, field: &str) -> Option<Value> {
+    /// One field of the state `session_id` last published, without copying
+    /// the rest of it.
+    pub(super) fn published(&self, session_id: &str, field: PublishedField) -> Option<Value> {
         lock(&self.shared.hub)
             .sessions
             .get(session_id)
-            .and_then(|mirror| mirror.state.get(field).cloned())
+            .and_then(|mirror| mirror.state.get(field.key()).cloned())
     }
 
     /// Opens the channel a turn's entries go to, before the turn can publish
@@ -739,7 +736,7 @@ pub(super) async fn settled_turn(
     shared: Arc<Shared>,
     session_id: String,
     turn_id: String,
-) -> Result<PublicTurnOutcome, DriverError> {
+) -> Result<TurnOutcome, DriverError> {
     let turn = loop {
         let notified = shared.changed.notified();
         tokio::pin!(notified);
@@ -779,13 +776,13 @@ pub(super) async fn settled_turn(
         return Err(DriverError::Published(error));
     }
     let stop_reason = match (status, turn["stopReason"].as_str()) {
-        ("cancelled", _) => PublicTurnStopReason::Cancelled,
-        (_, Some("limit")) => PublicTurnStopReason::MaxSteps,
-        _ => PublicTurnStopReason::Complete,
+        ("cancelled", _) => TurnStopReason::Cancelled,
+        (_, Some("limit")) => TurnStopReason::MaxSteps,
+        _ => TurnStopReason::Complete,
     };
     let usage = &session["tokenUsage"];
     let context = &session["contextUsage"];
-    Ok(PublicTurnOutcome {
+    Ok(TurnOutcome {
         session_id: session_id.clone(),
         events: Vec::new(),
         snapshot: vibe_core::events::ProjectionSnapshot {

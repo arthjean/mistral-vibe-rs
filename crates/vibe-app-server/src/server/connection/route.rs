@@ -343,6 +343,11 @@ impl ServerConnection {
                 self.unified_background_process(&request)
             }
             "session/list" if unified => self.unified_list(&request),
+            "session/history/list" if unified => self.unified_history_list(&request),
+            "session/turns/list" if unified => self.unified_turns_list(&request),
+            "session/fork" if unified => self.unified_fork(&request),
+            "session/delete" if unified => self.unified_delete_session(&request),
+            "session/history/clear" if unified => self.unified_clear(&request),
             "session/resume" if unified => self.unified_resume(request),
             "session/continue" if unified => self.unified_continue(request),
             "session/read" if unified => self.unified_read(&request),

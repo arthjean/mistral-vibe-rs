@@ -10,16 +10,16 @@ use vibe_core::engine::TurnOutcome;
 use vibe_core::events::{CallbackKind as EngineCallbackKind, ProjectionReducer};
 use vibe_protocol::{Envelope, decode_frame};
 
-use super::{ClientFuture, SessionBackend, TurnUpdates};
+use super::{ClientFuture, PublishedField, SessionBackend, TurnUpdates};
 use crate::client::in_process::{ServerProjectionObserver, public_history_entry_identity};
 use crate::client::interactive::InteractiveCallbackRequest;
 use crate::client::interactive::queue::{CallbackAnswer, CallbackQueue};
 use crate::client::{
-    AppServer, ClientError, DeferredWork, DriverError, InProcessClient, InterruptOutcome,
-    MAX_PROGRAMMATIC_UPDATES, PreparedImages, ProgrammaticTurn, ProgrammaticUpdate,
-    PublicContentBlock, PublicError, PublicHistoryEntry, ScheduledTurn, ServerError, SessionView,
-    TurnDriver, TurnRequest, TurnReservation, provider_images, request_bytes, response_frame,
-    response_result, turn_error_code,
+    AgentStatsSnapshot, AppServer, ClientError, DeferredWork, DriverError, InProcessClient,
+    InterruptOutcome, MAX_PROGRAMMATIC_UPDATES, PreparedImages, ProgrammaticTurn,
+    ProgrammaticUpdate, PublicContentBlock, PublicError, PublicHistoryEntry, ScheduledTurn,
+    ServerError, SessionView, TurnDriver, TurnRequest, TurnReservation, provider_images,
+    request_bytes, response_frame, response_result, turn_error_code,
 };
 
 pub(super) struct LegacySessions<'a, D> {
@@ -278,10 +278,13 @@ where
         self.client.session(session_id)
     }
 
-    fn stats(&mut self, session_id: &str) -> Result<(Value, u64), ClientError> {
+    fn stats(&mut self, session_id: &str) -> Result<(AgentStatsSnapshot, u64), ClientError> {
         let mut result = self.call("stats/read", json!({"sessionId": session_id}))?;
         Ok((
-            result.remove("stats").unwrap_or(Value::Null),
+            result
+                .remove("stats")
+                .and_then(|stats| serde_json::from_value(stats).ok())
+                .unwrap_or_default(),
             result
                 .get("contextWindow")
                 .and_then(Value::as_u64)
@@ -290,7 +293,7 @@ where
     }
 
     /// A legacy session publishes no state of its own: the server holds it.
-    fn published(&mut self, _session_id: &str, _field: &str) -> Option<Value> {
+    fn published(&mut self, _session_id: &str, _field: PublishedField) -> Option<Value> {
         None
     }
 

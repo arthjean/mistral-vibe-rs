@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
 
-use crate::client::ProgrammaticUpdate;
+use crate::client::{AgentStatsSnapshot, ProgrammaticUpdate};
 
 /// One session as its client mirrors it: the state it opened with, each
 /// published event applied in order.
@@ -15,7 +15,7 @@ pub(super) struct Mirror {
     pub(super) last_event: u64,
     /// The accounting the session last published, with its context window:
     /// reference `ClientState.stats`, which `session/statsUpdated` replaces.
-    pub(super) accounting: Option<(Value, u64)>,
+    pub(super) accounting: Option<(AgentStatsSnapshot, u64)>,
     /// The events no running turn took, handed to the next one that runs
     /// as watermarks so its reader sees an unbroken sequence.
     pub(super) skipped: Vec<u64>,
@@ -25,13 +25,9 @@ pub(super) struct Mirror {
 pub(super) enum Published {
     Entry(Value),
     TurnCompleted(Value),
-    /// The accounting a `session/statsUpdated` published, whole, with the
-    /// counts a live reader shows of it.
+    /// The accounting a `session/statsUpdated` published, whole.
     Stats {
-        context_tokens: u64,
-        input_tokens: u64,
-        output_tokens: u64,
-        stats: Value,
+        stats: AgentStatsSnapshot,
         context_window: u64,
     },
     Handoff {
@@ -175,17 +171,16 @@ impl Mirror {
                 Published::Nothing
             }
             "session/statsUpdated" => {
-                let stats = params.get("stats").cloned().unwrap_or(Value::Null);
+                let stats: AgentStatsSnapshot = params
+                    .get("stats")
+                    .and_then(|stats| serde_json::from_value(stats.clone()).ok())
+                    .unwrap_or_default();
                 let context_window = params
                     .get("contextWindow")
                     .and_then(Value::as_u64)
                     .unwrap_or(0);
                 self.accounting = Some((stats.clone(), context_window));
-                let tokens = |key: &str| stats[key].as_u64().unwrap_or(0);
                 Published::Stats {
-                    context_tokens: tokens("contextTokens"),
-                    input_tokens: tokens("sessionPromptTokens"),
-                    output_tokens: tokens("sessionCompletionTokens"),
                     stats,
                     context_window,
                 }

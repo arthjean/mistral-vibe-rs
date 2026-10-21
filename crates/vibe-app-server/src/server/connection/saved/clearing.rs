@@ -40,20 +40,14 @@ impl ServerConnection {
         let new_id = draft.metadata.id.clone();
         // The new identifier is leased, bound and registered before the old
         // lease goes, so a refusal leaves the root holding what it held.
-        self.server.acquire_lease(&new_id)?;
-        let abandon = |error: ServerError| {
-            self.server.release_lease(&new_id);
-            ProtocolFault::from(error)
-        };
+        let lease = self.server.acquire_lease(&new_id)?;
         self.server
             .projects
             .rebind_session(&session_id, &new_id)
-            .map_err(|error| abandon(ServerError::Projects(error.to_string())))?;
+            .map_err(|error| ServerError::Projects(error.to_string()))?;
         let mut sessions = self.server.lock_sessions();
-        if let Err(error) = sessions.rename(&key, &new_id) {
-            drop(sessions);
-            return Err(abandon(error));
-        }
+        sessions.rename(&key, &new_id)?;
+        lease.keep();
         let session = sessions
             .get_mut(&new_id)
             .ok_or_else(|| not_found(&new_id))?;

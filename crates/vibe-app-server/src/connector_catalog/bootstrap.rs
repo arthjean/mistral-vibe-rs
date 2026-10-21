@@ -10,8 +10,9 @@ use serde_json::{Map, Value, json};
 use vibe_core::text::sha256_hex;
 
 use super::{
-    CatalogError, CatalogProvider, MAX_PUBLIC_NAME_CHARACTERS, ResolvedCatalog, ResolvedConnector,
-    ResolvedTool, cache, canonical_json, normalize_connector_alias,
+    CatalogError, CatalogProvider, ConnectorAuthAction, MAX_PUBLIC_NAME_CHARACTERS,
+    ResolvedCatalog, ResolvedConnector, ResolvedTool, cache, canonical_json,
+    normalize_connector_alias,
 };
 
 const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -157,12 +158,12 @@ fn resolve_tool(value: &Value) -> Option<ResolvedTool> {
     })
 }
 
-fn auth_action(action: Option<&str>) -> &'static str {
+fn auth_action(action: Option<&str>) -> ConnectorAuthAction {
     match action {
-        None => "none",
-        Some("oauth") => "oauth",
-        Some("credentials_setup") => "credentials_setup",
-        Some(_) => "unknown",
+        None => ConnectorAuthAction::None,
+        Some("oauth") => ConnectorAuthAction::Oauth,
+        Some("credentials_setup") => ConnectorAuthAction::CredentialsSetup,
+        Some(_) => ConnectorAuthAction::Unknown,
     }
 }
 

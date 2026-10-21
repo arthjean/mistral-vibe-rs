@@ -8,6 +8,7 @@
 //! differences go out as entry, session and turn notifications, and the
 //! session's accounting follows behind them.
 
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use vibe_core::clock::now_millis;
 
@@ -23,9 +24,11 @@ pub struct Notification {
     pub params: Value,
 }
 
-/// Reference `AgentStatsSnapshot`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Stats {
+/// Reference `AgentStatsSnapshot` (`vibe/app_server/models.py`): a session's
+/// accounting as `session/statsUpdated` and `runtime/read` publish it.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentStatsSnapshot {
     pub steps: u64,
     pub session_prompt_tokens: u64,
     pub session_completion_tokens: u64,
@@ -33,50 +36,34 @@ pub struct Stats {
     pub input_price_per_million: f64,
     pub output_price_per_million: f64,
     pub cached_input_price_per_million: Option<f64>,
+    pub tool_calls_agreed: u64,
+    pub tool_calls_rejected: u64,
+    pub tool_calls_failed: u64,
+    pub tool_calls_succeeded: u64,
     pub context_tokens: u64,
     pub last_turn_prompt_tokens: u64,
     pub last_turn_completion_tokens: u64,
+    pub last_turn_cached_tokens: u64,
+    /// Seconds.
+    pub last_turn_duration: f64,
+    pub tokens_per_second: f64,
 }
 
-impl Stats {
+impl AgentStatsSnapshot {
     /// A session's opening accounting, priced by its model.
     #[must_use]
     pub fn priced(input: f64, output: f64, cached: Option<f64>) -> Self {
         Self {
-            steps: 0,
-            session_prompt_tokens: 0,
-            session_completion_tokens: 0,
-            session_cached_tokens: 0,
             input_price_per_million: input,
             output_price_per_million: output,
             cached_input_price_per_million: cached,
-            context_tokens: 0,
-            last_turn_prompt_tokens: 0,
-            last_turn_completion_tokens: 0,
+            ..Self::default()
         }
     }
 
     #[must_use]
     pub fn to_json(&self) -> Value {
-        json!({
-            "steps": self.steps,
-            "sessionPromptTokens": self.session_prompt_tokens,
-            "sessionCompletionTokens": self.session_completion_tokens,
-            "sessionCachedTokens": self.session_cached_tokens,
-            "inputPricePerMillion": self.input_price_per_million,
-            "outputPricePerMillion": self.output_price_per_million,
-            "cachedInputPricePerMillion": self.cached_input_price_per_million,
-            "toolCallsAgreed": 0,
-            "toolCallsRejected": 0,
-            "toolCallsFailed": 0,
-            "toolCallsSucceeded": 0,
-            "contextTokens": self.context_tokens,
-            "lastTurnPromptTokens": self.last_turn_prompt_tokens,
-            "lastTurnCompletionTokens": self.last_turn_completion_tokens,
-            "lastTurnCachedTokens": 0,
-            "lastTurnDuration": 0.0,
-            "tokensPerSecond": 0.0,
-        })
+        json!(self)
     }
 
     /// Reference `_seed_stats`: a resumed session adopts its spend and the
@@ -104,13 +91,18 @@ fn context_tokens(usage: &Value) -> Option<u64> {
 pub struct Translator {
     pub previous: Value,
     pub event_id: u64,
-    pub stats: Stats,
+    pub stats: AgentStatsSnapshot,
     pub context_window: u64,
 }
 
 impl Translator {
     #[must_use]
-    pub fn new(state: Value, event_id: u64, stats: Stats, context_window: u64) -> Self {
+    pub fn new(
+        state: Value,
+        event_id: u64,
+        stats: AgentStatsSnapshot,
+        context_window: u64,
+    ) -> Self {
         Self {
             previous: state,
             event_id,
@@ -295,11 +287,6 @@ impl Translator {
         }
     }
 
-    /// The `session/statsUpdated` a turn publishes outside a snapshot.
-    pub fn stats_notification(&mut self) -> Notification {
-        self.stats_event()
-    }
-
     fn stats_event(&mut self) -> Notification {
         let id = self.next_id();
         Notification {
@@ -315,7 +302,7 @@ impl Translator {
     }
 
     /// Reference `_advance_stats`.
-    fn advanced_stats(&self, current: &Value, steps: u64) -> Stats {
+    fn advanced_stats(&self, current: &Value, steps: u64) -> AgentStatsSnapshot {
         let mut stats = self.stats.clone();
         stats.steps += steps;
         let session = &current["session"];

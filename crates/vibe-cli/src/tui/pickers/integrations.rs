@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::Value;
+use vibe_app_server::vocabulary::McpSourceStatus;
 
 use super::super::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, IntegrationTarget, Overlay, OverlayAction,
@@ -20,6 +21,17 @@ pub struct McpSource {
     pub transport: String,
     pub status: McpSourceStatus,
     pub tools: Vec<McpTool>,
+    /// Why the source failed to bootstrap, which its detail view shows in
+    /// place of its tools.
+    #[serde(default)]
+    pub error: Option<String>,
+    /// The plugin that ships the source, which its row names.
+    #[serde(rename = "pluginName", default)]
+    pub plugin_name: Option<String>,
+    /// What the last discovery of the source reported, read off the state's
+    /// `discoveryErrors` (reference `MCPState.discovery_errors`).
+    #[serde(skip)]
+    pub discovery_error: Option<String>,
 }
 
 /// Reference `MCPToolSummary`.
@@ -30,46 +42,40 @@ pub struct McpTool {
     pub enabled: bool,
 }
 
-/// Reference `MCPSourceStatus`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum McpSourceStatus {
-    Disabled,
-    Connected,
-    Enabled,
-    NeedsAuth,
-    NeedsSetup,
-    Unavailable,
+/// One source of a session's accepted connector catalog (reference
+/// `SessionConnectorSourceView`).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CatalogSource {
+    alias: String,
+    display_name: String,
+    status: McpSourceStatus,
+    #[serde(default)]
+    tools: Vec<CatalogTool>,
+    error: Option<String>,
 }
 
-impl McpSourceStatus {
-    /// The wire word, which `/mcp status` prints verbatim.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Disabled => "disabled",
-            Self::Connected => "connected",
-            Self::Enabled => "enabled",
-            Self::NeedsAuth => "needs_auth",
-            Self::NeedsSetup => "needs_setup",
-            Self::Unavailable => "unavailable",
-        }
-    }
+/// Reference `SessionConnectorToolView`.
+#[derive(Deserialize)]
+struct CatalogTool {
+    name: String,
+    description: Option<String>,
+    enabled: bool,
+}
 
-    /// Reference `mcp_app._source_status`: an unavailable server points at
-    /// its configuration and an unavailable connector at a refresh.
-    fn label(self, kind: IntegrationKind) -> &'static str {
-        match self {
-            Self::Disabled => "disabled",
-            Self::Connected => "connected",
-            Self::Enabled => "enabled",
-            Self::NeedsAuth => "needs auth",
-            Self::NeedsSetup => "needs setup",
-            Self::Unavailable => match kind {
-                IntegrationKind::McpServer => "error - check your config",
-                IntegrationKind::Connector => "error - try refreshing",
-            },
-        }
+/// Reference `mcp_app._source_status`: an unavailable server points at its
+/// configuration and an unavailable connector at a refresh.
+fn status_label(status: McpSourceStatus, kind: IntegrationKind) -> &'static str {
+    match status {
+        McpSourceStatus::Disabled => "disabled",
+        McpSourceStatus::Connected => "connected",
+        McpSourceStatus::Enabled => "enabled",
+        McpSourceStatus::NeedsAuth => "needs auth",
+        McpSourceStatus::NeedsSetup => "needs setup",
+        McpSourceStatus::Unavailable => match kind {
+            IntegrationKind::McpServer => "error - check your config",
+            IntegrationKind::Connector => "error - try refreshing",
+        },
     }
 }
 
@@ -86,12 +92,69 @@ impl McpSource {
             .pointer("/mcp/sources")
             .map_or_else(|| Ok(Vec::new()), Vec::<Self>::deserialize)
             .map_err(|error| format!("Malformed MCP state: {error}"))?;
+        let discovery_errors = state.pointer("/mcp/discoveryErrors");
         for source in &mut sources {
             if source.display_name.is_empty() {
                 source.display_name.clone_from(&source.name);
             }
+            source.discovery_error = discovery_errors
+                .and_then(|errors| errors.get(&source.name))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
         }
         Ok(sources)
+    }
+
+    /// Reference `MCPResource.read`: the servers of `sources` and, in place of
+    /// its connectors, the ones `connector_catalog/read` answered for the
+    /// session, each labeled by the display name its catalog bootstrapped. A
+    /// catalog read that failed (`None`) keeps the published connectors, and
+    /// an answer without a session lists none.
+    ///
+    /// # Errors
+    ///
+    /// Returns the decoding error when the session's sources do not have the
+    /// published shape.
+    pub fn with_catalog_connectors(
+        mut sources: Vec<Self>,
+        catalog: Option<&Value>,
+    ) -> Result<Vec<Self>, String> {
+        let Some(catalog) = catalog else {
+            return Ok(sources);
+        };
+        let connectors = catalog
+            .pointer("/session/sources")
+            .map_or_else(|| Ok(Vec::new()), Vec::<CatalogSource>::deserialize)
+            .map_err(|error| format!("Malformed connector catalog: {error}"))?;
+        sources.retain(|source| source.kind == IntegrationKind::McpServer);
+        sources.extend(connectors.into_iter().map(|connector| {
+            Self {
+                name: connector.alias,
+                display_name: connector.display_name,
+                kind: IntegrationKind::Connector,
+                transport: "connector".to_owned(),
+                status: connector.status,
+                tools: connector
+                    .tools
+                    .into_iter()
+                    .map(|tool| McpTool {
+                        name: tool.name,
+                        description: tool.description.unwrap_or_default(),
+                        enabled: tool.enabled,
+                    })
+                    .collect(),
+                error: connector.error,
+                plugin_name: None,
+                discovery_error: None,
+            }
+        }));
+        Ok(sources)
+    }
+
+    /// Reference `_awaits_auth`: a source that failed to bootstrap opens on
+    /// its error rather than on the sign-in.
+    fn awaits_auth(&self) -> bool {
+        self.status == McpSourceStatus::NeedsAuth && self.error.is_none()
     }
 }
 
@@ -148,46 +211,58 @@ pub fn mcp_detail_overlay(sources: &[McpSource], target: &IntegrationTarget) -> 
             .as_str())
     );
     let status = source.map_or(McpSourceStatus::Unavailable, |source| source.status);
-    let mut items = if status == McpSourceStatus::NeedsSetup {
-        // The browser's `r` binding performs the refresh the instruction names.
+    let row = |id: &str, label: &str, description: &str| {
+        OverlayItem::new(id, label, description, true)
+            .with_action(OverlayAction::Integration(target.clone()))
+    };
+    let mut items = if let Some(error) = source.and_then(|source| source.error.as_deref()) {
         vec![
-            OverlayItem::new(
-                "mcp-detail:setup",
-                "Set up credentials in the Mistral dashboard, then press r to refresh.",
-                "",
-                true,
-            )
-            .with_action(OverlayAction::Integration(target.clone())),
+            row("mcp-detail:bootstrap", "Failed to bootstrap", ""),
+            row("mcp-detail:error", error, ""),
         ]
+    } else if status == McpSourceStatus::NeedsSetup {
+        // The browser's `r` binding performs the refresh the instruction names.
+        vec![row(
+            "mcp-detail:setup",
+            "Set up credentials in the Mistral dashboard, then press r to refresh.",
+            "",
+        )]
     } else {
         let mut tools = source
             .into_iter()
-            .flat_map(|source| &source.tools)
-            .map(|tool| {
-                integration_item(
-                    target.kind,
-                    &target.source,
-                    Some(&tool.name),
-                    tool.enabled,
-                    status,
-                    &tool.name,
-                    tool_description(&tool.description, tool.enabled),
-                )
+            .flat_map(|source| {
+                source.tools.iter().map(move |tool| {
+                    integration_item(
+                        source,
+                        Some(&tool.name),
+                        tool.enabled,
+                        &tool.name,
+                        tool_description(&tool.description, tool.enabled),
+                    )
+                })
             })
             .collect::<Vec<_>>();
         tools.sort_by_key(|item| item.label.to_ascii_lowercase());
         tools
     };
     if items.is_empty() {
-        items.push(
-            OverlayItem::new(
+        match source.filter(|source| failed_discovery(source)) {
+            Some(source) => {
+                items.push(row(
+                    "mcp-detail:discovery",
+                    "Tool discovery failed",
+                    "Backspace returns to all sources",
+                ));
+                if let Some(error) = &source.discovery_error {
+                    items.push(row("mcp-detail:discovery-error", error, ""));
+                }
+            }
+            None => items.push(row(
                 "mcp-detail:empty",
                 "No tools discovered",
                 "Backspace returns to all sources",
-                true,
-            )
-            .with_action(OverlayAction::Integration(target.clone())),
-        );
+            )),
+        }
     }
     Overlay::new(OverlayKind::McpDetail, title, items)
 }
@@ -209,20 +284,37 @@ fn sorted_sources(sources: &[McpSource], kind: IntegrationKind) -> Vec<&McpSourc
     sources
 }
 
+/// A server that is unavailable without a tool, which reference
+/// `_add_source_group` and `_show_detail_view` report as a failed discovery.
+fn failed_discovery(source: &McpSource) -> bool {
+    source.kind == IntegrationKind::McpServer
+        && source.status == McpSourceStatus::Unavailable
+        && source.tools.is_empty()
+}
+
+/// Reference `_add_source_group`: the transport, the plugin owning the source
+/// when there is one, the tools, and the status.
 fn source_item(source: &McpSource) -> OverlayItem {
-    let enabled = source.tools.iter().filter(|tool| tool.enabled).count();
-    let status = source.status.label(source.kind);
+    let tools = if failed_discovery(source) {
+        "tool discovery failed".to_owned()
+    } else {
+        let enabled = source.tools.iter().filter(|tool| tool.enabled).count();
+        tool_count_text(enabled, source.tools.len())
+    };
+    let owner = source
+        .plugin_name
+        .as_ref()
+        .map(|plugin| format!("plugin:{plugin} · "))
+        .unwrap_or_default();
     integration_item(
-        source.kind,
-        &source.name,
+        source,
         None,
         source.status != McpSourceStatus::Disabled,
-        source.status,
         &source.display_name,
         format!(
-            "{} · {} · {status}",
+            "{} · {owner}{tools} · {}",
             source.transport,
-            tool_count_text(enabled, source.tools.len()),
+            status_label(source.status, source.kind),
         ),
     )
 }
@@ -251,30 +343,28 @@ fn tool_description(description: &str, enabled: bool) -> String {
 }
 
 fn integration_item(
-    kind: IntegrationKind,
-    source: &str,
+    source: &McpSource,
     tool: Option<&str>,
     enabled: bool,
-    status: McpSourceStatus,
     label: impl Into<String>,
     description: impl Into<String>,
 ) -> OverlayItem {
-    let kind_id = match kind {
+    let kind_id = match source.kind {
         IntegrationKind::McpServer => "mcp",
         IntegrationKind::Connector => "connector",
     };
     let id = tool.map_or_else(
-        || format!("integration:{kind_id}:{source}"),
-        |tool| format!("integration:{kind_id}:{source}:{tool}"),
+        || format!("integration:{kind_id}:{}", source.name),
+        |tool| format!("integration:{kind_id}:{}:{tool}", source.name),
     );
     OverlayItem::new(id, label, description, false).with_action(OverlayAction::Integration(
         IntegrationTarget {
-            kind,
-            source: source.to_owned(),
+            kind: source.kind,
+            source: source.name.clone(),
             tool: tool.map(ToOwned::to_owned),
             enabled,
-            requires_auth: status == McpSourceStatus::NeedsAuth,
-            requires_setup: status == McpSourceStatus::NeedsSetup,
+            requires_auth: source.awaits_auth(),
+            requires_setup: source.status == McpSourceStatus::NeedsSetup,
         },
     ))
 }

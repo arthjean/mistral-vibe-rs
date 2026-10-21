@@ -9,7 +9,8 @@
 use serde_json::{Value, json};
 
 use super::{
-    ConnectorSelection, ConnectorSetting, ResolvedCatalog, ResolvedConnector, SessionConnectors,
+    ConnectorAuthAction, ConnectorSelection, ConnectorSetting, ResolvedCatalog, ResolvedConnector,
+    SessionConnectors,
 };
 use crate::vocabulary::{McpSourceKind, McpSourceStatus};
 
@@ -22,7 +23,7 @@ use crate::vocabulary::{McpSourceKind, McpSourceStatus};
 pub(super) fn source_status(
     enabled: bool,
     connected: bool,
-    held_by: Option<&str>,
+    held_by: Option<ConnectorAuthAction>,
 ) -> McpSourceStatus {
     if !enabled {
         McpSourceStatus::Disabled
@@ -30,8 +31,8 @@ pub(super) fn source_status(
         McpSourceStatus::Connected
     } else {
         match held_by {
-            Some("oauth") => McpSourceStatus::NeedsAuth,
-            Some("credentials_setup") => McpSourceStatus::NeedsSetup,
+            Some(ConnectorAuthAction::Oauth) => McpSourceStatus::NeedsAuth,
+            Some(ConnectorAuthAction::CredentialsSetup) => McpSourceStatus::NeedsSetup,
             _ => McpSourceStatus::Unavailable,
         }
     }
@@ -45,7 +46,9 @@ pub(super) fn source_status(
 fn legacy_status(connector: &ResolvedConnector, selection: &ConnectorSelection) -> McpSourceStatus {
     source_status(
         selection.source_enabled(&connector.alias),
-        connector.ready && connector.auth_action != "unknown" && !connector.tools.is_empty(),
+        connector.ready
+            && connector.auth_action != ConnectorAuthAction::Unknown
+            && !connector.tools.is_empty(),
         (!connector.ready).then_some(connector.auth_action),
     )
 }
@@ -93,13 +96,13 @@ impl SessionConnectors {
     }
 
     /// The source `alias` publishes, with the connector behind it.
-    pub(crate) fn source(&self, alias: &str) -> Option<(&ResolvedConnector, &'static str)> {
+    pub(crate) fn source(&self, alias: &str) -> Option<(&ResolvedConnector, McpSourceStatus)> {
         let (catalog, selection) = self.accepted.as_ref()?;
         let connector = catalog
             .connectors
             .iter()
             .find(|connector| connector.alias == alias)?;
-        Some((connector, legacy_status(connector, selection).as_str()))
+        Some((connector, legacy_status(connector, selection)))
     }
 
     /// Reference `project_connector_counts` for the runtime: the counts over

@@ -751,7 +751,7 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
         })
         .await
         .expect("root and child complete");
-    assert_eq!(outcome.stop_reason, PublicTurnStopReason::Complete);
+    assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
     assert!(provider.saw_task_definition.load(Ordering::Acquire));
     assert_eq!(
         provider

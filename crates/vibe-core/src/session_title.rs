@@ -18,6 +18,7 @@ use crate::llm::utility::{self, Attribution, UtilityRequest, UtilitySelection};
 use crate::observability::{self, LogLevel};
 use crate::prompt::library::UtilityPrompt;
 use crate::provider::config::UtilityFeature;
+use crate::pycompat;
 
 /// Reference `TitlePolicy.refresh_every_steps`.
 pub const REFRESH_EVERY_STEPS: u64 = 6;
@@ -141,17 +142,29 @@ pub fn build_title_transcript(messages: &[ModelMessage]) -> String {
             Some(format!("{role}: {text}"))
         })
         .collect();
-    let transcript = blocks.join("\n\n").trim().to_owned();
+    elide_transcript(blocks.join("\n\n").trim())
+}
+
+/// The clipping both reference transcript builders end with
+/// (`title_model.py` and the harness runtime's `_title.py`): a transcript
+/// over the limit keeps its opening and its latest exchange around an
+/// elision mark.
+#[must_use]
+pub fn elide_transcript(transcript: &str) -> String {
     let length = transcript.chars().count();
     if length <= MAX_TRANSCRIPT_CHARS {
-        return transcript;
+        return transcript.to_owned();
     }
     let head: String = transcript.chars().take(HEAD_TRANSCRIPT_CHARS).collect();
     let tail: String = transcript
         .chars()
         .skip(length - (MAX_TRANSCRIPT_CHARS - HEAD_TRANSCRIPT_CHARS))
         .collect();
-    format!("{}{ELISION}{}", head.trim_end(), tail.trim_start())
+    format!(
+        "{}{ELISION}{}",
+        head.trim_end_matches(pycompat::isspace),
+        tail.trim_start_matches(pycompat::isspace)
+    )
 }
 
 /// The user message: the transcript, behind the title it may refine.
@@ -162,26 +175,28 @@ fn user_prompt(transcript: &str, previous_title: Option<&str>) -> String {
     }
 }
 
-/// Reference `_clean_title`: the first line, without control characters,
-/// runs of whitespace or wrapping quotes, capped in length; a generic answer
-/// is no answer.
+/// Reference `_clean_title`, which the harness runtime's `clean_title`
+/// repeats: the first line, without control characters, runs of whitespace
+/// or wrapping quotes, capped in length; a generic answer is no answer.
+///
+/// Every `str` method keeps Python's reading: the first line ends at any
+/// `splitlines` boundary, and stripping removes the information separators.
 #[must_use]
 pub fn clean_title(content: Option<&str>) -> Option<String> {
-    let first_line = content?.trim().lines().next().unwrap_or_default();
+    let first_line = pycompat::splitlines(pycompat::strip(content?), false)
+        .into_iter()
+        .next()
+        .unwrap_or_default();
     let printable: String = first_line
         .chars()
         .filter(|character| !matches!(u32::from(*character), 0x00..=0x1f | 0x7f..=0x9f))
         .collect();
     let collapsed = WHITESPACE.replace_all(&printable, " ");
-    let collapsed = collapsed.trim().trim_matches(WRAPPING_QUOTES).trim();
+    let collapsed = pycompat::strip(pycompat::strip(&collapsed).trim_matches(WRAPPING_QUOTES));
     if collapsed.is_empty() || GENERIC_TITLES.contains(&collapsed.to_lowercase().as_str()) {
         return None;
     }
-    if collapsed.chars().count() > MAX_TITLE_CHARS {
-        let head: String = collapsed.chars().take(MAX_TITLE_CHARS).collect();
-        return Some(format!("{}…", head.trim_end()));
-    }
-    Some(collapsed.to_owned())
+    Some(pycompat::clip(collapsed, MAX_TITLE_CHARS))
 }
 
 /// Reference `generate_session_title`: the utility model's title for
