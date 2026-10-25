@@ -223,7 +223,10 @@ fn mcp_server_console(creation_flags: u32) -> ServerConsole {
     );
 
     let mut command = agent(&profile, &project);
-    command.creation_flags(creation_flags);
+    // The server's stderr reaches the log only at debug level.
+    command
+        .env("LOG_LEVEL", "DEBUG")
+        .creation_flags(creation_flags);
     let mut child = command.spawn().expect("vibe-acp launched");
     let agent = child.id();
     let lines = lines(&mut child);
@@ -265,15 +268,19 @@ fn mcp_server_console(creation_flags: u32) -> ServerConsole {
     while !report.is_file() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(100));
     }
+    let prompted: Vec<String> = lines.try_iter().collect();
     let stderr = finish(child);
     let printed = std::fs::read_to_string(&report).unwrap_or_else(|error| {
         let beside =
             |suffix: &str| std::path::PathBuf::from(format!("{}.{suffix}", report.display()));
         let started = beside("started").is_file();
         let failure = std::fs::read_to_string(beside("error")).unwrap_or_default();
+        let log = std::fs::read_to_string(profile.join(".vibe").join("logs").join("vibe.log"))
+            .unwrap_or_default();
         panic!(
             "the MCP server never reported ({error}); probe started: {started}; \
-             probe error: {failure:?}; stderr: {stderr}"
+             probe error: {failure:?}; the agent wrote: {prompted:?}; stderr: {stderr}; \
+             log:\n{log}"
         )
     });
     let (window, attached) = printed

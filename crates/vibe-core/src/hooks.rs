@@ -19,6 +19,8 @@ mod json;
 mod manager;
 mod models;
 
+pub(crate) use executor::decode_console;
+
 #[cfg(test)]
 mod hooks_tests;
 

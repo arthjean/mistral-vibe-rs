@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- At debug level, each line a stdio MCP server writes to its standard error
+  is logged as `[MCP stderr] <line>`, as the reference does, instead of being
+  discarded.
+
 - The MCP panel's search fuzzy-matches server and connector names and lists
   the best match first, as the reference does. Toggling a plugin-provided MCP
   server or one of its tools warns that the plugin manages it instead of

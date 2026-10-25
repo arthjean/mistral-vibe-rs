@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 
 use super::{Inbound, SessionError};
 use crate::child::{ChildGroup, Rung};
+use crate::observability::{LogLevel, log};
 
 /// SDK `PROCESS_TERMINATION_TIMEOUT`: how long a stdio server has to exit once
 /// its input closes before it is terminated.
@@ -199,7 +200,16 @@ fn inherited_environment() -> Vec<(&'static str, String)> {
         .collect()
 }
 
-async fn drain(mut stderr: ChildStderr) {
-    let mut sink = tokio::io::sink();
-    let _ = tokio::io::copy(&mut stderr, &mut sink).await;
+/// Reference `_stderr_logger_thread`: each line the server writes to stderr
+/// goes to the debug log, decoded the console's way and trimmed, blank lines
+/// dropped.
+async fn drain(stderr: ChildStderr) {
+    let mut lines = BufReader::new(stderr).split(b'\n');
+    while let Ok(Some(line)) = lines.next_segment().await {
+        let decoded = crate::hooks::decode_console(&line);
+        let decoded = decoded.trim_end();
+        if !decoded.is_empty() {
+            log(LogLevel::Debug, &format!("[MCP stderr] {decoded}"));
+        }
+    }
 }

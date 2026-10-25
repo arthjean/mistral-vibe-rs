@@ -173,7 +173,7 @@ async fn read_capped(stream: Option<impl AsyncRead + Unpin>) -> io::Result<Vec<u
 /// Reference `decode_console_safe`: the encoding a byte-order mark names, with
 /// the mark dropped, then UTF-8, then Latin-1, which every byte decodes, with
 /// line endings left as written.
-fn decode_console(bytes: &[u8]) -> String {
+pub(crate) fn decode_console(bytes: &[u8]) -> String {
     let marked = if let Some(rest) = bytes.strip_prefix(b"\xef\xbb\xbf") {
         std::str::from_utf8(rest).ok().map(str::to_owned)
     } else if let Some(rest) = bytes.strip_prefix(b"\xff\xfe\x00\x00") {
