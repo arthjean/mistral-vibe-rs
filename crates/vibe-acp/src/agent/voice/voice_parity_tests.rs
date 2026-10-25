@@ -43,6 +43,8 @@ const SETTLE: Duration = Duration::from_millis(40);
 /// app server, which answers after the call that asked for it has returned
 /// and its own notifications have been sent.
 const SUMMARY_LATENCY: Duration = Duration::from_millis(5);
+/// How long a `finish` step waits for the playback it ends to start.
+const PLAYBACK_DEADLINE: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,9 +200,20 @@ struct ScriptedOutput {
 }
 
 impl ScriptedOutput {
-    fn finish(&self) {
-        if let Some(current) = self.current.lock().expect("the playback slot").take() {
-            let _ = current.send(true);
+    /// Ends the playback in flight, waiting up to [`PLAYBACK_DEADLINE`] for
+    /// one to start: the oracle finishes a playback its player is running, and
+    /// a loaded host can still be preparing the speech when the step arrives.
+    async fn finish(&self) {
+        let deadline = tokio::time::Instant::now() + PLAYBACK_DEADLINE;
+        loop {
+            if let Some(current) = self.current.lock().expect("the playback slot").take() {
+                let _ = current.send(true);
+                return;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
         }
     }
 }
@@ -337,7 +350,7 @@ async fn bridge_case(case: &BridgeCase) -> Observation {
         let mut notices = Vec::new();
         if step.get("finish").is_some() {
             observed.insert("finish".to_owned(), json!(true));
-            output.finish();
+            output.finish().await;
         } else {
             let call = step["call"].as_str().unwrap_or_default();
             observed.insert("call".to_owned(), json!(call));
