@@ -174,9 +174,12 @@ fn an_environment_variable_that_is_not_unicode_leaves_the_agent_serving() {
 /// Reports, into the file its one argument names, whether the console the
 /// script runs in has a window and whether it shows, then the processes
 /// attached to that console. The report is renamed into place, so a reader
-/// never sees half of it.
+/// never sees half of it. `<report>.started` marks that the script ran at all,
+/// and `<report>.error` holds what stopped it before the report.
 #[cfg(windows)]
 const CONSOLE_PROBE: &str = r#"param([string]$Out)
+Set-Content -LiteralPath "$Out.started" -Value "started"
+try {
 Add-Type -Namespace VibeProbe -Name Console -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr window); [DllImport("kernel32.dll")] public static extern uint GetConsoleProcessList(uint[] list, uint count);'
 $window = [VibeProbe.Console]::GetConsoleWindow()
 $state = if ($window -eq [System.IntPtr]::Zero) { "none" } elseif ([VibeProbe.Console]::IsWindowVisible($window)) { "visible" } else { "hidden" }
@@ -184,6 +187,9 @@ $attached = New-Object 'uint32[]' 256
 $count = [VibeProbe.Console]::GetConsoleProcessList($attached, 256)
 Set-Content -LiteralPath "$Out.partial" -Value "$state;$(($attached | Select-Object -First $count) -join ',')"
 Move-Item -LiteralPath "$Out.partial" -Destination $Out
+} catch {
+Set-Content -LiteralPath "$Out.error" -Value $_.Exception.ToString()
+}
 "#;
 
 /// What the console of an MCP server the agent starts looks like.
@@ -261,7 +267,14 @@ fn mcp_server_console(creation_flags: u32) -> ServerConsole {
     }
     let stderr = finish(child);
     let printed = std::fs::read_to_string(&report).unwrap_or_else(|error| {
-        panic!("the MCP server never reported ({error}); stderr: {stderr}")
+        let beside =
+            |suffix: &str| std::path::PathBuf::from(format!("{}.{suffix}", report.display()));
+        let started = beside("started").is_file();
+        let failure = std::fs::read_to_string(beside("error")).unwrap_or_default();
+        panic!(
+            "the MCP server never reported ({error}); probe started: {started}; \
+             probe error: {failure:?}; stderr: {stderr}"
+        )
     });
     let (window, attached) = printed
         .trim()
