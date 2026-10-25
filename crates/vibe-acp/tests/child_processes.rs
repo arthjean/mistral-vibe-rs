@@ -222,6 +222,14 @@ fn mcp_server_console(creation_flags: u32) -> ServerConsole {
             .replace('\\', "/")
     );
 
+    // A stdio server inherits only the SDK's short list of variables, so
+    // Windows PowerShell finds no module analysis cache and analyzes every
+    // module on its path before it runs a line: some 20 seconds on a
+    // hosted runner, twice the startup timeout. The probe needs no module, so
+    // the entry points `PSModulePath` at an empty directory.
+    let modules = root.path().join("modules");
+    std::fs::create_dir(&modules).expect("module directory");
+
     let mut command = agent(&profile, &project);
     // The server's stderr reaches the log only at debug level.
     command
@@ -244,7 +252,7 @@ fn mcp_server_console(creation_flags: u32) -> ServerConsole {
                     "name": "console-probe",
                     "command": powershell,
                     "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", probe, report],
-                    "env": [],
+                    "env": [{"name": "PSModulePath", "value": modules}],
                 }],
             },
         }),
