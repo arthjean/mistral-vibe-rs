@@ -1,4 +1,3 @@
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "macos", all(test, unix)))]
@@ -188,6 +187,8 @@ pub fn osc52_sequence(text: &str, tmux: bool) -> String {
 fn write_osc52(text: &str) -> Result<(), ClipboardError> {
     #[cfg(unix)]
     {
+        use std::fs::OpenOptions;
+
         let sequence = osc52_sequence(text, std::env::var_os("TMUX").is_some());
         let mut terminal = OpenOptions::new()
             .write(true)

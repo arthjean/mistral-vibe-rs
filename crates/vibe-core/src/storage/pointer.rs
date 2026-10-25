@@ -2,7 +2,6 @@
 //! terminal last used, which is what a `continue` there reopens.
 
 use std::fs;
-use std::path::{Path, PathBuf};
 
 use super::{
     HANDOFF_JOURNAL_PREFIX, HANDOFF_LOCK_PREFIX, LAST_SESSION_DIRECTORY, SessionStore,
@@ -100,6 +99,8 @@ impl SessionStore {
 pub(super) fn current_tty_key() -> Option<String> {
     #[cfg(unix)]
     {
+        use std::path::{Path, PathBuf};
+
         for descriptor in ["0", "1", "2"] {
             let path = PathBuf::from("/proc/self/fd").join(descriptor);
             if let Ok(target) = fs::read_link(path)

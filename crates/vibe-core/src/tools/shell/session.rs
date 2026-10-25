@@ -204,15 +204,16 @@ impl ManagedSession {
 
     /// Reference `_session_info_locked`.
     pub(super) fn info(&self) -> SessionInfo {
-        let (status, exit_code, dropped, updated_at) = {
-            let state = sync::lock(&self.state);
-            (
-                state.status,
-                state.exit_code,
-                state.backpressure_dropped,
-                state.updated_at.clone(),
-            )
-        };
+        self.info_of(&sync::lock(&self.state))
+    }
+
+    fn info_of(&self, state: &SessionState) -> SessionInfo {
+        let (status, exit_code, dropped, updated_at) = (
+            state.status,
+            state.exit_code,
+            state.backpressure_dropped,
+            state.updated_at.clone(),
+        );
         // The reference declares no field for a reader that fell behind: its
         // own reader reports every failure through `reader_error`, so output
         // this session had to drop is named there rather than through a field
@@ -258,14 +259,15 @@ impl ManagedSession {
         }
     }
 
+    /// The manifest is written before the state lock is released: a
+    /// foreground call returns once it sees the session settled, and reference
+    /// `_save_manifest` has the final state on disk by then.
     pub(super) fn settle(&self, status: SessionStatus, exit_code: Option<i32>) {
-        {
-            let mut state = sync::lock(&self.state);
-            state.status = status;
-            state.exit_code = exit_code;
-            state.updated_at = now_iso();
-        }
-        self.save_manifest();
+        let mut state = sync::lock(&self.state);
+        state.status = status;
+        state.exit_code = exit_code;
+        state.updated_at = now_iso();
+        let _ = write_manifest(&self.manifest_path, &self.info_of(&state).typed());
     }
 
     /// Records what a later process needs to report this session as orphaned.

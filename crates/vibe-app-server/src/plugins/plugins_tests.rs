@@ -4,7 +4,6 @@ use std::fs;
 use std::path::Path;
 
 use serde_json::json;
-use vibe_core::plugins::content::digest_plugin_tree;
 
 use super::*;
 
@@ -127,6 +126,7 @@ async fn a_reload_picks_up_a_new_plugin() {
 #[test]
 fn a_checkout_keeps_runnable_only_what_its_own_mcp_json_launches() {
     use std::os::unix::fs::PermissionsExt;
+    use vibe_core::plugins::content::digest_plugin_tree;
     let home = crate::test_root::tempdir().unwrap();
     let tree = home.path().join("tree");
     let configuration = json!({"mcpServers": {
