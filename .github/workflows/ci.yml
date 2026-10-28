@@ -34,7 +34,9 @@ jobs:
             echo "apt-get update stalled on attempt ${attempt}"
             sleep 15
           done
-          sudo timeout 300 apt-get install --no-install-recommends -y libasound2-dev
+          # bubblewrap jails the e2e binaries in a network namespace of their
+          # own (`crates/vibe-e2e/src/jail.rs`); the image does not ship it.
+          sudo timeout 300 apt-get install --no-install-recommends -y libasound2-dev bubblewrap
       # The parity drivers read TOML with `tomllib` (Python 3.11+); the image's
       # own `python3` is 3.10.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -48,6 +50,36 @@ jobs:
           cargo +stable check --workspace --all-targets --all-features
           cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
           cargo +stable test --workspace --all-features
+      # US-007 of `tasks/prd-e2e-test-battery.md`: an e2e trial asserting an
+      # open defect of the register is declared `known_defect("E2E-Dnn", ...)`
+      # and ignored, so the open backlog is counted here per binary. Each e2e
+      # binary adds its own counts and wall time to the summary as it runs.
+      - name: Count known e2e defects
+        if: always()
+        run: |
+          {
+            echo "### Known e2e defects"
+            echo
+            for package in vibe-cli vibe-acp; do
+              count="$(grep -rhoE 'known_defect\("E2E-D[0-9]+' "crates/${package}/tests/e2e" | grep -c . || true)"
+              echo "- ${package}: ${count}"
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
+      # A known-defect trial that passes means its fix landed and its tag should
+      # go. The step only reports: it never fails the job.
+      - name: Known e2e defects that now pass
+        if: always()
+        continue-on-error: true
+        run: |
+          log="${RUNNER_TEMP}/e2e-ignored.log"
+          env -u GITHUB_STEP_SUMMARY cargo +stable test -p vibe-cli -p vibe-acp --all-features --test e2e -- --ignored 2>&1 \
+            | tee "${log}" || true
+          passing="$(sed -nE 's/^test (.*[^ ]) +\.\.\. ok$/\1/p' "${log}")"
+          {
+            echo "### Known e2e defects that now pass"
+            echo
+            if [ -n "${passing}" ]; then printf '%s\n' "${passing}" | sed 's/^/- /'; else echo "None."; fi
+          } >> "${GITHUB_STEP_SUMMARY}"
       # The runner has no pinned Python reference, so the surface is diffed
       # against the committed canonical digest. Rerun with output shown so the
       # conformance count lands in the job log.

@@ -13,6 +13,13 @@ nextest-version = "0.9.146"
 filter = "binary(tui_conpty)"
 threads-required = "num-cpus"
 
+# An end-to-end trial is never rerun: a retry would hide the flake it should
+# expose (`tasks/prd-e2e-test-battery.md`, US-007). Profile overrides take
+# precedence over profile settings, so this holds in `ci` despite its retries.
+[[profile.default.overrides]]
+filter = "binary(e2e)"
+retries = 0
+
 # A test that fails is rerun twice before it fails the job, as the reference
 # reruns its last-failed tests, because windows-2022's pseudoconsole host
 # sometimes stalls a session's teardown. A rerun that passes is reported as
@@ -27,3 +34,7 @@ slow-timeout = { period = "60s", terminate-after = 5 }
 [[profile.ci.overrides]]
 filter = "package(vibe-core) & test(/^tools::shell::/)"
 slow-timeout = { period = "30s", terminate-after = 2 }
+
+[[profile.ci.overrides]]
+filter = "binary(e2e)"
+retries = 0
