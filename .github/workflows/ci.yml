@@ -61,7 +61,10 @@ jobs:
             echo "### Known e2e defects"
             echo
             for package in vibe-cli vibe-acp; do
-              count="$(grep -rhoE 'known_defect\("E2E-D[0-9]+' "crates/${package}/tests/e2e" | grep -c . || true)"
+              # rustfmt may break a declaration after `known_defect(`, so
+              # whitespace is dropped before matching.
+              count="$(find "crates/${package}/tests/e2e" -name '*.rs' -exec cat {} + | tr -d ' \n' \
+                | grep -oE 'known_defect\("E2E-D[0-9]+' | grep -c . || true)"
               echo "- ${package}: ${count}"
             done
           } >> "${GITHUB_STEP_SUMMARY}"
