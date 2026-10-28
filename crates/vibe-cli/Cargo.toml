@@ -11,6 +11,13 @@ repository.workspace = true
 name = "vibe"
 path = "src/main.rs"
 
+# The end-to-end battery (`tasks/prd-e2e-test-battery.md` EP-001) runs on its
+# own harness, which enters the network jail before any trial runs.
+[[test]]
+name = "e2e"
+path = "tests/e2e/main.rs"
+harness = false
+
 [dependencies]
 base64.workspace = true
 clap.workspace = true
@@ -36,6 +43,7 @@ vibe-voice = { path = "../vibe-voice" }
 
 [dev-dependencies]
 vibe-core = { path = "../vibe-core", features = ["parity-replay"] }
+vibe-e2e = { path = "../vibe-e2e" }
 hex.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
