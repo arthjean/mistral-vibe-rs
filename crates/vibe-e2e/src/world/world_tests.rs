@@ -1,6 +1,10 @@
 use super::{MODEL_ALIAS, PROVIDER_KEY_VARIABLE, Setup, World};
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the system temporary directory lies under the user profile (US-034)"
+)]
 fn a_world_holds_its_directories_and_a_committed_repository_under_the_temporary_directory() {
     let world = World::new(Setup::default()).unwrap();
     let root = world.root();
@@ -30,6 +34,10 @@ fn a_world_holds_its_directories_and_a_committed_repository_under_the_temporary_
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the system temporary directory lies under the user profile (US-034)"
+)]
 fn the_config_points_the_provider_and_every_host_at_loopback() {
     let world = World::new(Setup::default()).unwrap();
     let config = std::fs::read_to_string(world.vibe_home().join("config.toml")).unwrap();
@@ -143,6 +151,10 @@ fn a_child_environment_is_built_from_empty() {
 }
 
 #[test]
+#[cfg_attr(
+    windows,
+    ignore = "windows: the system temporary directory lies under the user profile (US-034)"
+)]
 fn a_seed_path_outside_the_root_is_refused() {
     let world = World::new(Setup::default()).unwrap();
     world.write("work/AGENTS.md", "inside").unwrap();
