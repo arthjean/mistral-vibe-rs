@@ -1,7 +1,7 @@
 {
   "prd": {"file": "tasks/prd-e2e-test-battery.md", "title": "End-to-End Test Battery for Mistral Vibe RS", "created_at": "2026-10-28", "status": "READY"},
   "epics": [
-    {"id": "EP-001", "title": "Hermetic E2E Harness", "status": "TODO", "priority": "P0", "stories_total": 8, "stories_done": 0},
+    {"id": "EP-001", "title": "Hermetic E2E Harness", "status": "DONE", "priority": "P0", "stories_total": 8, "stories_done": 8},
     {"id": "EP-002", "title": "Programmatic CLI and Engine", "status": "TODO", "priority": "P0", "stories_total": 5, "stories_done": 0},
     {"id": "EP-003", "title": "Tools, Permissions, and Integrations", "status": "TODO", "priority": "P0", "stories_total": 6, "stories_done": 0},
     {"id": "EP-004", "title": "Editor and Server Protocols", "status": "TODO", "priority": "P0", "stories_total": 6, "stories_done": 0},
@@ -9,14 +9,14 @@
     {"id": "EP-006", "title": "Observability, Voice, and Platform Reach", "status": "TODO", "priority": "P0", "stories_total": 4, "stories_done": 0}
   ],
   "stories": [
-    {"id": "US-001", "title": "Validate assumption: a rootless network jail and an egress sentinel work on the CI runner and the workstation", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "S", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-002", "title": "Create the vibe-e2e crate and the hermetic world builder", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": [], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-003", "title": "Jail every e2e process and detect egress", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-001", "US-002"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-004", "title": "Script the model platform's chat completions", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-002"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-005", "title": "Answer every service route the binaries contact", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-004"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-006", "title": "Supervise processes, bound every wait, and keep failure artifacts", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-002"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-007", "title": "Ship the e2e test binaries, their CI wiring, and known-defect accounting", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-003", "US-004", "US-006"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-008", "title": "Run any stdio or JSON-RPC scenario against the pinned reference", "epic": "EP-001", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-007"], "started_at": null, "completed_at": null, "reviewed_at": null},
+    {"id": "US-001", "title": "Validate assumption: a rootless network jail and an egress sentinel work on the CI runner and the workstation", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "S", "blocked_by": [], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-002", "title": "Create the vibe-e2e crate and the hermetic world builder", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": [], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-003", "title": "Jail every e2e process and detect egress", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-001", "US-002"], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-004", "title": "Script the model platform's chat completions", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-002"], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-005", "title": "Answer every service route the binaries contact", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-004"], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-006", "title": "Supervise processes, bound every wait, and keep failure artifacts", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-002"], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-007", "title": "Ship the e2e test binaries, their CI wiring, and known-defect accounting", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-003", "US-004", "US-006"], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
+    {"id": "US-008", "title": "Run any stdio or JSON-RPC scenario against the pinned reference", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "M", "blocked_by": ["US-007"], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
     {"id": "US-009", "title": "Golden programmatic turns and the tool loop", "epic": "EP-002", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-005", "US-007", "US-008"], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-010", "title": "Session continuation, agent selection, and configuration layering", "epic": "EP-002", "status": "TODO", "priority": "P0", "size": "L", "blocked_by": ["US-009"], "started_at": null, "completed_at": null, "reviewed_at": null},
     {"id": "US-011", "title": "Stream faults, HTTP errors, and retries", "epic": "EP-002", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-009"], "started_at": null, "completed_at": null, "reviewed_at": null},

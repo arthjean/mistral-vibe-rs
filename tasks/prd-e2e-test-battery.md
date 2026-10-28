@@ -6,6 +6,7 @@
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
 | 1.0 | 2026-10-28 | Arthur Jean | Initial draft from the jailed side-by-side exploration of 2026-10-28 (HEAD `e48c5ba`, reference pin `376f6a33`): 31 verified port-only defects, the harness design, and the scenario catalog |
+| 1.1 | 2026-10-28 | Arthur Jean | US-001 measured (details in the `vibe-e2e` crate documentation): `bwrap --unshare-net` and nested `unshare` both work on Fedora 44 (1.6 ms and 3.1 ms median start overhead) and on ubuntu-22.04 (2.5 ms after `apt-get install bubblewrap`, 4.8 ms out of the box), with loopback, a public connect failing at once, the uid preserved, a PTY, and a grandchild in the namespace; on ubuntu-24.04 both fail (`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, `unshare: write failed /proc/self/uid_map: Operation not permitted`) until `kernel.apparmor_restrict_unprivileged_userns=0`. Hosts reached with only the provider redirected: `chat.mistral.ai` (`vibe_base_url`), `console.mistral.ai` (`console_base_url`), `experiments.mistral.services` (`[experiments] api_host`) for a Mistral backend, `api.github.com` (port TUI) and `pypi.org` (reference TUI) silenced by `enable_update_checks = false`; none once all are redirected; both honor the proxy variables. US-008 correction: on the Unified Harness the reference's chat request carries its SDK's default user agent (`mistral-client-python/2.6.0`), so the subject self-test compares the user agents of the whole journal, where telemetry carries each version |
 
 ## Problem Statement
 
