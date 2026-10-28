@@ -4,8 +4,14 @@
 //! the network jail, against the scripted platform. `VIBE_E2E_SUBJECT=reference`
 //! runs the same trials against the pinned Python reference.
 
+mod cli;
+mod engine;
+mod faults;
+mod programmatic;
 mod reference;
 mod self_test;
+mod sessions;
+mod surface;
 
 use std::process::ExitCode;
 
@@ -17,5 +23,10 @@ fn main() -> ExitCode {
         .artifacts(env!("CARGO_TARGET_TMPDIR"))
         .reference(reference::pinned)
         .scenarios(self_test::scenarios())
+        .scenarios(programmatic::scenarios())
+        .scenarios(sessions::scenarios())
+        .scenarios(faults::scenarios())
+        .scenarios(engine::scenarios())
+        .scenarios(surface::scenarios())
         .run()
 }
