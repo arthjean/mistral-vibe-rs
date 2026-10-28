@@ -76,7 +76,7 @@ pub use platform::{Entry, Gate, Platform, Reply};
 pub use process::{Child, Command, Output};
 pub use routes::RouteReply;
 pub use suite::{Ctx, Scenario, Subject, Suite};
-pub use world::{Provider, Setup, World};
+pub use world::{PROVIDER_KEY_VARIABLE, Provider, Setup, World};
 
 /// Why a trial failed, in words a maintainer can act on.
 #[derive(Debug, Clone, PartialEq, Eq)]

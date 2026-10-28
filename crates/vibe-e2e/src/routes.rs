@@ -87,10 +87,13 @@ pub(crate) fn resolve(method: &str, path: &str) -> Option<Route> {
         ("POST", ["api", "eval", _]) => route("experiments", |_, _| {
             RouteReply::json(200, &json!({"features": {}}))
         }),
-        ("GET", ["repos", _, _, "releases", "latest"]) => route("release_github", |_, _| {
+        // Both GitHub gateways list the releases and pick the newest
+        // (`vibe/cli/update_notifier/adapters/github_update_gateway.py`).
+        ("GET", ["repos", _, _, "releases"]) => route("release_github", |_, _| {
             RouteReply::json(
                 200,
-                &json!({"tag_name": format!("v{RELEASED}"), "name": format!("v{RELEASED}"), "assets": []}),
+                &json!([{"tag_name": format!("v{RELEASED}"), "published_at": "2026-01-01T00:00:00Z",
+                         "prerelease": false, "draft": false}]),
             )
         }),
         ("GET", ["pypi", _, "json"]) => route("release_pypi", |_, _| {

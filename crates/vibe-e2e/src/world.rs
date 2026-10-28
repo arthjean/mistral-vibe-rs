@@ -408,6 +408,12 @@ impl World {
         Ok(Command::new(self.clone(), program, name.to_owned()))
     }
 
+    /// The path of the subject's binary named `name`, for a scenario that
+    /// starts it through a shell.
+    pub fn binary(&self, name: &str) -> Outcome<PathBuf> {
+        self.inner.binaries.resolve(self.subject(), name)
+    }
+
     /// A command for any program, found on `PATH` when `program` is a bare
     /// name, with the world's environment.
     pub fn program(&self, program: impl AsRef<OsStr>) -> Command {

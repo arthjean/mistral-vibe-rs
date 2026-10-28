@@ -19,6 +19,7 @@ pub const PORT_ONLY_SEAMS: &[&str] = &[
     "VIBE_CREDENTIAL_ENV",
     "VIBE_MODEL",
     "VIBE_TEST_",
+    "VIBE_UPDATE_BASE_URL",
 ];
 
 fn is_word(byte: u8) -> bool {

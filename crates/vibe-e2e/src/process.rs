@@ -377,6 +377,22 @@ impl Child {
         })
     }
 
+    /// Sends SIGINT to the child alone, as a terminal's Ctrl+C reaches the
+    /// foreground process; a no-op elsewhere.
+    pub fn interrupt(&self) -> Outcome {
+        #[cfg(unix)]
+        {
+            let pid = i32::try_from(self.process.id())
+                .map_err(|_| Failure(format!("{} has no signalable pid", self.label)))?;
+            nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid),
+                nix::sys::signal::Signal::SIGINT,
+            )
+            .map_err(|error| Failure(format!("cannot interrupt {}: {error}", self.label)))?;
+        }
+        Ok(())
+    }
+
     /// Terminates the child's process group now.
     pub fn kill(&mut self) {
         terminate(&mut self.process);

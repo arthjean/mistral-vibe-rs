@@ -383,6 +383,8 @@ struct State {
     markers: Vec<(String, VecDeque<Reply>)>,
     journal: Vec<Entry>,
     chat: Vec<usize>,
+    /// Stream events written so far, per chat request in arrival order.
+    served: Vec<usize>,
     failures: Vec<String>,
     exact: bool,
     gates: BTreeMap<usize, bool>,
@@ -568,6 +570,45 @@ impl Platform {
         }
     }
 
+    /// Waits until the platform has written `events` stream events (the role
+    /// chunk counts as the first) in answer to the `n`-th chat-completions
+    /// request (from 1).
+    pub fn await_events(&self, n: usize, events: usize, deadline: Duration) -> Outcome {
+        let until = Instant::now() + scaled(deadline);
+        let mut state = self.shared.lock();
+        loop {
+            let served = state.served.get(n.saturating_sub(1)).copied().unwrap_or(0);
+            if served >= events {
+                return Ok(());
+            }
+            let now = Instant::now();
+            if now >= until {
+                return Err(Failure(format!(
+                    "chat request #{n} was never answered with {events} stream events within \
+                     {:?}; {served} were written",
+                    scaled(deadline)
+                )));
+            }
+            state = self
+                .shared
+                .changed
+                .wait_timeout(state, until - now)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+        }
+    }
+
+    /// The stream events written so far in answer to the `n`-th
+    /// chat-completions request (from 1).
+    pub fn events_served(&self, n: usize) -> usize {
+        self.shared
+            .lock()
+            .served
+            .get(n.saturating_sub(1))
+            .copied()
+            .unwrap_or(0)
+    }
+
     /// What went wrong on the platform side, including scripted turn responses
     /// left unserved when [`Self::exact`] was declared.
     pub fn failures(&self) -> Vec<String> {
@@ -731,9 +772,10 @@ fn chat(stream: &mut TcpStream, request: &Request, shared: &Arc<Shared>) {
     };
     let index = journal(&mut state, shared, request, queue);
     state.chat.push(index);
+    state.served.push(0);
+    let number = state.chat.len();
     shared.changed.notify_all();
     let Some(reply) = reply else {
-        let number = state.chat.len();
         state.failures.push(format!(
             "unexpected turn request #{number}: no scripted turn response was left (last user \
              message: {:?})",
@@ -776,7 +818,11 @@ fn chat(stream: &mut TcpStream, request: &Request, shared: &Arc<Shared>) {
     drop(state);
     let model = body.get("model").and_then(Value::as_str).unwrap_or("e2e");
     let streamed = body.get("stream").and_then(Value::as_bool) == Some(true);
-    let _ = answer(stream, &reply, model, &ids, streamed);
+    let written = || {
+        shared.lock().served[number - 1] += 1;
+        shared.changed.notify_all();
+    };
+    let _ = answer(stream, &reply, model, &ids, streamed, written);
 }
 
 fn answer(
@@ -785,6 +831,7 @@ fn answer(
     model: &str,
     ids: &[String],
     streamed: bool,
+    written: impl Fn(),
 ) -> std::io::Result<()> {
     if let Some(status) = reply.status {
         let body = reply.body.clone().unwrap_or_default();
@@ -818,6 +865,7 @@ fn answer(
             thread::sleep(reply.pace);
         }
         body.chunk(format!("{event}\n\n").as_bytes())?;
+        written();
     }
     body.finish()
 }

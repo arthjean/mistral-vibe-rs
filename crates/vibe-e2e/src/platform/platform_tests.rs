@@ -382,3 +382,21 @@ fn paced_chunks_arrive_at_least_ninety_milliseconds_apart() {
         );
     }
 }
+
+#[test]
+fn served_events_are_counted_while_a_paced_stream_is_written() {
+    let platform = Platform::start().unwrap();
+    // The role chunk, five pieces, the finish chunk, and `[DONE]`.
+    platform.reply(Reply::chunks(["a", "b", "c", "d", "e"]).paced(100));
+    let client = platform.clone();
+    let answered = thread::spawn(move || exchange(&client, "/v1/chat/completions", &chat(true)));
+    platform.await_events(1, 3, Duration::from_secs(5)).unwrap();
+    let served = platform.events_served(1);
+    assert!((3..8).contains(&served), "{served} events were counted");
+    answered.join().unwrap();
+    assert_eq!(platform.events_served(1), 8);
+    let error = platform
+        .await_events(2, 1, Duration::from_millis(100))
+        .unwrap_err();
+    assert!(error.0.contains("chat request #2"), "{error}");
+}

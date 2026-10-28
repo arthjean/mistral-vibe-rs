@@ -68,11 +68,7 @@ fn every_service_route_answers_its_neutral_default() {
             "{method} {path}"
         );
     }
-    let (status, text) = call(
-        &platform,
-        "GET",
-        "/repos/arthjean/mistral-vibe-rs/releases/latest",
-    );
+    let (status, text) = call(&platform, "GET", "/repos/arthjean/mistral-vibe-rs/releases");
     assert_eq!(status, 200);
     assert!(
         text.contains(&format!("v{}", env!("CARGO_PKG_VERSION"))),
