@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::pty::Tui;
 use crate::world::World;
 use crate::{DEFAULT_DEADLINE, Failure, Outcome, scaled, tail};
 
@@ -121,13 +122,38 @@ impl Command {
         self
     }
 
-    pub fn spawn(self) -> Outcome<Child> {
+    /// The world's environment with this command's removals and additions.
+    fn environment(&self) -> Vec<(String, String)> {
         let mut env = self.world.env();
         env.retain(|(name, _)| !self.removed.contains(name));
-        for (name, value) in self.env {
-            env.retain(|(existing, _)| *existing != name);
-            env.push((name, value));
+        for (name, value) in &self.env {
+            env.retain(|(existing, _)| existing != name);
+            env.push((name.clone(), value.clone()));
         }
+        env
+    }
+
+    /// Starts the command on a pseudo-terminal of `cols` by `rows` cells, with
+    /// `TERM=xterm-256color` unless the command sets `TERM` itself.
+    pub fn spawn_tui(self, cols: u16, rows: u16) -> Outcome<Tui> {
+        let mut env = self.environment();
+        if !self.env.iter().any(|(name, _)| name == "TERM") {
+            env.retain(|(name, _)| name != "TERM");
+            env.push(("TERM".to_owned(), "xterm-256color".to_owned()));
+        }
+        Tui::spawn(
+            &self.world,
+            &self.program,
+            self.label,
+            &self.args,
+            env,
+            &self.cwd,
+            (cols, rows),
+        )
+    }
+
+    pub fn spawn(self) -> Outcome<Child> {
+        let env = self.environment();
         let mut command = std::process::Command::new(&self.program);
         command
             .args(&self.args)

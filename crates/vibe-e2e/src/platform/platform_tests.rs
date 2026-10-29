@@ -287,6 +287,25 @@ fn a_gate_holds_its_response_until_released() {
 }
 
 #[test]
+fn a_gate_before_an_event_holds_the_rest_of_the_stream() {
+    let platform = Platform::start().unwrap();
+    platform.reply(Reply::chunks(["one ", "two ", "three"]));
+    // Events: the role chunk, three text chunks, the final chunk, `[DONE]`.
+    let gate = platform.gate_before(1, 3);
+    let client = platform.clone();
+    let answered = thread::spawn(move || exchange(&client, "/v1/chat/completions", &chat(true)).1);
+    platform.await_events(1, 3, Duration::from_secs(5)).unwrap();
+    thread::sleep(Duration::from_millis(200));
+    assert_eq!(platform.events_served(1), 3);
+    assert!(!answered.is_finished(), "the held stream ended early");
+    gate.release();
+    let (events, ended) = chunks(&answered.join().unwrap());
+    assert!(ended);
+    assert_eq!(events.len(), 6);
+    assert!(events[3].contains("three"), "{events:?}");
+}
+
+#[test]
 fn await_request_fails_at_its_deadline() {
     let platform = Platform::start().unwrap();
     let error = platform

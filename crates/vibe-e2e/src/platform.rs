@@ -372,7 +372,9 @@ pub struct Gate {
 
 impl Gate {
     pub fn release(&self) {
-        self.shared.lock().gates.insert(self.turn, true);
+        if let Some((_, released)) = self.shared.lock().gates.get_mut(&self.turn) {
+            *released = true;
+        }
         self.shared.changed.notify_all();
     }
 }
@@ -399,7 +401,9 @@ struct State {
     served: Vec<usize>,
     failures: Vec<String>,
     exact: bool,
-    gates: BTreeMap<usize, bool>,
+    /// Per gated turn: the stream event it holds before, and whether it was
+    /// released.
+    gates: BTreeMap<usize, (usize, bool)>,
     routes: BTreeMap<String, RouteReply>,
     mcp: BTreeMap<String, McpEndpoint>,
     pages: BTreeMap<String, String>,
@@ -526,7 +530,14 @@ impl Platform {
 
     /// Holds the `turn`-th turn response (from 1) until [`Gate::release`].
     pub fn gate(&self, turn: usize) -> Gate {
-        self.shared.lock().gates.insert(turn, false);
+        self.gate_before(turn, 0)
+    }
+
+    /// Streams the `turn`-th turn response (from 1) up to its `event`-th
+    /// stream event (from 0, the role chunk) and holds the rest until
+    /// [`Gate::release`].
+    pub fn gate_before(&self, turn: usize, event: usize) -> Gate {
+        self.shared.lock().gates.insert(turn, (event, false));
         Gate {
             turn,
             shared: Arc::clone(&self.shared),
@@ -856,31 +867,54 @@ fn chat(stream: &mut TcpStream, request: &Request, shared: &Arc<Shared>) {
             format!("e2e{:06}", state.next_call)
         })
         .collect();
-    if let Some(turn) = turn {
-        let until = Instant::now() + scaled(DEFAULT_DEADLINE * 4);
-        while state.gates.get(&turn) == Some(&false) && !shared.stop.load(Ordering::SeqCst) {
-            let now = Instant::now();
-            if now >= until {
-                state.failures.push(format!(
-                    "the gate on turn response #{turn} was never released"
-                ));
-                break;
-            }
-            state = shared
-                .changed
-                .wait_timeout(state, until - now)
-                .unwrap_or_else(PoisonError::into_inner)
-                .0;
-        }
+    let held = turn.and_then(|turn| state.gates.get(&turn).map(|&(event, _)| (turn, event)));
+    if let Some((turn, 0)) = held {
+        state = hold(shared, state, turn);
     }
     drop(state);
     let model = body.get("model").and_then(Value::as_str).unwrap_or("e2e");
     let streamed = body.get("stream").and_then(Value::as_bool) == Some(true);
-    let written = || {
-        shared.lock().served[number - 1] += 1;
+    let written = |position: usize| {
+        let mut state = shared.lock();
+        state.served[number - 1] += 1;
         shared.changed.notify_all();
+        if let Some((turn, event)) = held
+            && event == position + 1
+        {
+            drop(hold(shared, state, turn));
+        }
     };
     let _ = answer(stream, &reply, model, &ids, streamed, written);
+}
+
+/// Waits until the gate on turn response `turn` is released, or records that
+/// it never was.
+fn hold<'a>(
+    shared: &'a Shared,
+    mut state: MutexGuard<'a, State>,
+    turn: usize,
+) -> MutexGuard<'a, State> {
+    let until = Instant::now() + scaled(DEFAULT_DEADLINE * 4);
+    while state
+        .gates
+        .get(&turn)
+        .is_some_and(|&(_, released)| !released)
+        && !shared.stop.load(Ordering::SeqCst)
+    {
+        let now = Instant::now();
+        if now >= until {
+            state.failures.push(format!(
+                "the gate on turn response #{turn} was never released"
+            ));
+            break;
+        }
+        state = shared
+            .changed
+            .wait_timeout(state, until - now)
+            .unwrap_or_else(PoisonError::into_inner)
+            .0;
+    }
+    state
 }
 
 fn answer(
@@ -889,7 +923,7 @@ fn answer(
     model: &str,
     ids: &[String],
     streamed: bool,
-    written: impl Fn(),
+    written: impl Fn(usize),
 ) -> std::io::Result<()> {
     if let Some(status) = reply.status {
         let body = reply.body.clone().unwrap_or_default();
@@ -923,7 +957,7 @@ fn answer(
             thread::sleep(reply.pace);
         }
         body.chunk(format!("{event}\n\n").as_bytes())?;
-        written();
+        written(position);
     }
     body.finish()
 }
