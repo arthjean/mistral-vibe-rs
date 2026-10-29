@@ -7,11 +7,17 @@
 mod cli;
 mod engine;
 mod faults;
+mod hooks;
+mod hygiene;
+mod mcp;
+mod permissions;
 mod programmatic;
 mod reference;
 mod self_test;
 mod sessions;
+mod skills;
 mod surface;
+mod tools;
 
 use std::process::ExitCode;
 
@@ -28,5 +34,11 @@ fn main() -> ExitCode {
         .scenarios(faults::scenarios())
         .scenarios(engine::scenarios())
         .scenarios(surface::scenarios())
+        .scenarios(tools::scenarios())
+        .scenarios(permissions::scenarios())
+        .scenarios(hooks::scenarios())
+        .scenarios(mcp::scenarios())
+        .scenarios(skills::scenarios())
+        .scenarios(hygiene::scenarios())
         .run()
 }
