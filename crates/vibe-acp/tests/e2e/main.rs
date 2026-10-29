@@ -8,7 +8,13 @@
 #[path = "../../../vibe-cli/tests/e2e/reference.rs"]
 mod reference;
 
+mod editor;
+mod permissions;
+mod routing;
+mod sessions;
+
 use std::process::ExitCode;
+
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -17,12 +23,18 @@ use vibe_e2e::{Child, Ctx, Outcome, Scenario, Suite, ensure};
 fn main() -> ExitCode {
     Suite::new("vibe-acp")
         .binary("vibe-acp", env!("CARGO_BIN_EXE_vibe-acp"))
+        // `vibe` is another package's binary, built beside this one by a
+        // workspace build.
+        .binary("vibe", sibling("vibe"))
         .artifacts(env!("CARGO_TARGET_TMPDIR"))
         .reference(reference::pinned)
         .scenarios([Scenario::new(
             "acp::initialize_then_new_session",
             initialize_then_new_session,
         )])
+        .scenarios(routing::scenarios())
+        .scenarios(permissions::scenarios())
+        .scenarios(sessions::scenarios())
         .run()
 }
 
@@ -58,4 +70,10 @@ fn initialize_then_new_session(ctx: &mut Ctx) -> Outcome {
     ensure(created["result"]["sessionId"].is_string(), || {
         format!("session/new answered {created}")
     })
+}
+
+/// The binary `name` in the directory `vibe-acp` was built into.
+fn sibling(name: &str) -> std::path::PathBuf {
+    let acp = std::path::Path::new(env!("CARGO_BIN_EXE_vibe-acp"));
+    acp.with_file_name(format!("{name}{}", std::env::consts::EXE_SUFFIX))
 }
