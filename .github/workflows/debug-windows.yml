@@ -70,6 +70,41 @@ jobs:
             echo "exit=$? after $(( ($(date +%s%N) - started) / 1000000 )) ms"
           done
           cat "${probe}/log.jsonl" || true
+      - name: vibe MCP probe
+        if: always()
+        run: |
+          root="${RUNNER_TEMP}/vibe-probe"
+          mkdir -p "${root}/home" "${root}/vibe-home" "${root}/work" "${root}/mcp"
+          exe="$(cygpath -w "$(ls target/debug/deps/e2e-*.exe | head -1)")"
+          echo '{"tools":[{"name":"lookup","description":"d","inputSchema":{"type":"object"}}],"reactions":{},"record":[]}' > "${root}/mcp/script.json"
+          esc() { printf '%s' "$1" | sed 's/\\/\\\\/g'; }
+          cat > "${root}/vibe-home/config.toml" <<TOML
+          active_model = "m"
+          enable_update_checks = false
+          [[providers]]
+          name = "p"
+          api_base = "http://127.0.0.1:9/v1"
+          api_key_env_var = "E2E_PROVIDER_KEY"
+          api_style = "openai"
+          backend = "generic"
+          [[models]]
+          name = "m1"
+          provider = "p"
+          alias = "m"
+          [[mcp_servers]]
+          name = "e2e"
+          transport = "stdio"
+          command = "$(esc "${exe}")"
+          args = ["--vibe-e2e-mcp-server", "$(esc "$(cygpath -w "${root}/mcp/script.json")")", "$(esc "$(cygpath -w "${root}/mcp/log.jsonl")")"]
+          TOML
+          cat "${root}/vibe-home/config.toml"
+          for harness in "" "--legacy-harness"; do
+            rm -f "${root}/mcp/log.jsonl"
+            (cd "${root}/work" && git init -q . && VIBE_HOME="$(cygpath -w "${root}/vibe-home")" E2E_PROVIDER_KEY=k \
+              timeout 60 "${GITHUB_WORKSPACE}/target/debug/vibe.exe" -p hi --output text ${harness} 2>&1 | tail -5) || true
+            echo "== log after vibe ${harness}:"
+            cat "${root}/mcp/log.jsonl" || echo "no log"
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

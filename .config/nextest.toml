@@ -13,6 +13,13 @@ nextest-version = "0.9.146"
 filter = "binary(tui_conpty)"
 threads-required = "num-cpus"
 
+# The e2e TUI trials type into a pseudoconsole too, so on Windows they run alone
+# for the same reason: keys typed while the session stalls read as a paste
+# (crates/vibe-cli/src/tui/paste_burst.rs).
+[[profile.default.overrides]]
+filter = "binary(e2e) & test(/^tui::/)"
+threads-required = "num-cpus"
+
 # An end-to-end trial is never rerun: a retry would hide the flake it should
 # expose (`tasks/prd-e2e-test-battery.md`, US-007). Profile overrides take
 # precedence over profile settings, so this holds in `ci` despite its retries.

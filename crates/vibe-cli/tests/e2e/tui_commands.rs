@@ -25,6 +25,10 @@ pub fn scenarios() -> Vec<Scenario> {
                 })
                 .port_only(textual("vibe/cli/commands.py"));
             match definition.name {
+                "copy" => scenario.windows_ignore(
+                    "windows: E2E-D59 `/copy` waits on its PowerShell clipboard command without \
+                     a bound, on the event loop, and the TUI stops repainting (US-034)",
+                ),
                 "debug" => scenario.known_defect(
                     "E2E-D25",
                     "`/debug` sends `diagnostics/logs/read` without `sessionId`",
