@@ -13,11 +13,24 @@ use crate::platform::Platform;
 use crate::process::{self, ChildRecord, Command};
 use crate::sentinel::Sentinel;
 use crate::suite::Subject;
+use crate::voice::{self, Capture};
 use crate::{Failure, Outcome};
 
 /// The variable every world child carries, valued with the world's name, so
 /// teardown finds a process the trial left behind.
 pub const WORLD_VARIABLE: &str = "VIBE_E2E_WORLD";
+
+/// Names the directory worlds are created in instead of the system temporary
+/// directory, which on Windows lies under the user profile.
+pub const WORLDS_VARIABLE: &str = "VIBE_E2E_WORLDS";
+
+/// The directory worlds are created in: [`WORLDS_VARIABLE`] when set, the
+/// system temporary directory otherwise.
+pub(crate) fn worlds_parent() -> PathBuf {
+    std::env::var_os(WORLDS_VARIABLE)
+        .filter(|value| !value.is_empty())
+        .map_or_else(std::env::temp_dir, PathBuf::from)
+}
 
 /// The alias of the model every world configures as active.
 pub const MODEL_ALIAS: &str = "e2e-model";
@@ -55,6 +68,7 @@ pub struct Setup {
     api_base: Option<String>,
     config: String,
     env: Vec<(String, String)>,
+    voice: Option<Capture>,
 }
 
 impl Setup {
@@ -79,6 +93,14 @@ impl Setup {
     pub fn config(mut self, toml: impl Into<String>) -> Self {
         self.config.push_str(&toml.into());
         self.config.push('\n');
+        self
+    }
+
+    /// Declares audio providers on the platform and an ALSA configuration of
+    /// the world's own whose default device is `capture` ([`crate::voice`]).
+    #[must_use]
+    pub fn voice(mut self, capture: Capture) -> Self {
+        self.voice = Some(capture);
         self
     }
 
@@ -153,7 +175,7 @@ impl World {
             std::process::id(),
             NEXT_WORLD.fetch_add(1, Ordering::SeqCst)
         );
-        let parent = dunce_canonical(&std::env::temp_dir())?;
+        let parent = dunce_canonical(&worlds_parent())?;
         let root = parent.join(&name);
         fs::create_dir(&root)
             .map_err(|error| Failure(format!("cannot create world {}: {error}", root.display())))?;
@@ -162,6 +184,13 @@ impl World {
             Provider::Mistral => "MISTRAL_API_KEY",
         };
         let mut env = vec![(key.to_owned(), FAKE_KEY.to_owned())];
+        if setup.voice.is_some() {
+            let config = root.join(voice::ALSA_CONFIG);
+            env.push((
+                "ALSA_CONFIG_PATH".to_owned(),
+                config.to_string_lossy().into_owned(),
+            ));
+        }
         env.extend(setup.env.iter().cloned());
         let world = Self {
             inner: Arc::new(Inner {
@@ -186,6 +215,14 @@ impl World {
              [commit]\n\tgpgsign = false\n",
         )?;
         world.write("vibe-home/config.toml", world.config_toml(&setup))?;
+        if let Some(capture) = setup.voice {
+            let capture_file = world.path(voice::CAPTURE_FILE)?;
+            world.write(voice::CAPTURE_FILE, voice::capture_pcm())?;
+            world.write(
+                voice::ALSA_CONFIG,
+                voice::alsa_config(capture, &capture_file.to_string_lossy()),
+            )?;
+        }
         world.git(&["init", "-q"])?;
         world.git(&["commit", "-q", "--allow-empty", "-m", "e2e world"])?;
         Ok(world)
@@ -195,12 +232,15 @@ impl World {
     /// config target selection and repository detection.
     fn check_placement(&self) -> Outcome {
         let root = self.root();
-        if let Some(home) = std::env::var_os("HOME").filter(|home| !home.is_empty()) {
+        for variable in ["HOME", "USERPROFILE"] {
+            let Some(home) = std::env::var_os(variable).filter(|home| !home.is_empty()) else {
+                continue;
+            };
             let home = dunce_canonical(Path::new(&home)).unwrap_or_else(|_| PathBuf::from(home));
             if root.starts_with(&home) {
                 return Err(Failure(format!(
-                    "the world {} lies under the home directory {}; the system temporary \
-                     directory must sit outside it",
+                    "the world {} lies under the home directory {}; set {WORLDS_VARIABLE} to a \
+                     directory outside it",
                     root.display(),
                     home.display()
                 )));
@@ -242,11 +282,18 @@ impl World {
                  input_price = 0.0\noutput_price = 0.0\n"
             ),
         };
+        let (voice_keys, voice_tables) = match setup.voice {
+            Some(_) => (
+                voice::CONFIG_KEYS,
+                voice::config_tables(base, self.key_variable()),
+            ),
+            None => ("", String::new()),
+        };
         format!(
             "active_model = \"{MODEL_ALIAS}\"\nenable_update_checks = false\n\
              console_base_url = \"{base}\"\nvibe_base_url = \"{base}\"\n\
-             vibe_code_sessions_base_url = \"{base}\"\n{}\n[experiments]\napi_host = \"{base}\"\n\
-             client_key = \"sdk-e2e\"\n\n{provider}",
+             vibe_code_sessions_base_url = \"{base}\"\n{voice_keys}{}\n[experiments]\n\
+             api_host = \"{base}\"\nclient_key = \"sdk-e2e\"\n\n{provider}{voice_tables}",
             setup.config
         )
     }
@@ -306,6 +353,14 @@ impl World {
         self.inner.provider
     }
 
+    /// The variable the provider's key is read from.
+    pub fn key_variable(&self) -> &'static str {
+        match self.inner.provider {
+            Provider::Generic => PROVIDER_KEY_VARIABLE,
+            Provider::Mistral => "MISTRAL_API_KEY",
+        }
+    }
+
     /// The subject this run spawns for a binary name.
     pub fn subject(&self) -> Subject {
         self.inner.binaries.subject
@@ -337,6 +392,10 @@ impl World {
         env.push(("NO_PROXY".to_owned(), "127.0.0.1,localhost".to_owned()));
         env.push(("no_proxy".to_owned(), "127.0.0.1,localhost".to_owned()));
         env.push((WORLD_VARIABLE.to_owned(), self.name().to_owned()));
+        // Windows resolves the home from the profile directory, not HOME.
+        if cfg!(windows) {
+            env.push(("USERPROFILE".to_owned(), path(self.home())));
+        }
         env.extend(windows_base().map(|(k, v)| (k.to_owned(), v.to_string_lossy().into_owned())));
         env.extend(self.inner.env.iter().cloned());
         env

@@ -58,6 +58,17 @@
 //! reaches the sentinel as `CONNECT api.probe.example:443` from both (the
 //! reference then exits 1, the port keeps retrying). The port refuses a plain
 //! `http` base on a non-loopback host before any connection.
+//!
+//! # Windows (US-034)
+//!
+//! Windows has no network namespace, so trials run with the sentinel alone,
+//! teardown ends process trees with `taskkill /T /F`, and a scenario that
+//! needs the jail or its audio sandbox is skipped as `windows by design`. The
+//! system temporary directory lies under the user profile there, so
+//! [`WORLDS_VARIABLE`] names where worlds go instead; CI points it at
+//! `RUNNER_TEMP`. Every child gets the world's home as `USERPROFILE` too. A
+//! trial that fails on Windows because of a product defect carries
+//! [`Scenario::windows_ignore`] with the `AGENTS.md` tag.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
@@ -65,6 +76,7 @@ mod artifacts;
 mod http;
 pub mod jail;
 mod mcp;
+mod otlp;
 mod platform;
 mod process;
 mod pty;
@@ -73,6 +85,7 @@ mod rpc;
 pub mod seams;
 mod sentinel;
 mod suite;
+mod voice;
 mod world;
 
 use std::fmt;
@@ -85,7 +98,8 @@ pub use pty::{Key, LIVE_PTYS, Screen, Tui, TuiExit};
 pub use routes::RouteReply;
 pub use rpc::{Answer, Exchange, Rpc};
 pub use suite::{Ctx, Scenario, Subject, Suite};
-pub use world::{PROVIDER_KEY_VARIABLE, Provider, Setup, World};
+pub use voice::{Capture, Session as TranscriptionSession, Transcription};
+pub use world::{PROVIDER_KEY_VARIABLE, Provider, Setup, WORLDS_VARIABLE, World};
 
 /// Why a trial failed, in words a maintainer can act on.
 #[derive(Debug, Clone, PartialEq, Eq)]

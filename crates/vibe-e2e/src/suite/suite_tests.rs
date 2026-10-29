@@ -81,10 +81,6 @@ fn a_failed_trial_leaves_its_artifacts_with_credentials_redacted() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the system temporary directory lies under the user profile (US-034)"
-)]
 fn a_passing_trial_leaves_no_artifact_and_no_world() {
     let target = tempfile_dir();
     let roots = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -100,10 +96,6 @@ fn a_passing_trial_leaves_no_artifact_and_no_world() {
 }
 
 #[test]
-#[cfg_attr(
-    windows,
-    ignore = "windows: the system temporary directory lies under the user profile (US-034)"
-)]
 fn a_panicking_scenario_still_tears_its_world_down() {
     let roots = Arc::new(std::sync::Mutex::new(Vec::new()));
     let kept = Arc::clone(&roots);

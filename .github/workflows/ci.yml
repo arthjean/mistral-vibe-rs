@@ -158,14 +158,18 @@ jobs:
       # The AGENTS.md gate from Git Bash, through nextest, then the doctests
       # nextest does not run. The log is written as the run goes, so a step
       # canceled on its timeout still names the last test it started.
+      # The e2e worlds stand in for a user profile, so they live outside the
+      # runner's own (US-034 of `tasks/prd-e2e-test-battery.md`).
       - name: Test
         timeout-minutes: 100
         run: |
           set -o pipefail
           vibe_home="$(mktemp -d)"
+          worlds="${RUNNER_TEMP}/e2e-worlds"
+          mkdir -p "${worlds}"
           log="${RUNNER_TEMP}/windows-test.log"
           status=0
-          env -u FORCE_COLOR -u MISTRAL_API_KEY VIBE_HOME="${vibe_home}" \
+          env -u FORCE_COLOR -u MISTRAL_API_KEY VIBE_HOME="${vibe_home}" VIBE_E2E_WORLDS="${worlds}" \
             cargo +stable nextest run --profile ci --workspace --all-features --no-fail-fast 2>&1 \
             | tee "${log}" || status=1
           env -u FORCE_COLOR -u MISTRAL_API_KEY VIBE_HOME="${vibe_home}" \
@@ -175,8 +179,10 @@ jobs:
       - name: Count windows ignore tags
         if: always()
         run: |
-          tags="$(grep -rhoE 'ignore = "windows: [^"]*\(US-[0-9]+(, US-[0-9]+)*\)"' crates --include='*.rs' || true)"
-          by_design="$(grep -rhoE 'ignore = "windows by design: ' crates --include='*.rs' | grep -c . || true)"
+          # A reason is an `ignore` attribute or an e2e scenario's
+          # `windows_ignore`, so the literal is counted wherever it stands.
+          tags="$(grep -rhoE '"windows: [^"]*\(US-[0-9]+(, US-[0-9]+)*\)"' crates --include='*.rs' || true)"
+          by_design="$(grep -rhoE '"windows by design: ' crates --include='*.rs' | grep -c . || true)"
           count="$(printf '%s' "${tags}" | grep -c . || true)"
           {
             echo "### Windows ignore tags: ${count} (plus ${by_design} by design)"

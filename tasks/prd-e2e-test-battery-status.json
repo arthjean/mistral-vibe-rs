@@ -6,7 +6,7 @@
     {"id": "EP-003", "title": "Tools, Permissions, and Integrations", "status": "DONE", "priority": "P0", "stories_total": 6, "stories_done": 6},
     {"id": "EP-004", "title": "Editor and Server Protocols", "status": "DONE", "priority": "P0", "stories_total": 6, "stories_done": 6},
     {"id": "EP-005", "title": "Terminal UI under a Pseudo-Terminal", "status": "DONE", "priority": "P0", "stories_total": 5, "stories_done": 5},
-    {"id": "EP-006", "title": "Observability, Voice, and Platform Reach", "status": "TODO", "priority": "P0", "stories_total": 4, "stories_done": 0}
+    {"id": "EP-006", "title": "Observability, Voice, and Platform Reach", "status": "IN_PROGRESS", "priority": "P0", "stories_total": 4, "stories_done": 0}
   ],
   "stories": [
     {"id": "US-001", "title": "Validate assumption: a rootless network jail and an egress sentinel work on the CI runner and the workstation", "epic": "EP-001", "status": "DONE", "priority": "P0", "size": "S", "blocked_by": [], "started_at": "2026-10-28", "completed_at": "2026-10-28", "reviewed_at": "2026-10-28"},
@@ -39,9 +39,9 @@
     {"id": "US-028", "title": "TUI approvals, shell commands, interruption, rewind, and questions", "epic": "EP-005", "status": "DONE", "priority": "P0", "size": "L", "blocked_by": ["US-027"], "started_at": "2026-10-29", "completed_at": "2026-10-29", "reviewed_at": "2026-10-29"},
     {"id": "US-029", "title": "Slash commands, configuration editor, model picker, composer, and onboarding", "epic": "EP-005", "status": "DONE", "priority": "P1", "size": "L", "blocked_by": ["US-027"], "started_at": "2026-10-29", "completed_at": "2026-10-29", "reviewed_at": "2026-10-29"},
     {"id": "US-030", "title": "Session title, startup dialogs, resize, degraded provider, and idle output", "epic": "EP-005", "status": "DONE", "priority": "P2", "size": "M", "blocked_by": ["US-027"], "started_at": "2026-10-29", "completed_at": "2026-10-29", "reviewed_at": "2026-10-29"},
-    {"id": "US-031", "title": "Telemetry event sets per surface", "epic": "EP-006", "status": "TODO", "priority": "P0", "size": "M", "blocked_by": ["US-009", "US-021", "US-027"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-032", "title": "Log file and OpenTelemetry spans", "epic": "EP-006", "status": "TODO", "priority": "P1", "size": "M", "blocked_by": ["US-009", "US-005"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-033", "title": "Voice without audio hardware", "epic": "EP-006", "status": "TODO", "priority": "P1", "size": "L", "blocked_by": ["US-021", "US-026"], "started_at": null, "completed_at": null, "reviewed_at": null},
-    {"id": "US-034", "title": "Run the e2e suite on windows-2022", "epic": "EP-006", "status": "TODO", "priority": "P2", "size": "L", "blocked_by": ["US-009", "US-021", "US-024", "US-026"], "started_at": null, "completed_at": null, "reviewed_at": null}
+    {"id": "US-031", "title": "Telemetry event sets per surface", "epic": "EP-006", "status": "IN_REVIEW", "priority": "P0", "size": "M", "blocked_by": ["US-009", "US-021", "US-027"], "started_at": "2026-10-29", "completed_at": null, "reviewed_at": null},
+    {"id": "US-032", "title": "Log file and OpenTelemetry spans", "epic": "EP-006", "status": "IN_REVIEW", "priority": "P1", "size": "M", "blocked_by": ["US-009", "US-005"], "started_at": "2026-10-29", "completed_at": null, "reviewed_at": null},
+    {"id": "US-033", "title": "Voice without audio hardware", "epic": "EP-006", "status": "IN_REVIEW", "priority": "P1", "size": "L", "blocked_by": ["US-021", "US-026"], "started_at": "2026-10-29", "completed_at": null, "reviewed_at": null},
+    {"id": "US-034", "title": "Run the e2e suite on windows-2022", "epic": "EP-006", "status": "IN_PROGRESS", "priority": "P2", "size": "L", "blocked_by": ["US-009", "US-021", "US-024", "US-026"], "started_at": "2026-10-29", "completed_at": null, "reviewed_at": null}
   ]
 }

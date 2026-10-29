@@ -5867,10 +5867,12 @@ dependencies = [
 name = "vibe-e2e"
 version = "2.24.0"
 dependencies = [
+ "base64 0.23.0",
  "libtest-mimic",
  "nix 0.31.3",
  "portable-pty",
  "serde_json",
+ "tungstenite",
  "vt100",
 ]
 

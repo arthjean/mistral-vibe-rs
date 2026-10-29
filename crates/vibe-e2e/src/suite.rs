@@ -44,6 +44,7 @@ pub struct Scenario {
     body: Arc<Body>,
     known_defect: Option<(String, String)>,
     port_only: Option<String>,
+    windows: Option<&'static str>,
     needs_jail: bool,
     needs_reference: bool,
     seams: Vec<&'static str>,
@@ -59,6 +60,7 @@ impl Scenario {
             body: Arc::new(Box::new(body)),
             known_defect: None,
             port_only: None,
+            windows: None,
             needs_jail: false,
             needs_reference: false,
             seams: Vec::new(),
@@ -87,6 +89,16 @@ impl Scenario {
     #[must_use]
     pub fn port_only(mut self, reason: impl Into<String>) -> Self {
         self.port_only = Some(reason.into());
+        self
+    }
+
+    /// Ignores the trial on Windows with `reason`, which follows the
+    /// `AGENTS.md` convention: `windows: <cause> (US-NNN)` for a product
+    /// defect a story of `tasks/prd-windows-native-support.md` owns, or
+    /// `windows by design: <why>` for a trial Windows cannot run.
+    #[must_use]
+    pub fn windows_ignore(mut self, reason: &'static str) -> Self {
+        self.windows = Some(reason);
         self
     }
 
@@ -331,7 +343,15 @@ impl Suite {
                     notices.push(format!("known defect {id} ({cause}): {name}"));
                 }
                 let skip = match (&scenario.port_only, subject) {
+                    _ if cfg!(windows) && scenario.windows.is_some() => {
+                        scenario.windows.map(str::to_owned)
+                    }
                     (Some(reason), Subject::Reference) => Some(format!("port only: {reason}")),
+                    _ if scenario.needs_jail && cfg!(windows) => Some(
+                        "windows by design: the network jail, and the audio sandbox inside it, \
+                         exist on Linux only"
+                            .to_owned(),
+                    ),
                     _ if scenario.needs_jail && jail != Jail::Jailed => {
                         Some("needs the network jail".to_owned())
                     }
@@ -368,13 +388,6 @@ impl Suite {
                 return ExitCode::from(2);
             }
         };
-        if cfg!(windows) {
-            eprintln!(
-                "e2e: Windows support lands in US-034 of tasks/prd-e2e-test-battery.md; running \
-                 no trial"
-            );
-            return libtest_mimic::run(&arguments, Vec::new()).exit_code();
-        }
         if let Some(name) = self.duplicate() {
             eprintln!("e2e: two scenarios register the trial name {name:?}");
             return ExitCode::from(2);
@@ -421,6 +434,10 @@ fn summarize(
     let Some(path) = std::env::var_os("GITHUB_STEP_SUMMARY") else {
         return;
     };
+    // nextest runs one trial per process and reports the totals itself.
+    if std::env::var_os("NEXTEST").is_some() {
+        return;
+    }
     let line = format!(
         "- e2e `{package}` ({subject}): {} passed, {} failed, {} ignored, {} filtered out in {seconds:.1} s\n",
         conclusion.num_passed,

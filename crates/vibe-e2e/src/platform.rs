@@ -22,6 +22,7 @@ use serde_json::{Value, json};
 use crate::http::{self, Chunked, Request};
 use crate::mcp::{self, Answer, Calls, Mcp};
 use crate::routes::{self, RouteReply};
+use crate::voice::{self, Session, Transcription};
 use crate::{DEFAULT_DEADLINE, Failure, Outcome, scaled};
 
 /// One scripted answer to a chat-completions request.
@@ -408,6 +409,8 @@ struct State {
     mcp: BTreeMap<String, McpEndpoint>,
     pages: BTreeMap<String, String>,
     next_call: usize,
+    transcription: Transcription,
+    sessions: Vec<Session>,
 }
 
 struct Shared {
@@ -549,6 +552,17 @@ impl Platform {
         self.shared.lock().routes.insert(name.to_owned(), reply);
     }
 
+    /// Replaces how the realtime transcription stand-in answers the sessions
+    /// opened from now on ([`crate::voice`]).
+    pub fn transcription(&self, script: Transcription) {
+        self.shared.lock().transcription = script;
+    }
+
+    /// The realtime transcription sessions opened so far, in order.
+    pub fn transcriptions(&self) -> Vec<Session> {
+        self.shared.lock().sessions.clone()
+    }
+
     /// Serves `html` at `/pages/<name>`, for `web_fetch`.
     pub fn page(&self, name: &str, html: impl Into<String>) {
         self.shared
@@ -596,6 +610,16 @@ impl Platform {
     /// Every request so far, in arrival order.
     pub fn journal(&self) -> Vec<Entry> {
         self.shared.lock().journal.clone()
+    }
+
+    /// The bodies of the telemetry events the datalake route received, in
+    /// arrival order: `{"event": <name>, "properties": {...}}`.
+    pub fn telemetry(&self) -> Vec<Value> {
+        self.journal()
+            .into_iter()
+            .filter(|entry| entry.queue == "datalake")
+            .map(|entry| entry.body)
+            .collect()
     }
 
     /// The chat-completions requests so far, in arrival order.
@@ -706,6 +730,10 @@ fn serve(stream: TcpStream, shared: &Arc<Shared>) {
             return;
         }
     };
+    if voice::is_transcription(&request) {
+        transcription(stream, &request, shared);
+        return;
+    }
     let mut stream = stream;
     if request.method == "POST" && request.path().ends_with("/chat/completions") {
         chat(&mut stream, &request, shared);
@@ -714,6 +742,19 @@ fn serve(stream: TcpStream, shared: &Arc<Shared>) {
     } else {
         service(&mut stream, &request, shared);
     }
+}
+
+/// What the journal records of a request's body: a trace export decoded to
+/// its spans ([`crate::otlp`]), otherwise [`parsed_body`].
+fn journaled_body(request: &Request) -> Value {
+    let protobuf = request
+        .headers
+        .iter()
+        .any(|(name, value)| name == "content-type" && value.starts_with("application/x-protobuf"));
+    protobuf
+        .then(|| crate::otlp::decode_export(&request.body))
+        .flatten()
+        .unwrap_or_else(|| parsed_body(&request.body))
 }
 
 fn parsed_body(body: &[u8]) -> Value {
@@ -732,7 +773,7 @@ fn journal(state: &mut State, shared: &Shared, request: &Request, queue: String)
         path: request.path().to_owned(),
         queue,
         headers: request.headers.clone(),
-        body: parsed_body(&request.body),
+        body: journaled_body(request),
         at_ms: u64::try_from(shared.started.elapsed().as_millis()).unwrap_or(u64::MAX),
     });
     index
@@ -1034,6 +1075,25 @@ fn mcp_endpoint(stream: &mut TcpStream, request: &Request, name: &str, shared: &
             let _ = stream.shutdown(std::net::Shutdown::Both);
         }
     }
+}
+
+/// Journals a realtime transcription session and serves it with the
+/// stand-in's current script.
+fn transcription(stream: TcpStream, request: &Request, shared: &Arc<Shared>) {
+    let (script, position) = {
+        let mut state = shared.lock();
+        journal(&mut state, shared, request, "transcription".to_owned());
+        state.sessions.push(Session::default());
+        shared.changed.notify_all();
+        (state.transcription.clone(), state.sessions.len() - 1)
+    };
+    voice::serve(stream, request, &script, &|update| {
+        let mut state = shared.lock();
+        if let Some(session) = state.sessions.get_mut(position) {
+            update(session);
+        }
+        shared.changed.notify_all();
+    });
 }
 
 fn service(stream: &mut TcpStream, request: &Request, shared: &Arc<Shared>) {
