@@ -20,6 +20,10 @@ mod sessions;
 mod skills;
 mod surface;
 mod tools;
+mod tui;
+mod tui_commands;
+mod tui_periphery;
+mod tui_turns;
 #[cfg(feature = "test-fixtures")]
 mod wire;
 
@@ -50,5 +54,9 @@ fn main() -> ExitCode {
         .scenarios(mcp::scenarios())
         .scenarios(skills::scenarios())
         .scenarios(hygiene::scenarios())
+        .scenarios(tui::scenarios())
+        .scenarios(tui_turns::scenarios())
+        .scenarios(tui_commands::scenarios())
+        .scenarios(tui_periphery::scenarios())
         .run()
 }
