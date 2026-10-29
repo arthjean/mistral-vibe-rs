@@ -11,6 +11,7 @@
 | 1.3 | 2026-10-28 | Arthur Jean | EP-002 review: `--output streaming` writes whole entries in both implementations, so the paced-streaming criterion of US-012 asserts that the user entry precedes the model stream and no assistant text precedes the stream's end; the port prints an interrupted answer as a completed entry (new E2E-D37); the US-011 legacy fault criterion and the US-013 closed-stdout criterion restate the measured reference behavior; US-012 covers every `include_*` setting |
 | 1.4 | 2026-10-28 | Arthur Jean | EP-003 measured against the pinned reference: tool messages are compared through a SHA-256 of the normalized message and disk state, because they carry reference-authored text; `search_tool_functions` best-match scores derive from description prose, so its candidates compare as a set; a smart-approve classification is answered from a new platform utility queue (requests that offer no tools); stdio MCP servers are the e2e binary itself started with `--vibe-e2e-mcp-server`, HTTP servers and connector gateways are served by the platform; on the reference, `--auto-approve` bypasses `permission = "never"` and denylists but not `--enabled-tools` or `--disabled-tools`, `[tools.write_file] permission = "never"` does not stop a write, and a write to `.env`, outside the work tree, or through an escaping symlink asks (denied under `-p`); E2E-D07 also covers `--enabled-tools`; E2E-D11 reproduces under `--auto-approve` only, a legacy MCP tool set to `always` runs on the port; E2E-D21 reproduces under `-p` for an interrupted turn only: a `bash` call past its timeout leaves no process in either implementation, and the reference leaves a background `bash` job alive after `vibe -p` exits, so that US-016 trial keeps the no-survivor contract as `port_only`; `read_file` decodes invalid UTF-8 as Latin-1 in both implementations (`shared_with_reference`); `read_file` stops at 2,000 lines and `bash` bounds its stdout, so the US-016 large-output cases use long lines and escaped bytes; a project `hooks.toml` loads only in a trusted folder, so "not yet approved" is measured as untrusted, beside a `--trust` case; new register rows E2E-D38 to E2E-D42 |
 | 1.5 | 2026-10-29 | Arthur Jean | EP-003 review: the US-019 skill matrix installs a user and a project plugin in every cell; on the Unified Harness both implementations offer a plugin skill as `<plugin>:<skill>`, the project plugin's only in a trusted folder, and on the legacy harness neither offers a plugin skill |
+| 1.6 | 2026-10-29 | Arthur Jean | EP-004 measured against the pinned reference: the app-server scenarios drive `vibe-app-server-e2e` (`vibe-cli`, `test-fixtures` feature), composed by the `vibe -p` route with the summary provider `HeadlessService` attaches; every `vibe-acp` prompt is stopped on the port by E2E-D02, so a prompt scenario no narrower defect owns declares E2E-D02; the reference also writes `meta.json` without a trailing newline, so the E2E-D28 store criterion exempts it; with a pending permission, Zed's order (`session/cancel`, then the `cancelled` answer) never ends the reference's prompt (its store rejects the answer) and the other order fails it with -32603, so that US-022 trial keeps the cancellation contract as `port_only`; an MCP server passed in `session/new` and called through `run_typescript` receives the call and the reference reports `mcp_transport_failed`, which the trial asserts; a dismissed permission is the `cancelled` outcome without `session/cancel`; a malformed ACP line is answered by nothing in both and the connection survives; `initialize` reports the subject's own version; a batch array or a null id ends the app-server connection in both, a CRLF line is answered in both; `session/updated` patches neither the model nor the reasoning effort in either implementation; the method sweep commits the reference's response class per routed method; the `vibe-acp --setup` criterion moves from US-023 to US-029, which has the PTY driver of US-026 and the onboarding flow it drives, so US-023 no longer depends on US-026; new register rows E2E-D43 to E2E-D49 |
 
 ## Problem Statement
 
@@ -129,6 +130,13 @@ Evidence: **ran** means reproduced by the main session inside the network jail a
 | E2E-D40 | Default harness: `write_file` to `.env`, to a path outside the work tree, or through a symlink leaving it is approved by config; the reference asks (denied under `-p`), and the port writes `.env` | ran | US-015 |
 | E2E-D41 | Default harness: the declaration of an MCP tool types its return as `unknown`, dropping the server's `outputSchema` | ran | US-018 |
 | E2E-D42 | Default harness: an MCP call past `tool_timeout_sec` fails as `mcp_transport_failed`; the reference reports `mcp_timeout` | ran | US-018 |
+| E2E-D43 | An app server killed with SIGKILL during a turn loses the turn: a fresh server resumes the session with an empty history and an idle status; the reference keeps the user message and marks the turn and the session failed | ran | US-024 |
+| E2E-D44 | `vibe-acp` `_session/delete` of a live session with no turn yet fails with -32603 (`Session not found`); the reference answers `{}` | ran | US-023 |
+| E2E-D45 | `vibe-acp` `session/new` with a relative `cwd` fails with -31002; the reference opens the session | ran | US-023 |
+| E2E-D46 | The app server ends the connection on a frame above 8 MiB (a 9 MB request, a 12 MB image attachment), a message without `jsonrpc`, or a leading UTF-8 byte-order mark; the reference answers each and keeps the connection | ran | US-025 |
+| E2E-D47 | 11 routed methods answer another response class than the reference: with a root, `agents/list`, `diagnostics/list`, and `tools/list` answer a result, and `feedback/record`, `review/approve`, `review/baseline`, `review/hunks`, `review/revert`, `review/turnDiff`, and `session/relocate` answer `invalid_params`, where the reference answers `method_not_found`; without a root, `session/history/clear` answers `conflict` where the reference answers `internal_error` | ran | US-025 |
+| E2E-D48 | `session/compact` on a session with no turn sends summary requests again and again and never answers; the reference answers `internal_error` | ran | US-025 |
+| E2E-D49 | An approval answered `approve_permanently` for `touch first.txt` persists the bash allowlist rule `touch *`; the reference persists `touch` | ran | US-025 |
 
 Reported by exploration agents with saved scripts, not reproduced by the main session; the owning story measures each against the reference subject and registers it as a new `E2E-Dnn` row when the port diverges: SIGKILL during a turn loses the user message, an 8 MiB frame and a missing `jsonrpc` field or a BOM end the app-server connection, missing `session/updated` notifications (US-024, US-025); the session title is not persisted in `meta.json` and no terminal title is set (US-030); ALSA error lines are written over the TUI when no PCM device exists (US-033); the model picker preselects the first entry, and "always allow" persists a glob of the whole command (US-028, US-029); MCP `outputSchema` is lost and timeouts report `mcp_transport_failed` (US-018); valid UTF-8 is decoded as Latin-1 (US-016); OpenTelemetry spans carry the model alias and miss temperature, response id, and status code (US-032); unnamed worktrees are named locally without a utility request, and cross-harness resume fails (US-013); a Zed-style cancel leaves the tool card `in_progress`, and a relative `cwd` is refused (US-022, US-023); extra `vibe.new_session` events on resume and a `nb_skills` mismatch (US-031); the VS Code promotion (scorecard row 33) is not wired (US-030).
 
@@ -505,7 +513,7 @@ Cover what the model can do and what stops it: every published tool, the permiss
 
 Cover `vibe-acp` as an editor drives it and the app-server protocol as its clients drive it, through a JSON-RPC driver and an app-server binary composed like `vibe`.
 
-**Definition of Done:** the app-server scenarios run against a fixture composed by the production function; every scenario passes against the reference subject or is declared `port_only`; E2E-D02, D03, D11, D21, D27, D28, D31 are declared as known defects.
+**Definition of Done:** the app-server scenarios run against a fixture composed by the production function; every scenario passes against the reference subject or is declared `port_only`; E2E-D02, D03, D11, D21, D27, D28, D31, and the measured D43 to D49 are declared as known defects.
 
 #### US-020: JSON-RPC driver and a production-composed app-server binary
 **Description:** As an implementing agent, I want a JSON-RPC driver and an app-server binary built the way `vibe` builds its server so that protocol scenarios measure the shipped composition.
@@ -548,27 +556,26 @@ Cover `vibe-acp` as an editor drives it and the app-server protocol as its clien
 **Acceptance Criteria:**
 - [ ] Given a tool needing approval, when the editor answers allow once, allow always, reject, and dismissed, then the tool outcome and whether the next call asks again match the reference subject; given a path outside the work tree, then the offered options match the reference subject's.
 - [ ] Given `sh -c 'sleep 3; echo late > late.txt'` running, when the editor sends `session/cancel`, then the prompt ends with `stopReason: cancelled`, `late.txt` does not exist after 5 s, and no process carrying the world marker survives; declared `known_defect("E2E-D21")`.
-- [ ] Given a pending permission request, when the editor cancels the prompt and answers the request with the `cancelled` outcome, then the prompt ends `cancelled` and the tool call's last update is not `in_progress`, as in the reference subject.
+- [ ] Given a pending permission request, when the editor cancels the prompt and answers the request with the `cancelled` outcome, then the prompt ends `cancelled` and the tool call's last update is not `in_progress`; declared `port_only`, because the reference never ends that prompt (measured 2026-10-29).
 - [ ] Given 500 then 200, and 429 then 200, when the prompt runs, then one `_session/retrying` notification is sent per retry; declared `known_defect("E2E-D31")`.
 - [ ] Given a legacy-harness MCP tool, when the model calls it, then `session/request_permission` is sent and, once approved, the tool runs and the next request carries its result; declared `known_defect("E2E-D11")`.
-- [ ] Given an MCP server the editor passes in `session/new`, when a default-harness turn calls it through `run_typescript`, then the result matches the reference subject.
+- [ ] Given an MCP server the editor passes in `session/new`, when a default-harness turn calls it through `run_typescript`, then the server receives one call and the result matches the reference subject (`mcp_transport_failed`, measured 2026-10-29).
 - [ ] Given the legacy harness with client file system and terminal capabilities, when the model reads, writes, and runs a command, then the order of `fs/*` and `terminal/*` requests matches the reference subject's.
 - [ ] Every scenario of this story passes against the reference subject.
 
 #### US-023: ACP sessions, extensions, setup, and protocol robustness
-**Description:** As an editor user, I want sessions, extensions, and setup to work across restarts and clients so that editor history and session commands are reliable.
+**Description:** As an editor user, I want sessions and extensions to work across restarts and clients so that editor history and session commands are reliable.
 
 **Priority:** P1
 **Size:** M (3 pts)
-**Dependencies:** Blocked by US-021, US-026
+**Dependencies:** Blocked by US-021
 
 **Acceptance Criteria:**
 - [ ] Given sessions created through `vibe-acp`, when the editor lists, loads after a restart, forks, closes, and resumes them, then the replayed history and ids match the reference subject.
 - [ ] Given a session created by `vibe -p`, when the editor lists and loads it, then it appears and replays as in the reference subject.
-- [ ] Given the advertised slash commands and the title, delete, rewind, and trust extensions, when the editor uses each, then the outcomes match the reference subject.
-- [ ] Given `vibe-acp --setup` under a PTY, when a key is pasted, then `VIBE_HOME/.env` holds it with the mode the reference subject writes.
-- [ ] Given a relative `cwd` in `session/new`, an unknown method, and a malformed line, when each is sent, then the responses match the reference subject's, and the agent version in `initialize` equals the workspace version.
-- [ ] Every scenario of this story except the PTY setup passes against the reference subject.
+- [ ] Given the advertised slash commands and the title, delete, rewind, and trust extensions, when the editor uses each, then the outcomes match the reference subject; deleting a live session with no turn declared `known_defect("E2E-D44")`.
+- [ ] Given a relative `cwd` in `session/new`, an unknown method, and a malformed line, when each is sent, then the responses match the reference subject's (the relative `cwd` declared `known_defect("E2E-D45")`), and the agent version in `initialize` equals the workspace version (the pinned reference version for the reference subject).
+- [ ] Every scenario of this story passes against the reference subject.
 
 #### US-024: App-server session lifecycle and persistence
 **Description:** As a maintainer, I want the app-server's sessions to survive restarts, root switches, and other clients so that sessions written by the port stay readable by every client, the reference included.
@@ -581,9 +588,9 @@ Cover `vibe-acp` as an editor drives it and the app-server protocol as its clien
 - [ ] Given a client that starts a session, runs two turns, lists, reads, restarts the server, resumes, and runs a third turn, when the sequence ends, then history and ids match the reference subject's.
 - [ ] Given a connection with a root, when the client resumes another saved session, or forks attached on the default harness, and then runs a turn, then the turn runs on the resumed or forked session; declared `known_defect("E2E-D27")`.
 - [ ] Given a session created by `vibe -p`, when the server lists and resumes it, then it appears and continues; given a session created by the server, then `vibe -p --resume` continues it.
-- [ ] Given the default-harness store, when a session is written, then every JSON document in it ends with a newline; declared `known_defect("E2E-D28")`.
+- [ ] Given the default-harness store, when a session is written, then every JSON document in it but `meta.json`, which the reference also writes without one, ends with a newline; declared `known_defect("E2E-D28")`.
 - [ ] Given a session written by the port and the reference at the pin, when the reference's `vibe-app-server` runs on the same `VIBE_HOME`, then its `session/list` includes the session and loads it; skipped with the `off_pin_reason` when the checkout is missing; declared `known_defect("E2E-D28")`.
-- [ ] Given SIGKILL during a turn, when a fresh server reads the session, then the user message and the lease state match the reference subject's.
+- [ ] Given SIGKILL during a turn, when a fresh server reads the session, then the user message and the lease state match the reference subject's; declared `known_defect("E2E-D43")`.
 - [ ] Every scenario of this story except the cross-subject one passes against the reference subject.
 
 #### US-025: App-server wire robustness, turn control, and method sweep
@@ -594,12 +601,12 @@ Cover `vibe-acp` as an editor drives it and the app-server protocol as its clien
 **Dependencies:** Blocked by US-024
 
 **Acceptance Criteria:**
-- [ ] Given a 9 MB frame and a 12 MB image attachment, when each is sent, then the response matches the reference subject's and the next request is still answered.
-- [ ] Given a message missing `jsonrpc`, a UTF-8 byte-order mark, a CRLF line ending, a batch array, and a null id, when each is sent, then the response and whether the connection survives match the reference subject.
+- [ ] Given a 9 MB frame and a 12 MB image attachment, when each is sent, then the response matches the reference subject's and the next request is still answered; declared `known_defect("E2E-D46")`.
+- [ ] Given a message missing `jsonrpc`, a UTF-8 byte-order mark, a CRLF line ending, a batch array, and a null id, when each is sent, then the response and whether the connection survives match the reference subject; the first two declared `known_defect("E2E-D46")`.
 - [ ] Given a scripted sequence of operations, when each completes, then the state rebuilt from notifications equals `session/read`.
-- [ ] Given a default-harness approval through `callback/call`, when the client denies, approves once, approves for the session, and approves permanently, then each tool outcome matches the reference subject.
+- [ ] Given a default-harness approval through `callback/call`, when the client denies, approves once, approves for the session, and approves permanently, then each tool outcome matches the reference subject; the rule a permanent approval persists declared `known_defect("E2E-D49")`.
 - [ ] Given gates holding a turn open, when the client interrupts, steers, queues a prompt, and interrupts a shell command, then each outcome matches the reference subject.
-- [ ] Given every method in the routed inventory of `vibe-protocol`, when each is called without a root and with a root, then the response class (result, error code) matches the reference subject's.
+- [ ] Given every method in the routed inventory of `vibe-protocol`, when each is called without a root and with a root, then the response class (result, error code) matches the reference subject's; the divergent methods declared `known_defect("E2E-D47")` and `known_defect("E2E-D48")`.
 - [ ] Given two servers on one `VIBE_HOME`, when both open the same session, then the lease outcome matches the reference subject's, as do the values, marks, and worktree methods.
 
 ---
@@ -673,6 +680,7 @@ Drive the shipped TUI through a real PTY with a screen model, from a configured 
 - [ ] Given two models configured, when the user opens `/model`, then the current model is preselected and Esc leaves it active.
 - [ ] Given multiline input, a bracketed paste, history across sessions, and `@` and `/` completion, when the user submits, then the content reaching the platform matches what the composer showed, and a paste submits nothing by itself.
 - [ ] Given onboarding with no key, when the user pastes a key, then `VIBE_HOME/.env` holds it and the next turn succeeds.
+- [ ] Given `vibe-acp --setup` under a PTY, when a key is pasted, then `VIBE_HOME/.env` holds it with the mode the reference writes, read from the reference source since its Textual TUI is not driven (moved from US-023).
 - [ ] Given an unknown slash command, when the user submits it, then the message shown and the composer content afterward match the reference.
 
 #### US-030: Session title, startup dialogs, resize, degraded provider, and idle output
