@@ -192,6 +192,28 @@ fn a_scenario_that_needs_the_jail_is_skipped_without_it() {
 }
 
 #[test]
+fn a_port_run_resolves_the_reference_for_a_scenario_that_needs_it() {
+    let needing = |resolve: fn() -> Result<PathBuf, String>| {
+        Suite::new("self")
+            .reference(resolve)
+            .scenarios([Scenario::new("cross", |ctx| {
+                ctx.world()?.command_for(Subject::Reference, "vibe")?;
+                Ok(())
+            })
+            .needs_reference()])
+            .trials(Subject::Port, None, Jail::Jailed)
+            .0
+    };
+    let conclusion = libtest_mimic::run(&quiet(&[]), needing(|| Ok(PathBuf::from("/ref"))));
+    assert_eq!((conclusion.num_passed, conclusion.num_ignored), (1, 0));
+    let conclusion = libtest_mimic::run(
+        &quiet(&[]),
+        needing(|| Err("the checkout is missing".to_owned())),
+    );
+    assert_eq!((conclusion.num_passed, conclusion.num_ignored), (0, 1));
+}
+
+#[test]
 fn a_duplicate_trial_name_is_found() {
     assert_eq!(suite().duplicate(), None);
     let doubled = suite().scenarios([Scenario::new("port", |_| Ok(()))]);

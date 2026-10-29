@@ -68,6 +68,7 @@ mod mcp;
 mod platform;
 mod process;
 mod routes;
+mod rpc;
 pub mod seams;
 mod sentinel;
 mod suite;
@@ -80,6 +81,7 @@ pub use mcp::{Mcp, StdioMcp, text_result};
 pub use platform::{Entry, Gate, Platform, Reply};
 pub use process::{Child, Command, Output};
 pub use routes::RouteReply;
+pub use rpc::{Answer, Exchange, Rpc};
 pub use suite::{Ctx, Scenario, Subject, Suite};
 pub use world::{PROVIDER_KEY_VARIABLE, Provider, Setup, World};
 

@@ -45,6 +45,7 @@ pub struct Scenario {
     known_defect: Option<(String, String)>,
     port_only: Option<String>,
     needs_jail: bool,
+    needs_reference: bool,
     seams: Vec<&'static str>,
 }
 
@@ -59,6 +60,7 @@ impl Scenario {
             known_defect: None,
             port_only: None,
             needs_jail: false,
+            needs_reference: false,
             seams: Vec::new(),
         }
     }
@@ -92,6 +94,15 @@ impl Scenario {
     #[must_use]
     pub fn needs_jail(mut self) -> Self {
         self.needs_jail = true;
+        self
+    }
+
+    /// Runs `subject_command(Subject::Reference, ...)` beside the port: the
+    /// pinned reference is resolved for a port run too, and the trial is
+    /// skipped with the reason when it cannot be.
+    #[must_use]
+    pub fn needs_reference(mut self) -> Self {
+        self.needs_reference = true;
         self
     }
 
@@ -285,6 +296,21 @@ impl Suite {
         reference: Option<PathBuf>,
         jail: Jail,
     ) -> (Vec<Trial>, Vec<String>) {
+        // A scenario that reads what the port wrote with the reference needs
+        // the checkout in a port run too.
+        let mut missing_reference = None;
+        let reference = match (reference, self.reference) {
+            (None, Some(resolve)) if self.scenarios.iter().any(|s| s.needs_reference) => {
+                match resolve() {
+                    Ok(root) => Some(root),
+                    Err(reason) => {
+                        missing_reference = Some(reason);
+                        None
+                    }
+                }
+            }
+            (reference, _) => reference,
+        };
         let shared = Arc::new(Shared {
             binaries: Binaries {
                 subject,
@@ -308,6 +334,11 @@ impl Suite {
                     (Some(reason), Subject::Reference) => Some(format!("port only: {reason}")),
                     _ if scenario.needs_jail && jail != Jail::Jailed => {
                         Some("needs the network jail".to_owned())
+                    }
+                    _ if scenario.needs_reference && missing_reference.is_some() => {
+                        missing_reference
+                            .as_ref()
+                            .map(|reason| format!("needs the pinned reference: {reason}"))
                     }
                     _ => None,
                 };

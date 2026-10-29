@@ -276,7 +276,12 @@ impl Child {
 
     /// The next complete stdout line, without its newline.
     pub fn next_line(&mut self, deadline: Duration) -> Outcome<String> {
-        let until = Instant::now() + scaled(deadline);
+        self.next_line_until(Instant::now() + scaled(deadline))
+    }
+
+    /// [`Self::next_line`] against an instant already scaled.
+    pub(crate) fn next_line_until(&mut self, until: Instant) -> Outcome<String> {
+        let started = Instant::now();
         loop {
             let bytes = snapshot(&self.stdout);
             if let Some(end) = bytes[self.cursor..].iter().position(|&b| b == b'\n') {
@@ -288,13 +293,14 @@ impl Child {
             }
             if self.exited() {
                 return Err(Failure(format!(
-                    "{} exited before writing another line; {}",
+                    "{} exited ({}) before writing another line; {}",
                     self.label,
+                    self.status_text(),
                     self.quoted()
                 )));
             }
             if Instant::now() >= until {
-                return Err(self.expire(scaled(deadline), "writing another line"));
+                return Err(self.expire(until - started, "writing another line"));
             }
             thread::sleep(Duration::from_millis(10));
         }
@@ -324,6 +330,12 @@ impl Child {
             }
             thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    /// The exit status as words, or `running`.
+    fn status_text(&self) -> String {
+        self.status
+            .map_or_else(|| "running".to_owned(), |status| status.to_string())
     }
 
     fn exited(&mut self) -> bool {
@@ -391,6 +403,23 @@ impl Child {
             .map_err(|error| Failure(format!("cannot interrupt {}: {error}", self.label)))?;
         }
         Ok(())
+    }
+
+    /// Kills the child's process group with SIGKILL at once, as a crash ends
+    /// a process, with no chance to clean up; terminates it elsewhere.
+    pub fn crash(&mut self) {
+        #[cfg(unix)]
+        if let Ok(group) = i32::try_from(self.process.id()) {
+            let _ = nix::sys::signal::killpg(
+                nix::unistd::Pid::from_raw(group),
+                nix::sys::signal::Signal::SIGKILL,
+            );
+            // Signaling the group again once its leader is reaped could reach
+            // a group that reused the id.
+            self.status = self.process.wait().ok();
+            return;
+        }
+        self.kill();
     }
 
     /// Terminates the child's process group now.
