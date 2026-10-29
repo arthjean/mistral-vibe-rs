@@ -11,6 +11,19 @@ repository.workspace = true
 name = "vibe"
 path = "src/main.rs"
 
+[features]
+# Builds `vibe-app-server-e2e`, which the e2e battery drives; never shipped.
+test-fixtures = []
+
+# The app server over stdio, composed as `vibe` composes it
+# (`tasks/prd-e2e-test-battery.md`, US-020).
+[[bin]]
+name = "vibe-app-server-e2e"
+path = "tests/fixtures/app_server_e2e.rs"
+required-features = ["test-fixtures"]
+test = false
+bench = false
+
 # The end-to-end battery (`tasks/prd-e2e-test-battery.md` EP-001) runs on its
 # own harness, which enters the network jail before any trial runs.
 [[test]]
@@ -44,6 +57,7 @@ vibe-voice = { path = "../vibe-voice" }
 [dev-dependencies]
 vibe-core = { path = "../vibe-core", features = ["parity-replay"] }
 vibe-e2e = { path = "../vibe-e2e" }
+vibe-protocol = { path = "../vibe-protocol" }
 hex.workspace = true
 sha2.workspace = true
 tempfile.workspace = true

@@ -348,6 +348,51 @@ where
     .await
 }
 
+/// Serves the app-server protocol over stdio, composed as `vibe -p` composes
+/// the server its session runs on: the provider, model, and key of
+/// `config.toml`, and the resource backend of [`bootstrap::resource_server`].
+/// Only the e2e battery's `vibe-app-server-e2e` binary calls it
+/// (`tasks/prd-e2e-test-battery.md`, US-020); the distribution ships no app
+/// server.
+#[cfg(feature = "test-fixtures")]
+#[doc(hidden)]
+pub async fn serve_app_server_stdio(
+    arguments: Arguments,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::io::BufReader;
+    use vibe_app_server::transport::{StdioTransport, serve_stdio};
+
+    let workspace = WorkspaceService::default();
+    workspace
+        .migrate_configuration()
+        .map_err(|error| CliError::Configuration(error.to_string()))?;
+    let route = bootstrap::programmatic_route(&arguments, &workspace)?;
+    // Reference `vibe-app-server` starts without a key; the turn that needs
+    // one reports it.
+    let credential =
+        bootstrap::programmatic_credential(&arguments, &route.provider).unwrap_or_default();
+    let config = bootstrap::route_driver_config(&route, &workspace)?;
+    let driver =
+        vibe_app_server::client::LiveTurnDriver::from_credential(config, credential.clone())?;
+    let server = bootstrap::route_resource_server(
+        &arguments,
+        workspace,
+        &route,
+        credential,
+        Some(driver.sampling_handler(&route.model)),
+    )?
+    // What `HeadlessService` attaches for `vibe`: the provider the unified
+    // harness and a Teleport summary call besides the turn itself.
+    .using_secondary_provider(driver.summary_provider());
+    serve_stdio(
+        server,
+        StdioTransport::new(BufReader::new(tokio::io::stdin()), tokio::io::stdout()),
+        Arc::new(driver),
+    )
+    .await?;
+    Ok(())
+}
+
 /// The price arguments only this port declares, which the reference would
 /// have refused as unknown before anything else ran.
 fn validate_launch_prices(arguments: &Arguments) -> Result<(), CliError> {

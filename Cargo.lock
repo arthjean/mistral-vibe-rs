@@ -5804,6 +5804,7 @@ dependencies = [
  "vibe-app-server",
  "vibe-core",
  "vibe-e2e",
+ "vibe-protocol",
  "vibe-voice",
 ]
 

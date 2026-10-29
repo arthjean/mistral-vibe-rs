@@ -4,6 +4,8 @@
 //! the network jail, against the scripted platform. `VIBE_E2E_SUBJECT=reference`
 //! runs the same trials against the pinned Python reference.
 
+#[cfg(feature = "test-fixtures")]
+mod app_server;
 mod cli;
 mod engine;
 mod faults;
@@ -18,14 +20,22 @@ mod sessions;
 mod skills;
 mod surface;
 mod tools;
+#[cfg(feature = "test-fixtures")]
+mod wire;
 
 use std::process::ExitCode;
 
 use vibe_e2e::Suite;
 
 fn main() -> ExitCode {
-    Suite::new("vibe-cli")
-        .binary("vibe", env!("CARGO_BIN_EXE_vibe"))
+    let suite = Suite::new("vibe-cli").binary("vibe", env!("CARGO_BIN_EXE_vibe"));
+    // The app-server scenarios drive a binary only `test-fixtures` builds.
+    #[cfg(feature = "test-fixtures")]
+    let suite = suite
+        .binary("vibe-app-server", env!("CARGO_BIN_EXE_vibe-app-server-e2e"))
+        .scenarios(app_server::scenarios())
+        .scenarios(wire::scenarios());
+    suite
         .artifacts(env!("CARGO_TARGET_TMPDIR"))
         .reference(reference::pinned)
         .scenarios(self_test::scenarios())
