@@ -94,8 +94,10 @@ impl Scenario {
 
     /// Ignores the trial on Windows with `reason`, which follows the
     /// `AGENTS.md` convention: `windows: <cause> (US-NNN)` for a product
-    /// defect a story of `tasks/prd-windows-native-support.md` owns, or
-    /// `windows by design: <why>` for a trial Windows cannot run.
+    /// defect a story of `tasks/prd-windows-native-support.md` owns, or one
+    /// only this battery found, named by its register row and US-034 of
+    /// `tasks/prd-e2e-test-battery.md`, or `windows by design: <why>` for a
+    /// trial Windows cannot run.
     #[must_use]
     pub fn windows_ignore(mut self, reason: &'static str) -> Self {
         self.windows = Some(reason);

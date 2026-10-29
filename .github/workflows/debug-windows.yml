@@ -55,56 +55,6 @@ jobs:
             | tee "${RUNNER_TEMP}/e2e.log" || status=1
           echo "e2e wall time: $(( $(date +%s) - started )) s"
           exit "${status:-0}"
-      - name: MCP probe
-        if: always()
-        run: |
-          probe="${RUNNER_TEMP}/mcp-probe"
-          mkdir -p "${probe}"
-          echo '{"tools":[],"reactions":{},"record":[]}' > "${probe}/script.json"
-          for exe in target/debug/deps/e2e-*.exe; do
-            echo "== ${exe}"
-            started="$(date +%s%N)"
-            printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"1"}}}' \
-              | env -i SYSTEMROOT="${SYSTEMROOT}" PATH="${PATH}" "${exe}" --vibe-e2e-mcp-server \
-                "$(cygpath -w "${probe}/script.json")" "$(cygpath -w "${probe}/log.jsonl")"
-            echo "exit=$? after $(( ($(date +%s%N) - started) / 1000000 )) ms"
-          done
-          cat "${probe}/log.jsonl" || true
-      - name: vibe MCP probe
-        if: always()
-        run: |
-          root="${RUNNER_TEMP}/vibe-probe"
-          mkdir -p "${root}/home" "${root}/vibe-home" "${root}/work" "${root}/mcp"
-          exe="$(cygpath -w "$(realpath "$(ls target/debug/deps/e2e-*.exe | head -1)")")"
-          echo '{"tools":[{"name":"lookup","description":"d","inputSchema":{"type":"object"}}],"reactions":{},"record":[]}' > "${root}/mcp/script.json"
-          esc() { printf '%s' "$1" | sed 's/\\/\\\\/g'; }
-          cat > "${root}/vibe-home/config.toml" <<TOML
-          active_model = "m"
-          enable_update_checks = false
-          [[providers]]
-          name = "p"
-          api_base = "http://127.0.0.1:9/v1"
-          api_key_env_var = "E2E_PROVIDER_KEY"
-          api_style = "openai"
-          backend = "generic"
-          [[models]]
-          name = "m1"
-          provider = "p"
-          alias = "m"
-          [[mcp_servers]]
-          name = "e2e"
-          transport = "stdio"
-          command = "$(esc "${exe}")"
-          args = ["--vibe-e2e-mcp-server", "$(esc "$(cygpath -w "${root}/mcp/script.json")")", "$(esc "$(cygpath -w "${root}/mcp/log.jsonl")")"]
-          TOML
-          cat "${root}/vibe-home/config.toml"
-          for harness in "" "--legacy-harness"; do
-            rm -f "${root}/mcp/log.jsonl"
-            (cd "${root}/work" && git init -q . && VIBE_HOME="$(cygpath -w "${root}/vibe-home")" E2E_PROVIDER_KEY=k \
-              timeout 60 "${GITHUB_WORKSPACE}/target/debug/vibe.exe" -p hi --output text ${harness} 2>&1 | tail -20; echo "vibe exit=$?") || true
-            echo "== log after vibe ${harness}:"
-            cat "${root}/mcp/log.jsonl" || echo "no log"
-          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -115,7 +65,6 @@ jobs:
 
   windows-quality:
     name: Quality gates on Windows
-    if: false
     runs-on: windows-2022
     # A healthy run fits in 90 minutes. The test step alone is bounded at 100,
     # so a hung test is canceled with its log still uploaded below.

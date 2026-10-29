@@ -14,6 +14,9 @@ use crate::editor::{editor, new_session, prompt_ends};
 const PLAN: (&str, &str) = ("chat", "INDIVIDUAL");
 const PLAN_LABEL: &str = "Pro";
 
+/// How long a forwarded event gets to reach the datalake route.
+const FORWARD_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// A session that ran one prompt calling `bash`, then the editor hung up.
 const TOOL_PROMPT: &[(&str, usize)] = &[
     ("vibe.new_session", 1),
@@ -158,6 +161,18 @@ fn forwarded(ctx: &mut Ctx, flags: &[&str]) -> Outcome {
     ensure(listed.get("result").is_some(), || {
         format!("session/list answered {listed}")
     })?;
+    // The event is sent in the background; the editor waits for it before it
+    // hangs up, as an editor that stays open would see it.
+    let deadline = std::time::Instant::now() + vibe_e2e::scaled(FORWARD_DEADLINE);
+    while !world
+        .platform()
+        .telemetry()
+        .iter()
+        .any(|event| event["event"] == FORWARDED)
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
     rpc.hang_up()?;
     let events = world.platform().telemetry();
     let sent: Vec<&Value> = events

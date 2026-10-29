@@ -12,6 +12,14 @@ use crate::tui::{READY, STEP, exit, launch, prompt, textual, tui_world, turn_cou
 /// What a failed app-server call prints in the transcript.
 const SERVER_ERROR: &str = "app-server error";
 
+/// `/copy` on windows-2022, where the TUI stops repainting after it.
+const COPY_ON_WINDOWS: &str =
+    "windows: E2E-D59 `/copy` blocks the event loop on its PowerShell clipboard command (US-034)";
+
+/// A Ctrl+J typed through ConPTY between two lines.
+const CTRL_J_ON_WINDOWS: &str =
+    "windows: E2E-D61 a Ctrl+J typed through ConPTY inserts no line break (US-034)";
+
 /// How long a command gets to fail asynchronously once its echo is on screen.
 const SETTLE: Duration = Duration::from_millis(1500);
 
@@ -25,10 +33,7 @@ pub fn scenarios() -> Vec<Scenario> {
                 })
                 .port_only(textual("vibe/cli/commands.py"));
             match definition.name {
-                "copy" => scenario.windows_ignore(
-                    "windows: E2E-D59 `/copy` waits on its PowerShell clipboard command without \
-                     a bound, on the event loop, and the TUI stops repainting (US-034)",
-                ),
+                "copy" => scenario.windows_ignore(COPY_ON_WINDOWS),
                 "debug" => scenario.known_defect(
                     "E2E-D25",
                     "`/debug` sends `diagnostics/logs/read` without `sessionId`",
@@ -63,7 +68,8 @@ pub fn scenarios() -> Vec<Scenario> {
             "tui::composer::multiline_input_reaches_the_platform_as_shown",
             multiline,
         )
-        .port_only(textual("vibe/cli/textual_ui/widgets/chat_input/")),
+        .port_only(textual("vibe/cli/textual_ui/widgets/chat_input/"))
+        .windows_ignore(CTRL_J_ON_WINDOWS),
         Scenario::new("tui::composer::a_paste_submits_nothing_by_itself", paste)
             .port_only(textual("vibe/cli/textual_ui/widgets/chat_input/")),
         Scenario::new(

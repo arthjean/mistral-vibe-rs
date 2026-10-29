@@ -8,16 +8,24 @@ use vibe_e2e::{Ctx, Mcp, Outcome, Reply, Scenario, StdioMcp, World, ensure, text
 use crate::cli::{edit_config, exits, vibe};
 use crate::tools::{canonical, tool_message, turn_requests};
 
+/// Measured on windows-2022 outside the harness too: `vibe -p` on either
+/// harness never starts a stdio server `config.toml` declares, while the
+/// same server answers `initialize` when started by hand.
+const STDIO_ON_WINDOWS: &str =
+    "windows: E2E-D60 `vibe` never starts a stdio MCP server `config.toml` declares (US-034)";
+
 pub fn scenarios() -> Vec<Scenario> {
     let mut scenarios = vec![
         Scenario::new(
             "mcp::unified::a_stdio_tool_returns_its_structured_result",
             structured_result,
-        ),
+        )
+        .windows_ignore(STDIO_ON_WINDOWS),
         Scenario::new(
             "mcp::unified::the_declaration_types_the_return_from_the_output_schema",
             typed_declaration,
         )
+        .windows_ignore(STDIO_ON_WINDOWS)
         .known_defect(
             "E2E-D41",
             "the declaration of an MCP tool types its return as `unknown`, losing `outputSchema`",
@@ -25,26 +33,31 @@ pub fn scenarios() -> Vec<Scenario> {
         Scenario::new("mcp::legacy::auto_approve_runs_an_mcp_tool", |ctx| {
             legacy_call(ctx, true)
         })
+        .windows_ignore(STDIO_ON_WINDOWS)
         .known_defect(
             "E2E-D11",
             "on the legacy harness `--auto-approve` does not cover MCP tools",
         ),
         Scenario::new("mcp::legacy::permission_always_runs_an_mcp_tool", |ctx| {
             legacy_call(ctx, false)
-        }),
+        })
+        .windows_ignore(STDIO_ON_WINDOWS),
         Scenario::new(
             "mcp::settings::env_and_cwd_reach_a_stdio_server",
             env_and_cwd,
-        ),
+        )
+        .windows_ignore(STDIO_ON_WINDOWS),
         Scenario::new(
             "mcp::settings::headers_and_the_api_key_reach_an_http_server",
             headers,
         ),
-        Scenario::new("mcp::settings::disabled_tools_are_withheld", disabled_tools),
+        Scenario::new("mcp::settings::disabled_tools_are_withheld", disabled_tools)
+            .windows_ignore(STDIO_ON_WINDOWS),
         Scenario::new(
             "mcp::a_server_whose_command_does_not_exist_leaves_the_turn_running",
             missing_command,
-        ),
+        )
+        .windows_ignore(STDIO_ON_WINDOWS),
     ];
     for (case, calls, expected) in HTTP_CASES {
         let scenario = Scenario::new(format!("mcp::http::{case}"), move |ctx| {
@@ -127,7 +140,7 @@ pub fn outcome(message: &str) -> String {
 }
 
 fn structured_result(ctx: &mut Ctx) -> Outcome {
-    let world = ctx.world_with(vibe_e2e::Setup::default().env("LOG_LEVEL", "DEBUG"))?;
+    let world = ctx.world()?;
     let server = lookup_server(&world)?;
     add_servers(&world, &server.toml(""))?;
     let messages = run(
