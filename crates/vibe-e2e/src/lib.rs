@@ -93,7 +93,7 @@ use std::time::Duration;
 
 pub use mcp::{Mcp, StdioMcp, text_result};
 pub use platform::{Entry, Gate, Platform, Reply};
-pub use process::{Child, Command, Output};
+pub use process::{Child, Command, NO_CONSOLE_INTERRUPT, NO_SURVIVOR_SCAN, Output};
 pub use pty::{Key, LIVE_PTYS, Screen, Tui, TuiExit};
 pub use routes::RouteReply;
 pub use rpc::{Answer, Exchange, Rpc};

@@ -31,6 +31,11 @@ const QUOTED: usize = 8 * 1024;
 /// How long a wait goes on after the child exited, for its last output.
 const EXIT_DRAIN: Duration = Duration::from_millis(500);
 
+/// The pause after each key typed on Windows. The port reads three key events
+/// within 8 ms there as a console paste (crates/vibe-cli/src/tui/paste_burst.rs),
+/// so keys written at once would arrive as a paste instead of as typing.
+const WINDOWS_KEY_PACE: Duration = Duration::from_millis(20);
+
 /// What the driver answers a primary device attributes request with: a VT220
 /// with ANSI color, the class xterm reports.
 const DEVICE_ATTRIBUTES: &[u8] = b"\x1b[?62;22c";
@@ -401,14 +406,28 @@ impl Tui {
     }
 
     /// Sends keys in order. An Esc is followed by a pause, so the next key is
-    /// not read as an Alt chord.
+    /// not read as an Alt chord, and on Windows every key typed is followed by
+    /// [`WINDOWS_KEY_PACE`], a person's pace.
     pub fn send(&mut self, keys: &[Key]) -> Outcome {
         for key in keys {
+            match key {
+                Key::Text(text) if cfg!(windows) => {
+                    for character in text.chars() {
+                        let mut buffer = [0; 4];
+                        self.write_raw(character.encode_utf8(&mut buffer).as_bytes())?;
+                        thread::sleep(WINDOWS_KEY_PACE);
+                    }
+                    continue;
+                }
+                _ => {}
+            }
             let screen = self.screen();
             let bytes = key.bytes(screen.application_cursor(), screen.bracketed_paste());
             self.write_raw(&bytes)?;
             if *key == Key::Esc {
                 thread::sleep(Duration::from_millis(60));
+            } else if cfg!(windows) {
+                thread::sleep(WINDOWS_KEY_PACE);
             }
         }
         Ok(())

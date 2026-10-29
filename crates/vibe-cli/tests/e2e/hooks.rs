@@ -12,10 +12,17 @@ const HARNESSES: [(&str, bool); 2] = [("unified", false), ("legacy", true)];
 
 const NO_HOOK_RUNS: &str = "no hook runs on the default harness";
 
+/// Both implementations run a hook through the platform shell, `cmd.exe` on
+/// Windows (`create_subprocess_shell` in vibe/core/hooks/executor.py), and the
+/// recorder hooks here are POSIX shell.
+const POSIX_HOOKS: &str =
+    "windows by design: the hook commands are POSIX shell, which cmd.exe does not run";
+
 pub fn scenarios() -> Vec<Scenario> {
     let mut scenarios = Vec::new();
     for (harness, legacy) in HARNESSES {
         let tagged = |scenario: Scenario| {
+            let scenario = scenario.windows_ignore(POSIX_HOOKS);
             if legacy {
                 scenario
             } else {

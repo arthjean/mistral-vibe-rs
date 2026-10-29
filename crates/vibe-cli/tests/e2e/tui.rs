@@ -201,14 +201,16 @@ pub fn scenarios() -> Vec<Scenario> {
                 command.trim_start_matches('-').replace('-', "_"),
                 choice.name()
             );
-            scenarios.push(
-                Scenario::new(name, move |ctx| update_prompt(ctx, command, choice))
-                    .port_only(
-                        "the reference's update host, pypi.org, is hardcoded; the prompt is read \
-                         from `_show_update_prompt` in vibe/cli/cli.py",
-                    )
-                    .tests_seam("VIBE_UPDATE_BASE_URL"),
-            );
+            let scenario = Scenario::new(name, move |ctx| update_prompt(ctx, command, choice))
+                .port_only(
+                    "the reference's update host, pypi.org, is hardcoded; the prompt is read \
+                     from `_show_update_prompt` in vibe/cli/cli.py",
+                )
+                .tests_seam("VIBE_UPDATE_BASE_URL");
+            scenarios.push(match choice {
+                Choice::Updated | Choice::Failed => scenario.windows_ignore(REAL_INSTALLER),
+                Choice::Cancel | Choice::Quit => scenario,
+            });
         }
     }
     scenarios
@@ -223,7 +225,8 @@ fn composer_keys(ctx: &mut Ctx) -> Outcome {
     let world = tui_world(ctx, Setup::mistral())?;
     world.platform().reply(Reply::text("received"));
     let mut tui = launch(&world, &[])?;
-    ensure(tui.screen().alternate(), || {
+    // ConPTY keeps the alternate screen to itself and never forwards the switch.
+    ensure(cfg!(windows) || tui.screen().alternate(), || {
         "the TUI did not take the alternate screen".to_owned()
     })?;
     tui.type_text("helo")?;
@@ -585,6 +588,13 @@ impl Choice {
         }
     }
 }
+
+/// On Windows the update runs the published `install.ps1` through
+/// PowerShell's `irm` (`upgrade_commands` in crates/vibe-cli/src/distribution.rs),
+/// which takes the system proxy and ignores the proxy variables, so the
+/// sentinel cannot stop it and no `sh` on PATH stands in for it.
+const REAL_INSTALLER: &str = "windows by design: the update downloads and runs the published \
+     installer through PowerShell, which no proxy variable or PATH entry stops";
 
 /// A newer release on the release route opens the update prompt in the
 /// terminal; each choice ends as `_show_update_prompt` (vibe/cli/cli.py) ends

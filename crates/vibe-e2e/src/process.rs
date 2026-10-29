@@ -416,7 +416,7 @@ impl Child {
     }
 
     /// Sends SIGINT to the child alone, as a terminal's Ctrl+C reaches the
-    /// foreground process; a no-op elsewhere.
+    /// foreground process; a no-op elsewhere ([`NO_CONSOLE_INTERRUPT`]).
     pub fn interrupt(&self) -> Outcome {
         #[cfg(unix)]
         {
@@ -537,6 +537,16 @@ pub(crate) fn survivors(world: &str) -> Vec<(u32, String)> {
 pub(crate) fn survivors(_world: &str) -> Vec<(u32, String)> {
     Vec::new()
 }
+
+/// The [`crate::Scenario::windows_ignore`] reason of a trial that interrupts
+/// a child with [`Child::interrupt`].
+pub const NO_CONSOLE_INTERRUPT: &str =
+    "windows by design: a child on pipes has no console, so no Ctrl+C reaches it alone";
+
+/// The [`crate::Scenario::windows_ignore`] reason of a trial whose verdict is
+/// the survivor scan of teardown, which reads `/proc`.
+pub const NO_SURVIVOR_SCAN: &str =
+    "windows by design: a process surviving teardown is found by a /proc scan";
 
 /// Kills every process still carrying the world's marker after a short
 /// settling time, and names each one.

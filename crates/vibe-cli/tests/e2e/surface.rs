@@ -11,6 +11,11 @@ use crate::cli::{
     chat_count, exits, interrupted_entries, last_user, session_id, stream_entries, vibe, with_role,
 };
 
+/// A Windows child inherits the runner's console, so the update prompt opens
+/// there and waits, where a Linux child has no terminal and is refused.
+const CONSOLE_PROMPT: &str = "windows by design: a child inherits the runner's console, so the \
+     update prompt opens and waits for a key";
+
 pub fn scenarios() -> Vec<Scenario> {
     let mut scenarios = vec![
         Scenario::new(
@@ -46,20 +51,24 @@ pub fn scenarios() -> Vec<Scenario> {
             |ctx| update_check(ctx, "--check-upgrade", Some("99.0.0")),
         )
         .port_only(UPDATE_HOST)
-        .tests_seam("VIBE_UPDATE_BASE_URL"),
+        .tests_seam("VIBE_UPDATE_BASE_URL")
+        .windows_ignore(CONSOLE_PROMPT),
         Scenario::new(
             "surface::update::update_command_with_a_newer_release",
             |ctx| update_check(ctx, "update", Some("99.0.0")),
         )
         .port_only(UPDATE_HOST)
-        .tests_seam("VIBE_UPDATE_BASE_URL"),
+        .tests_seam("VIBE_UPDATE_BASE_URL")
+        .windows_ignore(CONSOLE_PROMPT),
         Scenario::new(
             "surface::signals::sigint_with_the_default_disposition",
             |ctx| interrupted(ctx, false),
-        ),
+        )
+        .windows_ignore(vibe_e2e::NO_CONSOLE_INTERRUPT),
         Scenario::new("surface::signals::sigint_with_an_inherited_ignore", |ctx| {
             interrupted(ctx, true)
         })
+        .windows_ignore(vibe_e2e::NO_CONSOLE_INTERRUPT)
         .known_defect(
             "E2E-D35",
             "`vibe -p` stops on SIGINT even when it was started with SIGINT ignored",

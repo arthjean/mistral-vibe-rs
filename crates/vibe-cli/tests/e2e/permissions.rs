@@ -694,6 +694,8 @@ fn boundary(ctx: &mut Ctx, mode: Mode, place: Place, write: bool, expected: &str
     world.write("work/.env", "SECRET=dotenv\n")?;
     #[cfg(unix)]
     std::os::unix::fs::symlink(world.root().join("outside"), world.work().join("link"))?;
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(world.root().join("outside"), world.work().join("link"))?;
     let (named, resolved) = place.paths(&world);
     let call = if write {
         Reply::tool_call(

@@ -392,12 +392,15 @@ impl World {
         env.push(("NO_PROXY".to_owned(), "127.0.0.1,localhost".to_owned()));
         env.push(("no_proxy".to_owned(), "127.0.0.1,localhost".to_owned()));
         env.push((WORLD_VARIABLE.to_owned(), self.name().to_owned()));
-        // Windows resolves the home from the profile directory, not HOME, and
-        // its credential store is the runner's own: the D-Bus address above
-        // keeps Linux children off the keyring, the reference's test hook
-        // keeps Windows children off it.
+        // Windows resolves the home from the profile directory, not HOME, the
+        // temporary directory from TEMP and TMP, not TMPDIR, and its
+        // credential store is the runner's own: the D-Bus address above keeps
+        // Linux children off the keyring, the reference's test hook keeps
+        // Windows children off it.
         if cfg!(windows) {
             env.push(("USERPROFILE".to_owned(), path(self.home())));
+            env.push(("TEMP".to_owned(), path(self.tmp())));
+            env.push(("TMP".to_owned(), path(self.tmp())));
             env.push(("VIBE_TEST_DISABLE_KEYRING".to_owned(), "1".to_owned()));
         }
         env.extend(windows_base().map(|(k, v)| (k.to_owned(), v.to_string_lossy().into_owned())));
