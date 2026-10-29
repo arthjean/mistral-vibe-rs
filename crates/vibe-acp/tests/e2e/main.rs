@@ -12,6 +12,7 @@ mod editor;
 mod permissions;
 mod routing;
 mod sessions;
+mod setup;
 
 use std::process::ExitCode;
 
@@ -35,6 +36,7 @@ fn main() -> ExitCode {
         .scenarios(routing::scenarios())
         .scenarios(permissions::scenarios())
         .scenarios(sessions::scenarios())
+        .scenarios(setup::scenarios())
         .run()
 }
 
