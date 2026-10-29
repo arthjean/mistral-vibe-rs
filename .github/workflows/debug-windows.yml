@@ -75,7 +75,7 @@ jobs:
         run: |
           root="${RUNNER_TEMP}/vibe-probe"
           mkdir -p "${root}/home" "${root}/vibe-home" "${root}/work" "${root}/mcp"
-          exe="$(cygpath -w "$(ls target/debug/deps/e2e-*.exe | head -1)")"
+          exe="$(cygpath -w "$(realpath "$(ls target/debug/deps/e2e-*.exe | head -1)")")"
           echo '{"tools":[{"name":"lookup","description":"d","inputSchema":{"type":"object"}}],"reactions":{},"record":[]}' > "${root}/mcp/script.json"
           esc() { printf '%s' "$1" | sed 's/\\/\\\\/g'; }
           cat > "${root}/vibe-home/config.toml" <<TOML
@@ -101,7 +101,7 @@ jobs:
           for harness in "" "--legacy-harness"; do
             rm -f "${root}/mcp/log.jsonl"
             (cd "${root}/work" && git init -q . && VIBE_HOME="$(cygpath -w "${root}/vibe-home")" E2E_PROVIDER_KEY=k \
-              timeout 60 "${GITHUB_WORKSPACE}/target/debug/vibe.exe" -p hi --output text ${harness} 2>&1 | tail -5) || true
+              timeout 60 "${GITHUB_WORKSPACE}/target/debug/vibe.exe" -p hi --output text ${harness} 2>&1 | tail -20; echo "vibe exit=$?") || true
             echo "== log after vibe ${harness}:"
             cat "${root}/mcp/log.jsonl" || echo "no log"
           done

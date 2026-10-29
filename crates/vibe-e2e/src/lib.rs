@@ -70,8 +70,8 @@
 //! `tmp` as `TEMP` and `TMP`, and `VIBE_TEST_DISABLE_KEYRING=1`, the
 //! reference's own test hook, since the Windows credential store is the
 //! runner's and a key one trial saves would reach every later one. The PTY
-//! driver types one key every 20 ms there, a person's pace, since the port
-//! reads faster keys as a console paste. A trial that fails on Windows
+//! driver types one key every 50 ms there, a person's pace, since the port
+//! reads keys that arrive together as a console paste. A trial that fails on Windows
 //! because of a product defect carries [`Scenario::windows_ignore`] with the
 //! `AGENTS.md` tag.
 

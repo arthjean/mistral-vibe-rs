@@ -31,10 +31,12 @@ const QUOTED: usize = 8 * 1024;
 /// How long a wait goes on after the child exited, for its last output.
 const EXIT_DRAIN: Duration = Duration::from_millis(500);
 
-/// The pause after each key typed on Windows. The port reads three key events
-/// within 8 ms there as a console paste (crates/vibe-cli/src/tui/paste_burst.rs),
-/// so keys written at once would arrive as a paste instead of as typing.
-const WINDOWS_KEY_PACE: Duration = Duration::from_millis(20);
+/// The pause after each key typed on Windows, a quick typist's pace. The port
+/// reads three key events within 8 ms there as a console paste
+/// (crates/vibe-cli/src/tui/paste_burst.rs), timed as it reads them, so keys
+/// that arrive while a frame is drawn read as one; 20 ms still let a debug
+/// build's frame gather a burst.
+const WINDOWS_KEY_PACE: Duration = Duration::from_millis(50);
 
 /// What the driver answers a primary device attributes request with: a VT220
 /// with ANSI color, the class xterm reports.
