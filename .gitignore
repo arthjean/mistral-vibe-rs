@@ -1,7 +1,7 @@
 .claude/
 .codex/
 .env
-target/
+target
 .parity/
 .vibe/
 __pycache__/
