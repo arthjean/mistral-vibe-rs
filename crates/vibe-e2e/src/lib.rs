@@ -4,6 +4,9 @@
 //! editor does, in a [`World`] of its own: a home, a vibe home whose
 //! `config.toml` points the provider and every service host at a loopback
 //! [`Platform`], a Git work tree, and an egress sentinel exported as the proxy.
+//! A scenario can add scripted MCP servers ([`Mcp`]): over stdio, the e2e
+//! binary itself serves them; over HTTP, the platform does, connector gateways
+//! included.
 //! On Linux the whole test binary runs inside a network namespace that holds
 //! only loopback ([`jail`]), so nothing a trial starts can reach a real host,
 //! and the sentinel names any host a binary still reaches for.
@@ -61,6 +64,7 @@
 mod artifacts;
 mod http;
 pub mod jail;
+mod mcp;
 mod platform;
 mod process;
 mod routes;
@@ -72,6 +76,7 @@ mod world;
 use std::fmt;
 use std::time::Duration;
 
+pub use mcp::{Mcp, StdioMcp, text_result};
 pub use platform::{Entry, Gate, Platform, Reply};
 pub use process::{Child, Command, Output};
 pub use routes::RouteReply;

@@ -323,8 +323,12 @@ impl Suite {
         (trials, notices)
     }
 
-    /// Enters the jail, resolves the subject, and runs the trials.
+    /// Enters the jail, resolves the subject, and runs the trials, unless a
+    /// world started this binary as a stdio MCP server ([`crate::Mcp`]).
     pub fn run(self) -> ExitCode {
+        if let Some(code) = crate::mcp::serve_if_asked() {
+            return code;
+        }
         let arguments = Arguments::from_args();
         let jail = match jail::enter() {
             Ok(jail) => jail,

@@ -253,6 +253,22 @@ fn a_marker_queue_answers_before_the_turn_queue() {
 }
 
 #[test]
+fn the_utility_queue_answers_a_request_that_offers_no_tools() {
+    let platform = Platform::start().unwrap();
+    platform.replies([Reply::text("first turn"), Reply::text("untooled turn")]);
+    platform.utility(Reply::text("the verdict"));
+    let untooled = json!({"model": "m", "messages": [{"role": "user", "content": "judge"}]});
+    let (_, body) = exchange(&platform, "/v1/chat/completions", &chat(false));
+    assert!(body.contains("first turn"), "{body}");
+    let (_, body) = exchange(&platform, "/v1/chat/completions", &untooled);
+    assert!(body.contains("the verdict"), "{body}");
+    let (_, body) = exchange(&platform, "/v1/chat/completions", &untooled);
+    assert!(body.contains("untooled turn"), "{body}");
+    let queues: Vec<String> = platform.journal().into_iter().map(|e| e.queue).collect();
+    assert_eq!(queues, ["turn", "utility", "turn"]);
+}
+
+#[test]
 fn a_gate_holds_its_response_until_released() {
     let platform = Platform::start().unwrap();
     platform.reply(Reply::text("held"));

@@ -2,7 +2,8 @@
 //!
 //! Chat completions are answered from scripted [`Reply`] queues: a probe queue
 //! for one-token requests that offer no tools, marker queues for requests
-//! whose messages carry a scenario's marker, and the turn queue for the rest.
+//! whose messages carry a scenario's marker, a utility queue for other requests
+//! that offer no tools, and the turn queue for the rest.
 //! Every other path is a service route ([`crate::routes`]). Every request lands
 //! in one journal in arrival order, and anything a scenario did not script
 //! (an exhausted queue, an unknown path, a tool message answering a call no
@@ -19,6 +20,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::http::{self, Chunked, Request};
+use crate::mcp::{self, Answer, Calls, Mcp};
 use crate::routes::{self, RouteReply};
 use crate::{DEFAULT_DEADLINE, Failure, Outcome, scaled};
 
@@ -316,7 +318,7 @@ pub struct Entry {
     pub method: String,
     /// The path without its query string.
     pub path: String,
-    /// `turn`, `probe`, `when:<marker>`, a route name, or `unknown`.
+    /// `turn`, `probe`, `when:<marker>`, `utility`, a route name, or `unknown`.
     pub queue: String,
     /// Header names lowercased, in arrival order.
     pub headers: Vec<(String, String)>,
@@ -375,11 +377,21 @@ impl Gate {
     }
 }
 
+/// A scripted MCP server the platform serves at `/mcp/<name>`. A crash
+/// starts a new generation, whose session id the old one's no longer matches.
+#[derive(Default)]
+struct McpEndpoint {
+    script: Value,
+    calls: Calls,
+    generation: u64,
+}
+
 #[derive(Default)]
 struct State {
     turn: VecDeque<Reply>,
     turns_served: usize,
     probe: VecDeque<Reply>,
+    utility: VecDeque<Reply>,
     markers: Vec<(String, VecDeque<Reply>)>,
     journal: Vec<Entry>,
     chat: Vec<usize>,
@@ -389,6 +401,7 @@ struct State {
     exact: bool,
     gates: BTreeMap<usize, bool>,
     routes: BTreeMap<String, RouteReply>,
+    mcp: BTreeMap<String, McpEndpoint>,
     pages: BTreeMap<String, String>,
     next_call: usize,
 }
@@ -486,6 +499,14 @@ impl Platform {
         self.shared.lock().probe.push_back(reply);
     }
 
+    /// Queues an answer for the next request that offers no tools, such as a
+    /// smart-approve classification, served after the marker queues and before
+    /// the turn queue. While this queue is empty, such requests take turn
+    /// responses.
+    pub fn utility(&self, reply: Reply) {
+        self.shared.lock().utility.push_back(reply);
+    }
+
     /// Queues an answer for the next request whose serialized messages contain
     /// `marker`, served before the turn queue.
     pub fn when(&self, marker: impl Into<String>, reply: Reply) {
@@ -523,6 +544,37 @@ impl Platform {
             .lock()
             .pages
             .insert(name.to_owned(), html.into());
+    }
+
+    /// Serves `script` as a streamable HTTP MCP server at [`Self::mcp_url`].
+    pub fn mcp(&self, name: &str, script: &Mcp) {
+        self.shared.lock().mcp.insert(
+            name.to_owned(),
+            McpEndpoint {
+                script: script.to_json(),
+                ..McpEndpoint::default()
+            },
+        );
+    }
+
+    /// Serves `script` as the connector gateway of the connector `id`, whose
+    /// requests [`Self::mcp_requests`] lists under `gateway-<id>`.
+    pub fn gateway(&self, id: &str, script: &Mcp) {
+        self.mcp(&format!("gateway-{id}"), script);
+    }
+
+    /// The URL of the MCP server [`Self::mcp`] declared as `name`.
+    pub fn mcp_url(&self, name: &str) -> String {
+        format!("{}/mcp/{name}", self.base)
+    }
+
+    /// The requests the MCP server `name` received, in arrival order.
+    pub fn mcp_requests(&self, name: &str) -> Vec<Entry> {
+        let queue = format!("mcp:{name}");
+        self.journal()
+            .into_iter()
+            .filter(|entry| entry.queue == queue)
+            .collect()
     }
 
     /// The URL of a page served by [`Self::page`].
@@ -646,6 +698,8 @@ fn serve(stream: TcpStream, shared: &Arc<Shared>) {
     let mut stream = stream;
     if request.method == "POST" && request.path().ends_with("/chat/completions") {
         chat(&mut stream, &request, shared);
+    } else if let Some(name) = mcp_name(request.path(), shared) {
+        mcp_endpoint(&mut stream, &request, &name, shared);
     } else {
         service(&mut stream, &request, shared);
     }
@@ -708,11 +762,13 @@ pub(crate) fn orphan_tool_messages(messages: &[Value]) -> Vec<(String, Vec<Strin
 }
 
 fn is_probe(body: &Value) -> bool {
-    body.get("max_tokens").and_then(Value::as_u64) == Some(1)
-        && body
-            .get("tools")
-            .and_then(Value::as_array)
-            .is_none_or(Vec::is_empty)
+    body.get("max_tokens").and_then(Value::as_u64) == Some(1) && offers_no_tools(body)
+}
+
+fn offers_no_tools(body: &Value) -> bool {
+    body.get("tools")
+        .and_then(Value::as_array)
+        .is_none_or(Vec::is_empty)
 }
 
 fn last_user_text(body: &Value) -> String {
@@ -762,6 +818,8 @@ fn chat(stream: &mut TcpStream, request: &Request, shared: &Arc<Shared>) {
         let (marker, queue) = &mut state.markers[position];
         let marker = marker.clone();
         (format!("when:{marker}"), queue.pop_front(), None)
+    } else if !state.utility.is_empty() && offers_no_tools(&body) {
+        ("utility".to_owned(), state.utility.pop_front(), None)
     } else {
         let reply = state.turn.pop_front();
         if reply.is_some() {
@@ -868,6 +926,80 @@ fn answer(
         written();
     }
     body.finish()
+}
+
+/// The scripted MCP server a path reaches: `/mcp/<name>`, or the connector
+/// gateway `/v1/connectors-gateway/<id>/mcp` once [`Platform::gateway`]
+/// declared `<id>`, which otherwise falls to its neutral service route.
+fn mcp_name(path: &str, shared: &Shared) -> Option<String> {
+    if let Some(name) = path.strip_prefix("/mcp/") {
+        return Some(name.to_owned());
+    }
+    let id = path
+        .strip_prefix("/v1/connectors-gateway/")?
+        .strip_suffix("/mcp")?;
+    let name = format!("gateway-{id}");
+    shared.lock().mcp.contains_key(&name).then_some(name)
+}
+
+/// Answers one streamable HTTP request to a scripted MCP server: JSON for a
+/// request, 202 for a notification, 405 for the event stream a client may
+/// open, and 404 for a session a crash ended.
+fn mcp_endpoint(stream: &mut TcpStream, request: &Request, name: &str, shared: &Arc<Shared>) {
+    const SESSION: &str = "mcp-session-id";
+    let json = [("content-type".to_owned(), "application/json".to_owned())];
+    let mut state = shared.lock();
+    journal(&mut state, shared, request, format!("mcp:{name}"));
+    shared.changed.notify_all();
+    let State { mcp, failures, .. } = &mut *state;
+    let Some(endpoint) = mcp.get_mut(name) else {
+        failures.push(format!(
+            "unexpected request to the undeclared MCP server {name:?}"
+        ));
+        drop(state);
+        let _ = http::respond(stream, 404, &json, b"{}");
+        return;
+    };
+    let session = format!("{name}-{}", endpoint.generation);
+    match request.method.as_str() {
+        "GET" => {
+            drop(state);
+            let _ = http::respond(stream, 405, &[], b"");
+            return;
+        }
+        "DELETE" => {
+            drop(state);
+            let _ = http::respond(stream, 200, &[], b"");
+            return;
+        }
+        _ => {}
+    }
+    if request.header(SESSION).is_some_and(|sent| sent != session) {
+        drop(state);
+        let _ = http::respond(stream, 404, &json, br#"{"error":"unknown session"}"#);
+        return;
+    }
+    let message = parsed_body(&request.body);
+    match mcp::answer(&endpoint.script, &mut endpoint.calls, &message) {
+        Answer::Respond(response, delay) => {
+            let mut headers = json.to_vec();
+            if message.get("method").and_then(Value::as_str) == Some("initialize") {
+                headers.push((SESSION.to_owned(), session));
+            }
+            drop(state);
+            thread::sleep(delay);
+            let _ = http::respond(stream, 200, &headers, response.to_string().as_bytes());
+        }
+        Answer::Nothing => {
+            drop(state);
+            let _ = http::respond(stream, 202, &[], b"");
+        }
+        Answer::Crash => {
+            endpoint.generation += 1;
+            drop(state);
+            let _ = stream.shutdown(std::net::Shutdown::Both);
+        }
+    }
 }
 
 fn service(stream: &mut TcpStream, request: &Request, shared: &Arc<Shared>) {
