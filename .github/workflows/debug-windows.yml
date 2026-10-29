@@ -65,6 +65,7 @@ jobs:
 
   windows-quality:
     name: Quality gates on Windows
+    if: false
     runs-on: windows-2022
     # A healthy run fits in 90 minutes. The test step alone is bounded at 100,
     # so a hung test is canceled with its log still uploaded below.

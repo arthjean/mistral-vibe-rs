@@ -160,7 +160,20 @@ fn a_known_defect_is_ignored_for_the_port_and_announced() {
     assert_eq!(ignored, ["defect"]);
     assert_eq!(notices, ["known defect E2E-D99 (a cause): defect"]);
     let conclusion = libtest_mimic::run(&quiet(&[]), trials);
-    assert_eq!((conclusion.num_passed, conclusion.num_ignored), (3, 1));
+    assert_eq!(
+        (conclusion.num_passed, conclusion.num_ignored),
+        jailed_counts(3, 1)
+    );
+}
+
+/// Passed and ignored counts of a jailed run of [`suite`]: Windows skips the
+/// scenario that needs the jail by design.
+fn jailed_counts(passed: u64, ignored: u64) -> (u64, u64) {
+    if cfg!(windows) {
+        (passed - 1, ignored + 1)
+    } else {
+        (passed, ignored)
+    }
 }
 
 #[test]
@@ -173,7 +186,20 @@ fn the_reference_runs_known_defects_and_skips_port_only_scenarios() {
     assert!(trials.iter().all(|t| !t.has_ignored_flag()));
     assert!(notices.is_empty());
     let conclusion = libtest_mimic::run(&quiet(&[]), trials);
-    assert_eq!((conclusion.num_passed, conclusion.num_ignored), (3, 1));
+    assert_eq!(
+        (conclusion.num_passed, conclusion.num_ignored),
+        jailed_counts(3, 1)
+    );
+}
+
+#[test]
+fn a_windows_ignore_skips_the_trial_on_windows_only() {
+    let (trials, _) = Suite::new("self")
+        .scenarios([Scenario::new("tagged", |_| Ok(())).windows_ignore("a reason")])
+        .trials(Subject::Port, None, Jail::Jailed);
+    let conclusion = libtest_mimic::run(&quiet(&[]), trials);
+    let expected = if cfg!(windows) { (0, 1) } else { (1, 0) };
+    assert_eq!((conclusion.num_passed, conclusion.num_ignored), expected);
 }
 
 #[test]
