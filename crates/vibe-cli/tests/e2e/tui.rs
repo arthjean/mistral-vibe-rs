@@ -397,7 +397,9 @@ fn paced_answer(ctx: &mut Ctx) -> Outcome {
     // Events: the role chunk, then one per piece; the fifth piece is event 5.
     let gate = world.platform().gate_before(1, 5);
     let mut tui = launch(&world, &[])?;
-    let before = footer(&tui.screen());
+    // The footer can land after the first frame, so it is read once it shows.
+    let idle = tui.wait_screen("the idle token footer", |s| footer(s).is_some(), STEP)?;
+    let before = footer(&idle);
     prompt(&mut tui, "stream please")?;
     world.platform().await_events(1, 5, STEP)?;
     let partial = tui.wait_text("alpha bravo charlie delta", STEP)?;

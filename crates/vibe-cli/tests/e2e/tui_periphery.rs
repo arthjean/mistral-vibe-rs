@@ -150,7 +150,12 @@ fn trust_dialog(ctx: &mut Ctx) -> Outcome {
     tui.wait_text(crate::tui::READY, STEP)?;
     let trusted = std::fs::read_to_string(world.vibe_home().join("trusted_folders.toml"))?;
     let work = world.work().to_string_lossy().into_owned();
-    ensure(trusted.contains(&format!("\"{work}\"")), || {
+    let table: toml::Table = toml::from_str(&trusted).map_err(|error| error.to_string())?;
+    let listed = table
+        .get("trusted")
+        .and_then(toml::Value::as_array)
+        .is_some_and(|folders| folders.iter().any(|f| f.as_str() == Some(work.as_str())));
+    ensure(listed, || {
         format!("trusted_folders.toml does not trust the folder:\n{trusted}")
     })?;
     exit(&mut tui).map(drop)

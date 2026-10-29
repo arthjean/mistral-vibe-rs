@@ -36,6 +36,8 @@ jobs:
           version="$(awk -F'"' '/^nextest-version/ { print $2 }' .config/nextest.toml)"
           archive="cargo-nextest-${version}-x86_64-pc-windows-msvc.tar.gz"
           curl -sSfLO "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${version}/${archive}"
+          echo "809b01f2c94d031ab6cf5f4d4a4f477c8f51b69c96ab3cb2fe4db7ecb222d0d3  ${archive}" \
+            | sha256sum -c -
           tar xzf "${archive}" -C "${HOME}/.cargo/bin"
       - name: Build
         run: cargo +stable nextest run --profile ci -p vibe-e2e -p vibe-cli -p vibe-acp --all-features --no-run
@@ -57,7 +59,9 @@ jobs:
         if: always()
         with:
           name: e2e-log
-          path: ${{ runner.temp }}/e2e.log
+          path: |
+            ${{ runner.temp }}/e2e.log
+            target/tmp/e2e-artifacts
 
   windows-quality:
     name: Quality gates on Windows

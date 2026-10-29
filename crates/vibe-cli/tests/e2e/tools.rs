@@ -470,9 +470,16 @@ pub fn fingerprint(text: &str) -> String {
 /// What stays of a tool message once everything that legitimately differs
 /// between two runs, or between the implementations, is removed.
 pub fn normalize(world: &World, tool: &str, legacy: bool, message: &str) -> String {
+    let root = world.root().to_string_lossy().into_owned();
     let text = message
-        .replace(&world.root().to_string_lossy().into_owned(), "<world>")
+        .replace(&root.replace('\\', "\\\\"), "<world>")
+        .replace(&root, "<world>")
         .replace(world.platform().base(), "<platform>");
+    let text = if cfg!(windows) {
+        forward_slashes(&text)
+    } else {
+        text
+    };
     match tool {
         "run_typescript" => without_stack_frames(&text),
         // `docs/parity.md` ledgers the two guidance lines that follow the base
@@ -575,6 +582,24 @@ fn legacy_error(tool: &str, text: &str) -> String {
     text.to_owned()
 }
 
+/// `text` with the separators of every path under `<world>` written as `/`,
+/// as the expectations measured on Linux spell them.
+fn forward_slashes(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("<world>") {
+        let (head, tail) = rest.split_at(start + "<world>".len());
+        out.push_str(head);
+        let end = tail
+            .find(|c: char| c == '"' || c == '\'' || c == ')' || c == ',' || c.is_whitespace())
+            .unwrap_or(tail.len());
+        out.push_str(&tail[..end].replace("\\\\", "/").replace('\\', "/"));
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Every file of the work tree outside `.git`, and of each session
 /// scratchpad, with the hash of its content.
 pub fn disk_state(world: &World) -> String {
@@ -596,7 +621,11 @@ fn walk(root: &Path, directory: &Path, label: &str, into: &mut Vec<String>) {
         if relative.starts_with(".git") {
             continue;
         }
-        let shown = format!("{label}/{}", relative.to_string_lossy());
+        let parts: Vec<_> = relative
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy())
+            .collect();
+        let shown = format!("{label}/{}", parts.join("/"));
         if path.is_dir() {
             walk(root, &path, label, into);
         } else {
