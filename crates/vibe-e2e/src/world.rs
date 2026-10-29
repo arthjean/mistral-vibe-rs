@@ -616,9 +616,18 @@ fn dunce_canonical(path: &Path) -> Outcome<PathBuf> {
 }
 
 /// What Windows itself reads in any child environment (see
-/// `crates/vibe-cli/tests/support/mod.rs`); empty elsewhere.
+/// `crates/vibe-cli/tests/support/mod.rs`), and `PSModulePath`, without which
+/// Windows PowerShell 5.1 scans every module before its first line, as a
+/// user's environment never makes it; empty elsewhere.
 fn windows_base() -> impl Iterator<Item = (&'static str, std::ffi::OsString)> {
-    const BASE: [&str; 5] = ["SystemRoot", "SystemDrive", "windir", "COMSPEC", "PATHEXT"];
+    const BASE: [&str; 6] = [
+        "SystemRoot",
+        "SystemDrive",
+        "windir",
+        "COMSPEC",
+        "PATHEXT",
+        "PSModulePath",
+    ];
     BASE.into_iter()
         .filter(|_| cfg!(windows))
         .filter_map(|name| std::env::var_os(name).map(|value| (name, value)))

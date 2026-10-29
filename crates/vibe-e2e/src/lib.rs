@@ -66,9 +66,14 @@
 //! needs the jail or its audio sandbox is skipped as `windows by design`. The
 //! system temporary directory lies under the user profile there, so
 //! [`WORLDS_VARIABLE`] names where worlds go instead; CI points it at
-//! `RUNNER_TEMP`. Every child gets the world's home as `USERPROFILE` too. A
-//! trial that fails on Windows because of a product defect carries
-//! [`Scenario::windows_ignore`] with the `AGENTS.md` tag.
+//! `RUNNER_TEMP`. Every child gets the world's home as `USERPROFILE`, its
+//! `tmp` as `TEMP` and `TMP`, and `VIBE_TEST_DISABLE_KEYRING=1`, the
+//! reference's own test hook, since the Windows credential store is the
+//! runner's and a key one trial saves would reach every later one. The PTY
+//! driver types one key every 20 ms there, a person's pace, since the port
+//! reads faster keys as a console paste. A trial that fails on Windows
+//! because of a product defect carries [`Scenario::windows_ignore`] with the
+//! `AGENTS.md` tag.
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 

@@ -127,7 +127,7 @@ pub fn outcome(message: &str) -> String {
 }
 
 fn structured_result(ctx: &mut Ctx) -> Outcome {
-    let world = ctx.world()?;
+    let world = ctx.world_with(vibe_e2e::Setup::default().env("LOG_LEVEL", "DEBUG"))?;
     let server = lookup_server(&world)?;
     add_servers(&world, &server.toml(""))?;
     let messages = run(

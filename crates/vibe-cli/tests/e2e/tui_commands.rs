@@ -393,6 +393,12 @@ fn command_completion(ctx: &mut Ctx) -> Outcome {
     let world = tui_world(ctx, Setup::mistral())?;
     let mut tui = launch(&world, &[])?;
     tui.type_text("/hel")?;
+    // Tab completes what the popup offers, so it waits for the command mode.
+    tui.wait_screen(
+        "\"/ hel\" in the composer",
+        |screen| screen.rows().iter().any(|row| row.trim_end() == "/ hel"),
+        STEP,
+    )?;
     tui.send(&[Key::Tab])?;
     tui.wait_text("/ help", STEP)?;
     tui.send(&[Key::Enter])?;
