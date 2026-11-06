@@ -18,6 +18,7 @@ Usage::
         --test <file>::<function> --row <n> [--output-flag <flag>] [--kind <kind>]
     python3 scripts/parity/repin.py materialize [<sha>... | --accepted] [--checkout <path>]
     python3 scripts/parity/repin.py attest <sha> [--full]
+    python3 scripts/parity/repin.py check [<corpus>...] [--unprobed] [--records <dir>]
     python3 scripts/parity/repin.py accepted
     python3 scripts/parity/repin.py census [--check] [--url <upstream>]
 
@@ -35,6 +36,13 @@ observations on purpose; without it the floors only rise.
 live probe runs instead of the shared checkout; ``--accepted`` builds one per
 commit the manifest accepts. ``attest`` checks an environment against its
 attestation, every file hashed with ``--full``.
+
+``check`` recaptures entries through their drivers, as ``capture`` does, and
+compares what they write with the committed corpora without replacing
+anything; ``--unprobed`` adds one entry of every driver whose reference side
+the run under ``--records`` did not record, which is how the weekly live run
+reaches the drivers no live probe calls. An ``assembled`` entry's driver is
+run for its reference side only. Each outcome goes to ``checks.jsonl``.
 
 ``census`` compares the pin with upstream's newest release through a static
 census of both trees (``scripts/parity/sentinel.py``) and records it in
@@ -319,9 +327,15 @@ def driver_command(driver: list[str]) -> list[str]:
     return list(driver)
 
 
-def capture(name: str, commit: str, accept_shrink: bool, hand_assembled: bool) -> list[str]:
+def capture(
+    name: str, commit: str, accept_shrink: bool, hand_assembled: bool, compare: bool = False
+) -> list[str]:
     """Runs the driver of the entry ``name`` and moves every corpus it wrote
     into place, returning the paths it refreshed.
+
+    With ``compare``, nothing is replaced or recorded: the corpora the driver
+    wrote are compared with the committed ones, every staged file is removed,
+    and the paths returned are the corpora whose recapture differs.
 
     Every entry the same driver command writes is refreshed together. A driver
     with an output flag per corpus writes each one beside it under a staged
@@ -421,6 +435,13 @@ def capture(name: str, commit: str, accept_shrink: bool, hand_assembled: bool) -
             moved = not in_place and now != before[member["corpus"]]
             if moved or listed["sha256"] != member["sha256"]:
                 raise RepinError(f"{member['corpus']} changed during capture; rerun")
+        if compare:
+            read = lambda path: json.loads(path.read_text(encoding="utf-8"))  # noqa: E731
+            return [
+                member["corpus"]
+                for member in group
+                if read(staged[member["corpus"]]) != read(REPOSITORY / member["corpus"])
+            ]
         for member in group:
             record(member, staged[member["corpus"]], accept_shrink)
             if not in_place:
@@ -437,6 +458,101 @@ def capture(name: str, commit: str, accept_shrink: bool, hand_assembled: bool) -
                     path.unlink(missing_ok=True)
         shutil.rmtree(workspace, ignore_errors=True)
     return [member["corpus"] for member in group]
+
+
+def driver_name(entry: dict[str, Any]) -> str | None:
+    """The script name a capture records in ``drivers.jsonl``
+    (``reference.py``), or ``None`` for an entry no Python driver writes."""
+
+    driver = entry.get("driver")
+    return Path(driver[0]).name if driver and driver[0].endswith(".py") else None
+
+
+def ran_drivers(records: Path) -> set[str]:
+    """The drivers whose reference side a run recorded under ``records``."""
+
+    path = records / "drivers.jsonl"
+    if not path.is_file():
+        return set()
+    names = set()
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            names.add(json.loads(line).get("driver"))
+        except ValueError:
+            continue
+    return names
+
+
+def check(names: list[str], unprobed: bool, records: Path) -> int:
+    """Recaptures the reference for each named entry, or with ``unprobed``
+    for one entry of every driver no live probe ran, and compares what it
+    writes with the committed corpus without replacing anything.
+
+    An ``assembled`` corpus is merged by hand from what its driver measures,
+    so its driver is run for its reference side and nothing is compared.
+    Every outcome is appended to ``checks.jsonl`` under ``records`` for the
+    live summary. Returns the exit status: non-zero when any recapture differs
+    or fails.
+    """
+
+    manifest = provenance.load_manifest()
+    entries = [find_entry(manifest, name) for name in names]
+    if unprobed:
+        ran = ran_drivers(records)
+        seen: set[str] = set()
+        for entry in manifest["entries"]:
+            name = driver_name(entry)
+            if name and name not in ran and name not in seen and entry["kind"] != "fixture":
+                seen.add(name)
+                entries.append(entry)
+    if not entries:
+        print("every driver's reference side already ran", file=sys.stderr)
+        return 0
+    status = 0
+    for entry in entries:
+        corpus = entry["corpus"]
+        outcome: dict[str, Any] = {"driver": driver_name(entry), "corpus": corpus}
+        try:
+            if entry["kind"] == "assembled":
+                result = subprocess.run(
+                    driver_command(entry["driver"]),
+                    cwd=REPOSITORY,
+                    env={key: value for key, value in os.environ.items() if key != "FORCE_COLOR"},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    raise RepinError(
+                        f"the driver exited with {result.returncode}: {result.stderr.strip()[-2000:]}"
+                    )
+                outcome["outcome"] = "ran"
+            else:
+                differing = capture(corpus, EXPECTED_COMMIT, False, False, compare=True)
+                outcome["outcome"] = "differs" if differing else "matches"
+                if differing:
+                    outcome["detail"] = "a fresh capture differs for " + ", ".join(differing)
+        except (RepinError, materialize.AttestationError, OSError) as error:
+            outcome["outcome"] = "failed"
+            outcome["detail"] = str(error)
+        if outcome["outcome"] in ("differs", "failed"):
+            status = 1
+        print(f"{corpus}: {outcome['outcome']}" + (f" ({outcome['detail']})" if "detail" in outcome else ""))
+        try:
+            records.mkdir(parents=True, exist_ok=True)
+            with (records / "checks.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(outcome) + "\n")
+        except OSError:
+            pass
+    return status
+
+
+def default_records() -> Path:
+    """``parity/`` under the Cargo target directory, where the Rust gate and
+    ``reference.py`` record what ran."""
+
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or REPOSITORY / "target")
+    return (target if target.is_absolute() else REPOSITORY / target) / "parity"
 
 
 def add(arguments: argparse.Namespace) -> str:
@@ -502,6 +618,21 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         default=materialize.DEFAULT_CACHE / "upstream.git",
         help="the bare repository upstream commits are fetched into",
+    )
+    checking = commands.add_parser(
+        "check", help="recapture entries and compare them with the committed corpora"
+    )
+    checking.add_argument("corpora", nargs="*", help="manifest paths or unique suffixes")
+    checking.add_argument(
+        "--unprobed",
+        action="store_true",
+        help="also check one entry of every driver whose reference side the run did not record",
+    )
+    checking.add_argument(
+        "--records",
+        type=Path,
+        default=default_records(),
+        help="where the run recorded its drivers (`drivers.jsonl`) and checks go",
     )
     attesting = commands.add_parser("attest", help="check an environment against its attestation")
     attesting.add_argument("commit")
@@ -574,6 +705,10 @@ def main() -> int:
             for commit in dict.fromkeys(commits):
                 print(materialize.materialize(commit, arguments.checkout))
             return 0
+        if arguments.command == "check":
+            if not arguments.corpora and not arguments.unprobed:
+                raise RepinError("name the corpora to check, or pass `--unprobed`")
+            return check(arguments.corpora, arguments.unprobed, arguments.records)
         if arguments.command == "attest":
             commit = arguments.commit
             root = materialize.environment_root(commit)

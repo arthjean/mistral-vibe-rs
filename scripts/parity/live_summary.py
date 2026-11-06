@@ -6,7 +6,9 @@ The Rust gate ``vibe_core::parity::live`` appends a line to
 ``target/parity/probes.jsonl`` for every live probe that ran and to
 ``skips.jsonl`` for every one that skipped; every corpus replay appends one to
 ``replays.jsonl``; every capture whose reference side ran appends one to
-``drivers.jsonl`` (``scripts/parity/reference.py``). This script counts them,
+``drivers.jsonl`` (``scripts/parity/reference.py``); every recapture of a
+driver no probe calls appends one to ``checks.jsonl``
+(``repin.py check --unprobed``). This script counts them,
 and with a nextest JUnit report classes every failed test:
 
 * **provenance**: a corpus outside the manifest's rules (the messages of
@@ -142,8 +144,17 @@ def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
     skips = read_lines(records / "skips.jsonl")
     replays = read_lines(records / "replays.jsonl")
     drivers = read_lines(records / "drivers.jsonl")
+    checks = read_lines(records / "checks.jsonl")
     probing = {line["test"] for line in probes if line.get("test")}
     failed = failures(arguments.junit)
+    # A driver no live probe calls is recaptured by `repin.py check
+    # --unprobed`; what differs is a behavior result like a failed probe.
+    failed += [
+        (f"repin.py check {line.get('corpus')}", str(line.get("detail", "")))
+        for line in checks
+        if line.get("outcome") in ("differs", "failed")
+    ]
+    probing |= {name for name, _ in failed if name.startswith("repin.py check ")}
     classes = Counter(classify(name, text, probing) for name, text in failed)
     if arguments.materialization_failed:
         classes["environment"] += 1
@@ -162,6 +173,11 @@ def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
         f"| Live probes skipped | {len(skips)} |",
         f"| Reference drivers run | {len({line.get('driver') for line in drivers})} |",
     ]
+    if checks:
+        lines.append(
+            f"| Unprobed drivers checked | {len(checks)} "
+            f"({sum(line.get('outcome') in ('matches', 'ran') for line in checks)} matching or run) |"
+        )
     if arguments.junit is not None:
         lines.append(f"| Tests failed | {len(failed)} |")
         for name in ("behavior", "environment", "provenance", "other"):

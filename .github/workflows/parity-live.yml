@@ -129,6 +129,27 @@ jobs:
           fi
           chmod -R u+w "${home}" && rm -rf "${home}"
           exit "${status}"
+      # A driver no live probe calls (an assembled runtime oracle, the
+      # composer trace oracle, the parameter schema driver) is recaptured here
+      # and compared with its corpus, so every driver's reference side runs.
+      - name: Check the drivers no live probe calls
+        id: unprobed
+        if: always() && steps.materialize.outcome == 'success' && steps.suite.outputs.timed_out != 'true'
+        run: |
+          budget=$(( PARITY_LIVE_DEADLINE - $(date +%s) ))
+          if [ "${budget}" -lt 60 ]; then
+            echo "The suite left no time for the unprobed drivers."
+            echo "timed_out=true" >> "${GITHUB_OUTPUT}"
+            exit 1
+          fi
+          status=0
+          env -u FORCE_COLOR -u MISTRAL_API_KEY VIBE_REFERENCE="${RUNNER_TEMP}/mistral-vibe" \
+            timeout --signal=INT --kill-after=1m "${budget}s" \
+            python3 scripts/parity/repin.py check --unprobed || status=$?
+          if [ "${status}" -eq 124 ] || [ "${status}" -eq 137 ]; then
+            echo "timed_out=true" >> "${GITHUB_OUTPUT}"
+          fi
+          exit "${status}"
       - name: Summarize the live measurement
         if: always()
         run: |
@@ -136,7 +157,7 @@ jobs:
           if [ "${{ steps.materialize.outcome }}" != "success" ]; then
             flags=(--materialization-failed)
           fi
-          if [ "${{ steps.suite.outputs.timed_out }}" = "true" ]; then
+          if [ "${{ steps.suite.outputs.timed_out }}" = "true" ] || [ "${{ steps.unprobed.outputs.timed_out }}" = "true" ]; then
             flags+=(--timed-out)
           fi
           python3 scripts/parity/live_summary.py --title "Live parity" \

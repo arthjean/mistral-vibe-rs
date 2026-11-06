@@ -61,7 +61,20 @@ pub const ATTESTATION_SCHEMA: u32 = 1;
 pub const MATERIALIZE: &str = "python3 scripts/parity/repin.py materialize";
 
 /// The two attested trees, relative to the environment root.
-pub const TREES: [&str; 2] = ["source", ".venv"];
+pub const TREES: [&str; 2] = [SOURCE, ".venv"];
+
+/// The tree holding the commit as `git archive` exported it, relative to the
+/// environment root.
+pub const SOURCE: &str = "source";
+
+/// The reference's source files in the environment at `root`, which
+/// [`gate`] returns: a probe reads a reference file such as `action.yml`
+/// here, never at `root` itself, where only the attestation and the two
+/// trees sit.
+#[must_use]
+pub fn source_tree(root: &Path) -> PathBuf {
+    root.join(SOURCE)
+}
 
 /// Directory names no attestation covers: bytecode caches the interpreter
 /// writes next to what it imports.

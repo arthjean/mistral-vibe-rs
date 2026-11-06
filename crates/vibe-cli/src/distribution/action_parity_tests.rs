@@ -122,6 +122,7 @@ fn the_recorded_reference_inputs_match_the_pinned_checkout() {
     let Some(root) = pinned_reference("action inputs") else {
         return;
     };
-    let text = fs::read_to_string(root.join("action.yml")).expect("the reference action");
+    let text = fs::read_to_string(vibe_core::parity::live::source_tree(&root).join("action.yml"))
+        .expect("the reference action");
     assert_eq!(declared_inputs(&text), reference_inputs());
 }

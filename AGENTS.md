@@ -96,7 +96,8 @@ documentation use the Linux form; read them relative to the local checkout.
   measured, and a live parity claim comes from a Linux run with
   `VIBE_PARITY_REQUIRE_LIVE=1` (Windows probes answer the reference's Windows
   behavior, which Linux-captured corpora do not hold). The scheduled
-  `.github/workflows/parity-live.yml` is that run, and the daily
+  `.github/workflows/parity-live.yml` is that run (it also recaptures, through
+  `repin.py check --unprobed`, every driver no live probe calls), and the daily
   `upstream-sentinel.yml` reports how far the pin is behind upstream
   (`repin.py census`).
 

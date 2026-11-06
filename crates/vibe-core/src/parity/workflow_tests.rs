@@ -127,6 +127,10 @@ fn the_live_workflow_runs_on_a_schedule_with_a_read_only_token_and_pinned_action
         "{LIVE} runs the suite in require-live mode"
     );
     assert!(
+        workflow.contains("python3 scripts/parity/repin.py check --unprobed"),
+        "{LIVE} recaptures the drivers no live probe calls, so every driver's reference side runs"
+    );
+    assert!(
         workflow.contains("--require-live --require-drivers")
             && workflow.contains("--materialization-failed")
             && workflow.contains("--timed-out"),
