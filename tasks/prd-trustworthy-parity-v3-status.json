@@ -17,10 +17,10 @@
     {
       "id": "EP-002",
       "title": "Attested Live Measurement and Upstream Tracking",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 5,
-      "stories_done": 0
+      "stories_done": 5
     },
     {
       "id": "EP-003",
@@ -100,69 +100,69 @@
       "id": "US-004",
       "title": "Validate assumption: pinned environments materialize from an archive on Linux and Windows",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-06",
+      "reviewed_at": "2026-11-06"
     },
     {
       "id": "US-005",
       "title": "Reference materializer and attestation gate",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-004"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-06",
+      "reviewed_at": "2026-11-06"
     },
     {
       "id": "US-006",
       "title": "Loud skips and the documented gate in CI",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-005"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-06",
+      "reviewed_at": "2026-11-06"
     },
     {
       "id": "US-007",
       "title": "Scheduled live parity workflow",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-006"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-06",
+      "reviewed_at": "2026-11-06"
     },
     {
       "id": "US-008",
       "title": "Upstream sentinel and static census",
       "epic": "EP-002",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-001"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-06",
+      "reviewed_at": "2026-11-06"
     },
     {
       "id": "US-009",
