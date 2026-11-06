@@ -329,9 +329,8 @@ fn plugin_store(world: &World) -> String {
                     }
                 })
                 .collect();
-            let metadata = entry.metadata();
             #[cfg(unix)]
-            let mode = metadata.as_ref().map_or(0, |m| {
+            let mode = entry.metadata().as_ref().map_or(0, |m| {
                 use std::os::unix::fs::PermissionsExt;
                 m.permissions().mode() & 0o777
             });
