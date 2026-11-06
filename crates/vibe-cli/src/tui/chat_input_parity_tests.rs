@@ -172,6 +172,17 @@ fn load_manifest() -> Result<Manifest, String> {
     Ok(manifest)
 }
 
+/// Asserts the trace index and every trace it lists are the files the parity
+/// manifest records, at an accepted commit and unchanged since
+/// `scripts/parity/oracle.py` captured them.
+fn assert_trace_provenance(manifest: &Manifest) {
+    let root = "crates/vibe-cli/tests/parity";
+    vibe_core::parity::manifest::assert_corpus(&format!("{root}/manifest.json"));
+    for trace in &manifest.traces {
+        vibe_core::parity::manifest::assert_corpus(&format!("{root}/{}", trace.file));
+    }
+}
+
 fn load_expectations() -> Result<Expectations, String> {
     let expectations: Expectations = read_json(&parity_directory().join("expectations.json"))?;
     if expectations.version != SCHEMA_VERSION {
@@ -214,6 +225,7 @@ fn trace_observations(trace: &Map<String, Value>) -> Vec<Value> {
 #[test]
 fn corpus_declares_every_gap_trace_and_expectation() -> Result<(), String> {
     let manifest = load_manifest()?;
+    assert_trace_provenance(&manifest);
     let expectations = load_expectations()?;
     let directory = parity_directory();
 
@@ -965,6 +977,7 @@ fn validate_trace_schema(trace: &Map<String, Value>, id: &str) -> Result<(), Str
 )]
 fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
     let manifest = load_manifest()?;
+    assert_trace_provenance(&manifest);
     let expectations = load_expectations()?;
     let directory = parity_directory();
     let temporary = tempfile::tempdir().map_err(|error| format!("workspace root: {error}"))?;

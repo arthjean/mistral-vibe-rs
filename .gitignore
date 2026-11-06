@@ -7,3 +7,6 @@ target
 __pycache__/
 *.py[cod]
 dist/
+
+# Staged outputs `scripts/parity/repin.py capture` writes beside a corpus.
+*.staged

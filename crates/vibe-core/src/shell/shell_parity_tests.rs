@@ -989,6 +989,7 @@ fn every_requirement_ledger_entry_names_a_corpus_case() {
 /// rot.
 #[test]
 fn every_resolution_matches_the_reference() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/shell-policy/policy.json");
     let corpus = corpus();
     assert_eq!(corpus.resolutions.len(), corpus.counts.resolution_cases);
     let workspace = OperandWorkspace::build();

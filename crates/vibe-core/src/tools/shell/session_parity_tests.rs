@@ -1038,6 +1038,7 @@ async fn replay(corpus: &Corpus, scratch: &Path) -> Vec<(String, String, Vec<Val
 
 #[tokio::test(flavor = "multi_thread")]
 async fn shell_sessions_match_the_reference_except_for_the_recorded_gap() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/shell-session/corpus.json");
     let corpus = corpus();
     assert_corpus_floor(&corpus);
     if let Some(reason) = skip_reason(&corpus) {

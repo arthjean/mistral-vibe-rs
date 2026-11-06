@@ -38,10 +38,6 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 344;
-
 /// A pointer this port answers differently in some scenarios, and why.
 struct Divergence {
     /// The scenario it applies to, `*` for every one, or `<prefix>/*` for every
@@ -82,7 +78,6 @@ fn the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledg
     Replay {
         heading: "protocol parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

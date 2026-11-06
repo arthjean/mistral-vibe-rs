@@ -259,12 +259,25 @@ pub struct Capture {
 }
 
 impl Capture {
-    /// The command that regenerates the corpus.
+    /// The command that regenerates the corpus: `repin.py capture` on the
+    /// manifest entry this script and family write, which stages the output
+    /// and records its digest, or the bare driver when no entry names it.
     fn command(&self) -> String {
-        std::iter::once(self.script)
+        let driver: Vec<&str> = std::iter::once(self.script)
             .chain(self.family.iter().copied())
-            .collect::<Vec<_>>()
-            .join(" ")
+            .collect();
+        super::manifest::load()
+            .entries
+            .iter()
+            .find(|entry| {
+                entry.driver.as_ref().is_some_and(|listed| {
+                    listed.iter().map(String::as_str).eq(driver.iter().copied())
+                })
+            })
+            .map_or_else(
+                || driver.join(" "),
+                |entry| format!("{} capture {}", super::manifest::REPIN, entry.corpus),
+            )
     }
 
     /// Runs the script under `python3` from the workspace root, `arguments`
@@ -678,11 +691,11 @@ fn quote(observation: &Value, pointer: &str) -> String {
 pub struct Replay<'a> {
     /// What the summary line opens with, such as `review parity:`.
     pub heading: &'a str,
-    /// The committed corpus.
+    /// The committed corpus, as `include_str!` embeds it. Its manifest entry
+    /// supplies the commits it may record and the floor its scenarios may
+    /// not fall below, so a recapture that lost coverage fails here and not
+    /// only on the machine that made it.
     pub corpus: &'a str,
-    /// The scenarios the corpus may not fall below, so a recapture that lost
-    /// coverage fails here and not only on the machine that made it.
-    pub floor: usize,
     pub capture: &'a Capture,
     /// What hands the script this port's binary, such as `--server` and the
     /// stdio fixture.
@@ -693,16 +706,17 @@ pub struct Replay<'a> {
 }
 
 impl Replay<'_> {
-    /// Captures this port, compares every scenario with the corpus under
-    /// `entries`, and concludes the tally.
+    /// Asserts the corpus is the one its manifest entry records, at an
+    /// accepted commit and above its floors, then captures this port,
+    /// compares every scenario with the corpus under `entries`, and concludes
+    /// the tally.
     pub fn run<'l>(&self, entries: impl IntoIterator<Item = &'l dyn Entry>) {
+        let listed = super::manifest::assert_replayed(self.corpus);
         let corpus: Value = serde_json::from_str(self.corpus).expect("the corpus parses");
         let recorded = scenarios(&corpus);
         assert!(
-            recorded.len() >= self.floor,
-            "the corpus holds {} scenarios, below the floor of {}",
-            recorded.len(),
-            self.floor
+            !recorded.is_empty(),
+            "{listed} holds no scenarios, so the replay would compare nothing"
         );
         let replayed = self.capture.port(self.port, self.output);
         let mut tally = Tally::new(entries);

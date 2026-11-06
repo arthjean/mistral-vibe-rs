@@ -314,6 +314,7 @@ fn line_splitting_matches_the_reference() {
 
 #[test]
 fn opcodes_match_the_reference() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/checkpoints/opcodes.json");
     let corpus = corpus();
     let mut conforming = 0;
     let mut divergent = Vec::new();
@@ -1135,6 +1136,7 @@ fn against_ledger(
 
 #[test]
 fn the_engine_matches_the_reference_over_every_scenario() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/checkpoints/engine.json");
     let corpus = engine_corpus();
     let mut per_family: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
     let mut all = Vec::new();

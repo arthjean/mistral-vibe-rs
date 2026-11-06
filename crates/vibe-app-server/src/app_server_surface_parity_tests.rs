@@ -347,6 +347,9 @@ fn ledger(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
 
 #[test]
 fn the_inventory_is_exactly_the_reference_inventory() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/app-server-surface/corpus.json",
+    );
     let corpus = corpus();
     let declared = SERVER_METHODS.iter().copied().collect::<BTreeSet<_>>();
     let reference = corpus

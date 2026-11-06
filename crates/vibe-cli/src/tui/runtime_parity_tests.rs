@@ -759,6 +759,9 @@ fn plan_review(path: PathBuf) -> PendingCallback {
 
 #[tokio::test]
 async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-cli/tests/runtime-parity/active-turn.json",
+    );
     let corpus: Corpus =
         serde_json::from_str(include_str!("../../tests/runtime-parity/active-turn.json"))
             .expect("strict active-turn corpus");
@@ -825,6 +828,9 @@ fn message_index(entry_id: &str) -> &str {
 
 #[test]
 fn session_management_corpus_replays_rewind_and_delete_state_machines() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-cli/tests/runtime-parity/session-management.json",
+    );
     let corpus: SessionManagementCorpus = serde_json::from_str(include_str!(
         "../../tests/runtime-parity/session-management.json"
     ))

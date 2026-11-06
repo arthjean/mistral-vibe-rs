@@ -438,6 +438,7 @@ fn the_ledger_reports_an_unrecorded_divergence_and_a_stale_entry() {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    vibe_core::parity::manifest::assert_corpus("crates/vibe-cli/tests/promo/corpus.json");
     let corpus = corpus();
     println!("promo: divergence ledger ({} entries)", DIVERGENCES.len());
     for (case, reason) in DIVERGENCES {

@@ -115,6 +115,9 @@ fn corpus() -> Corpus {
 
 #[test]
 fn the_corpus_names_the_pinned_reference() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+    );
     let corpus = corpus();
     assert_eq!(corpus.schema_version, 1);
     assert_eq!(corpus.oracle, "tui-interactions-oracle.py");

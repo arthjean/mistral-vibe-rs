@@ -802,6 +802,9 @@ fn observe_update_check(
 
 #[test]
 fn corpus_replays_update_attention_narration_and_exit_behavior() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-cli/tests/runtime-parity/terminal-services.json",
+    );
     let corpus: Corpus = serde_json::from_str(include_str!(
         "../../../tests/runtime-parity/terminal-services.json"
     ))

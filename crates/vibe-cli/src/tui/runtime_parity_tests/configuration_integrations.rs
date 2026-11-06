@@ -445,6 +445,9 @@ fn overlay_observation(label: &str, overlay: &Overlay) -> String {
 
 #[test]
 fn corpus_replays_presentations_and_typed_auth_effects() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-cli/tests/runtime-parity/configuration-integrations.json",
+    );
     let corpus: Corpus = serde_json::from_str(include_str!(
         "../../../tests/runtime-parity/configuration-integrations.json"
     ))

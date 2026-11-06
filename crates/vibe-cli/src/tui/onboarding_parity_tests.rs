@@ -1925,6 +1925,7 @@ fn run_screen_graph(cases: &[GraphScenario], report: &mut Report) {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    vibe_core::parity::manifest::assert_corpus("crates/vibe-cli/tests/onboarding/corpus.json");
     let corpus = corpus();
     println!(
         "onboarding: divergence ledger ({} entries)",

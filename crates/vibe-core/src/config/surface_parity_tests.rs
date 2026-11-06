@@ -997,6 +997,7 @@ fn the_port_implements_every_strategy_the_reference_reaches() {
 
 #[test]
 fn every_scenario_composes_the_document_the_reference_produces() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/config-surface/corpus.json");
     let corpus = corpus();
     assert!(
         corpus.scenarios.len() >= MINIMUM_SCENARIOS,

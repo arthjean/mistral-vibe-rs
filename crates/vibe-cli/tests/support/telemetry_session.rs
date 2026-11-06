@@ -42,6 +42,7 @@ impl Surfaces {
     /// Replays every scenario recorded on the replayed surfaces and compares
     /// it with the corpus under `ledger`.
     pub fn replay(&self, ledger: &[PatternDivergence], output: &Path) {
+        vibe_core::parity::manifest::assert_replayed(CORPUS);
         let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
         let served = on_surfaces(&corpus, self.served);
         assert!(

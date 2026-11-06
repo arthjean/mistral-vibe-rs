@@ -1,0 +1,3420 @@
+{
+  "schemaVersion": 1,
+  "note": "Every corpus a parity replay reads. Written only by scripts/parity/repin.py; crates/vibe-core/src/parity/manifest_tests.rs checks it.",
+  "transition": [],
+  "entries": [
+    {
+      "corpus": "crates/vibe-acp/tests/acp-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/acp.py",
+        "--harness",
+        "legacy"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-acp/tests/acp_parity_tests.rs::the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "8",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "5cafee5bfd90f474860fbb3ffd97335a4891c467786cbd6bcd8c66e2f5a73e10",
+      "count": 104,
+      "floors": {
+        "argv": 22,
+        "scenarios": 77
+      }
+    },
+    {
+      "corpus": "crates/vibe-acp/tests/acp-parity/unified-corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/acp.py",
+        "--harness",
+        "unified"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-acp/tests/acp_parity_tests.rs::the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "8",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "1e53823a113987d21b15f8a7e4b6e75425e828ac4dff38a25447a91e05e3f1e3",
+      "count": 104,
+      "floors": {
+        "argv": 22,
+        "scenarios": 77
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/src/wire_validation/schema.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/app_server_params.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/src/wire_validation/wire_validation_tests.rs::every_validator_the_schema_names_is_implemented",
+      "row": "17",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "11c3756a025882fcb05d6e4a40e1f84006611f58ef6cb0891d30e8ae8021b7ac",
+      "count": 344,
+      "floors": {
+        "defs": 178,
+        "functions": 9,
+        "lifecycle": 1,
+        "methods": 139,
+        "nested": 1
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/agent-loop-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/agent_loop.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/agent_loop_parity_tests.rs::the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "34",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "491746552f497d952a9c44ad6cbd9ee86eabda32b87a517fd3ccf5abc45537dc",
+      "count": 33,
+      "floors": {
+        "scenarios": 32
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/agents-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/agents.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/agents_parity_tests.rs::the_port_runs_every_agent_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "20",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8548ce06e2d60ff812170faa43cb9bca8ff10e3e66c8015fe441778f23d3aaf0",
+      "count": 38,
+      "floors": {
+        "scenarios": 37
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/app-server-surface/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/app_server_surface.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/src/app_server_surface_parity_tests.rs::the_inventory_is_exactly_the_reference_inventory",
+      "row": "17",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bb3a384544500905c5604f97caf662c99de8125038efb207936139fabfe0cc65",
+      "count": 751,
+      "floors": {
+        "absentEnums": 0,
+        "clientToolMethods": 7,
+        "enums": 24,
+        "errorCodes": 15,
+        "methods": 139,
+        "models": 498,
+        "notifications": 21,
+        "serverRequests": 1,
+        "unions": 11
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/connectors-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/connectors.py",
+        "--harness",
+        "legacy"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/connectors_parity_tests.rs::the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "21",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "adeffcef9dc51204a5f1731d336466d5cf584b37ec61f92685babbc6e9c8323c",
+      "count": 43,
+      "floors": {
+        "scenarios": 41
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/connectors-parity/unified-corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/connectors.py",
+        "--harness",
+        "unified"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/connectors_parity_tests.rs::the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "21",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e9e4bebbd9fccc3bc29ddc0bd901c02ae252e87c8f9d8f4d0cf7f16283e755d7",
+      "count": 9,
+      "floors": {
+        "scenarios": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/experiments/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/experiments.py"
+      ],
+      "output": "--startup-corpus",
+      "test": "crates/vibe-app-server/src/experiments/startup_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "32",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d31d8b818b8d4334683e3b39f26b2fd4bbd35200638cb88d112db8eb99e8a72a",
+      "count": 30,
+      "floors": {
+        "startup": 29
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/hooks-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/hooks.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/hooks_parity_tests.rs::the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "18",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "b2582d3945b9648d4e957d7e5690c43864df8c66f92328713a6873b20539d6f4",
+      "count": 39,
+      "floors": {
+        "scenarios": 38
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/mcp-catalog/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/mcp_catalog.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/mcp_catalog_parity_tests.rs::the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "11",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "5acd1f7d995f0fbe62b2c14e80c7190b88eff1cf1e19e3abba8548e8493f5104",
+      "count": 15,
+      "floors": {
+        "scenarios": 15
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/mcp-oauth/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/mcp_oauth.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/mcp_oauth_parity_tests.rs::every_scenario_matches_the_reference_capture",
+      "row": "11",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "242f11694d68e8f7a16c19106890c3eee2b967e78bccf056f24915a537ecf54f",
+      "count": 49,
+      "floors": {
+        "scenarios": 47
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/mcp-transport/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/mcp_transport.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/mcp_transport_parity_tests.rs::every_scenario_matches_the_reference_mcp_client",
+      "row": "11",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "aacc2133f831a637eddb5bfdcf59524d74ea871b8b1de854c6711dafd0299108",
+      "count": 53,
+      "floors": {
+        "inheritedNames": 6,
+        "scenarios": 45
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/plugins-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/plugins.py",
+        "--family",
+        "server"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/plugins_parity_tests.rs::the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "35",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c35ff4308ee1fa1910696deefffd8c5746673e2779f68ddcfe37afc66ce2c3b6",
+      "count": 11,
+      "floors": {
+        "scenarios": 11
+      },
+      "note": "needs `cargo build -p vibe-app-server --features test-fixtures --bin vibe-mcp-stdio-fixture` first"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/project-links-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/project_links.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/project_links_parity_tests.rs::the_port_answers_every_project_links_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "25",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8c225b35b15d51cfe8c7ebc1660d8e677d0ceed1a6a2dd9734a40f69e5b6d592",
+      "count": 120,
+      "floors": {
+        "scenarios": 114
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/protocol-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/app_server_protocol.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/protocol_parity_tests.rs::the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "17",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f523ae605bf38330baf4217a84544f8750a304d83ee5b8f4635d6a8599887e33",
+      "count": 344,
+      "floors": {
+        "scenarios": 327
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/review-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/review.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/review_parity_tests.rs::the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "15",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9c650ad5999ac0904fb9a158a2bdef1c7c95d7d4267a49bd6679e7d55c1867c0",
+      "count": 29,
+      "floors": {
+        "scenarios": 28
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/rewind-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/rewind.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/rewind_parity_tests.rs::the_port_rewinds_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "9",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f358524acedb857c13315f66ec2ebd7bfa3214a82f973aa64e0d59be15ae0bcb",
+      "count": 12,
+      "floors": {
+        "scenarios": 12
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/session-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/sessions.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/session_parity_tests.rs::the_port_answers_every_session_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "16",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2187e95d0ad23b977ceb56af877b888694ab5fa36c68283abd991e8aee77b2a9",
+      "count": 25,
+      "floors": {
+        "scenarios": 24
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/teleport-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/teleport.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/teleport_parity_tests.rs::the_port_runs_every_teleport_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "22",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "b9a28029a3914466ed2c8036f130882ce6a72c8f41319bd85a99e07686a49bec",
+      "count": 104,
+      "floors": {
+        "scenarios": 99
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/tool-execution/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_execution.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-app-server/src/tool_execution_parity_tests.rs::tool_execution_matches_the_reference_except_for_the_recorded_gap",
+      "row": "3",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "84c758abc5004ac3e7f04b0921ae80e76fa2a3b977d4ed7ae2f9a1b988b0aaee",
+      "count": 103,
+      "floors": {
+        "cases": 98
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/tool-surface/baseline.json",
+      "kind": "fixture",
+      "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_published_tool_surface_matches_the_reference_except_for_the_recorded_gap",
+      "row": "3",
+      "note": "hand-owned: the recorded gaps of the tool surface"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/tool-surface/digest.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_surface.py"
+      ],
+      "output": "--digest",
+      "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_published_tool_surface_matches_the_reference_except_for_the_recorded_gap",
+      "row": "3",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c36d272a6e991c9ed9e543a409c7605c09763e9e345d4a925560e4cb375d7bd8",
+      "count": 30,
+      "floors": {
+        "managedTools": 16,
+        "tools": 12,
+        "windowsTools": 2
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/tool-surface/fixtures.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_surface.py"
+      ],
+      "output": "--fixtures",
+      "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::arguments_the_reference_rejects_are_rejected_here_too",
+      "row": "3",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bf13d8a5fb366279fafdc59d0a5dbde945452f42545800746fbb9dd1bd7231aa",
+      "count": 102,
+      "floors": {
+        "fixtures": 89,
+        "multiArgument": 9
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/tool-surface/gates.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_surface.py"
+      ],
+      "output": "--gates",
+      "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_configured_filters_publish_what_the_reference_publishes",
+      "row": "3",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "330d17e68be7aebcccc913638410c5ccd75a588a1c0ae8ef6bbace7b58811277",
+      "count": 10,
+      "floors": {
+        "gates": 10
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/tool-surface/quadrants.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_surface.py"
+      ],
+      "output": "--quadrants",
+      "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_four_surface_quadrants_publish_what_the_reference_publishes",
+      "row": "3",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "617d904d5a51121b9dc155f0645c8603ee9ed79b458ec7a0d5e9fa30293a7400",
+      "count": 4,
+      "floors": {
+        "quadrants": 4
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/unified-harness-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/unified_harness.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/unified_harness_parity_tests.rs::the_port_runs_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "36",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bed5a2acc95600bfb7dd51559da8db0aa5bde69ff8a431c5f24e4bc62601fc73",
+      "count": 91,
+      "floors": {
+        "scenarios": 87
+      }
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/wire-validation/cases.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/app_server_params.py"
+      ],
+      "output": "--cases",
+      "test": "crates/vibe-app-server/src/wire_validation/wire_validation_tests.rs::validation_answers_as_the_reference_does",
+      "row": "17",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d443d7b43950c3991ed47e9190fc8183da74d6a488cdd06458d1c06aa449d5c0",
+      "count": 7034,
+      "floors": {
+        "cases": 6683
+      },
+      "note": "the same run captures crates/vibe-app-server/src/wire_validation/schema.json, listed as its own entry"
+    },
+    {
+      "corpus": "crates/vibe-app-server/tests/workspace-trust/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/workspace_trust.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-app-server/tests/workspace_trust_parity_tests.rs::the_port_answers_every_trust_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "12",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c53e19036b76e2b07d8da01f697943d5546616698ef6f56fe45cd65598e7e686",
+      "count": 29,
+      "floors": {
+        "scenarios": 28
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/autocompletion/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/autocompletion.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-cli/src/tui/completion/path/autocompletion_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "23",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9fb105ae7a5b4f3ab787a3ae7613690934a70ea9075637398d04416f452215fa",
+      "count": 218,
+      "floors": {
+        "changes": 16,
+        "collect": 3,
+        "constants": 8,
+        "controller": 9,
+        "fixtures": 8,
+        "fuzzy": 5,
+        "gitChanges": 1,
+        "gitWalk": 2,
+        "ignoreRules": 74,
+        "inlineSkill": 2,
+        "pathPrompt": 2,
+        "ranking": 38,
+        "walk": 8,
+        "watchFilter": 36
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/commands/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/commands.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-cli/src/tui/commands_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "2",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "3157ac9b2a087914beccdf7f01e9dbb5ee4083ccff8ac2a46eb904d9e7035a8d",
+      "count": 438,
+      "floors": {
+        "availability": 6,
+        "counts": 4,
+        "dispatch": 59,
+        "handlers": 122,
+        "helpCommands": 33,
+        "helpDocument": 4,
+        "helpProse": 45,
+        "helpSections": 3,
+        "inventory": 33,
+        "logLevelApply": 10,
+        "logLevelPicker": 11,
+        "parse": 58,
+        "traits": 33
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/onboarding/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/onboarding.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-cli/src/tui/onboarding_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "31",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "250ab87afa029ff4cc6b11ee9bc079de733cf9630b8dcfe282a60bf9022315ba",
+      "count": 88,
+      "floors": {
+        "constants": 7,
+        "domainValidation": 25,
+        "screenGraph": 39,
+        "screenProse": 9,
+        "terminating": 5
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/expectations.json",
+      "kind": "fixture",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "note": "hand-owned: which trace dimensions are expected to match"
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/manifest.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::corpus_declares_every_gap_trace_and_expectation",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "6c280c2677abf6db3f5000ad2f2699ad4fe0f49874ae2f60fd3935cd3ac1652c",
+      "count": 124,
+      "floors": {
+        "gaps": 20,
+        "traces": 96,
+        "workspaces": 2
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/async-cancelled-by-space.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "fe99d0148fcc49c7bbcc060e984adee275a55cf2ad485d5714d63ee5a102cbc7",
+      "count": 23,
+      "floors": {
+        "capabilities": 1,
+        "events": 5,
+        "initial": 3,
+        "observations": 5,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/async-generation-supersedes.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "fc1c96c08b1cc668103025eee6facd4934e3e28d91d1bb1c379ae1ef7180b324",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/async-history-recall-closes.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "1beb3130512102de175fb9f0a534c8d3834afc5a97636d3a796c223f81a9d714",
+      "count": 26,
+      "floors": {
+        "capabilities": 1,
+        "events": 6,
+        "initial": 4,
+        "observations": 6,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/clipboard-implicit-empty-paste.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8187bd7298b12f42aa8934cb7f87e5a091c53e432f0762d4c3719746ff50b0f3",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/clipboard-whitespace-paste.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8f6ceefa3399389234ef18e913565ae35dada2e73f3641549c4ce7cc7f559102",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/commands-excluded.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "0bb92545ccff9096d84a48f2623a0823a6390861650c48bfd2b3674aaa883305",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/commands-full-surface.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "30a1109b843fc48a05fa8e739c9d6d975bb7cb8382d14f57c766c259e2c84f03",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/commands-unknown-alias.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "dbc6ec04abfd6b8ce686523651e62f72f46d990ab18c710987181034bba9aa64",
+      "count": 23,
+      "floors": {
+        "capabilities": 1,
+        "events": 5,
+        "initial": 3,
+        "observations": 5,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/corpus-dot-query.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9be8100022ce741cda9d7c7344f6eb1817a3d1fdd73530cadd9d074c9933eec3",
+      "count": 33,
+      "floors": {
+        "capabilities": 1,
+        "events": 10,
+        "initial": 3,
+        "observations": 10,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/corpus-gitignore.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "af7feb81ed42d33457744dc61021617cc1eb750ef28a91da6a3449eaf9b07691",
+      "count": 37,
+      "floors": {
+        "capabilities": 1,
+        "events": 12,
+        "initial": 3,
+        "observations": 12,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/corpus-hidden-files.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d46e6769c55f782191778ecf634d3d58bad92a268fa8752a2ea60ada9a24e9d8",
+      "count": 37,
+      "floors": {
+        "capabilities": 1,
+        "events": 12,
+        "initial": 3,
+        "observations": 12,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/corpus-nested-ranking.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "211cb7ea109f3a1e4cdf685378d4684dcb66c69137fd80c6893172fff538aff4",
+      "count": 29,
+      "floors": {
+        "capabilities": 1,
+        "events": 8,
+        "initial": 3,
+        "observations": 8,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/dnd-absolute-image.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "0e155c2d15450fb709d9ef84ba918e3fec1e5f26e81a49515d75d3891e86c651",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/dnd-escaped-image.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9a2bfdb57b8145dfec551b6485ad60dce4e5f1079765d4119a6fef88eb6d4d8d",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/dnd-text-path-untouched.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "7c0d7e332e05a0cc06b920bbfed65d48d095e7b8b49e1e5e0ae5701bba1854ea",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/external-editor-refreshes-completion.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "88e27e615bc849f101a363a3486ce7b37774431f0f0f91a6ee05ac474dab2fcb",
+      "count": 25,
+      "floors": {
+        "capabilities": 1,
+        "events": 6,
+        "initial": 3,
+        "observations": 6,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/external-editor-replaces-text.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "0fedece64ea583f46ac5ed161f37f4512c8f1d483732a5093e76c08fe5a7e30b",
+      "count": 25,
+      "floors": {
+        "capabilities": 1,
+        "events": 6,
+        "initial": 3,
+        "observations": 6,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/external-editor-unchanged.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "3219fb9b597346bd6480ff6c945f6bd0adbda22e09380a95c864e1b9d67d3605",
+      "count": 25,
+      "floors": {
+        "capabilities": 1,
+        "events": 6,
+        "initial": 3,
+        "observations": 6,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/feedback-other-character.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f626e7576b597d7e9a1c9e992b297922924763e77c2b5661659e25cf9cb2feeb",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/feedback-rating-keys.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "211f7e5ed8beed735c2bf1b273e72772fc79c5d07b5c84b5323ae31834b9d0ad",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/feedback-snooze-key.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "30f72c0a411c99b7fef712e33a8ebae155dfcc9a9ef1811a6603e81bf60f6952",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-down-restores-draft.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d7d8e4a6a38add50e7ae0097281915c97c4211b684046a67077d7f2f6205d848",
+      "count": 34,
+      "floors": {
+        "capabilities": 1,
+        "events": 10,
+        "initial": 4,
+        "observations": 10,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-edit-after-recall.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f4949ae4447f12febc59b864a6385104c44f9008efdfa6fa3d298c53c9f1a1f8",
+      "count": 20,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 4,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-loads-existing.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f9760e95186280a7d1cb1d3beacd31b84487b549926ca5c351e8a1506be1aa42",
+      "count": 22,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 4,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-persists-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9f919004a43fc7b4c4dfba29a081568cf17ecfc451411f7f9ec56646f8f701e2",
+      "count": 68,
+      "floors": {
+        "capabilities": 1,
+        "events": 26,
+        "initial": 4,
+        "observations": 26,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-suppresses-duplicates.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "48527c5e810300001186071878c2ed9270f1fb6fce459ce0cdc35633ecacbd9b",
+      "count": 38,
+      "floors": {
+        "capabilities": 1,
+        "events": 12,
+        "initial": 4,
+        "observations": 12,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-tolerates-corrupt-lines.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "b892627ec3c0ed37bff9ba78b903d003dd24985c891575f67d506e063c35cc53",
+      "count": 18,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 4,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-up-from-first-line.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "32b5f0c5de349c317ca945d4a20d60dde2b3acac68cb5b825e65b8e6690ddd80",
+      "count": 28,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 4,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-up-moves-inside-multiline.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "81ed76f53309be431cd8ef3df78569b84ca8dd7f3258ddb43bf10830570d2eb6",
+      "count": 52,
+      "floors": {
+        "capabilities": 1,
+        "events": 19,
+        "initial": 4,
+        "observations": 19,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/history-wrapped-line-navigation.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "124378e0d8a4128c23b8cb6f39e3cdf2feb5488b82a5b7faede41224c18d3d9a",
+      "count": 140,
+      "floors": {
+        "capabilities": 1,
+        "events": 60,
+        "initial": 4,
+        "observations": 60,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/long-prompt-resize.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "25aa647b7504da1205e22d7e1ef8ee3de21e913edf926e05cd716a5605f4aedb",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/long-prompt-unicode.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bf7c5ff4cdac66632ec1b74ecaf24d2e3e46116ad6891bf2dc21b8ca06f7c9b8",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/long-prompt-viewport-40.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "5d6246933110c91ab7dbbf3f6f0e57c0a8dba16a4babad3d6a847055bbc7cf4e",
+      "count": 17,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 3,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/long-prompt-viewport-80.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "0ce0dfb80fabaac3922d39534c72d3ff87a5a07b9938f57a9c4c7cef2925b366",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mention-directory-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2e191d4754b20250f1a18f98e516a0d616453ce8fc7775fda6e1fac93c718e2e",
+      "count": 53,
+      "floors": {
+        "capabilities": 1,
+        "events": 19,
+        "initial": 3,
+        "observations": 19,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mention-external-path-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e1b388a6cd514947ed36deed09153a53efa80e25803112d62b92a1cd992642b4",
+      "count": 59,
+      "floors": {
+        "capabilities": 1,
+        "events": 22,
+        "initial": 3,
+        "observations": 22,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mention-image-payload-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "6674943b990d09299035f26c4ddbd2c8a54af15d44dcef5320000255577630ac",
+      "count": 17,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 3,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mention-missing-path-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "87142904c12e833415ffcf7a4cf2de8d098720a155872a49908b2693b204f392",
+      "count": 63,
+      "floors": {
+        "capabilities": 1,
+        "events": 24,
+        "initial": 3,
+        "observations": 24,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mention-text-file-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "ca74401eb1a0b5d7a44c8e6ca4a949a3e67898d09657e1b99a92247be3513ec5",
+      "count": 63,
+      "floors": {
+        "capabilities": 1,
+        "events": 24,
+        "initial": 3,
+        "observations": 24,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mode-backspace-keeps-text.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f6c412fad7161ea3e8b935fc0ad3a896035219682292042cffee208e2dab5449",
+      "count": 25,
+      "floors": {
+        "capabilities": 1,
+        "events": 6,
+        "initial": 3,
+        "observations": 6,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mode-backspace-resets.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "153b312392be7d544d552e1325977235e28549c26f8019eb39870c34852985c1",
+      "count": 27,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 3,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mode-teleport-unavailable.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "7120a510ce601557446b3b9ec9c0c9f98940e7adb169eb2072d5d52a99fa234d",
+      "count": 27,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 3,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/modes-bang-prefix.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "321cf2b55b5a38c46350f38562541c6ce4f5a91d49494634e0cef1bf7b9d6065",
+      "count": 27,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 3,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/modes-prompt-default.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2235bb270c630fc1d41669b2bde0322b47866414085b1d74bd35e4797b476a7d",
+      "count": 49,
+      "floors": {
+        "capabilities": 1,
+        "events": 18,
+        "initial": 3,
+        "observations": 18,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/modes-slash-prefix.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "fb8ace73188ed20314db7e023e4edc567305dbf09e5e19fd119f8a647f2aa241",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/modes-teleport-available.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9bb7885b486540ba6146bfef21490458aee24a4f2fffa7197b59028a84885769",
+      "count": 27,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 3,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mouse-click-wide-character.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "48b92224e687be49dceb364110fda4435c77f0beca0753adc105c7ba98168330",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mouse-out-of-bounds.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "fd7bbde8a8e9e9a0721bf7479ddeafd7ef240a111e3907301a61b6ce61f98e92",
+      "count": 27,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 3,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/mouse-shift-selection.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d45ae993eba0b2644a2b711cf0096052f053d7a5ee4c7f72085c1a7aae47179b",
+      "count": 35,
+      "floors": {
+        "capabilities": 1,
+        "events": 11,
+        "initial": 3,
+        "observations": 11,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/paste-control-characters.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8a9264c567e1ce36b7a42542447fbaad36670f0ec0d2667a444ed6d8336c3b2c",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/paste-empty-triggers-clipboard.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9d5b53a5cc0c8202fc75561934937a2da8781091614587c203a7dfa3cac1ff62",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/paste-large-payload.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "6f306bc9395af2b342c1aa1df96405f7ab2f7106cff933a88cd05cd2ed5f6cfa",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/paste-mode-characters.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "126d4b03de7f1d57c72b53be45eb4c98e335b771b2538f38e70ea6eac445e02a",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/paste-multiline-atomic.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "aa10183f7d1d40ca0005af8c5e4a08ef9398939eed45ee7de8fc79beec88f3c9",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-accept-directory.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "6084bae0a0cb44c9fe71888fa079ead8debf9746db48104c9e545ba1eea2dde1",
+      "count": 39,
+      "floors": {
+        "capabilities": 1,
+        "events": 13,
+        "initial": 3,
+        "observations": 13,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-accept-inserts-space.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "f4f2d3851a3f0be9e59033ad95f7b67ff789fdba3ebfce56a4fb634bc2f39f85",
+      "count": 43,
+      "floors": {
+        "capabilities": 1,
+        "events": 15,
+        "initial": 3,
+        "observations": 15,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-mid-token-completion.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e6e58afc17a7051222e5cbf951a6d84ab89b773021dc822d42af29005a7ad79b",
+      "count": 51,
+      "floors": {
+        "capabilities": 1,
+        "events": 19,
+        "initial": 3,
+        "observations": 19,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-trigger-after-punctuation.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e681182ea1a9d75372effa897dcb29e53a0551ecec325d2f60e35ee55b8995ab",
+      "count": 29,
+      "floors": {
+        "capabilities": 1,
+        "events": 8,
+        "initial": 3,
+        "observations": 8,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-trigger-bare-at.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c32d809f8c1e8f3a2c1aad546b0d7c0fa524fb1a38a1937ba2950e248bf38435",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-trigger-basic.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "1282f92ad43849190b9ce030e8bfe8e813bb1dc1f9f80ba92edbd2c7cace6271",
+      "count": 37,
+      "floors": {
+        "capabilities": 1,
+        "events": 12,
+        "initial": 3,
+        "observations": 12,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-trigger-nested.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "0f99658d7b5b788c42eb11183196eda185f80c0386f260d8155d872410d7a7f7",
+      "count": 33,
+      "floors": {
+        "capabilities": 1,
+        "events": 10,
+        "initial": 3,
+        "observations": 10,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/path-trigger-space-closes.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "21bb6be32d136c8bbcb2d4659371853e70aeded6de4d2c1b554f4330ecd43b0d",
+      "count": 33,
+      "floors": {
+        "capabilities": 1,
+        "events": 10,
+        "initial": 3,
+        "observations": 10,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/popup-render-120.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "10b559a34cd1360ef6bdad19cdd3dee10fcd3619464183447f574433067b6e7b",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/popup-render-40.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "5cb1b002ba50007447e004688b19083b074d9521af4610e1ae4685b359e4007d",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/popup-render-80.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "fb4b24272e9ca60fe345bf905866ff0db621f4f6025da90d3f0ae70d2592c8af",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/popup-render-path-bound.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d29b7fbecfe82a2bd1c429b7b6deefa4528fb62dd93f1b2e1ec978743dfc22a1",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/safety-destructive-chrome.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "a07577a5dd00070c5fd4389973ee2ae3e3eeb1a4cf54d6b1724a6bc76107b95c",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/safety-transition.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "dd2e8d3196c5b042e4338fe425bc2402b76246943cc221f6d901b2ff8ca1b59e",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-double-marker.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "86f3d4d32772289d897366146ef588a638a914eff26a95755e61111a3b56b1bb",
+      "count": 17,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 3,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-no-match.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "6c84f1078838ec4ab3b7e26929109d1af55975e07498411b2874adeb432b3318",
+      "count": 23,
+      "floors": {
+        "capabilities": 1,
+        "events": 5,
+        "initial": 3,
+        "observations": 5,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-arrows.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "da78e6849047fab4d1b666a4d9106b6ffc71b83586167f0524e2b75a676ff968",
+      "count": 23,
+      "floors": {
+        "capabilities": 1,
+        "events": 5,
+        "initial": 3,
+        "observations": 5,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-caret-at-line-start.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "067a2873d80fb20e3de5771f9f4c28344b03bb56e426e246dabca5c742db6fc4",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-enter-submits.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8b245f50c2e3470b3ee145d172807e33f0b23de4168bf2cf8d3ac87bd0d19d30",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-escape.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2c3e4ffa4be18bf001d21e0632739c1b5463962237e1e881750dac8842cb2208",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-mid-token-cursor.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9632f9a74537da7d177a55b3c02a9d519588f4bdb0b2aac85462168d46828d0a",
+      "count": 49,
+      "floors": {
+        "capabilities": 1,
+        "events": 18,
+        "initial": 3,
+        "observations": 18,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-right.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8e0a6a7ad365f7cdc11d804501d118fcbbb53909a305ccc9e34fc841b7af4c51",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-tab-applies.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "35011a5fd3c0f3d4e487a0d3ba16666b44e638a58e531336c167c447524e5282",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-popup-wraps-selection.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "177fac86abecc16ba9551f8facb477199e0983bc9e01c55c1cd4063cdcf139ed",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-ranking-c.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "81dc17632c37f21ef874308c35502f04a65548eded17d51cced70a77db5886eb",
+      "count": 17,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 3,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-ranking-empty-boosts.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "15f56edbe810bb655156644759e153016b42bd88cd48deb8e14e949c94344a0e",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-ranking-fuzzy.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e95c8c86c9177d9a932534893d963793c198566a86ef5f8164c202178c78b820",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-skill-entries.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "ebac27d049a27ee0ebf0fd57ac0476d04f88494a09fefd385498315636787ced",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/slash-uppercase-alias.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "94936f67f2dc0acf69b117ca6aff7a5d4a48673c3ea92bd3ebf018968d10dffe",
+      "count": 19,
+      "floors": {
+        "capabilities": 1,
+        "events": 3,
+        "initial": 3,
+        "observations": 3,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/submit-empty-composer.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "aa0804a24b6e56a8b37b0ea21a559b4092cf44ea0e424198d26bf87ee1acbe3e",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/submit-multiline-shift-enter.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "39ffe83ab4cc2c989375a68257935c3c43ccd263a99494d55bda260067b4ef21",
+      "count": 39,
+      "floors": {
+        "capabilities": 1,
+        "events": 13,
+        "initial": 3,
+        "observations": 13,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/submit-strips-whitespace.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9a2c01bc29d7194c13fdb0c7635f02511222cd52ff14369068d4e54ffe451c5f",
+      "count": 53,
+      "floors": {
+        "capabilities": 1,
+        "events": 19,
+        "initial": 3,
+        "observations": 19,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/submit-whitespace-only.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "261cfc9deb7c02d7c71ca2fd7150d9b4b06f3ad07f8455128d317d92113143d9",
+      "count": 21,
+      "floors": {
+        "capabilities": 1,
+        "events": 4,
+        "initial": 3,
+        "observations": 4,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/switching-blocks-submission.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "07b975610679a7f1fe4a33b43febd1949851324a21536046360bb54075b2b34c",
+      "count": 43,
+      "floors": {
+        "capabilities": 1,
+        "events": 15,
+        "initial": 3,
+        "observations": 15,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/switching-resolves.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "25ceb5425e74fe47d7498af46b3b94596411c28e3f78973202c0b4651d922d7b",
+      "count": 47,
+      "floors": {
+        "capabilities": 1,
+        "events": 17,
+        "initial": 3,
+        "observations": 17,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/unicode-combining-backspace.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "a34b005f7811662acbdb9873ee791483c69823413a965c1e41109f853f1cab9d",
+      "count": 25,
+      "floors": {
+        "capabilities": 1,
+        "events": 6,
+        "initial": 3,
+        "observations": 6,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/unicode-emoji-motion.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "42e836c5e8ac33538248b556e41f67901c2c790fa6966603c1819d914671cca2",
+      "count": 29,
+      "floors": {
+        "capabilities": 1,
+        "events": 8,
+        "initial": 3,
+        "observations": 8,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/unicode-home-end.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "8a637549f2cf094c55d7114777f3fee4827fec40569362bf7de65cc635f48e81",
+      "count": 61,
+      "floors": {
+        "capabilities": 1,
+        "events": 23,
+        "initial": 3,
+        "observations": 23,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/unicode-shift-selection.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "1e49cc9aa8a38e2d4907f08680f22497c84e863a1cb3679fee22c1f9732d629b",
+      "count": 39,
+      "floors": {
+        "capabilities": 1,
+        "events": 13,
+        "initial": 3,
+        "observations": 13,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/unicode-wide-characters.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "1d5f8f6601108b186c80f139ae38c6963932cb69022a8eea9128f85c7f610c12",
+      "count": 35,
+      "floors": {
+        "capabilities": 1,
+        "events": 11,
+        "initial": 3,
+        "observations": 11,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/unicode-word-motion.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "225ba171c5a79321ff747f70e34f36ffeac1e19b44248c5d3cfeebdbf4517a23",
+      "count": 51,
+      "floors": {
+        "capabilities": 1,
+        "events": 19,
+        "initial": 3,
+        "observations": 19,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/voice-ctrl-c-cancels.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "174a6ac0e5ac61727fa142cc734072016d07bfdcd8d2027e59b2176d9c26f02a",
+      "count": 17,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 3,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/voice-disabled-ignores-key.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9899daad0ec2e00c810020709e2d74d039c2b01d1f33eceacb347b2a822c9426",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/voice-key-stops-recording.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "81f92915cea457e106657f1f9c521ec9e12bcf56bb978ac3fb7f59dadeeb9dbf",
+      "count": 17,
+      "floors": {
+        "capabilities": 1,
+        "events": 2,
+        "initial": 3,
+        "observations": 2,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/voice-start-failure.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c33f4dfde18f02aae41312337aa78404a5749bd4185dbd3054fe076b31d754c9",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/voice-start-recording.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e91f271cdd9bf47ca5101edd582dccc0734730fa71977edd8e71ade32b1c4b51",
+      "count": 15,
+      "floors": {
+        "capabilities": 1,
+        "events": 1,
+        "initial": 3,
+        "observations": 1,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/parity/traces/voice-transcript-insertion.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/oracle.py"
+      ],
+      "output": "--output",
+      "outputRoot": "crates/vibe-cli/tests/parity",
+      "test": "crates/vibe-cli/src/tui/chat_input_parity_tests.rs::canonical_traces_replay_with_their_declared_parity",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "cd877c167086aeaf128262ffc7e8c78c3cc515b3029c8b30e16b2235d3591228",
+      "count": 27,
+      "floors": {
+        "capabilities": 1,
+        "events": 7,
+        "initial": 3,
+        "observations": 7,
+        "setup": 9
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/programmatic-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/programmatic.py",
+        "--harness",
+        "legacy"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-cli/tests/programmatic_parity_tests.rs::the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "13",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "226d9611dde2b319458d90b2bae521766527655860288f1abe795d66ea4bd64d",
+      "count": 56,
+      "floors": {
+        "scenarios": 54
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/programmatic-parity/unified-corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/programmatic.py",
+        "--harness",
+        "unified"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-cli/tests/programmatic_parity_tests.rs::the_port_answers_every_unified_programmatic_scenario_as_the_corpus_records",
+      "row": "13",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "5ed63e3f6539ce6de91b44855024d51b47ae21c0f2300cc2da1e6a220177fd8f",
+      "count": 56,
+      "floors": {
+        "scenarios": 54
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/promo/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/experiments.py"
+      ],
+      "output": "--promo-corpus",
+      "test": "crates/vibe-cli/src/tui/promo_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "33",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2be87597e306f83e6a50dec4bc04602fe3c3bc81544572b441295ec15e84cf4e",
+      "count": 48,
+      "floors": {
+        "promoConstants": 7,
+        "promoPredicate": 24,
+        "promoProse": 2,
+        "promoState": 14
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/active-turn.json",
+      "kind": "assembled",
+      "driver": [
+        "crates/vibe-cli/tests/runtime-parity/active-turn-oracle.py"
+      ],
+      "output": null,
+      "test": "crates/vibe-cli/src/tui/runtime_parity_tests.rs::active_turn_corpus_replays_every_event_against_runtime_reducers",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "a47be7ebfd10101296036fa08a87a784a3d90e1545bf94310ce8ce5d49ca2a15",
+      "count": 8,
+      "floors": {
+        "traces": 8
+      },
+      "note": "the oracle prints the traces it measures; the corpus around them is merged by hand"
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/cli-surface.json",
+      "kind": "corpus",
+      "driver": [
+        "crates/vibe-cli/tests/runtime-parity/cli-surface-oracle.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-cli/src/cli_surface_parity_tests.rs::replaying_the_corpus_finds_no_difference_the_ledger_does_not_name",
+      "row": "7",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "424e6ff8f6e6041d66a819c64be62116807c065cca14c9c702bad16e8fbfb00a",
+      "count": 200,
+      "floors": {
+        "capture": 7,
+        "cases": 178,
+        "interpreter": 2,
+        "parsers": 4
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/configuration-integrations.json",
+      "kind": "corpus",
+      "driver": [
+        "cargo",
+        "test",
+        "-p",
+        "vibe-cli",
+        "--lib",
+        "tui::runtime_parity_tests::configuration_integrations::regenerate_corpus",
+        "--",
+        "--ignored",
+        "--exact"
+      ],
+      "output": null,
+      "test": "crates/vibe-cli/src/tui/runtime_parity_tests/configuration_integrations.rs::corpus_replays_presentations_and_typed_auth_effects",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c3daeab282f83df71a6546c4c5551cfa123a3300cf5547587692ef67cfc40055",
+      "count": 8,
+      "floors": {
+        "oracle": 3,
+        "oracleProbe": 2,
+        "traces": 3
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/semantic-transcript.json",
+      "kind": "corpus",
+      "driver": [
+        "cargo",
+        "test",
+        "-p",
+        "vibe-cli",
+        "--lib",
+        "tui::runtime_parity_tests::semantic_transcript::regenerate_corpus",
+        "--",
+        "--ignored",
+        "--exact"
+      ],
+      "output": null,
+      "test": "crates/vibe-cli/src/tui/runtime_parity_tests/semantic_transcript.rs::corpus_replays_semantic_regions_errors_activity_and_diagnostics",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "c6d97c75f484216088f7407b9a53a125f9928c7ea7da1636f2a141fde70943a9",
+      "count": 12,
+      "floors": {
+        "oracle": 3,
+        "oracleProbe": 2,
+        "traces": 7
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/session-management.json",
+      "kind": "assembled",
+      "driver": [
+        "crates/vibe-cli/tests/runtime-parity/session-management-oracle.py"
+      ],
+      "output": null,
+      "test": "crates/vibe-cli/src/tui/runtime_parity_tests.rs::session_management_corpus_replays_rewind_and_delete_state_machines",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2bcadf22b1682c315806a6aa07f8d0daad9ad7deb4b1311477260c8d37d7bd23",
+      "count": 3,
+      "floors": {
+        "traces": 3
+      },
+      "note": "the oracle prints the traces it measures; the corpus around them is merged by hand"
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/startup.json",
+      "kind": "assembled",
+      "driver": [
+        "crates/vibe-cli/tests/runtime-parity/startup-oracle.py"
+      ],
+      "output": null,
+      "test": "crates/vibe-cli/src/tui/startup/invocation.rs::pinned_startup_intents_drive_the_executed_invocation_variant",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "9482d03263a85d67712f0152143a7d167e9fbb21a1656b82faaba116ed6bc932",
+      "count": 10,
+      "floors": {
+        "traces": 10
+      },
+      "note": "the oracle prints the traces it measures; the corpus around them is merged by hand"
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/terminal-services.json",
+      "kind": "corpus",
+      "driver": [
+        "cargo",
+        "test",
+        "-p",
+        "vibe-cli",
+        "--lib",
+        "tui::runtime_parity_tests::terminal_services::regenerate_corpus",
+        "--",
+        "--ignored",
+        "--exact"
+      ],
+      "output": null,
+      "test": "crates/vibe-cli/src/tui/runtime_parity_tests/terminal_services.rs::corpus_replays_update_attention_narration_and_exit_behavior",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "38614ce6208b205b2cd4314987925973105ffa81beb862db9fe61e2614d1535b",
+      "count": 20,
+      "floors": {
+        "oracle": 3,
+        "oracleProbe": 2,
+        "traces": 15
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+      "kind": "corpus",
+      "driver": [
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions-oracle.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-cli/src/tui/runtime_parity_tests/tui_interactions.rs::the_corpus_names_the_pinned_reference",
+      "row": "14",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e0388aa0607be3f28a9d99ffec40a39cc547f93091e6deff978318eee6d3096b",
+      "count": 24,
+      "floors": {
+        "composer": 5,
+        "groupHeader": 10,
+        "loadingSweep": 1,
+        "queue": 4,
+        "streamDelta": 3,
+        "transcript": 1
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/system-prompt-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/system_prompt.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-cli/tests/system_prompt_parity_tests.rs::the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "19",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "ec0fce313917498dfe1c762bb610519c61ae99ea9586f436eea4e2bf90f01604",
+      "count": 55,
+      "floors": {
+        "scenarios": 53
+      }
+    },
+    {
+      "corpus": "crates/vibe-cli/tests/telemetry-session/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/telemetry_session.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-cli/tests/telemetry_session_parity_tests.rs::the_port_reports_every_session_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "27",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "0fe252b9b2ad35cc5bf32df64d372b419ac1a35bbe44f5203f68308404769e50",
+      "count": 41,
+      "floors": {
+        "scenarios": 39
+      },
+      "note": "the tui surface needs a POSIX pseudo-terminal: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-core/tests/checkpoints/engine.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/checkpoints.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/checkpoints/checkpoint_parity_tests.rs::the_engine_matches_the_reference_over_every_scenario",
+      "row": "29",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "129f4c65309adc0416ef2ea1c1f45d5815e033620485130f00221c2df60f5d07",
+      "count": 73,
+      "floors": {
+        "scenarios": 70
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/checkpoints/opcodes.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/checkpoint_opcodes.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/checkpoints/checkpoint_parity_tests.rs::opcodes_match_the_reference",
+      "row": "29",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "668e48e24fcd48c5c0d909c34271b623ae2d425ad159e8ab18ea942a670d97e1",
+      "count": 68,
+      "floors": {
+        "lineFixtures": 31,
+        "opcodeFixtures": 35
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/compaction/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/compaction.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/compaction/compaction_parity_tests.rs::the_committed_corpus_replays_every_family_the_reference_answered",
+      "row": "26",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "d27e3e80880874436f9576c0019f76661d61bedf92f5f7ba81541e0eca4410ca",
+      "count": 90,
+      "floors": {
+        "constants": 1,
+        "envelopeParses": 11,
+        "envelopeProse": 2,
+        "envelopeRenders": 8,
+        "managerScenarios": 11,
+        "messageSelections": 16,
+        "placeholderSummary": 2,
+        "roundDrops": 8,
+        "summaryExtractions": 10,
+        "tokenCounts": 10,
+        "truncations": 11
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/config-surface/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/config_surface.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/config/surface_parity_tests.rs::every_scenario_composes_the_document_the_reference_produces",
+      "row": "30",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bcb8d46a27ad399bd0fd70486decdd5df40ea7d124b86a5dfa44234492099b42",
+      "count": 288,
+      "floors": {
+        "agentProfiles": 2,
+        "defaults": 2,
+        "dotenv": 2,
+        "encoding": 19,
+        "environment": 7,
+        "fields": 76,
+        "mcp": 6,
+        "modelScenarios": 47,
+        "originRewrite": 7,
+        "scenarios": 36,
+        "settingsOrder": 70,
+        "stack": 2,
+        "strategies": 3
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/experiments/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/experiments.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/experiments_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "32",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "005e6a4b8e3c1be598fddc80cffaeb4bdb8ce28c4f286b0b1e8c04a113879a87",
+      "count": 251,
+      "floors": {
+        "attributes": 10,
+        "bucketingKey": 4,
+        "configMapping": 21,
+        "configVariants": 10,
+        "constants": 12,
+        "evalCache": 38,
+        "evalFailures": 9,
+        "evalRequest": 5,
+        "evalUrl": 12,
+        "featureResolution": 14,
+        "layerPrecedence": 12,
+        "sessionGates": 27,
+        "surfaces": 10,
+        "typedMapping": 36,
+        "typedVariants": 7,
+        "variantLabels": 9,
+        "variantResolution": 11
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/llm-backends/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/llm_backends.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/llm/backend_parity_tests.rs::the_backends_answer_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "row": "10",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "a3f3fa1dee029c048ec92a6d573a8ae53accf09c8514c687141d3f253b1e2207",
+      "count": 506,
+      "floors": {
+        "availabilityKeys": 8,
+        "availabilityProbes": 40,
+        "retryDelays": 31,
+        "scenarios": 341,
+        "utilityCompletions": 11,
+        "utilitySelections": 47,
+        "vertexEndpoints": 6
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/permission-surface/vocabulary.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/permission_surface.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/policy/permission_parity_tests.rs::the_scope_vocabulary_is_the_reference_one",
+      "row": "4",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "840e02cac3cf316ba58ed76cb0c89798af5430139d278d18ef141eb0818a6fa5",
+      "count": 270,
+      "floors": {
+        "arity": 132,
+        "counts": 12,
+        "covers": 14,
+        "fileToolChain": 6,
+        "listChain": 12,
+        "pathGrantScopes": 2,
+        "pathGrants": 2,
+        "pathScopes": 13,
+        "requirement": 2,
+        "scopes": 4,
+        "sensitiveChain": 6,
+        "sensitiveMatches": 19,
+        "sessionPatterns": 19,
+        "wildcardMatches": 19
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/plugins-parity/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/plugins.py",
+        "--family",
+        "resolve"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/plugins/plugins_parity_tests.rs::every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledger_names",
+      "row": "35",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "14c14db033195522f7bf19c2f40c40989c47e0fc50a0d9cf362b32f2cb3c49fe",
+      "count": 12,
+      "floors": {
+        "cases": 12
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/plugins-parity/fixtures.json",
+      "kind": "fixture",
+      "test": "crates/vibe-core/src/plugins/plugins_parity_tests.rs::every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledger_names",
+      "row": "35",
+      "note": "hand-owned: the plugin trees both sides resolve"
+    },
+    {
+      "corpus": "crates/vibe-core/tests/setup-auth/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/setup_auth.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/setup_auth_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "31",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "ac36fc016ed7ab3b557729b4333c7acf3b12eef371bc207aecbbd6e8d15ffdc3",
+      "count": 328,
+      "floors": {
+        "acpAuthProse": 5,
+        "acpSignIn": 30,
+        "authState": 39,
+        "constants": 14,
+        "errorTaxonomy": 11,
+        "persistence": 20,
+        "providerCredentials": 6,
+        "signInProtocol": 44,
+        "tenantDomains": 51,
+        "tenantReconcile": 11,
+        "urlRewrite": 54,
+        "urlValidation": 32
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/shell-policy/policy.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/shell_policy.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/shell/shell_parity_tests.rs::every_resolution_matches_the_reference",
+      "row": "6",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "2362703b3158a54a7f8953695077bac8987faa284ee3109319588cf80ebb8e2c",
+      "count": 364,
+      "floors": {
+        "allowlistGrants": 27,
+        "commandSets": 6,
+        "counts": 10,
+        "extraction": 45,
+        "managedResolutions": 16,
+        "outsidePaths": 27,
+        "pathGrantMatches": 31,
+        "repositoryResolutions": 38,
+        "resolutions": 126,
+        "stdinPermissions": 20,
+        "windowsGrammar": 4
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/shell-session/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/shell_session.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/tools/shell/session_parity_tests.rs::shell_sessions_match_the_reference_except_for_the_recorded_gap",
+      "row": "6",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bbc9c769aa67a99461b880b82b960588ee5440ca233b275e4f18956782fafbba",
+      "count": 88,
+      "floors": {
+        "cases": 84
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-core/tests/skills/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/skills.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/skills/skills_parity_tests.rs::the_committed_corpus_replays_every_family_the_reference_answered",
+      "row": "28",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "429149159fef1cac9b8ed9c58be8ed3bcd80b2d4bbf45d1910ad72bf046b3cf1",
+      "count": 262,
+      "floors": {
+        "builtins": 2,
+        "command": 2,
+        "discovery": 27,
+        "filtering": 13,
+        "frontmatter": 29,
+        "installedMarks": 14,
+        "ledger": 5,
+        "lifecycle": 17,
+        "loading": 21,
+        "manifest": 14,
+        "metadata": 44,
+        "projection": 12,
+        "service": 29,
+        "store": 2,
+        "sync": 24
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/telemetry/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/telemetry.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/telemetry/telemetry_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "27",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "60710dbb7d46aa6404cbde740a7005501e8c353cd5bb5e2383e099360abce3d5",
+      "count": 236,
+      "floors": {
+        "attachmentCounts": 4,
+        "baseMetadata": 12,
+        "constants": 6,
+        "documents": 9,
+        "envelope": 19,
+        "eventPayloads": 26,
+        "eventVocabulary": 26,
+        "exporterConfig": 15,
+        "logConfig": 10,
+        "logEncoding": 11,
+        "logFormat": 30,
+        "logPagination": 12,
+        "logParse": 12,
+        "providerNames": 17,
+        "redaction": 6,
+        "spans": 17
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/tool-config/defaults.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_config.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/tools/config/config_parity_tests.rs::the_declared_tool_configuration_matches_the_reference_enumeration",
+      "row": "4",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "78f901f3321aa4b711714eeef121aae826b5127e8b2a79cc13c58ddab39abe87",
+      "count": 53,
+      "floors": {
+        "counts": 3,
+        "keys": 21,
+        "shellLists": 2,
+        "tools": 25
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/tool-descriptions/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_descriptions.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/tools/descriptions/descriptions_parity_tests.rs::the_winning_description_file_matches_the_reference",
+      "row": "4",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "b5136d36697276593cb0359af6e8729532f01d5aa00eda8289159cc0ef667c86",
+      "count": 10,
+      "floors": {
+        "cases": 7,
+        "tree": 3
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/tool-presentation/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_presentation.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/events/detail/detail_presentation_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "4",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "15774aa4ec5cc98f70055b0d4228087631b4a1eec3fea51d928c9d0c01898f93",
+      "count": 132,
+      "floors": {
+        "cases": 126
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-core/tests/web-fetch-markdown/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/web_fetch_markdown.py"
+      ],
+      "output": "--output",
+      "test": "crates/vibe-core/src/tools/builtins/web_fetch/markdown/markdown_tests.rs::every_captured_page_converts_as_the_reference_converted_it",
+      "row": "3",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "bf70bac40e21b8cd8a0fc348941e89f8ed07dd5aeb30ecbf2545e30fdaabf613",
+      "count": 478,
+      "floors": {
+        "cases": 455
+      }
+    },
+    {
+      "corpus": "crates/vibe-core/tests/worktree/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/worktree.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-core/src/worktree/worktree_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "5",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "e79d044e9132be575c281aae6e6f50d21e3b7386ef6a315df3bc4177cde542e0",
+      "count": 147,
+      "floors": {
+        "cases": 132,
+        "setups": 9
+      },
+      "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-voice/tests/voice/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/voice.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-voice/src/voice_parity_tests.rs::the_committed_corpus_replays_against_this_port",
+      "row": "24",
+      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+      "sha256": "4b56d421c8d999ab277cc3d2dc4161bd65bdee588c1da67fc337f425f1a053ab",
+      "count": 213,
+      "floors": {
+        "acpBridge": 11,
+        "audioDevices": 4,
+        "audioMetadata": 2,
+        "captureSignal": 9,
+        "constants": 5,
+        "decodeWav": 10,
+        "documents": 31,
+        "narrationService": 7,
+        "narrator": 13,
+        "speechResolution": 31,
+        "transcribeStream": 10,
+        "transcriptionResolution": 31,
+        "voiceManager": 19,
+        "wireFrames": 26
+      }
+    }
+  ]
+}

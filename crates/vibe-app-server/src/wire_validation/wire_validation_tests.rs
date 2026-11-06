@@ -61,6 +61,9 @@ fn the_compiled_schema_parses() {
 
 #[test]
 fn every_validator_the_schema_names_is_implemented() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/src/wire_validation/schema.json",
+    );
     for function in &SCHEMA.functions {
         assert!(
             custom::KNOWN.contains(&function.as_str()),
@@ -71,6 +74,9 @@ fn every_validator_the_schema_names_is_implemented() {
 
 #[test]
 fn validation_answers_as_the_reference_does() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/wire-validation/cases.json",
+    );
     let corpus: Corpus = serde_json::from_str(CASES).unwrap();
     let mut failures = Vec::new();
     for case in &corpus.cases {

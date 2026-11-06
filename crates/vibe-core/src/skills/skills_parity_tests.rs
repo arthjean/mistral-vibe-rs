@@ -1474,6 +1474,7 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
 
 #[test]
 fn the_committed_corpus_replays_every_family_the_reference_answered() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/skills/corpus.json");
     let corpus = corpus();
     let mut scenarios = 0;
 

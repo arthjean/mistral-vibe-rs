@@ -127,6 +127,7 @@ fn as_json(table: &Table) -> Map<String, JsonValue> {
 /// declared here, with the same keys and the same defaults.
 #[test]
 fn the_declared_tool_configuration_matches_the_reference_enumeration() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/tool-config/defaults.json");
     let corpus = corpus();
     let resolver = captured_resolver(&corpus);
     let published = resolver.published_defaults();

@@ -943,6 +943,7 @@ fn the_parse_family_reaches_every_branch_it_was_built_for() {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    vibe_core::parity::manifest::assert_corpus("crates/vibe-cli/tests/commands/corpus.json");
     let corpus = corpus();
     let contexts = port_contexts(&corpus);
     println!(

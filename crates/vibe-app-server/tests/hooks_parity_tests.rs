@@ -48,10 +48,6 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 39;
-
 /// A difference this port keeps in one scenario, and the row of
 /// `docs/parity.md` that answers for it.
 struct Divergence {
@@ -195,7 +191,6 @@ fn the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_name
     Replay {
         heading: "hooks parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

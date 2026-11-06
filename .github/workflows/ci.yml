@@ -44,6 +44,11 @@ jobs:
           python-version: "3.12"
       - name: Install Rust stable
         run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      # Every committed corpus is listed in `scripts/parity/manifest.json`, at
+      # an accepted commit and unchanged since `repin.py capture` wrote it; the
+      # Rust meta-test checks the same rules inside `cargo test`.
+      - name: Parity manifest
+        run: python3 scripts/parity/repin.py verify
       - name: Quality gates
         run: |
           cargo +stable fmt --all -- --check

@@ -75,6 +75,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import provenance  # noqa: E402
 from reference import OracleError, reexecute_pinned, reference_command, require_pin  # noqa: E402
 import host_env  # noqa: E402
 
@@ -837,6 +838,10 @@ def emit(path: Path, document: Any, key: str, check: bool) -> None:
 
 def main() -> int:
     arguments = parse_arguments()
+    if arguments.server is not None:
+        arguments.output = provenance.port_output(
+            arguments.output, SERVER_OUTPUT, server=arguments.server
+        )
     try:
         families = ("resolve", "server") if arguments.family == "all" else (arguments.family,)
         if "resolve" in families and arguments.server is not None:

@@ -384,12 +384,14 @@ fn corpus() -> Option<Corpus> {
         return None;
     };
     let corpus: Corpus = serde_json::from_str(&raw).expect("the corpus parses");
-    if let Some(reason) = skip_reason_for(
+    let manifest = vibe_core::parity::manifest::load();
+    let stale = stale_reason_for(
         corpus.schema_version,
         &corpus.reference.commit,
-        &corpus.platform,
-        running_platform(),
-    ) {
+        &manifest.accepted(),
+    );
+    assert!(stale.is_none(), "{}", stale.unwrap_or_default());
+    if let Some(reason) = skip_reason_for(&corpus.platform, running_platform()) {
         eprintln!("{reason}");
         return None;
     }
@@ -400,36 +402,39 @@ fn running_platform() -> &'static str {
     std::env::consts::OS
 }
 
-/// Why a corpus cannot answer for this run, or `None` when it can.
-///
-/// A corpus is only an oracle for the commit it was captured from and for the
-/// platform whose availability rules it recorded, so both mismatches skip with
-/// an explicit message rather than failing or passing silently.
-fn skip_reason_for(
+/// Why a corpus captured on `captured_platform` cannot answer on `running`,
+/// or `None` when it can. Availability rules are per platform, so a corpus
+/// recorded elsewhere skips with an explicit message.
+fn skip_reason_for(captured_platform: &str, running: &str) -> Option<String> {
+    (captured_platform != running).then(|| {
+        format!(
+            "skipping the tool-surface oracle: the corpus records the {captured_platform} \
+             surface and this host is {running}"
+        )
+    })
+}
+
+/// Why a corpus is stale, or `None` when it measures an accepted commit in the
+/// current layout. A stale corpus fails the oracle: skipping it would let a
+/// green run measure nothing.
+fn stale_reason_for(
     captured_version: u32,
     captured_commit: &str,
-    captured_platform: &str,
-    running: &str,
+    accepted: &[&str],
 ) -> Option<String> {
     if captured_version != CORPUS_SCHEMA_VERSION {
         return Some(format!(
-            "skipping the tool-surface oracle: the corpus is at schema version {captured_version}, \
-             not the expected {CORPUS_SCHEMA_VERSION}; regenerate it with {CAPTURE_SCRIPT}"
+            "the tool-surface corpus is at schema version {captured_version}, not the expected \
+             {CORPUS_SCHEMA_VERSION}; regenerate it with {CAPTURE_SCRIPT}"
         ));
     }
-    if captured_commit != REFERENCE_COMMIT {
-        return Some(format!(
-            "skipping the tool-surface oracle: the corpus was captured from {captured_commit}, \
-             not the pinned {REFERENCE_COMMIT}"
-        ));
-    }
-    if captured_platform != running {
-        return Some(format!(
-            "skipping the tool-surface oracle: the corpus records the {captured_platform} \
-             surface and this host is {running}"
-        ));
-    }
-    None
+    (!accepted.contains(&captured_commit)).then(|| {
+        format!(
+            "the tool-surface corpus was captured from {captured_commit}; accepted: {}; \
+             regenerate it with {CAPTURE_SCRIPT}",
+            accepted.join(", ")
+        )
+    })
 }
 
 /// Refuses every approval, so a case measures the published surface rather than
@@ -761,6 +766,12 @@ fn baseline() -> Baseline {
 
 #[tokio::test]
 async fn the_published_tool_surface_matches_the_reference_except_for_the_recorded_gap() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/tool-surface/baseline.json",
+    );
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/tool-surface/digest.json",
+    );
     let Some(corpus) = corpus() else {
         return;
     };
@@ -1113,6 +1124,9 @@ async fn no_windows_family_name_reaches_a_posix_surface() {
 /// repository authored and the accept-or-reject verdict the reference gave it.
 #[test]
 fn arguments_the_reference_rejects_are_rejected_here_too() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/tool-surface/fixtures.json",
+    );
     let root = repo_root();
     let raw = fs::read_to_string(root.join(FIXTURES_RELATIVE)).expect("the fixtures are committed");
     let fixtures: Fixtures = serde_json::from_str(&raw).expect("the fixtures parse");
@@ -1331,6 +1345,9 @@ fn a_rejection_names_every_argument_the_reference_names() {
 /// which is the regression this holds shut.
 #[tokio::test]
 async fn the_configured_filters_publish_what_the_reference_publishes() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/tool-surface/gates.json",
+    );
     let root = repo_root();
     let raw = fs::read_to_string(root.join(GATES_RELATIVE)).expect("the gate corpus is committed");
     let gates: Gates = serde_json::from_str(&raw).expect("the gate corpus parses");
@@ -1444,6 +1461,9 @@ fn reference_class_priority(class: &str) -> Option<i32> {
 /// names, so CI reports a conformance count with no checkout at all.
 #[tokio::test]
 async fn the_four_surface_quadrants_publish_what_the_reference_publishes() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/tool-surface/quadrants.json",
+    );
     let quadrants = quadrants();
     let baseline = baseline();
     assert_eq!(
@@ -1608,39 +1628,31 @@ async fn the_committed_fixtures_match_a_freshly_captured_corpus() {
 }
 
 #[test]
-fn a_corpus_from_another_commit_platform_or_layout_skips_with_an_explicit_message() {
-    let moved = skip_reason_for(
+fn a_corpus_from_another_commit_or_layout_fails_and_one_from_another_platform_skips() {
+    let accepted = [REFERENCE_COMMIT];
+    let moved = stale_reason_for(
         CORPUS_SCHEMA_VERSION,
         "0123456789abcdef0123456789abcdef01234567",
-        "linux",
-        "linux",
+        &accepted,
     )
     .expect("a corpus from another commit cannot answer");
     assert!(moved.contains(REFERENCE_COMMIT), "{moved}");
     assert!(moved.contains("0123456789abcdef"), "{moved}");
 
-    let elsewhere = skip_reason_for(CORPUS_SCHEMA_VERSION, REFERENCE_COMMIT, "windows", "linux")
-        .expect("a corpus from another platform cannot answer");
+    // A corpus captured before the managed surface was recorded carries no
+    // answer for it, so it is regenerated rather than partly believed.
+    let stale = stale_reason_for(1, REFERENCE_COMMIT, &accepted)
+        .expect("an older corpus layout cannot answer");
+    assert!(stale.contains(CAPTURE_SCRIPT), "{stale}");
+    assert!(stale_reason_for(CORPUS_SCHEMA_VERSION, REFERENCE_COMMIT, &accepted).is_none());
+
+    let elsewhere =
+        skip_reason_for("windows", "linux").expect("a corpus from another platform cannot answer");
     assert!(
         elsewhere.contains("windows") && elsewhere.contains("linux"),
         "{elsewhere}"
     );
-
-    // A corpus captured before the managed surface was recorded carries no
-    // answer for it, so it is regenerated rather than partly believed.
-    let stale = skip_reason_for(1, REFERENCE_COMMIT, "linux", "linux")
-        .expect("an older corpus layout cannot answer");
-    assert!(stale.contains(CAPTURE_SCRIPT), "{stale}");
-
-    assert!(
-        skip_reason_for(
-            CORPUS_SCHEMA_VERSION,
-            REFERENCE_COMMIT,
-            running_platform(),
-            running_platform()
-        )
-        .is_none()
-    );
+    assert!(skip_reason_for(running_platform(), running_platform()).is_none());
 }
 
 fn digest() -> Digest {

@@ -385,6 +385,8 @@ async fn resolve_case(case: &Value) -> Value {
 
 #[tokio::test]
 async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledger_names() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/plugins-parity/corpus.json");
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/plugins-parity/fixtures.json");
     let fixtures: Value = serde_json::from_str(FIXTURES).unwrap();
     let corpus: Value = serde_json::from_str(CORPUS).unwrap();
     let recorded = corpus["cases"].as_object().unwrap();

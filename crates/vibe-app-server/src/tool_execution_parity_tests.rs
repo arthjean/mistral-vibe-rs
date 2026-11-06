@@ -1586,6 +1586,9 @@ async fn observed_document(case: &Case, source: &Path, scratch: &Path, index: us
 
 #[tokio::test]
 async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/tool-execution/corpus.json",
+    );
     let corpus = corpus();
     assert_corpus_floor(&corpus);
     if let Some(reason) = skip_reason(&corpus) {

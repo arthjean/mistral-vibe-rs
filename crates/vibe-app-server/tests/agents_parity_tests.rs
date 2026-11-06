@@ -48,10 +48,6 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 38;
-
 const PLAN_REVIEWS: &[&str] = &[
     "switch/exit-plan-auto",
     "switch/exit-plan-manual",
@@ -199,7 +195,6 @@ fn the_port_runs_every_agent_scenario_as_the_corpus_records_or_as_the_ledger_nam
     Replay {
         heading: "agents parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

@@ -37,10 +37,6 @@ const CAPTURE: Capture = Capture {
     arguments: &[],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 29;
-
 const LEDGER: &[PatternDivergence] = &[];
 
 #[test]
@@ -52,7 +48,6 @@ fn the_port_answers_every_trust_scenario_as_the_corpus_records_or_as_the_ledger_
     Replay {
         heading: "workspace trust parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

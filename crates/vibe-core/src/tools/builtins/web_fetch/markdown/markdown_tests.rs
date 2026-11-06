@@ -22,8 +22,8 @@ fn corpus() -> Vec<Value> {
 
 #[test]
 fn every_captured_page_converts_as_the_reference_converted_it() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/web-fetch-markdown/corpus.json");
     let cases = corpus();
-    assert!(cases.len() > 400, "the corpus lost its pages");
     let mut mismatches = Vec::new();
     for case in &cases {
         let name = case["name"].as_str().unwrap_or_default();
@@ -66,4 +66,16 @@ fn the_corpus_exercises_the_failures_the_reference_raises() {
             "no captured page raises `{expected}`"
         );
     }
+}
+
+/// The live probe: on a machine holding the pinned reference, a fresh capture
+/// of every page has to be what the committed corpus records.
+#[test]
+fn the_committed_corpus_still_matches_the_pinned_reference() {
+    crate::parity::replay::Capture {
+        script: "scripts/parity/web_fetch_markdown.py",
+        family: &[],
+        arguments: &[],
+    }
+    .probe("web-fetch-markdown");
 }

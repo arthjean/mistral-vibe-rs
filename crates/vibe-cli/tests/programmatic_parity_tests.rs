@@ -48,10 +48,6 @@ const UNIFIED: Capture = Capture {
     arguments: &[],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 56;
-
 const LEDGER: &[PatternDivergence] = &[];
 
 #[test]
@@ -70,7 +66,6 @@ fn replay(corpus: &str, capture: &Capture, harness: &str) {
     Replay {
         heading: &format!("programmatic parity ({harness}):"),
         corpus,
-        floor: SCENARIO_FLOOR,
         capture,
         port: &["--binary", env!("CARGO_BIN_EXE_vibe")],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR"))

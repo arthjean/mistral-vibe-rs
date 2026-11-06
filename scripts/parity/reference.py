@@ -32,6 +32,7 @@ import sys
 import tarfile
 
 import host_env
+import provenance
 from pin import EXPECTED_COMMIT, RESTORE_COMMAND
 
 #: Where extracted trees are kept between runs: gitignored, at the repository
@@ -73,20 +74,26 @@ def _git(reference: Path, *arguments: str) -> str:
 
 def require_pin(reference: Path, expected: str | None = EXPECTED_COMMIT) -> str:
     """The commit the checkout at ``reference`` sits at, refused unless it is
-    ``expected``.
+    the one this capture may record.
 
-    An empty or ``None`` ``expected`` accepts whatever commit the checkout
-    holds, which is how a capture is pointed at a checkout off the pin on
-    purpose, for a re-pin.
+    That is the pin, whatever ``expected`` says, unless
+    ``scripts/parity/repin.py capture`` started the capture: an empty or
+    ``None`` ``expected`` (``--expected-commit ''``, ``--allow-unpinned``) or
+    another commit is refused anywhere else, since the corpus it wrote would
+    record a commit no replay accepts (:func:`provenance.expected_commit`).
     """
 
+    try:
+        expected = provenance.expected_commit(expected, EXPECTED_COMMIT)
+    except PermissionError as error:
+        raise OracleError(str(error)) from None
     if not reference.is_dir():
         raise OracleError(
             f"no reference checkout at {reference}; set VIBE_REFERENCE to the checkout "
             "path or pass --reference"
         )
     commit = _git(reference, "rev-parse", "HEAD")
-    if expected and commit != expected:
+    if commit != expected:
         raise OracleError(
             f"{reference} is at {commit}, not the pinned {expected}; "
             f"restore it with `{RESTORE_COMMAND}`"

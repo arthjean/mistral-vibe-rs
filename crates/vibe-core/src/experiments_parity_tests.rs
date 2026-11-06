@@ -2060,6 +2060,7 @@ fn a_reference_null_compares_equal_to_the_absent_key_toml_leaves() {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/experiments/corpus.json");
     let corpus = corpus();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .build()

@@ -54,10 +54,6 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 33;
-
 /// The accepted divergence the row 34 entries below stand on: a difference
 /// the measured row keeps on purpose has to be decided in the scorecard.
 const OWN_PROSE: &str = "The conversation loop's own sentences";
@@ -300,7 +296,6 @@ fn the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_name
     Replay {
         heading: "agent loop parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

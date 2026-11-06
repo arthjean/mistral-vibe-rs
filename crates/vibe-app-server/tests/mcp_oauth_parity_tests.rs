@@ -661,6 +661,9 @@ fn is_page(pointer: &str) -> bool {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_scenario_matches_the_reference_capture() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/mcp-oauth/corpus.json",
+    );
     let corpus: Value = serde_json::from_str(CORPUS).unwrap();
     let only = std::env::var("VIBE_OAUTH_PARITY_ONLY").ok();
     let mut failures = Vec::new();

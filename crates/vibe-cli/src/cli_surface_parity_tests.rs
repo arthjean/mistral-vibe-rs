@@ -1545,6 +1545,9 @@ fn no_ledger_entry_outlives_the_difference_it_names() {
 
 #[test]
 fn replaying_the_corpus_finds_no_difference_the_ledger_does_not_name() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-cli/tests/runtime-parity/cli-surface.json",
+    );
     let corpus = corpus();
     let differences = replay(&corpus);
     let unlisted: Vec<String> = differences

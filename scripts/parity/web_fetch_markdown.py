@@ -22,6 +22,11 @@ from it, so the corpus holds observations and no reference-authored text.
 Usage::
 
     scripts/parity/web_fetch_markdown.py --reference /path/to/reference
+    scripts/parity/web_fetch_markdown.py --check
+
+``--check`` recaptures the reference and compares every page with the
+committed corpus instead of writing it, naming each page that differs; the live
+probe of ``markdown_tests.rs`` runs it.
 
 ``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
 default path; ``--reference`` wins over it. The wrapper re-executes itself with
@@ -243,6 +248,29 @@ def build_corpus(commit: str) -> dict[str, Any]:
     }
 
 
+def check(corpus: dict[str, Any], committed_path: Path) -> int:
+    """Compares a fresh capture with the committed corpus page by page."""
+
+    try:
+        committed = json.loads(committed_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise OracleError(f"no committed corpus to check against: {error}") from None
+    recorded = {case["name"]: case for case in committed.get("cases", [])}
+    fresh = {case["name"]: case for case in corpus["cases"]}
+    differing = sorted(
+        name for name in recorded.keys() | fresh.keys() if recorded.get(name) != fresh.get(name)
+    )
+    if differing:
+        print(
+            f"error: a fresh capture differs from {committed_path} for {len(differing)} pages: "
+            + ", ".join(differing),
+            file=sys.stderr,
+        )
+        return 1
+    print(f"{len(fresh)} pages match the committed corpus")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
@@ -252,6 +280,11 @@ def main() -> int:
         type=Path,
         default=None,
         help="Python that can import `vibe`; also read from " + INTERPRETER_VARIABLE,
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="compare a fresh capture with the committed corpus, write nothing",
     )
     parser.add_argument(
         "--allow-unpinned",
@@ -267,6 +300,8 @@ def main() -> int:
             override=arguments.interpreter,
         )
         corpus = build_corpus(commit)
+        if arguments.check:
+            return check(corpus, arguments.output)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

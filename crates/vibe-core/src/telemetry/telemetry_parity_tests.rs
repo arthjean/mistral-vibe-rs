@@ -3263,6 +3263,7 @@ fn the_ledger_fails_an_unrecorded_divergence_and_a_stale_entry() {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/telemetry/corpus.json");
     let corpus = corpus();
     // The tracer provider is process-global, so the three families that install
     // one hold the tracing lock for the whole replay rather than racing the

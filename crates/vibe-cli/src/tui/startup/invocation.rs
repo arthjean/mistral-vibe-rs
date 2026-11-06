@@ -207,6 +207,9 @@ mod tests {
 
     #[test]
     fn pinned_startup_intents_drive_the_executed_invocation_variant() {
+        vibe_core::parity::manifest::assert_corpus(
+            "crates/vibe-cli/tests/runtime-parity/startup.json",
+        );
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/runtime-parity/startup.json");
         let text = fs::read_to_string(&path).expect("startup corpus");
         let corpus: StartupCorpus = serde_json::from_str(&text).expect("strict startup corpus");

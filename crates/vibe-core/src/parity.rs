@@ -111,11 +111,19 @@ pub fn pinned_interpreter(root: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(any(test, feature = "parity-replay"))]
+pub mod manifest;
+#[cfg(any(test, feature = "parity-replay"))]
 pub mod replay;
 
 #[cfg(test)]
+mod capture_guard_tests;
+#[cfg(test)]
 mod ledger_tests;
 #[cfg(test)]
+mod manifest_tests;
+#[cfg(test)]
 mod parity_tests;
+#[cfg(test)]
+mod repin_tests;
 #[cfg(test)]
 mod scorecard_tests;

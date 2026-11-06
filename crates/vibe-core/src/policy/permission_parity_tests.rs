@@ -382,6 +382,9 @@ fn every_divergence_names_a_corpus_pointer_and_its_evidence() {
 /// US-105: the four scopes, and nothing else.
 #[test]
 fn the_scope_vocabulary_is_the_reference_one() {
+    crate::parity::manifest::assert_corpus(
+        "crates/vibe-core/tests/permission-surface/vocabulary.json",
+    );
     let corpus = corpus();
     // The comparison goes through serde rather than through a second spelling:
     // what has to match the reference is the value that crosses the wire.

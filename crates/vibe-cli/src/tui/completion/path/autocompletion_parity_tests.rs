@@ -1565,6 +1565,7 @@ fn the_ledger_fails_an_unrecorded_divergence_and_a_stale_entry() {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    vibe_core::parity::manifest::assert_corpus("crates/vibe-cli/tests/autocompletion/corpus.json");
     let corpus = corpus();
     println!(
         "autocompletion: divergence ledger ({} entries)",

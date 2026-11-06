@@ -35,10 +35,6 @@ const CAPTURE: Capture = Capture {
     arguments: &["--fixture", env!("CARGO_BIN_EXE_vibe-oauth-script-fixture")],
 };
 
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 15;
-
 const LEDGER: &[PatternDivergence] = &[];
 
 #[test]
@@ -46,7 +42,6 @@ fn the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger
     Replay {
         heading: "MCP catalog parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

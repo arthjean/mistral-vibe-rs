@@ -37,9 +37,6 @@ const CAPTURE: Capture = Capture {
     ],
 };
 
-/// The scenarios the corpus may not fall below.
-const SCENARIO_FLOOR: usize = 11;
-
 /// A difference this port keeps in one scenario.
 struct Divergence {
     scenario: &'static str,
@@ -73,7 +70,6 @@ fn the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_
     Replay {
         heading: "plugins parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",

@@ -57,6 +57,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import provenance  # noqa: E402
 from reference import (  # noqa: E402
     OracleError,
     reexecute_pinned,
@@ -905,7 +906,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--live-binary", type=Path, default=None, help="run the live family against this `vibe`")
@@ -917,6 +918,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
+    arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, live_binary=arguments.live_binary)
     try:
         if arguments.child is not None:
             # A child runs reference code, so like every capture that imports

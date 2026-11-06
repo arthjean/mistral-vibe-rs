@@ -57,6 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
@@ -614,7 +615,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--vibe", type=Path, default=None, help="drive this port's `vibe`")
     parser.add_argument("--vibe-acp", type=Path, default=None, help="drive this port's `vibe-acp`")
     parser.add_argument("--surface", action="append", default=[], choices=SURFACES)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--raw", action="store_true")
@@ -623,6 +624,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
+    arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, vibe=arguments.vibe, vibe_acp=arguments.vibe_acp)
     try:
         port = any(
             path is not None for path in (arguments.vibe, arguments.vibe_acp)

@@ -50,6 +50,7 @@ import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import loop_capture  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 from unified_harness_scenarios import scenarios  # noqa: E402
 
@@ -510,7 +511,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--server", type=Path, default=None, help="drive this binary instead")
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw answers")
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
@@ -522,6 +523,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
+    arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
             command = [str(arguments.server.resolve())]

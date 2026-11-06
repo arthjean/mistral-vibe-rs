@@ -31,6 +31,7 @@ use sha2::{Digest as _, Sha256};
 use vibe_app_server::workspace::{
     PromptHost, SessionPromptScope, SystemPromptError, WorkspacePaths, WorkspaceService,
 };
+use vibe_core::parity::manifest;
 use vibe_core::parity::replay::{
     Capture, PatternDivergence, Prose, Tally, differences, entries, scenarios,
 };
@@ -49,10 +50,6 @@ const CAPTURE: Capture = Capture {
     family: &[],
     arguments: &[],
 };
-
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 55;
 
 const ROOT: &str = "<root>";
 const DATE: &str = "<DATE>";
@@ -487,13 +484,9 @@ fn replay_live() -> BTreeMap<String, Value> {
     ignore = "windows by design: the corpus was captured on Linux, and the reference prompt names the Windows platform and spells paths with backslashes"
 )]
 fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    manifest::assert_replayed(CORPUS);
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
-    assert!(
-        recorded.len() >= SCENARIO_FLOOR,
-        "the corpus holds {} scenarios, below the floor of {SCENARIO_FLOOR}",
-        recorded.len()
-    );
     let live = replay_live();
 
     let mut tally = Tally::new(entries(LEDGER));

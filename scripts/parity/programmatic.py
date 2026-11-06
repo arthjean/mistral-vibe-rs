@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
@@ -851,8 +852,8 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     flags = HARNESS_FLAGS if arguments.harness == "legacy" else []
-    if arguments.output is None:
-        arguments.output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
+    default_output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
+    arguments.output = provenance.port_output(arguments.output, default_output, binary=arguments.binary)
     try:
         if arguments.binary is not None:
             command = [str(arguments.binary.resolve()), *flags]

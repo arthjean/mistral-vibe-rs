@@ -1734,6 +1734,7 @@ fn run_acp_auth_prose(cases: &[AcpProseRun]) -> usize {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/setup-auth/corpus.json");
     let corpus = corpus();
     println!("setup-auth: divergence ledger");
     if DIVERGENCES.is_empty() {

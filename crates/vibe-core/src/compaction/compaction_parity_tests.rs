@@ -526,6 +526,7 @@ fn role_of(message: &ModelMessage) -> &'static str {
 
 #[tokio::test]
 async fn the_committed_corpus_replays_every_family_the_reference_answered() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/compaction/corpus.json");
     let corpus = corpus();
     assert_eq!(
         corpus.constants.compact_user_message_max_tokens, COMPACT_USER_MESSAGE_MAX_TOKENS,

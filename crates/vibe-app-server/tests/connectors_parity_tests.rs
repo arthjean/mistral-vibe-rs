@@ -30,6 +30,7 @@
 use std::path::Path;
 
 use serde_json::Value;
+use vibe_core::parity::manifest;
 use vibe_core::parity::replay::{
     Capture, Divergence, Prose, Replay, Tally, differences, entries, scenarios,
 };
@@ -45,10 +46,6 @@ const CAPTURE: Capture = Capture {
     family: &[],
     arguments: JOBS,
 };
-
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 43;
 
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and server processes.
@@ -87,7 +84,6 @@ fn the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger
     Replay {
         heading: "connectors parity:",
         corpus: CORPUS,
-        floor: SCENARIO_FLOOR,
         capture: &CAPTURE,
         port: &[
             "--server",
@@ -132,8 +128,6 @@ const UNIFIED_CAPTURE: Capture = Capture {
     arguments: JOBS,
 };
 
-const UNIFIED_SCENARIO_FLOOR: usize = 9;
-
 /// The accepted divergence the unified entries below stand on.
 const REJECTED_MIDTURN: &str = "A connector the gateway rejects mid-turn keeps its turn";
 
@@ -156,13 +150,9 @@ const UNIFIED_LEDGER: &[Divergence] = &[
 
 #[test]
 fn the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    manifest::assert_replayed(UNIFIED_CORPUS);
     let corpus: Value = serde_json::from_str(UNIFIED_CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
-    assert!(
-        recorded.len() >= UNIFIED_SCENARIO_FLOOR,
-        "the unified corpus holds {} scenarios, below the floor of {UNIFIED_SCENARIO_FLOOR}",
-        recorded.len()
-    );
     let replayed = UNIFIED_CAPTURE.port(
         &[
             "--server",

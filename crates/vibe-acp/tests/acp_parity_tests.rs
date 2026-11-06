@@ -30,6 +30,7 @@
 use std::path::Path;
 
 use serde_json::Value;
+use vibe_core::parity::manifest;
 use vibe_core::parity::replay::{
     Capture, Entry, Prose, Tally, differences, entries, pinned_reference, scenarios, scorecard_rows,
 };
@@ -52,11 +53,6 @@ const UNIFIED: Capture = Capture {
 
 /// The scorecard the ledger's `row` values point into.
 const SCORECARD: &str = include_str!("../../../docs/parity.md");
-
-/// The scenarios the corpus may not fall below, so a recapture that lost
-/// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 81;
-const ARGV_FLOOR: usize = 23;
 
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and agent process.
@@ -120,13 +116,11 @@ fn the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledge
 }
 
 fn replay(corpus: &str, capture: &Capture, harness: &str) {
+    // The manifest entry holds the floors of both the scenarios and the
+    // argument vectors, so a recapture that lost either fails here.
+    manifest::assert_replayed(corpus);
     let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
     let recorded = scenarios(&corpus);
-    assert!(
-        recorded.len() >= SCENARIO_FLOOR,
-        "the corpus holds {} scenarios, below the floor of {SCENARIO_FLOOR}",
-        recorded.len()
-    );
 
     let replayed = capture.port(
         &["--agent", env!("CARGO_BIN_EXE_vibe-acp")],
@@ -137,11 +131,6 @@ fn replay(corpus: &str, capture: &Capture, harness: &str) {
     let argv = corpus["argv"]
         .as_array()
         .expect("the corpus records the command line");
-    assert!(
-        argv.len() >= ARGV_FLOOR,
-        "the corpus holds {} argument vectors, below the floor of {ARGV_FLOOR}",
-        argv.len()
-    );
     let argv_differences: Vec<String> =
         differences(&corpus["argv"], &replayed["argv"], Prose::OwnWords)
             .into_iter()

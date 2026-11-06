@@ -50,6 +50,7 @@ from blackbox import (  # noqa: E402
     write_tree,
 )
 from acp_scenarios import scenarios  # noqa: E402
+import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -338,8 +339,8 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     flags = HARNESS_FLAGS if arguments.harness == "legacy" else ()
-    if arguments.output is None:
-        arguments.output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
+    default_output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
+    arguments.output = provenance.port_output(arguments.output, default_output, agent=arguments.agent)
     try:
         if arguments.agent is not None:
             command = [str(arguments.agent.resolve())]

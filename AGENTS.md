@@ -62,10 +62,20 @@ documentation use the Linux form; read them relative to the local checkout.
   `vibe_core::parity::replay` (the `parity-replay` feature of a dev-dependency
   on `vibe-core`), whose `Replay` compares and ledgers a corpus and whose
   `Capture::probe` and `pinned_reference` resolve and gate the checkout.
-- A committed corpus changes only in a re-pin, which edits both pin sources and
-  regenerates every corpus in the same change. A replay that drifts outside a
-  re-pin is a regression or an environment leak (see Quality gates); fix the
-  cause and leave the corpus as captured.
+- `scripts/parity/manifest.json` lists every committed corpus with its driver,
+  test, scorecard row, capture commit, SHA-256 and floors, and
+  `python3 scripts/parity/repin.py capture <corpus>` is the only way to change
+  one: `crates/vibe-core/src/parity/manifest_tests.rs` fails on a corpus that
+  is unlisted, edited by hand, off the accepted commits, or below its floors.
+  `repin.py list` prints the regeneration commands and `repin.py verify` runs
+  the checks without Rust. A driver run against this port (`--server`,
+  `--agent`, `--binary`, `--live-binary`, `--vibe`, `--vibe-acp`) needs an
+  `--output` outside the manifest paths, and an off-pin capture runs only
+  through `repin.py capture --commit <sha>`.
+- A re-pin edits both pin sources and recaptures every corpus in the same
+  change. A replay that drifts outside a re-pin is a regression or an
+  environment leak (see Quality gates); fix the cause and leave the corpus as
+  captured.
 - State a parity claim only from a measurement against the reference, run wide
   enough to cover what changed: filtering `cargo test` to the edited module
   hides assertions elsewhere that read the same fixture. A run that printed

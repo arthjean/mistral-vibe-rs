@@ -288,6 +288,9 @@ async fn port_case(case: &Map<String, Value>) -> Map<String, Value> {
 
 #[tokio::test]
 async fn the_committed_corpus_replays_against_this_port() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/experiments/corpus.json",
+    );
     let corpus = corpus();
     let families = corpus
         .keys()

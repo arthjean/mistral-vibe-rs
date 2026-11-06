@@ -843,6 +843,9 @@ fn json_escaped(path: &str) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn every_scenario_matches_the_reference_mcp_client() {
+    vibe_core::parity::manifest::assert_corpus(
+        "crates/vibe-app-server/tests/mcp-transport/corpus.json",
+    );
     let corpus: Value = serde_json::from_str(CORPUS).expect("corpus JSON");
     let token = (
         corpus["tokenVariable"]

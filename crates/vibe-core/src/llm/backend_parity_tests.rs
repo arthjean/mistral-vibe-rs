@@ -45,8 +45,6 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/llm_backends.py";
 const SESSION_ID: &str = "session-oracle";
 /// Headers a transport adds on its own, which the stand-in does not record.
 const TRANSPORT_HEADERS: &[&str] = &["host", "content-length", "accept-encoding", "connection"];
-/// The scenarios the corpus may not fall below.
-const SCENARIO_FLOOR: usize = 350;
 /// How many scenarios replay side by side.
 const JOBS: usize = 16;
 
@@ -967,16 +965,12 @@ pub(super) fn resolve(value: &Value, pointer: &str) -> String {
 
 #[test]
 fn the_backends_answer_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    crate::parity::manifest::assert_replayed(CORPUS);
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let scenarios = corpus["scenarios"]
         .as_array()
         .expect("the corpus holds scenarios")
         .clone();
-    assert!(
-        scenarios.len() >= SCENARIO_FLOOR,
-        "the corpus holds {} scenarios, below the floor of {SCENARIO_FLOOR}",
-        scenarios.len()
-    );
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()

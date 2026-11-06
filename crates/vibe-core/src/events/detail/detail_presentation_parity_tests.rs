@@ -776,6 +776,7 @@ fn observed_document(case: &Case) -> Value {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/tool-presentation/corpus.json");
     let corpus = corpus();
     if let Some(reason) = skip_reason(&corpus) {
         eprintln!("{reason}");

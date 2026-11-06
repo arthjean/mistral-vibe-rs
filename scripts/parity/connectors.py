@@ -72,6 +72,7 @@ import blackbox  # noqa: E402
 from connectors_scenarios import API_KEY, scenarios, unified_scenarios  # noqa: E402
 import loop_capture  # noqa: E402
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
@@ -653,8 +654,7 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     arguments = parse_arguments()
     unified = arguments.harness == "unified"
-    if arguments.output is None:
-        arguments.output = UNIFIED_OUTPUT if unified else DEFAULT_OUTPUT
+    arguments.output = provenance.port_output(arguments.output, UNIFIED_OUTPUT if unified else DEFAULT_OUTPUT, server=arguments.server)
     flags = () if unified else HARNESS_FLAGS
     try:
         if arguments.server is not None:

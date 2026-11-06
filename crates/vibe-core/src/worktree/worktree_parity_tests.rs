@@ -1251,6 +1251,7 @@ fn compare(expected: &Value, actual: &Value) -> Vec<ValuedDifference> {
 
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/worktree/corpus.json");
     let corpus = corpus();
     assert_corpus_floor(&corpus);
     if let Some(reason) = skip_reason(&corpus) {

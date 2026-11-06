@@ -285,6 +285,7 @@ fn the_search_path_order_matches_the_reference() {
 
 #[test]
 fn the_winning_description_file_matches_the_reference() {
+    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/tool-descriptions/corpus.json");
     let corpus = corpus();
     let scratch = Scratch::build(&corpus.tree);
     // The reference records which file won by its text, so the replay maps back
