@@ -32,11 +32,17 @@ the two disagree. The checkout defaults to `/home/arthur/dev/mistral-vibe`;
 a capture script's `--reference` wins over both. Reference paths in comments and
 documentation use the Linux form; read them relative to the local checkout.
 
-- Keep the checkout's tracked files at the pin. It accepts two writes:
-  `vibe_core::parity::RESTORE_COMMAND` when it sits at another commit (restore
-  it rather than re-pinning by accident), and `uv sync --frozen` after a pull or
-  re-pin, which rebuilds its gitignored environment and native harness. It is an
-  oracle once `.venv/bin/python -c "import vibe.cli.entrypoint"` succeeds there.
+- The checkout is only an object store, at any `HEAD`: never check out or
+  `uv sync` inside it, and `git fetch` there only to bring in a commit to
+  measure. Captures and live probes run an environment materialized per commit,
+  `python3 scripts/parity/repin.py materialize <sha>` (`--accepted` for every
+  commit the manifest accepts), which exports the commit with `git archive`,
+  builds it with `uv sync --locked --no-editable` under
+  `.parity/reference-<sha12>/` and writes `attestation.json`;
+  `scripts/parity/materialize.py` documents the layout. `repin.py attest <sha>`
+  checks it, and an environment that drifted is rebuilt, never trusted. On
+  Windows the build needs short paths, which `.parity/` under this repository
+  gives.
 - Read the reference before writing Rust that touches a public boundary. Open
   the owning module first, then implement. `vibe/cli/` is the terminal client,
   `vibe/app_server/` the session methods, `vibe/acp/` the editor protocol, and
@@ -51,17 +57,23 @@ documentation use the Linux form; read them relative to the local checkout.
   `scripts/parity/`, which takes `--reference <path>` and re-executes itself
   under the reference interpreter, or the `*-oracle.py` beside its corpus in
   `crates/vibe-cli/tests/runtime-parity/`. `scripts/parity/reference.py` is
-  the one place that checks the pin and re-executes a driver; a driver never
+  the one place that resolves and checks the attested environment and
+  re-executes a driver; a driver never
   imports another driver, only shared modules and its own `<driver>_cases.py`
   or `<driver>_scenarios.py` data table. A table holds pure data and imports
   neither the driver nor `vibe`; a scenario written as a closure that drives
   the reference stays in its driver, however long that makes the driver.
 - Rust parity tests replay committed corpora unconditionally and gate only the
-  live probe on `vibe_core::parity::off_pin_reason`, so a missing or off-pin
-  checkout skips instead of failing `cargo test`. A new parity test builds on
-  `vibe_core::parity::replay` (the `parity-replay` feature of a dev-dependency
-  on `vibe-core`), whose `Replay` compares and ledgers a corpus and whose
-  `Capture::probe` and `pinned_reference` resolve and gate the checkout.
+  live probe, on `vibe_core::parity::live::gate`: a host other than Linux,
+  where the corpora are captured, and a missing environment skip, and one that
+  no longer matches its attestation is refused as environment drift, all
+  without failing `cargo test`; a probe whose oracle is the host's own
+  platform gates through `gate_native` instead. Every skip is recorded in
+  `target/parity/skips.jsonl`. `VIBE_PARITY_REQUIRE_LIVE=1` turns a skip into a
+  failure. A new parity test builds on `vibe_core::parity::replay` (the
+  `parity-replay` feature of a dev-dependency on `vibe-core`), whose `Replay`
+  compares and ledgers a corpus and whose `Capture::probe` and
+  `pinned_reference` pass through that gate.
 - `scripts/parity/manifest.json` lists every committed corpus with its driver,
   test, scorecard row, capture commit, SHA-256 and floors, and
   `python3 scripts/parity/repin.py capture <corpus>` is the only way to change
@@ -80,7 +92,13 @@ documentation use the Linux form; read them relative to the local checkout.
   enough to cover what changed: filtering `cargo test` to the edited module
   hides assertions elsewhere that read the same fixture. A run that printed
   `skipping the live ... probe` measured the committed corpora only; report it
-  that way.
+  that way. `python3 scripts/parity/live_summary.py` counts what a run
+  measured, and a live parity claim comes from a Linux run with
+  `VIBE_PARITY_REQUIRE_LIVE=1` (Windows probes answer the reference's Windows
+  behavior, which Linux-captured corpora do not hold). The scheduled
+  `.github/workflows/parity-live.yml` is that run, and the daily
+  `upstream-sentinel.yml` reports how far the pin is behind upstream
+  (`repin.py census`).
 
 `docs/parity.md` is the scorecard: one numbered row per part, the open
 divergences, and the ledger of divergences kept on purpose. Read a part's row
@@ -114,8 +132,10 @@ environment, so an exported `FORCE_COLOR` makes it emit ANSI that no corpus
 holds. The opposite leak hides failures: credentials resolve from
 `MISTRAL_API_KEY`, then the OS keyring. To reproduce a failure seen only on the
 runner, add `env -u MISTRAL_API_KEY DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent
-CI=true VIBE_REFERENCE=/nonexistent`, which removes the key, the keyring, and
-the reference checkout as the runner lacks them. The tests write logs and
+CI=true`, which removes the key and the keyring as the runner lacks them. The
+runner also holds no materialized reference environment, so on a Linux
+workstation that materialized one, move `.parity/reference-*` aside as well:
+every live probe then skips as it does there. The tests write logs and
 trust state into that throwaway home and harden some of its directories, so the
 last line restores write access before removing it.
 

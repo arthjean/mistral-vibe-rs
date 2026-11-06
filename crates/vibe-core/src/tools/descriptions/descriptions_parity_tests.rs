@@ -30,7 +30,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::config::{ConfigPaths, ConfigSource, HarnessFiles};
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
 
 use super::{SearchInputs, read_overrides, search_paths};
 
@@ -401,12 +401,9 @@ fn the_reference_reads_its_builtin_descriptions_from_disk() {
 /// failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "tool descriptions") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = crate::parity::replay::pinned_reference("tool descriptions") else {
         return;
-    }
+    };
     let repository = repo_root();
     let recaptured = repository.join("target/tool-descriptions-corpus.json");
     let output = Command::new("python3")

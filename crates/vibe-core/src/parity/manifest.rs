@@ -306,6 +306,16 @@ pub fn assert_corpus(corpus: &str) {
         .unwrap_or_else(|error| panic!("{corpus} is unreadable: {error}"));
     let problems = content_problems(entry, &text, &manifest.accepted());
     assert!(problems.is_empty(), "{}", report(&problems));
+    record_replay(corpus);
+}
+
+/// Records that the corpus at `corpus` replayed, for the CI summary that
+/// counts replays beside skipped probes (`target/parity/replays.jsonl`).
+fn record_replay(corpus: &str) {
+    super::live::record(
+        "replays.jsonl",
+        &serde_json::json!({"corpus": corpus, "test": super::live::test_name()}),
+    );
 }
 
 /// Asserts `text`, a corpus a replay embedded, is a listed corpus at an
@@ -342,6 +352,7 @@ pub fn assert_replayed(text: &str) -> String {
     };
     let problems = content_problems(entry, text, &accepted);
     assert!(problems.is_empty(), "{}", report(&problems));
+    record_replay(&entry.corpus);
     entry.corpus.clone()
 }
 

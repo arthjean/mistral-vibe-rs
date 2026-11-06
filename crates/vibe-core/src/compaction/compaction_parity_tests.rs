@@ -26,7 +26,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::events::ModelMessage;
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::parity::REFERENCE_COMMIT;
 use crate::text::hex_encode;
 
 use super::context::{
@@ -954,12 +954,9 @@ fn mask_placeholder(text: &str) -> String {
 /// pin, and skips everywhere else naming the pin and the way back.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "compaction") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = crate::parity::replay::pinned_reference("compaction") else {
         return;
-    }
+    };
     let repository = repo_root();
     let script = repository.join(CAPTURE_SCRIPT);
     let recaptured = repository.join("target/compaction-recapture.json");

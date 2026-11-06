@@ -32,8 +32,8 @@ use tempfile::TempDir;
 
 use super::session::{ManagedSession, SessionStatus, kill_managed_session};
 use super::*;
+use crate::parity::REFERENCE_COMMIT;
 use crate::parity::replay::{ValuedDifference, valued_differences};
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use crate::platform::Platform;
 use crate::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore,
@@ -1454,15 +1454,9 @@ fn the_projection_agrees_with_the_capture_script() {
 /// `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "shell sessions") {
-        eprintln!("{reason}");
-        eprintln!(
-            "this build asserts {REFERENCE_COMMIT}; the committed corpus replayed regardless, \
-             restore with `{RESTORE_COMMAND}`"
-        );
+    let Some(root) = crate::parity::replay::pinned_reference("shell sessions") else {
         return;
-    }
+    };
     let repository = repo_root();
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))

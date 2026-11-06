@@ -153,3 +153,57 @@ fn the_weighted_total_is_the_sum_the_parity_table_produces() {
         scores.len()
     );
 }
+
+/// The header row that states how far the pin is behind upstream.
+const UPSTREAM_CELL: &str = "| Weighted score against upstream `HEAD` |";
+/// What `scripts/parity/repin.py census` last recorded.
+const CENSUS: &str = "scripts/parity/upstream-census.json";
+
+/// `v3.1.0` as the numbers a release compares by.
+fn release(tag: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = tag.strip_prefix('v')?.split('.').map(str::parse::<u32>);
+    let release = (
+        parts.next()?.ok()?,
+        parts.next()?.ok()?,
+        parts.next()?.ok()?,
+    );
+    parts.next().is_none().then_some(release)
+}
+
+#[test]
+fn the_upstream_row_names_the_newest_tag_the_census_recorded() {
+    let root = repo_root();
+    let document = fs::read_to_string(root.join(SCORECARD)).expect("the scorecard is committed");
+    let census: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(root.join(CENSUS)).expect("the upstream census is committed"),
+    )
+    .expect("the upstream census parses");
+    let newest = census["newest"]["tag"]
+        .as_str()
+        .expect("the census names the newest upstream tag");
+    let cell = document
+        .lines()
+        .find(|line| line.starts_with(UPSTREAM_CELL))
+        .expect("the header states the score against upstream, or this parser moved");
+    let named = cell
+        .split_once("newest upstream tag `")
+        .and_then(|(_, rest)| rest.split_once('`'))
+        .map(|(tag, _)| tag)
+        .expect("the upstream row names the newest upstream tag as `vX.Y.Z`");
+    let (Some(named_release), Some(newest_release)) = (release(named), release(newest)) else {
+        panic!("{named} and {newest} are not both release tags");
+    };
+    assert!(
+        named_release >= newest_release,
+        "the upstream row names {named}, older than the newest tag {newest} that {CENSUS} records; \
+         rerun `python3 scripts/parity/repin.py census`"
+    );
+    let summary = census["summary"]
+        .as_str()
+        .expect("the census states its summary");
+    assert!(
+        cell.contains(summary),
+        "the upstream row does not state the census diff `{summary}`; rerun `python3 \
+         scripts/parity/repin.py census`"
+    );
+}

@@ -41,7 +41,7 @@ use crate::server::{
     stdio_routed_methods,
 };
 
-use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use vibe_core::parity::{REFERENCE_COMMIT, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/app_server_surface.py";
 const CORPUS_RELATIVE: &str = "tests/app-server-surface/corpus.json";
@@ -2310,11 +2310,7 @@ fn wire_values<T: serde::Serialize>(values: &[T]) -> Vec<String> {
 /// live probe cannot run here. Every replay above still ran against the
 /// committed corpus.
 fn pinned_reference() -> Option<(PathBuf, PathBuf)> {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "app-server surface") {
-        eprintln!("{reason}");
-        return None;
-    }
+    let root = vibe_core::parity::replay::pinned_reference("app-server surface")?;
     let interpreter = pinned_interpreter(&root)?;
     Some((root, interpreter))
 }

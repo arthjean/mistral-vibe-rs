@@ -1,23 +1,27 @@
-"""The reference checkout a capture measures, and how a capture runs its code.
+"""The reference environment a capture measures, and how a capture runs its
+code.
 
-Every capture script resolves the Python reference here, so the pin is checked
-one way, a refusal reads the same whichever script raised it, and the pinned
-source is imported one way.
+Every capture script resolves the Python reference here, so the environment is
+checked one way, a refusal reads the same whichever script raised it, and the
+pinned source is imported one way.
 
-The checkout must sit at the pin: its ``HEAD`` is :data:`pin.EXPECTED_COMMIT`,
-the test ``vibe_core::parity::off_pin_reason`` applies before a Rust test runs a
-live probe, and :data:`pin.RESTORE_COMMAND` returns a checkout that moved.
-Nothing weaker serves every capture: a black-box one runs the checkout's own
-console scripts, which import its working tree.
+A capture runs an environment materialized for its commit
+(``scripts/parity/materialize.py``), never the shared checkout: the checkout is
+only the object store ``git archive`` reads, so its ``HEAD`` and its working
+tree cannot reach a corpus. :func:`environment` finds the environment and
+checks it against its attestation, the same check
+``vibe_core::parity::live`` applies before a Rust test runs a live probe.
+``--reference`` names either an environment root, as the Rust probes pass it,
+or anything else (the checkout, by default), in which case the environment of
+the commit under :data:`DEFAULT_CACHE` is used.
 
-A capture that imports ``vibe`` itself can run it from the pinned commit
-rather than from that working tree: :func:`reexecute_pinned` extracts the
-commit with ``git archive`` under ``.parity/`` and re-runs the script under the
-checkout's interpreter with that tree first on ``PYTHONPATH``. The interpreter
-supplies the third-party dependencies and the gitignored native harness build;
-the tree supplies ``vibe`` exactly as committed, so an untracked module or a
-stray edit in the checkout never reaches a corpus, and the checkout itself is
-only read.
+A black-box capture starts the environment's own console scripts
+(:func:`reference_command`), installed without an editable link. A capture
+that imports ``vibe`` itself re-runs under the environment's interpreter with
+the attested source tree first on ``PYTHONPATH`` (:func:`reexecute_pinned`).
+
+Every resolution appends one line to ``target/parity/drivers.jsonl``, so a
+live run can show that each driver's reference side executed.
 
 Oracles that live outside ``scripts/parity`` reach this module by inserting
 this directory on ``sys.path``.
@@ -25,23 +29,32 @@ this directory on ``sys.path``.
 
 from __future__ import annotations
 
+import datetime
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
-import tarfile
 
-import host_env
+import materialize
 import provenance
-from pin import EXPECTED_COMMIT, RESTORE_COMMAND
+from materialize import DEFAULT_CACHE
+from pin import EXPECTED_COMMIT
 
-#: Where extracted trees are kept between runs: gitignored, at the repository
-#: root whichever directory a capture runs from, and keyed by commit so a
-#: re-pin extracts a new tree instead of reusing the old one.
-DEFAULT_CACHE = Path(__file__).resolve().parents[2] / ".parity"
+__all__ = [
+    "DEFAULT_CACHE",
+    "INTERPRETER_VARIABLE",
+    "OracleError",
+    "environment",
+    "reexecute_pinned",
+    "reference_command",
+    "reference_interpreter",
+    "require_pin",
+]
 
-#: Names an interpreter for a checkout whose virtual environment sits
-#: elsewhere, as it does for ``vibe_core::parity::pinned_interpreter``.
+#: Names the interpreter a capture should run under. Only the attested
+#: environment's own interpreter is accepted, so the variable can select it
+#: but never substitute another.
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 
 #: Set on the re-executed process, so it runs the capture instead of
@@ -52,127 +65,118 @@ _REEXEC_MARKER = "VIBE_PARITY_PINNED_TREE"
 #: re-executed process can put it back.
 _CALLER_PATH = "VIBE_PARITY_CALLER_PYTHONPATH"
 
+#: Where a capture records that its reference side ran, under the Cargo target
+#: directory the Rust gate records its probes in.
+RECORD = "parity/drivers.jsonl"
+
 
 class OracleError(RuntimeError):
     """Raised when a capture cannot be produced from an authoritative state."""
 
 
-def _git(reference: Path, *arguments: str) -> str:
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=reference,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise OracleError(
-            f"git {' '.join(arguments)} failed in {reference}: {result.stderr.strip()}"
-        )
-    return result.stdout.strip()
+def _target_commit(expected: str | None) -> str:
+    try:
+        return provenance.expected_commit(expected, EXPECTED_COMMIT)
+    except PermissionError as error:
+        raise OracleError(str(error)) from None
 
 
-def require_pin(reference: Path, expected: str | None = EXPECTED_COMMIT) -> str:
-    """The commit the checkout at ``reference`` sits at, refused unless it is
-    the one this capture may record.
+def _record(commit: str, root: Path) -> None:
+    target = Path(os.environ.get("CARGO_TARGET_DIR") or provenance.REPOSITORY / "target")
+    if not target.is_absolute():
+        target = provenance.REPOSITORY / target
+    line = {
+        "driver": Path(sys.argv[0]).name,
+        "commit": commit,
+        "environment": str(root),
+        "at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+    }
+    try:
+        (target / RECORD).parent.mkdir(parents=True, exist_ok=True)
+        with (target / RECORD).open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(line) + "\n")
+    except OSError:
+        pass
 
-    That is the pin, whatever ``expected`` says, unless
+
+def environment(
+    reference: Path, expected: str | None = EXPECTED_COMMIT, *, cache: Path = DEFAULT_CACHE
+) -> tuple[str, Path]:
+    """The commit this capture may record and the root of its attested
+    environment, refused when no environment for that commit exists or when
+    one no longer matches its attestation.
+
+    The commit is the pin, whatever ``expected`` says, unless
     ``scripts/parity/repin.py capture`` started the capture: an empty or
     ``None`` ``expected`` (``--expected-commit ''``, ``--allow-unpinned``) or
     another commit is refused anywhere else, since the corpus it wrote would
     record a commit no replay accepts (:func:`provenance.expected_commit`).
     """
 
+    commit = _target_commit(expected)
+    reference = Path(reference)
+    root = (
+        reference.resolve()
+        if (reference / materialize.ATTESTATION).is_file()
+        else materialize.environment_root(commit, cache)
+    )
     try:
-        expected = provenance.expected_commit(expected, EXPECTED_COMMIT)
-    except PermissionError as error:
+        materialize.verify(root, commit)
+    except materialize.AttestationError as error:
         raise OracleError(str(error)) from None
-    if not reference.is_dir():
-        raise OracleError(
-            f"no reference checkout at {reference}; set VIBE_REFERENCE to the checkout "
-            "path or pass --reference"
-        )
-    commit = _git(reference, "rev-parse", "HEAD")
-    if commit != expected:
-        raise OracleError(
-            f"{reference} is at {commit}, not the pinned {expected}; "
-            f"restore it with `{RESTORE_COMMAND}`"
-        )
-    return commit
+    _record(commit, root)
+    return commit, root
 
 
-def reference_interpreter(reference: Path, override: Path | None = None) -> Path:
-    """The interpreter that runs reference code: ``override``, then
-    :data:`INTERPRETER_VARIABLE`, then the checkout's virtual environment in
-    its POSIX layout and then its Windows one."""
+def require_pin(reference: Path, expected: str | None = EXPECTED_COMMIT) -> str:
+    """The commit this capture may record, refused as :func:`environment`
+    refuses it."""
 
-    candidates = [override] if override else []
-    if os.environ.get(INTERPRETER_VARIABLE):
-        candidates.append(Path(os.environ[INTERPRETER_VARIABLE]))
-    candidates += [reference / ".venv/bin/python", reference / ".venv/Scripts/python.exe"]
-    found = next((candidate for candidate in candidates if candidate.is_file()), None)
-    if found is None:
-        raise OracleError(
-            f"no reference interpreter: looked for {INTERPRETER_VARIABLE} and a virtual "
-            f"environment in {reference}; run `uv sync --frozen` there"
-        )
+    return environment(reference, expected)[0]
+
+
+def _is_attested_interpreter(candidate: Path, root: Path) -> bool:
+    normalized = os.path.normcase(os.path.abspath(candidate.parent))
+    return normalized == os.path.normcase(os.path.abspath(materialize.scripts_directory(root)))
+
+
+def reference_interpreter(
+    reference: Path, override: Path | None = None, expected: str | None = EXPECTED_COMMIT
+) -> Path:
+    """The interpreter that runs reference code: the attested environment's.
+
+    ``override`` and :data:`INTERPRETER_VARIABLE` may name it, as callers that
+    already run under it do, but an interpreter outside the environment is
+    refused rather than trusted.
+    """
+
+    _, root = environment(reference, expected)
+    found = materialize.interpreter(root)
+    for candidate in (override, os.environ.get(INTERPRETER_VARIABLE)):
+        if candidate and not _is_attested_interpreter(Path(candidate), root):
+            raise OracleError(
+                f"{candidate} is not the interpreter of the attested environment {root}; "
+                f"captures run only under {found}"
+            )
+    if not found.is_file():
+        raise OracleError(f"the attested environment {root} has no interpreter at {found}")
     return found
 
 
 def reference_command(
     reference: Path, script: str, expected: str | None = EXPECTED_COMMIT
 ) -> tuple[str, list[str]]:
-    """The commit the checkout at ``reference`` sits at, refused as
-    :func:`require_pin` refuses it, and the command that runs its console
-    script ``script``.
+    """The commit this capture may record and the command that runs the
+    attested environment's console script ``script``."""
 
-    A console script sits beside :func:`reference_interpreter`'s interpreter,
-    so it is found wherever that interpreter is: in either virtual environment
-    layout, or beside :data:`INTERPRETER_VARIABLE`'s.
-    """
-
-    commit = require_pin(reference, expected)
-    directory = reference_interpreter(reference).parent
-    for name in (script, f"{script}.exe"):
-        if (directory / name).is_file():
-            return commit, [str(directory / name)]
-    raise OracleError(
-        f"no reference entry point `{script}` in {directory}; run `uv sync --frozen`"
-    )
-
-
-def pinned_tree(reference: Path, commit: str, cache: Path = DEFAULT_CACHE) -> Path:
-    """The source tree of ``commit``, extracted once and reused across runs.
-
-    The extraction lands in a per-process directory and is moved into place at
-    the end, so a concurrent run reads a complete tree or builds its own rather
-    than importing a half-written one.
-    """
-
-    # Absolute, because `_git` runs inside the checkout and a relative output
-    # path would land there.
-    tree = (cache / f"reference-{commit[:12]}").resolve()
-    marker = Path("vibe") / "__init__.py"
-    if (tree / marker).is_file():
-        return tree
-    staged = tree.with_name(f"{tree.name}.{os.getpid()}.partial")
-    staged.mkdir(parents=True, exist_ok=True)
-    archive = staged.with_suffix(".tar")
-    _git(reference, "archive", "--format=tar", "-o", str(archive), commit)
-    with tarfile.open(archive) as bundle:
-        bundle.extractall(staged, filter="data")
-    archive.unlink(missing_ok=True)
-    if not (staged / marker).is_file():
-        raise OracleError(f"the extracted tree at {staged} carries no `vibe` package")
-    try:
-        staged.rename(tree)
-    except OSError:
-        # Another run finished first, which is the only way the destination
-        # exists by now. Its tree is the same commit, so theirs wins.
-        host_env.remove_tree(staged)
-    if not (tree / marker).is_file():
-        raise OracleError(f"the extracted tree at {tree} carries no `vibe` package")
-    return tree
+    commit, root = environment(reference, expected)
+    found = materialize.console_script(root, script)
+    if found is None:
+        raise OracleError(
+            f"no reference entry point `{script}` in {materialize.scripts_directory(root)}; "
+            f"rerun `{materialize.materialize_command(commit)}`"
+        )
+    return commit, [str(found)]
 
 
 def reexecute_pinned(
@@ -183,12 +187,15 @@ def reexecute_pinned(
     override: Path | None = None,
     source_paths: tuple[Path, ...] = (),
 ) -> tuple[str, Path]:
-    """Re-runs this script under :func:`reference_interpreter` importing the
-    pinned tree, and returns the commit and that tree to the process that then
-    runs the capture.
+    """Re-runs this script under the attested environment's interpreter
+    importing its source tree, and returns the commit and that tree to the
+    process that then runs the capture.
 
-    ``source_paths`` are directories of the tree that also go on the path, ahead
-    of whatever the interpreter would otherwise find.
+    The source tree is the commit as ``git archive`` exported it, checked
+    against the attestation like the environment, so an untracked module or a
+    stray edit never reaches a corpus. ``source_paths`` are directories of the
+    tree that also go on the path, ahead of whatever the interpreter would
+    otherwise find.
 
     POSIX replaces the process. Windows has no such call: ``os.execv`` starts a
     new process and exits, so whoever ran the script would see that exit code
@@ -201,8 +208,8 @@ def reexecute_pinned(
     caller's, not the re-execution's.
     """
 
-    commit = require_pin(reference, expected)
-    tree = pinned_tree(reference, commit, cache)
+    commit, root = environment(reference, expected, cache=cache)
+    tree = root / materialize.SOURCE
     if os.environ.get(_REEXEC_MARKER) == str(tree):
         del os.environ[_REEXEC_MARKER]
         caller = os.environ.pop(_CALLER_PATH, None)
@@ -213,19 +220,19 @@ def reexecute_pinned(
         if not _imports_pinned_vibe(tree):
             raise OracleError(f"the reference interpreter did not import `vibe` from {tree}")
         return commit, tree
-    executable = str(reference_interpreter(reference, override))
-    environment = dict(os.environ)
-    environment[_REEXEC_MARKER] = str(tree)
-    caller = environment.get("PYTHONPATH")
+    executable = str(reference_interpreter(root, override, commit))
+    environment_variables = dict(os.environ)
+    environment_variables[_REEXEC_MARKER] = str(tree)
+    caller = environment_variables.get("PYTHONPATH")
     if caller is not None:
-        environment[_CALLER_PATH] = caller
-    environment["PYTHONPATH"] = os.pathsep.join(
+        environment_variables[_CALLER_PATH] = caller
+    environment_variables["PYTHONPATH"] = os.pathsep.join(
         [str(tree), *(str(tree / path) for path in source_paths), *([caller] if caller else [])]
     )
     command = [executable, str(Path(sys.argv[0]).resolve()), *sys.argv[1:]]
     if os.name == "nt":
-        sys.exit(subprocess.run(command, env=environment, check=False).returncode)
-    os.execve(executable, command, environment)
+        sys.exit(subprocess.run(command, env=environment_variables, check=False).returncode)
+    os.execve(executable, command, environment_variables)
 
 
 def _imports_pinned_vibe(tree: Path) -> bool:

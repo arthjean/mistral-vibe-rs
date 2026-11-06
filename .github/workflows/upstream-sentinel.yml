@@ -1,0 +1,41 @@
+name: Upstream sentinel
+
+# US-008 of `tasks/prd-trustworthy-parity-v3.md`: once a day, compare the pin
+# with the newest upstream release tag and take a static census of both trees.
+# The job fails while the pin is behind, with the releases and the census diff
+# by boundary in its summary, and fails with an unreachable message when
+# upstream cannot be listed, never with "up to date".
+#
+# Nothing fetched is executed: `scripts/parity/census.py` reads the trees with
+# Python's `ast` parser and patterns only. The job still runs with a read-only
+# token, no repository secret and every action pinned by commit.
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sentinel:
+    name: Pin against the newest upstream release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Census against upstream
+        run: |
+          set -o pipefail
+          status=0
+          python3 scripts/parity/repin.py census --check 2>&1 | tee -a "${GITHUB_STEP_SUMMARY}" || status=$?
+          if [ "${status}" -ne 0 ]; then
+            echo
+            echo "The pin is behind upstream, or upstream could not be read (see the summary)."
+          fi
+          exit "${status}"

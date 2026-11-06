@@ -32,8 +32,8 @@ use sha2::{Digest as _, Sha256};
 
 use crate::text::hex_encode;
 
+use crate::parity::REFERENCE_COMMIT;
 use crate::parity::replay::valued_differences;
-use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::{EffectDetail, EffectResultDisplay, RemoteSettlement, RemoteToolOrigin};
 
@@ -1028,7 +1028,7 @@ fn the_replay_reads_the_corpus_and_not_the_reference_checkout() {
             format!("{head}{tail}")
         })
         .unwrap_or_else(|| source[..probe].to_owned());
-    for reader in ["reference_root(", "off_pin_reason(", "RESTORE_COMMAND"] {
+    for reader in ["reference_root(", "pinned_reference(", "RESTORE_COMMAND"] {
         assert!(
             !before.contains(reader),
             "{reader} is read before `{RECAPTURE_PROBE}`, so the replay would depend on the \
@@ -1149,12 +1149,9 @@ fn the_corpus_records_a_projected_output_for_every_result_case() {
 /// `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "tool presentation") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = crate::parity::replay::pinned_reference("tool presentation") else {
         return;
-    }
+    };
     let repository = repo_root();
     let recaptured = repository.join("target/tool-presentation-corpus.json");
     let output = Command::new("python3")

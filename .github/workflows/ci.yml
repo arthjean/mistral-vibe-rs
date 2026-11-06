@@ -49,12 +49,30 @@ jobs:
       # Rust meta-test checks the same rules inside `cargo test`.
       - name: Parity manifest
         run: python3 scripts/parity/repin.py verify
+      # The AGENTS.md gate: no `FORCE_COLOR`, a throwaway vibe home, and every
+      # test run to the end so one failure does not hide the next.
       - name: Quality gates
         run: |
           cargo +stable fmt --all -- --check
           cargo +stable check --workspace --all-targets --all-features
           cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
-          cargo +stable test --workspace --all-features
+          rm -rf target/parity
+          home="$(mktemp -d)"
+          status=0
+          env -u FORCE_COLOR VIBE_HOME="${home}" cargo +stable test --workspace --all-features --no-fail-fast \
+            || status=$?
+          chmod -R u+w "${home}" && rm -rf "${home}"
+          exit "${status}"
+      # What the suite measured: every replay and every live probe records
+      # itself under `target/parity/` (`vibe_core::parity::live`), so a run that
+      # skipped every probe reads as such. The runner holds no attested
+      # reference environment, so every probe skips here; `parity-live.yml`
+      # is the run that measures them.
+      - name: Parity measurement summary
+        if: always()
+        run: |
+          python3 scripts/parity/live_summary.py --title "Parity measurement (ubuntu)" \
+            >> "${GITHUB_STEP_SUMMARY}"
       # US-007 of `tasks/prd-e2e-test-battery.md`: an e2e trial asserting an
       # open defect of the register is declared `known_defect("E2E-Dnn", ...)`
       # and ignored, so the open backlog is counted here per binary. Each e2e
@@ -167,6 +185,7 @@ jobs:
         timeout-minutes: 100
         run: |
           set -o pipefail
+          rm -rf target/parity
           vibe_home="$(mktemp -d)"
           log="${RUNNER_TEMP}/windows-test.log"
           status=0
@@ -177,6 +196,13 @@ jobs:
             cargo +stable test --workspace --all-features --doc 2>&1 \
             | tee -a "${log}" || status=1
           exit "${status}"
+      # The same count as on Linux, with the nextest JUnit report classing
+      # every failure.
+      - name: Parity measurement summary
+        if: always()
+        run: |
+          python3 scripts/parity/live_summary.py --title "Parity measurement (windows)" \
+            --junit target/nextest/ci/junit.xml >> "${GITHUB_STEP_SUMMARY}"
       - name: Count windows ignore tags
         if: always()
         run: |

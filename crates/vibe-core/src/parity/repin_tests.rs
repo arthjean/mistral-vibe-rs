@@ -52,7 +52,15 @@ impl World {
         let root = directory.path().to_path_buf();
         let scripts = root.join("scripts/parity");
         std::fs::create_dir_all(&scripts).expect("the scripts directory");
-        for module in ["repin.py", "provenance.py", "pin.py"] {
+        for module in [
+            "repin.py",
+            "provenance.py",
+            "pin.py",
+            "materialize.py",
+            "host_env.py",
+            "sentinel.py",
+            "census.py",
+        ] {
             std::fs::copy(
                 repository().join("scripts/parity").join(module),
                 scripts.join(module),

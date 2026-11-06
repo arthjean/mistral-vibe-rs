@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{REFERENCE_COMMIT, REFERENCE_VERSION, RESTORE_COMMAND, off_pin_reason};
+use super::{REFERENCE_COMMIT, REFERENCE_VERSION, RESTORE_COMMAND};
 
 /// The two files allowed to spell the commit out, relative to the repository
 /// root. Every other oracle cites one of them.
@@ -197,49 +197,4 @@ fn the_restore_command_names_the_pinned_commit() {
         "the documented restore command must target the pin it restores"
     );
     assert!(RESTORE_COMMAND.starts_with("git -C "));
-}
-
-#[test]
-fn an_off_pin_checkout_names_both_commits_and_the_way_back() {
-    // The repository itself stands in for a checkout sitting at another commit,
-    // which is exactly the state the message has to describe.
-    let root = repo_root();
-    let reason =
-        off_pin_reason(&root, "example").expect("this repository is not the pinned reference");
-
-    assert!(
-        reason.contains(REFERENCE_COMMIT),
-        "the skip message must name the expected commit: {reason}"
-    );
-    assert!(
-        reason.contains(RESTORE_COMMAND),
-        "the skip message must name the way back: {reason}"
-    );
-    assert!(
-        reason.contains("example"),
-        "the skip message must name the probe that went quiet: {reason}"
-    );
-
-    let head = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&root)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .expect("this repository answers rev-parse");
-    let head = String::from_utf8(head.stdout).expect("a revision is UTF-8");
-    assert!(
-        reason.contains(head.trim()),
-        "the skip message must name the commit actually found: {reason}"
-    );
-}
-
-#[test]
-fn a_missing_checkout_skips_without_naming_a_commit_it_never_read() {
-    let reason = off_pin_reason(Path::new("/nonexistent/reference/checkout"), "example")
-        .expect("a missing checkout cannot be the oracle");
-    assert!(reason.contains("no reference checkout"), "{reason}");
-    assert!(
-        !reason.contains(REFERENCE_COMMIT),
-        "nothing was read, so no commit comparison can be reported: {reason}"
-    );
 }

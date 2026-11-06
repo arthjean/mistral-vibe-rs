@@ -47,8 +47,8 @@ use vibe_core::engine::CancellationToken;
 use vibe_core::extensions::{
     ChildContext, SkillDefinition, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
 };
+use vibe_core::parity::REFERENCE_COMMIT;
 use vibe_core::parity::replay::{ValuedDifference, valued_differences};
-use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
@@ -1939,12 +1939,9 @@ fn the_fixture_tree_is_committed_and_deterministic() {
 /// `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "tool execution") {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
+    let Some(root) = vibe_core::parity::replay::pinned_reference("tool execution") else {
         return;
-    }
+    };
     let repository = repo_root();
     let recaptured = repository.join("target/tool-execution-corpus.json");
     let output = Command::new("python3")

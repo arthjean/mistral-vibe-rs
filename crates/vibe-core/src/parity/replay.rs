@@ -27,8 +27,6 @@ use std::process::{Command, Output};
 
 use serde_json::{Value, json};
 
-use super::{RESTORE_COMMAND, off_pin_reason, reference_root};
-
 /// The workspace root, which the capture scripts run from.
 #[must_use]
 pub fn repository() -> PathBuf {
@@ -230,19 +228,21 @@ pub fn digest(text: &str) -> Value {
     })
 }
 
-/// The checkout the live probe named `probe` recaptures, or [`None`] after
-/// saying why this machine cannot act as the oracle. The committed corpus
-/// replays regardless, which is what keeps a missing checkout from failing
-/// `cargo test`.
+/// The attested reference environment the live probe named `probe`
+/// recaptures, or [`None`] after recording why this machine cannot act as the
+/// oracle ([`super::live::gate`]). The committed corpus replays regardless,
+/// which is what keeps a missing environment from failing `cargo test` unless
+/// `VIBE_PARITY_REQUIRE_LIVE=1` asks for live measurement.
 #[must_use]
 pub fn pinned_reference(probe: &str) -> Option<PathBuf> {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, probe) {
-        eprintln!("{reason}");
-        eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
-        return None;
-    }
-    Some(root)
+    super::live::gate(probe)
+}
+
+/// [`pinned_reference`] for a probe whose oracle is the host's own platform
+/// ([`super::live::gate_native`]).
+#[must_use]
+pub fn pinned_reference_native(probe: &str) -> Option<PathBuf> {
+    super::live::gate_native(probe)
 }
 
 /// A capture script under `scripts/parity/` and how a replay runs it.

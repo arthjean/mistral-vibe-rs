@@ -3,20 +3,16 @@
 
 use std::path::PathBuf;
 
-/// The pinned checkout with its environment, or why it cannot be the subject.
+/// The attested environment of the pin, laid out like a checkout with its
+/// `.venv`, or why it cannot be the subject.
 pub fn pinned() -> Result<PathBuf, String> {
-    let root = vibe_core::parity::reference_root();
-    if let Some(reason) = vibe_core::parity::off_pin_reason(&root, "e2e reference subject") {
-        // The reason is worded for a live probe that skips; keep what it found.
-        let found = reason
-            .split_once("probe: ")
-            .map_or(reason.as_str(), |(_, found)| found);
-        return Err(found.to_owned());
-    }
+    let root = vibe_core::parity::live::pinned_environment().map_err(|refusal| refusal.detail)?;
     if vibe_core::parity::pinned_interpreter(&root).is_none() {
         return Err(format!(
-            "{} has no virtual environment; run `uv sync --frozen` there",
-            root.display()
+            "{} has no virtual environment; rerun `{} {}`",
+            root.display(),
+            vibe_core::parity::live::MATERIALIZE,
+            vibe_core::parity::REFERENCE_COMMIT
         ));
     }
     Ok(root)

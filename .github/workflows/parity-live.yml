@@ -1,0 +1,152 @@
+name: Parity live
+
+# The weekly live measurement (US-007 of `tasks/prd-trustworthy-parity-v3.md`):
+# every commit the parity manifest accepts is materialized into an attested
+# reference environment, and the whole suite runs with
+# `VIBE_PARITY_REQUIRE_LIVE=1`, so every live probe recaptures the reference
+# and a probe that would skip fails instead.
+#
+# The job executes upstream code (the reference's build backend, its console
+# scripts, its Rust client), so it holds nothing worth taking: it runs only on a
+# schedule or by hand, with a read-only token, no repository secret, every
+# action pinned by commit, and caches under a `parity-live-` key that no
+# pull-request workflow writes or reads.
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parity-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Live parity on Linux
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    env:
+      CARGO_INCREMENTAL: "0"
+      CARGO_NET_RETRY: "3"
+    steps:
+      # The suite stops by this deadline, five minutes inside the job's own
+      # timeout, so a slow materialization shortens the suite instead of
+      # letting the job timeout cut it and the summary together.
+      - name: Start the clock
+        run: echo "PARITY_LIVE_DEADLINE=$(( $(date +%s) + 85 * 60 ))" >> "${GITHUB_ENV}"
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Install system dependencies
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            if sudo timeout 180 apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=30; then
+              break
+            fi
+            sleep 15
+          done
+          sudo timeout 300 apt-get install --no-install-recommends -y libasound2-dev bubblewrap
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install Rust stable
+        run: rustup toolchain install stable --profile minimal
+      # uv and nextest at the releases the workstation measured, verified by
+      # digest rather than installed by a script fetched at run time.
+      - name: Install uv and cargo-nextest
+        run: |
+          cd "${RUNNER_TEMP}"
+          uv_archive="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfLO "https://github.com/astral-sh/uv/releases/download/0.13.7/${uv_archive}"
+          echo "c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83  ${uv_archive}" \
+            | sha256sum -c -
+          tar xzf "${uv_archive}"
+          cp uv-x86_64-unknown-linux-gnu/uv uv-x86_64-unknown-linux-gnu/uvx "${HOME}/.cargo/bin/"
+          version="$(awk -F'"' '/^nextest-version/ { print $2 }' "${GITHUB_WORKSPACE}/.config/nextest.toml")"
+          nextest_archive="cargo-nextest-${version}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfLO "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${version}/${nextest_archive}"
+          echo "682c21b777c333e96fd532e114d3a5a894e0729ab88d94c0a9f20f8419695428  ${nextest_archive}" \
+            | sha256sum -c -
+          tar xzf "${nextest_archive}" -C "${HOME}/.cargo/bin"
+          uv --version
+          cargo nextest --version
+      # The reference is read as an object store only: `git archive` extracts
+      # each commit, and nothing is checked out or run from this clone.
+      - name: Fetch the reference objects
+        run: |
+          git clone --quiet --bare --filter=blob:none \
+            https://github.com/mistralai/mistral-vibe "${RUNNER_TEMP}/mistral-vibe"
+      - name: Read the accepted commits
+        id: accepted
+        run: |
+          commits="$(python3 scripts/parity/repin.py accepted)"
+          echo "Accepted commits: ${commits}"
+          echo "key=$(printf '%s' "${commits}" | sha256sum | cut -c1-16)" >> "${GITHUB_OUTPUT}"
+      # Keyed by the accepted commits and the materializer, restored by exact
+      # key only: an environment from another commit or another materializer is
+      # never reused, and the attestation check below rejects one that drifted.
+      - name: Restore the reference environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            .parity/reference-*
+            ~/.cache/uv
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: parity-live-${{ runner.os }}-${{ steps.accepted.outputs.key }}-${{ hashFiles('scripts/parity/materialize.py') }}
+      - name: Materialize the reference environments
+        id: materialize
+        continue-on-error: true
+        timeout-minutes: 45
+        run: |
+          python3 scripts/parity/repin.py materialize --accepted --checkout "${RUNNER_TEMP}/mistral-vibe"
+      - name: Run the suite in require-live mode
+        id: suite
+        if: steps.materialize.outcome == 'success'
+        run: |
+          rm -rf target/parity
+          budget=$(( PARITY_LIVE_DEADLINE - $(date +%s) ))
+          if [ "${budget}" -lt 60 ]; then
+            echo "Materializing left no time for the suite."
+            echo "timed_out=true" >> "${GITHUB_OUTPUT}"
+            exit 1
+          fi
+          home="$(mktemp -d)"
+          status=0
+          # SIGINT lets nextest finish its report for the tests that completed,
+          # so the summary can name the last probe that did.
+          env -u FORCE_COLOR -u MISTRAL_API_KEY VIBE_HOME="${home}" VIBE_PARITY_REQUIRE_LIVE=1 \
+            VIBE_REFERENCE="${RUNNER_TEMP}/mistral-vibe" \
+            timeout --signal=INT --kill-after=2m "${budget}s" \
+            cargo +stable nextest run --profile parity-live --workspace --all-features --no-fail-fast \
+            || status=$?
+          if [ "${status}" -eq 124 ] || [ "${status}" -eq 137 ]; then
+            echo "timed_out=true" >> "${GITHUB_OUTPUT}"
+          fi
+          chmod -R u+w "${home}" && rm -rf "${home}"
+          exit "${status}"
+      - name: Summarize the live measurement
+        if: always()
+        run: |
+          flags=(--require-live --require-drivers)
+          if [ "${{ steps.materialize.outcome }}" != "success" ]; then
+            flags=(--materialization-failed)
+          fi
+          if [ "${{ steps.suite.outputs.timed_out }}" = "true" ]; then
+            flags+=(--timed-out)
+          fi
+          python3 scripts/parity/live_summary.py --title "Live parity" \
+            --junit target/nextest/parity-live/junit.xml "${flags[@]}" | tee -a "${GITHUB_STEP_SUMMARY}"
+      - name: Upload the measurement records
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: parity-live-records
+          path: |
+            target/parity/
+            target/nextest/parity-live/junit.xml
+          if-no-files-found: warn

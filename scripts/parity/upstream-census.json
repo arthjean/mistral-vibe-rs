@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "note": "Written by scripts/parity/repin.py census; scorecard_tests checks the upstream row of docs/parity.md against it.",
+  "checkedAt": "2026-11-06",
+  "pin": {
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+    "version": "2.26.0"
+  },
+  "newest": {
+    "tag": "v3.1.0",
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
+  },
+  "releasesBehind": [
+    "v2.26.1",
+    "v3.0.0",
+    "v3.0.1",
+    "v3.0.2",
+    "v3.0.3",
+    "v3.0.4",
+    "v3.1.0"
+  ],
+  "notes": [],
+  "summary": "methods +33/-5, config +27/-2, tools +0/-1, cliFlags +10/-1, scorecard paths missing 31",
+  "diff": {
+    "methods": {
+      "added": [
+        "artifacts/list",
+        "artifacts/markViewed",
+        "artifacts/subscribe",
+        "artifacts/sync",
+        "config/effective/read",
+        "connector_catalog/connect",
+        "imports/discover",
+        "imports/read",
+        "imports/start",
+        "platformCredentials/headers",
+        "projects/create",
+        "projects/list",
+        "projects/remove",
+        "projects/rename",
+        "session/context/read",
+        "session/lease/subscribe",
+        "session/subagents/interrupt",
+        "session/subagents/read",
+        "session/subagents/wait",
+        "session/turn/queue/edit/abandon",
+        "session/turn/queue/edit/cancel",
+        "session/turn/queue/edit/save",
+        "session/turn/queue/edit/start",
+        "setup/oidc-cancel",
+        "setup/oidc-clear",
+        "setup/oidc-poll",
+        "setup/oidc-probe",
+        "setup/oidc-start",
+        "skills/local/delete",
+        "skills/local/list",
+        "skills/local/read",
+        "skills/local/setEnabled",
+        "skills/local/write"
+      ],
+      "removed": [
+        "diagnostics/list",
+        "stats/read",
+        "tools/list",
+        "workspace/git/worktrees/reap",
+        "workspace/git/worktrees/reap/cancel"
+      ]
+    },
+    "config": {
+      "added": [
+        "VibeConfigSchema.agent_max_output_tokens",
+        "VibeConfigSchema.api_stream_idle_timeout",
+        "VibeConfigSchema.catalog_model_aliases",
+        "VibeConfigSchema.catalog_recommended_model",
+        "VibeConfigSchema.compaction_max_output_tokens",
+        "VibeConfigSchema.compaction_reasoning_limit_tokens",
+        "VibeConfigSchema.cursor_blink",
+        "VibeConfigSchema.enable_auto_approve",
+        "VibeConfigSchema.enable_background_processes",
+        "VibeConfigSchema.enable_file_autocomplete",
+        "VibeConfigSchema.enable_mcp",
+        "VibeConfigSchema.enable_mouse_capture",
+        "VibeConfigSchema.enable_subagents",
+        "VibeConfigSchema.experimental_enable_document_library_connector",
+        "VibeConfigSchema.experimental_enable_local_projects",
+        "VibeConfigSchema.experimental_enable_mistral_mcp_connector",
+        "VibeConfigSchema.experimental_enable_model_catalog",
+        "VibeConfigSchema.experimental_enable_pr_discovery",
+        "VibeConfigSchema.experimental_enable_pr_monitoring",
+        "VibeConfigSchema.experimental_local_runtime_session_api",
+        "VibeConfigSchema.max_concurrent_subagents",
+        "VibeConfigSchema.max_subagents",
+        "VibeConfigSchema.output_limit_retries",
+        "VibeConfigSchema.outside_workdir",
+        "VibeConfigSchema.strict_config",
+        "VibeConfigSchema.title_prompt_id",
+        "VibeConfigSchema.worktree_copy_on_write"
+      ],
+      "removed": [
+        "VibeConfigSchema.smart_approve_default",
+        "VibeConfigSchema.tool_paths"
+      ]
+    },
+    "tools": {
+      "added": [],
+      "removed": [
+        "exit_plan_mode"
+      ]
+    },
+    "cliFlags": {
+      "added": [
+        "--agent-socket",
+        "--arg",
+        "--header",
+        "--max-runs",
+        "--model",
+        "--output-dir",
+        "--prompt-file",
+        "--runs-per-app-server",
+        "--system-prompt-file",
+        "--time-limit"
+      ],
+      "removed": [
+        "--no-login"
+      ]
+    },
+    "scorecardPaths": {
+      "missing": [
+        "vibe/app_server/_handler.py",
+        "vibe/app_server/_legacy_session_backend.py",
+        "vibe/app_server/_turns.py",
+        "vibe/cli/_rust.py",
+        "vibe/cli/autocompletion",
+        "vibe/cli/autocompletion/completers.py",
+        "vibe/cli/autocompletion/slash_command.py",
+        "vibe/cli/cli.py",
+        "vibe/cli/commands.py",
+        "vibe/cli/entrypoint.py",
+        "vibe/cli/mcp_command.py",
+        "vibe/cli/programmatic.py",
+        "vibe/cli/textual_ui",
+        "vibe/cli/textual_ui/app.py",
+        "vibe/cli/textual_ui/handlers/event_handler.py",
+        "vibe/cli/textual_ui/provider_auth_status.py",
+        "vibe/cli/textual_ui/screens",
+        "vibe/cli/textual_ui/widgets",
+        "vibe/cli/textual_ui/widgets/chat_input/input_kinds.py",
+        "vibe/cli/update_notifier",
+        "vibe/cli/vscode_extension_promo",
+        "vibe/core/agent_loop",
+        "vibe/core/agent_loop_hooks.py",
+        "vibe/core/llm/backend",
+        "vibe/core/middleware.py",
+        "vibe/core/plan_session.py",
+        "vibe/core/rewind",
+        "vibe/core/skills/builtins",
+        "vibe/core/subagents.py",
+        "vibe/core/tools/terminal_runtime.py",
+        "vibe/core/tools/ui.py"
+      ]
+    }
+  }
+}

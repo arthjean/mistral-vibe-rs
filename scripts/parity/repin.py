@@ -16,6 +16,10 @@ Usage::
     python3 scripts/parity/repin.py capture <corpus> [--commit <sha>] [--accept-shrink]
     python3 scripts/parity/repin.py add <corpus> --driver "<script> <args>" \\
         --test <file>::<function> --row <n> [--output-flag <flag>] [--kind <kind>]
+    python3 scripts/parity/repin.py materialize [<sha>... | --accepted] [--checkout <path>]
+    python3 scripts/parity/repin.py attest <sha> [--full]
+    python3 scripts/parity/repin.py accepted
+    python3 scripts/parity/repin.py census [--check] [--url <upstream>]
 
 ``<corpus>`` is a manifest path or a suffix of exactly one, such as
 ``acp-parity/corpus.json``. ``capture`` runs the entry's driver (and refreshes
@@ -25,6 +29,18 @@ the same invocation. ``--commit`` captures a checkout at another commit, for a
 re-pin; the entry is then marked as captured off-target until the pin names
 that commit. ``--accept-shrink`` lowers the floors of a capture that lost
 observations on purpose; without it the floors only rise.
+
+``materialize`` builds the attested reference environment of a commit under
+``.parity/`` (``scripts/parity/materialize.py``), which every capture and every
+live probe runs instead of the shared checkout; ``--accepted`` builds one per
+commit the manifest accepts. ``attest`` checks an environment against its
+attestation, every file hashed with ``--full``.
+
+``census`` compares the pin with upstream's newest release through a static
+census of both trees (``scripts/parity/sentinel.py``) and records it in
+``scripts/parity/upstream-census.json`` and the "against upstream ``HEAD``" row
+of ``docs/parity.md``; with ``--check`` it records nothing and exits non-zero
+when the pin is behind, which is what the daily sentinel runs.
 
 The Rust meta-test ``crates/vibe-core/src/parity/manifest_tests.rs`` checks the
 same rules as ``verify`` without running Python.
@@ -43,8 +59,10 @@ import subprocess
 import sys
 from typing import Any
 
+import materialize
 import provenance
-from pin import EXPECTED_COMMIT
+import sentinel
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from provenance import MANIFEST, REPOSITORY
 
 SCORECARD = REPOSITORY / "docs/parity.md"
@@ -460,6 +478,34 @@ def parse_arguments() -> argparse.Namespace:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list", help="one line per manifest entry")
+    commands.add_parser("accepted", help="the commits the manifest accepts, pin first")
+    materializing = commands.add_parser(
+        "materialize", help="build the attested reference environment of a commit"
+    )
+    materializing.add_argument("commits", nargs="*", help="commits or revisions to materialize")
+    materializing.add_argument(
+        "--accepted",
+        action="store_true",
+        help="materialize every commit the manifest accepts",
+    )
+    materializing.add_argument(
+        "--checkout",
+        type=Path,
+        default=DEFAULT_REFERENCE,
+        help="the reference checkout the commits are read from (never written)",
+    )
+    censusing = commands.add_parser("census", help="compare the pin with the newest upstream release")
+    censusing.add_argument("--check", action="store_true", help="record nothing; fail when the pin is behind")
+    censusing.add_argument("--url", default=sentinel.UPSTREAM, help="the upstream repository")
+    censusing.add_argument(
+        "--store",
+        type=Path,
+        default=materialize.DEFAULT_CACHE / "upstream.git",
+        help="the bare repository upstream commits are fetched into",
+    )
+    attesting = commands.add_parser("attest", help="check an environment against its attestation")
+    attesting.add_argument("commit")
+    attesting.add_argument("--full", action="store_true", help="hash every attested file")
     commands.add_parser("verify", help="check every provenance rule")
     capturing = commands.add_parser("capture", help="regenerate one entry through its driver")
     capturing.add_argument("corpus")
@@ -508,6 +554,35 @@ def main() -> int:
                     f"row {entry['row']}  {commit}{'  off-target' if entry.get('offTarget') else ''}"
                 )
             return 0
+        if arguments.command == "census":
+            entry = sentinel.take(arguments.url, arguments.store.resolve())
+            print("\n".join(sentinel.report(entry)))
+            if arguments.check:
+                return 1 if entry["releasesBehind"] else 0
+            sentinel.record(entry)
+            print("\nrecorded scripts/parity/upstream-census.json and the upstream row of docs/parity.md")
+            return 0
+        if arguments.command == "accepted":
+            print(" ".join(dict.fromkeys(accepted_commits(provenance.load_manifest()))))
+            return 0
+        if arguments.command == "materialize":
+            commits = list(arguments.commits)
+            if arguments.accepted:
+                commits += accepted_commits(provenance.load_manifest())
+            if not commits:
+                raise RepinError("name the commits to materialize, or pass `--accepted`")
+            for commit in dict.fromkeys(commits):
+                print(materialize.materialize(commit, arguments.checkout))
+            return 0
+        if arguments.command == "attest":
+            commit = arguments.commit
+            root = materialize.environment_root(commit)
+            attestation = materialize.verify(root, commit, arguments.full)
+            print(
+                f"{root} matches its attestation for {commit}: {len(attestation['files'])} files, "
+                f"python {attestation['python']}, {attestation['platform']}"
+            )
+            return 0
         if arguments.command == "verify":
             manifest = provenance.load_manifest()
             problems = verify(manifest)
@@ -529,6 +604,12 @@ def main() -> int:
     except RepinError as error:
         print(f"repin: {error}", file=sys.stderr)
         return 1
+    except sentinel.SentinelError as error:
+        print(f"repin: {error}", file=sys.stderr)
+        return 1
+    except materialize.AttestationError as error:
+        print(f"repin: {error}", file=sys.stderr)
+        return 2 if error.kind == "drift" else 1
 
 
 if __name__ == "__main__":

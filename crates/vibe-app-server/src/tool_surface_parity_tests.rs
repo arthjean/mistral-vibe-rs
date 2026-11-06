@@ -49,7 +49,7 @@ use crate::client::interactive::InteractiveSessionToolFactory;
 use crate::client::live::delegation::task_spec;
 use crate::server::SessionToolFactory;
 
-use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use vibe_core::parity::{REFERENCE_COMMIT, pinned_interpreter};
 
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
@@ -345,11 +345,7 @@ fn repo_root() -> PathBuf {
 /// The pinned checkout and an interpreter that can drive it, or `None` when
 /// this machine cannot act as the oracle.
 fn pinned_reference() -> Option<(PathBuf, PathBuf)> {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "tool-surface") {
-        eprintln!("{reason}");
-        return None;
-    }
+    let root = vibe_core::parity::replay::pinned_reference("tool-surface")?;
     let interpreter = pinned_interpreter(&root)?;
     Some((root, interpreter))
 }

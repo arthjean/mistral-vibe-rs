@@ -235,7 +235,8 @@ fn the_reference_and_the_port_read_each_other_s_secrets() {
         }
     }
 
-    let Some(root) = crate::parity::replay::pinned_reference("keyring") else {
+    // The vault is the Windows host's own, so this probe measures on Windows.
+    let Some(root) = crate::parity::replay::pinned_reference_native("keyring") else {
         return;
     };
     let Some(python) = crate::parity::pinned_interpreter(&root) else {

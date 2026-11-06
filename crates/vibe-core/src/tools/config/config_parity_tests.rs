@@ -28,7 +28,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value as JsonValue};
 
 use super::*;
-use crate::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use crate::parity::{REFERENCE_COMMIT, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_config.py";
 const CORPUS_RELATIVE: &str = "tests/tool-config/defaults.json";
@@ -343,11 +343,7 @@ fn distinct_value(default: &JsonValue) -> Value {
 /// live probe cannot run here. Every replay above still ran against the
 /// committed corpus.
 fn pinned_reference() -> Option<(PathBuf, PathBuf)> {
-    let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "tool configuration oracle") {
-        eprintln!("{reason}");
-        return None;
-    }
+    let root = crate::parity::replay::pinned_reference("tool configuration oracle")?;
     let interpreter = pinned_interpreter(&root)?;
     Some((root, interpreter))
 }

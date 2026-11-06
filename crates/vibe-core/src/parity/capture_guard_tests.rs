@@ -182,8 +182,8 @@ fn an_off_pin_reference_capture_runs_only_through_repin() {
     }
 
     // Through `repin.py capture --commit` the guard lets the capture through
-    // to the checkout, which is missing here: the refusal is about the
-    // checkout, not the commit.
+    // to the environment check, and no environment is materialized for that
+    // commit here: the refusal is about the environment, not the commit.
     let sanctioned = "0123456789abcdef0123456789abcdef01234567";
     let output = run(
         &root.join("scripts/parity/tool_config.py"),
@@ -192,7 +192,9 @@ fn an_off_pin_reference_capture_runs_only_through_repin() {
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        !stderr.contains("repin.py capture") && stderr.contains("no reference checkout"),
-        "a capture repin.py started reaches the checkout check: {stderr}"
+        !stderr.contains("repin.py capture")
+            && stderr.contains("no attested environment for 0123456789ab")
+            && stderr.contains(&format!("repin.py materialize {sanctioned}")),
+        "a capture repin.py started reaches the environment check: {stderr}"
     );
 }

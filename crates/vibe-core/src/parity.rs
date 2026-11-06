@@ -17,7 +17,6 @@
 //! reference, which is a developer-workstation artifact.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 /// The reference commit every committed corpus in this repository was captured
 /// from. A checkout at any other revision is not an oracle for those corpora.
@@ -39,77 +38,42 @@ pub const REFERENCE_ROOT: &str = "/home/arthur/dev/mistral-vibe";
 /// the capture scripts read.
 pub const REFERENCE_VARIABLE: &str = "VIBE_REFERENCE";
 
-/// The single documented command that returns a checkout to the pin. Quoted by
-/// `docs/parity.md` and by the skip message below, so an operator whose probe
-/// went quiet reads the fix where the problem is reported.
+/// The single documented command that returns a checkout to the pin. Since
+/// probes gate on a materialized environment ([`live`]) instead of the
+/// checkout's `HEAD`, nothing requires it; US-029 of
+/// `tasks/prd-trustworthy-parity-v3.md` decides whether it goes.
 pub const RESTORE_COMMAND: &str =
     "git -C /home/arthur/dev/mistral-vibe checkout 376f6a33413a3eec9b3795b0c0e004066c47b5c1";
 
 /// The checkout root this run should use: [`REFERENCE_VARIABLE`] when set,
-/// otherwise [`REFERENCE_ROOT`].
+/// otherwise [`REFERENCE_ROOT`]. The checkout is only the object store
+/// `scripts/parity/repin.py materialize` reads with `git archive`: no probe
+/// gates on its `HEAD` or runs its working tree (see [`live`]).
 #[must_use]
 pub fn reference_root() -> PathBuf {
     std::env::var_os(REFERENCE_VARIABLE)
         .map_or_else(|| PathBuf::from(REFERENCE_ROOT), PathBuf::from)
 }
 
-/// Why the local checkout cannot act as the oracle for `probe`, or [`None`]
-/// when it can.
+/// The interpreter of the environment at `root`, a materialized reference
+/// environment (`.parity/reference-<sha12>/`, laid out like a checkout), in
+/// its POSIX layout first and its Windows one second, or [`None`] when it has
+/// neither.
 ///
-/// A missing checkout is the ordinary CI case and says so plainly. A checkout
-/// sitting at another commit is the case that used to skip into silence, so its
-/// message names the expected commit, the one actually found, and the command
-/// that reconciles them.
-#[must_use]
-pub fn off_pin_reason(root: &Path, probe: &str) -> Option<String> {
-    if !root.is_dir() {
-        return Some(format!(
-            "skipping the live {probe} probe: no reference checkout at {}",
-            root.display()
-        ));
-    }
-    let revision = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-    if !revision.status.success() {
-        return Some(format!(
-            "skipping the live {probe} probe: {} is not a readable git checkout",
-            root.display()
-        ));
-    }
-    let head = String::from_utf8(revision.stdout).ok()?;
-    let head = head.trim();
-    if head == REFERENCE_COMMIT {
-        return None;
-    }
-    Some(format!(
-        "skipping the live {probe} probe: {} is at {head}, not the pinned {REFERENCE_COMMIT} \
-         (v{REFERENCE_VERSION}); restore it with `{RESTORE_COMMAND}`",
-        root.display()
-    ))
-}
-
-/// The pinned checkout together with an interpreter that can import the
-/// reference package, or [`None`] when this machine cannot act as the oracle.
-///
-/// `VIBE_PARITY_PYTHON` names an interpreter for a checkout whose virtual
-/// environment sits elsewhere; otherwise the in-tree one is used, POSIX layout
-/// first and Windows second.
+/// No variable substitutes another interpreter: the environment at `root` is
+/// the one [`live::gate`] checked against its attestation.
 #[must_use]
 pub fn pinned_interpreter(root: &Path) -> Option<PathBuf> {
-    std::env::var_os("VIBE_PARITY_PYTHON")
-        .map(PathBuf::from)
-        .into_iter()
-        .chain([
-            root.join(".venv/bin/python"),
-            root.join(".venv/Scripts/python.exe"),
-        ])
-        .find(|candidate| candidate.is_file())
+    [
+        root.join(".venv/bin/python"),
+        root.join(".venv/Scripts/python.exe"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_file())
 }
 
+#[cfg(any(test, feature = "parity-replay"))]
+pub mod live;
 #[cfg(any(test, feature = "parity-replay"))]
 pub mod manifest;
 #[cfg(any(test, feature = "parity-replay"))]
@@ -118,7 +82,11 @@ pub mod replay;
 #[cfg(test)]
 mod capture_guard_tests;
 #[cfg(test)]
+mod census_tests;
+#[cfg(test)]
 mod ledger_tests;
+#[cfg(test)]
+mod live_tests;
 #[cfg(test)]
 mod manifest_tests;
 #[cfg(test)]
@@ -127,3 +95,5 @@ mod parity_tests;
 mod repin_tests;
 #[cfg(test)]
 mod scorecard_tests;
+#[cfg(test)]
+mod workflow_tests;

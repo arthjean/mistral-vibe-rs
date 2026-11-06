@@ -9,6 +9,10 @@ members = [
     "crates/vibe-protocol",
     "crates/vibe-voice",
 ]
+# Reference environments materialized under `.parity/` carry their own Cargo
+# packages (`scripts/parity/materialize.py`), which must not resolve to this
+# workspace while their build backend compiles them.
+exclude = [".parity"]
 resolver = "3"
 
 [workspace.package]
