@@ -88,6 +88,8 @@ mod census_tests;
 #[cfg(test)]
 mod ledger_tests;
 #[cfg(test)]
+mod licensing_tests;
+#[cfg(test)]
 mod live_tests;
 #[cfg(test)]
 mod manifest_tests;

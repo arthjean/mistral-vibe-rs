@@ -9,3 +9,6 @@ crates/vibe-app-server/tests/tool-execution/tree/crlf.txt -text
 
 # Binary fixture of the same tree: never converted.
 crates/vibe-app-server/tests/tool-execution/tree/nested/delta.bin binary
+
+# The clean-room guard's digest sets are arrays of 64-bit integers.
+crates/vibe-core/tests/licensing/*.bin binary

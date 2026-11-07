@@ -21,6 +21,7 @@ Usage::
     python3 scripts/parity/repin.py check [<corpus>...] [--unprobed] [--records <dir>]
     python3 scripts/parity/repin.py accepted
     python3 scripts/parity/repin.py census [--check] [--url <upstream>]
+    python3 scripts/parity/repin.py shingles <sha>
 
 ``<corpus>`` is a manifest path or a suffix of exactly one, such as
 ``acp-parity/corpus.json``. ``capture`` runs the entry's driver (and refreshes
@@ -50,6 +51,14 @@ census of both trees (``scripts/parity/sentinel.py``) and records it in
 of ``docs/parity.md``; with ``--check`` it records nothing and exits non-zero
 when the pin is behind, which is what the daily sentinel runs.
 
+``shingles`` writes the digests of every 8-word run of the reference's prose
+at ``<sha>`` (``scripts/parity/shingles.py``), read from the pristine tree of
+its attested environment, to ``crates/vibe-core/tests/licensing/``, refusing a
+set above 4 MB. The clean-room guard
+``crates/vibe-core/src/parity/licensing_tests.rs`` fails on any tracked run
+that shares one outside its baseline, and writes the baseline it measured to
+``target/parity/licensing/baseline.txt``.
+
 The Rust meta-test ``crates/vibe-core/src/parity/manifest_tests.rs`` checks the
 same rules as ``verify`` without running Python.
 """
@@ -70,6 +79,7 @@ from typing import Any
 import materialize
 import provenance
 import sentinel
+import shingles
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from provenance import MANIFEST, REPOSITORY
 
@@ -638,6 +648,10 @@ def parse_arguments() -> argparse.Namespace:
     attesting.add_argument("commit")
     attesting.add_argument("--full", action="store_true", help="hash every attested file")
     commands.add_parser("verify", help="check every provenance rule")
+    shingling = commands.add_parser(
+        "shingles", help="write the digests of the reference's 8-word prose runs at a commit"
+    )
+    shingling.add_argument("commit", help="a commit with an attested environment")
     capturing = commands.add_parser("capture", help="regenerate one entry through its driver")
     capturing.add_argument("corpus")
     capturing.add_argument(
@@ -718,6 +732,17 @@ def main() -> int:
                 f"python {attestation['python']}, {attestation['platform']}"
             )
             return 0
+        if arguments.command == "shingles":
+            commit = arguments.commit
+            root = materialize.environment_root(commit)
+            materialize.verify(root, commit)
+            values, files = shingles.digests(root / materialize.SOURCE)
+            target = shingles.write(commit, values)
+            print(
+                f"{target.relative_to(REPOSITORY).as_posix()}: {len(values)} shingle digests "
+                f"from {files} files, {target.stat().st_size} bytes"
+            )
+            return 0
         if arguments.command == "verify":
             manifest = provenance.load_manifest()
             problems = verify(manifest)
@@ -737,6 +762,9 @@ def main() -> int:
         print(f"added {add(arguments)}")
         return 0
     except RepinError as error:
+        print(f"repin: {error}", file=sys.stderr)
+        return 1
+    except shingles.ShingleError as error:
         print(f"repin: {error}", file=sys.stderr)
         return 1
     except sentinel.SentinelError as error:

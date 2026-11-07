@@ -20,6 +20,16 @@ vendored, linked, or shipped. This binds every change:
   `crates/vibe-app-server/tests/tool-surface/baseline.json` and
   `crates/vibe-cli/tests/runtime-parity/`.
 - Cite reference paths in comments and documentation instead of quoting them.
+- A user-visible message the reference authored (an error, a notice, a label)
+  is rewritten in original words that keep its cause, value and limit, and
+  ledgered under "Accepted divergences" in `docs/parity.md`, as the precedents
+  there are.
+- The clean-room guard, `crates/vibe-core/src/parity/licensing_tests.rs`, fails
+  on any tracked run of 8 or more words of prose shared with the pinned
+  reference, against the digests `python3 scripts/parity/repin.py shingles
+  <sha>` writes under `crates/vibe-core/tests/licensing/`. Its baseline lists
+  the runs known when it landed and only shrinks: fix a new run by rewriting
+  it, never by adding a line.
 
 ## The behavioral oracle
 
