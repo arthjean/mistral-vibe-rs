@@ -25,10 +25,10 @@
     {
       "id": "EP-003",
       "title": "Comparison Framework",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4
     },
     {
       "id": "EP-004",
@@ -168,53 +168,53 @@
       "id": "US-009",
       "title": "Typed prose comparison",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-07",
+      "reviewed_at": "2026-11-07"
     },
     {
       "id": "US-010",
       "title": "Bounded, segment-exact ledger entries",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-07",
+      "reviewed_at": "2026-11-07"
     },
     {
       "id": "US-011",
       "title": "Replays check their declared figures",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-010"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-07",
+      "reviewed_at": "2026-11-07"
     },
     {
       "id": "US-012",
       "title": "Clean-room shingle guard with a shrinking baseline",
       "epic": "EP-003",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-005"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-06",
+      "completed_at": "2026-11-07",
+      "reviewed_at": "2026-11-07"
     },
     {
       "id": "US-013",
