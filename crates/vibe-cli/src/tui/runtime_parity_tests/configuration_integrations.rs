@@ -475,6 +475,8 @@ fn corpus_replays_presentations_and_typed_auth_effects() {
         BTreeSet::from(["US-031", "US-032", "US-033"])
     );
 
+    let mut events = 0;
+    let mut departures = 0;
     for trace in corpus.traces {
         assert!(!trace.id.is_empty());
         assert_eq!(
@@ -505,6 +507,8 @@ fn corpus_replays_presentations_and_typed_auth_effects() {
                 divergence.event
             })
             .collect::<BTreeSet<_>>();
+        events += trace.events.len();
+        departures += declared.len();
         for (event_index, (event, expected)) in
             trace.events.into_iter().zip(&trace.expected).enumerate()
         {
@@ -529,6 +533,15 @@ fn corpus_replays_presentations_and_typed_auth_effects() {
             );
         }
     }
+    // A unit is an event. Every departure from the reference is declared with
+    // the reason `docs/parity.md` accepts it under, and checked above to be
+    // real.
+    vibe_core::parity::figures::assert_figures(
+        "configuration integrations parity:",
+        "crates/vibe-cli/tests/runtime-parity/configuration-integrations.json",
+        vibe_core::parity::figures::Figures::decided(events - departures, events, departures),
+        serde_json::json!({}),
+    );
 }
 
 fn assert_python_oracle_probe(probe: &OracleProbe) -> Option<BTreeMap<String, Vec<String>>> {

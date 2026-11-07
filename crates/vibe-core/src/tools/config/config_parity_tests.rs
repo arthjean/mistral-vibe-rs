@@ -28,6 +28,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value as JsonValue};
 
 use super::*;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::{REFERENCE_COMMIT, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_config.py";
@@ -208,6 +209,14 @@ fn the_declared_tool_configuration_matches_the_reference_enumeration() {
         corpus.counts.keys,
         &corpus.reference.commit[..12]
     );
+    // An admitted divergence is a default this port declares otherwise on
+    // purpose, as its reason records.
+    assert_figures(
+        "tool configuration parity:",
+        "crates/vibe-core/tests/tool-config/defaults.json",
+        Figures::decided(pairs - DIVERGENCES.len(), pairs, DIVERGENCES.len()),
+        serde_json::json!({}),
+    );
 }
 
 /// Every ledger entry points at a corpus value that exists and cites the pin
@@ -310,6 +319,12 @@ fn every_reference_configuration_pair_reaches_the_view_its_tool_reads() {
     println!(
         "tool configuration: {pairs}/{} pairs have a live reader",
         corpus.counts.pairs
+    );
+    assert_figures(
+        "tool configuration parity (readers):",
+        "crates/vibe-core/tests/tool-config/defaults.json",
+        Figures::decided(pairs, pairs, 0),
+        serde_json::json!({}),
     );
 }
 

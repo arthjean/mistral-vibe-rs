@@ -57,6 +57,7 @@ use crate::config::registry::default_document;
 use crate::config::{ConfigPaths, DotenvValues, LayeredConfig};
 use crate::identity::IdentityFuture;
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::pycompat::{Dumps, dumps};
 use crate::whoami::{
@@ -473,7 +474,14 @@ fn settle(report: &Report, family: &str) -> usize {
         "setup-auth: {family} {}/{} conform",
         report.conformant, report.total
     );
+    CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
     report.total
+}
+
+std::thread_local! {
+    /// The conformant comparisons every family [`settle`]d on this thread
+    /// has counted, which the replay's figures read.
+    static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // --------------------------------------------------------------------------
@@ -1743,6 +1751,7 @@ fn the_committed_corpus_replays_against_this_port() {
     for (case, reason) in DIVERGENCES {
         println!("  {case}: {reason}");
     }
+    CONFORMANT.with(|conformant| conformant.set(0));
     let mut scenarios = 0;
     scenarios += run_constants(&corpus.constants);
     scenarios += run_auth_state(&corpus.auth_state);
@@ -1767,6 +1776,15 @@ fn the_committed_corpus_replays_against_this_port() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} scenarios, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every comparison that departs passed `settle`, so `DIVERGENCES`, whose
+    // entries are decisions, records it.
+    let conformant = CONFORMANT.with(std::cell::Cell::get);
+    assert_figures(
+        "setup-auth parity:",
+        "crates/vibe-core/tests/setup-auth/corpus.json",
+        Figures::decided(conformant, scenarios, scenarios - conformant),
+        serde_json::json!({}),
     );
 }
 

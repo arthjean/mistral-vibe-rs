@@ -41,6 +41,7 @@ use sha2::{Digest, Sha256};
 
 use super::operands::inspects_paths;
 use super::*;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::pinned_interpreter;
 use crate::parity::replay::{pinned_reference, repository};
 use crate::platform::parse_policy_path;
@@ -458,6 +459,21 @@ fn wire_scope(scope: PermissionScope) -> String {
         .expect("a scope serializes as a string")
 }
 
+/// Asserts the figures of a shell policy family whose every case is compared
+/// for equality: `conformant` of `total`, nothing ledgered.
+fn shell_figures(family: &str, conformant: usize, total: usize) {
+    assert_figures(
+        &format!("shell policy parity ({family}):"),
+        "crates/vibe-core/tests/shell-policy/policy.json",
+        Figures {
+            conformant,
+            total,
+            ..Figures::default()
+        },
+        serde_json::json!({}),
+    );
+}
+
 /// US-109: the grammar extracts what the reference grammar extracts, segment
 /// for segment.
 #[test]
@@ -478,6 +494,7 @@ fn every_extraction_matches_the_reference() {
         "shell policy: extraction {conforming}/{}",
         corpus.counts.extraction_cases
     );
+    shell_figures("extraction", conforming, corpus.counts.extraction_cases);
 }
 
 /// US-111: the inspected set is the reference set, and it covers every
@@ -549,6 +566,7 @@ fn the_path_inspecting_set_is_the_reference_set() {
         ported.len(),
         corpus.counts.path_commands
     );
+    shell_figures("path commands", ported.len(), corpus.counts.path_commands);
 }
 
 /// The tree the capture resolved its operands against, rebuilt so the recorded
@@ -782,6 +800,11 @@ fn every_escaping_operand_matches_the_reference() {
         corpus.outside_paths.len(),
         corpus.counts.outside_path_cases
     );
+    shell_figures(
+        "escaping operands",
+        corpus.outside_paths.len(),
+        corpus.counts.outside_path_cases,
+    );
 }
 
 /// What replaying one family of resolutions found.
@@ -950,6 +973,26 @@ impl Replay {
             "{family}: resolutions that differ in another direction than the one tolerated \
              (`always` upstream, `ask` here): {:#?}",
             self.untolerated
+        );
+
+        // A case differs when it resolves stricter or raises a requirement
+        // field the reference does not; both ledgers hold decided
+        // divergences, which the checks above leave as the only ones.
+        let differing = self
+            .stricter
+            .iter()
+            .cloned()
+            .chain(self.requirement_diffs.iter().map(|(key, _)| key.clone()))
+            .collect::<BTreeSet<String>>();
+        assert_figures(
+            &format!("shell policy parity ({family}):"),
+            "crates/vibe-core/tests/shell-policy/policy.json",
+            Figures::decided(
+                total - differing.len(),
+                total,
+                self.stricter.len() + self.requirement_diffs.len(),
+            ),
+            serde_json::json!({}),
         );
     }
 }
@@ -1171,6 +1214,11 @@ fn every_path_grant_verdict_matches_the_reference() {
         corpus.path_grant_matches.len(),
         corpus.counts.path_grant_match_cases
     );
+    shell_figures(
+        "path grant verdicts",
+        corpus.path_grant_matches.len(),
+        corpus.counts.path_grant_match_cases,
+    );
 }
 
 /// The PowerShell grammar splits, tokenizes, names, matches and expands as the
@@ -1298,6 +1346,11 @@ fn every_stdin_permission_matches_the_reference() {
     eprintln!(
         "shell policy: {} stdin permissions",
         corpus.stdin_permissions.len()
+    );
+    shell_figures(
+        "stdin permissions",
+        corpus.stdin_permissions.len(),
+        corpus.counts.stdin_permission_cases,
     );
 }
 

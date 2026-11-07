@@ -832,6 +832,8 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
     );
     let python_expected = assert_python_oracle_probe(&corpus.oracle_probe);
 
+    let mut events = 0;
+    let mut departures = 0;
     for trace in corpus.traces {
         assert!(!trace.id.is_empty());
         assert_eq!(
@@ -862,6 +864,8 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
                 divergence.event
             })
             .collect::<BTreeSet<_>>();
+        events += trace.events.len();
+        departures += declared.len();
         for run in 0..corpus.oracle.deterministic_runs {
             let mut replay = Replay::default();
             for (event_index, (event, expected)) in trace
@@ -893,6 +897,15 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
             );
         }
     }
+    // A unit is an event. Every departure from the reference is declared with
+    // the reason `docs/parity.md` accepts it under, and checked above to be
+    // real.
+    vibe_core::parity::figures::assert_figures(
+        "terminal services parity:",
+        "crates/vibe-cli/tests/runtime-parity/terminal-services.json",
+        vibe_core::parity::figures::Figures::decided(events - departures, events, departures),
+        serde_json::json!({}),
+    );
 }
 
 fn assert_python_oracle_probe(probe: &OracleProbe) -> Option<BTreeMap<String, Vec<String>>> {

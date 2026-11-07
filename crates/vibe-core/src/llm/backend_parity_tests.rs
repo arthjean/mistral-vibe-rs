@@ -29,6 +29,7 @@ use super::error::{BackendErrorSource, CallFailure, KeySource, WrappedCause};
 use super::retry::{Clock, RetryObserver, RetryReason, SleepFuture, SleepKind, next_delay};
 use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
 use super::{Backend, BackendContext, MapCredentials, ModelRequest, TokenFuture, VertexAccess};
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::Capture;
 use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
 use crate::pycompat::{self, Dumps, truthy};
@@ -1009,7 +1010,8 @@ fn the_backends_answer_every_scenario_as_the_corpus_records_or_as_the_ledger_nam
         }
         for pointer in found {
             match LEDGER.iter().position(|entry| {
-                name.starts_with(entry.scenario) && pointer.ends_with(entry.suffix)
+                name.starts_with(entry.scenario)
+                    && crate::parity::replay::pointer_ends_with(entry.suffix, &pointer)
             }) {
                 Some(index) => reproduced[index] += 1,
                 None => unexplained.push(format!(
@@ -1043,6 +1045,13 @@ fn the_backends_answer_every_scenario_as_the_corpus_records_or_as_the_ledger_nam
     assert!(
         stale.is_empty(),
         "these ledger entries no longer reproduce and should be removed: {stale:?}"
+    );
+    // Every entry the ledger may hold is a divergence the scorecard decided.
+    assert_figures(
+        "llm backend parity:",
+        "crates/vibe-core/tests/llm-backends/corpus.json",
+        Figures::decided(conformant, results.len(), reproduced.iter().sum()),
+        json!({}),
     );
 }
 

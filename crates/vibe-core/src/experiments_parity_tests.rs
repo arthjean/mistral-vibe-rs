@@ -52,6 +52,7 @@ use crate::experiments::{
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::pycompat::{Dumps, dumps};
 use crate::telemetry::{
@@ -2073,6 +2074,7 @@ fn the_committed_corpus_replays_against_this_port() {
         println!("  {case}: {reason}");
     }
     let mut comparisons = 0;
+    let mut conformant = 0;
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for family in FAMILIES {
         let mut report = Report::default();
@@ -2080,6 +2082,7 @@ fn the_committed_corpus_replays_against_this_port() {
         let total = settle(&report, family.name);
         counts.insert(family.name, total);
         comparisons += total;
+        conformant += report.conformant;
     }
     println!(
         "experiments: {comparisons} comparisons across {} families replayed at {}",
@@ -2090,6 +2093,14 @@ fn the_committed_corpus_replays_against_this_port() {
         comparisons >= MINIMUM_COMPARISONS,
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every comparison that departs passed `settle`, so it is recorded in
+    // `DIVERGENCES`, whose entries are decisions.
+    assert_figures(
+        "experiments parity:",
+        "crates/vibe-core/tests/experiments/corpus.json",
+        Figures::decided(conformant, comparisons, comparisons - conformant),
+        serde_json::json!({}),
     );
 }
 

@@ -32,13 +32,15 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{Capture, Divergence, Prose, Replay, entries, scenarios};
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("agents-parity/corpus.json");
 
-/// The scorecard the ledger's `row` values point into.
-const SCORECARD: &str = include_str!("../../../docs/parity.md");
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/agents-parity/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/agents.py",
@@ -61,8 +63,30 @@ const TASK_REFUSALS: &[&str] = &[
     "delegation/disabled-subagent",
 ];
 
-const LEDGER: &[Divergence] = &[
-    Divergence {
+/// The accepted divergence the row 34 sentences stand on.
+const LOOP_SENTENCES: &str = "The conversation loop's own sentences";
+/// The accepted divergence the row 3 tool results stand on.
+const TOOL_RESULTS: &str = "Authored result and error text in six tools";
+/// The accepted divergence the plan review's call display stands on.
+const CALL_DISPLAY: &str = "Authored call-display text in the plan and fetch tools";
+
+/// A subagent that asks for `task` is refused in one short sentence where
+/// the reference explains the depth limit at 2.7 times the length.
+const DEPTH_BAND: Band = Band {
+    low: 0.3,
+    high: 2.0,
+};
+
+/// `task` names the agent it refuses and the agents a session may delegate
+/// to, about 2.3 times the reference's sentence, as the failed effect shows.
+const REFUSAL_BAND: Band = Band {
+    low: 0.5,
+    high: 2.5,
+};
+
+/// Every text this port words its own way in these scenarios.
+const PROSE: &[OwnProse] = &[
+    OwnProse {
         scenarios: &[
             "profile/builtin-tools",
             "switch/exit-plan-auto",
@@ -71,12 +95,16 @@ const LEDGER: &[Divergence] = &[
             "switch/exit-plan-stay",
         ],
         pointer: "/requests/0/conversation/1/content",
+        count: 5,
+        band: Band::DEFAULT,
+        directives: None,
         row: "34",
+        accepted: LOOP_SENTENCES,
         reason: "the reminder a plan session injects before its first request is this port's own \
                  prose (`NOTICE`), naming the same plan file, the same read-only rule and the same \
                  two tools as reference `ReadOnlyAgentMiddleware`",
     },
-    Divergence {
+    OwnProse {
         scenarios: &[
             "profile/builtin-tools",
             "switch/exit-plan-auto",
@@ -84,104 +112,164 @@ const LEDGER: &[Divergence] = &[
             "switch/exit-plan-stay",
         ],
         pointer: "/requests/1/conversation/1/content",
+        count: 4,
+        band: Band::DEFAULT,
+        directives: None,
         row: "34",
+        accepted: LOOP_SENTENCES,
         reason: "the same reminder, as the next request resends it",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["profile/builtin-tools"],
         pointer: "/requests/2/conversation/1/content",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "34",
+        accepted: LOOP_SENTENCES,
         reason: "the same reminder, in the third request",
     },
-    Divergence {
+    OwnProse {
         scenarios: &[
             "profile/builtin-tools",
             "switch/exit-plan-auto",
             "switch/exit-plan-manual",
         ],
         pointer: "/requests/1/conversation/4/content",
+        count: 3,
+        band: Band::DEFAULT,
+        directives: None,
         row: "34",
+        accepted: LOOP_SENTENCES,
         reason: "the reminder a session reads once it leaves plan mode is this port's own prose",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["profile/builtin-tools"],
         pointer: "/requests/2/conversation/4/content",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "34",
+        accepted: LOOP_SENTENCES,
         reason: "the same leaving reminder, as the third request resends it",
     },
-    Divergence {
+    OwnProse {
         scenarios: &[
             "switch/exit-plan-auto",
             "switch/exit-plan-manual",
             "switch/exit-plan-stay",
         ],
         pointer: "/requests/1/conversation/3/content",
+        count: 3,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: TOOL_RESULTS,
         reason: "`exit_plan_mode` writes its own sentence for each plan-review outcome, as the \
                  model reads the result",
     },
-    Divergence {
+    OwnProse {
         scenarios: TASK_REFUSALS,
         pointer: "/requests/1/conversation/2/content",
+        count: 3,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: TOOL_RESULTS,
         reason: "`task` refuses an agent the session is not offered and a primary agent in its \
                  own sentences, as the model reads them",
     },
-    Divergence {
+    OwnProse {
         scenarios: TASK_REFUSALS,
         pointer: "/steps/1/turn/4/patch/0/value/display/message",
+        count: 3,
+        band: REFUSAL_BAND,
+        directives: None,
         row: "3",
+        accepted: CALL_DISPLAY,
         reason: "the same refusal, as the failed effect's header",
     },
-    Divergence {
+    OwnProse {
         scenarios: TASK_REFUSALS,
         pointer: "/steps/1/turn/4/patch/0/value/error/message",
+        count: 3,
+        band: REFUSAL_BAND,
+        directives: None,
         row: "3",
+        accepted: TOOL_RESULTS,
         reason: "the same refusal, as the failed effect's error",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["delegation/depth"],
         pointer: "/requests/2/conversation/2/content",
+        count: 1,
+        band: DEPTH_BAND,
+        directives: None,
         row: "3",
+        accepted: TOOL_RESULTS,
         reason: "a subagent that asks for `task` is refused in this port's own sentence",
     },
-    Divergence {
+    OwnProse {
         scenarios: PLAN_REVIEWS,
         pointer: "/steps/1/turn/3/detail/display/statusText",
+        count: 4,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: CALL_DISPLAY,
         reason: "`exit_plan_mode`'s status line is this port's own words",
     },
-    Divergence {
+    OwnProse {
         scenarios: PLAN_REVIEWS,
-        pointer: "/steps/1/turn/4/patch/0/value/display/",
+        pointer: "/steps/1/turn/4/patch/0/value/display/**",
+        count: 16,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: CALL_DISPLAY,
         reason: "`exit_plan_mode`'s call header, the same verbs over this port's own summary, \
                  message and status line",
     },
-    Divergence {
+    OwnProse {
         scenarios: PLAN_REVIEWS,
-        pointer: "/steps/1/turn/6/detail/request/",
+        pointer: "/steps/1/turn/6/detail/request/**",
+        count: 24,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: CALL_DISPLAY,
         reason: "the plan review asks its question, describes its four options and names the \
                  plan file in this port's own words; the option labels, which a client answers \
                  with, are the reference's",
     },
-    Divergence {
+    OwnProse {
         scenarios: PLAN_REVIEWS,
         pointer: "/steps/1/turn/8/patch/0/value/output/result/answers/0/question",
+        count: 4,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: TOOL_RESULTS,
         reason: "the same question, as the answered callback repeats it",
     },
-    Divergence {
+    OwnProse {
         scenarios: PLAN_REVIEWS,
         pointer: "/steps/1/turn/10/patch/0/value/display/message",
+        count: 4,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: CALL_DISPLAY,
         reason: "the plan-review outcome, as the settled effect's header",
     },
-    Divergence {
+    OwnProse {
         scenarios: PLAN_REVIEWS,
         pointer: "/steps/1/turn/10/patch/0/value/output/message",
+        count: 4,
+        band: Band::DEFAULT,
+        directives: None,
         row: "3",
+        accepted: TOOL_RESULTS,
         reason: "the plan-review outcome, as the settled effect's output",
     },
 ];
@@ -201,15 +289,14 @@ fn the_port_runs_every_agent_scenario_as_the_corpus_records_or_as_the_ledger_nam
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("agents-parity-port.json"),
-        prose: Prose::Compared,
     }
-    .run(entries(LEDGER));
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_names_another_scorecard_row() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    Divergence::assert_ledger(LEDGER, SCORECARD, &scenarios(&corpus), "20", None);
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

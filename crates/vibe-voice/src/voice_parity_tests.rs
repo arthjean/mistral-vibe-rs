@@ -1421,42 +1421,55 @@ fn the_committed_corpus_replays_against_this_port() {
         println!("  {case}: {reason}");
     }
     let mut scenarios = 0;
+    let mut conformant = 0;
     let mut report = Report::default();
     run_constants(&corpus.constants, &mut report);
     scenarios += settle(&report, "constants");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_transcription_resolution(&corpus, &mut report);
     scenarios += settle(&report, "transcriptionResolution");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_speech_resolution(&corpus, &mut report);
     scenarios += settle(&report, "speechResolution");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_wire_frames(&corpus, &mut report);
     scenarios += settle(&report, "wireFrames");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_capture_signal(&corpus.capture_signal, &mut report);
     scenarios += settle(&report, "captureSignal");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_audio_devices(&corpus.audio_devices, &mut report);
     scenarios += settle(&report, "audioDevices");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_decode_wav(&corpus.decode_wav, &mut report);
     scenarios += settle(&report, "decodeWav");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_audio_metadata(&corpus.audio_metadata, &mut report);
     scenarios += settle(&report, "audioMetadata");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_transcribe_stream(&corpus.transcribe_stream, &mut report);
     scenarios += settle(&report, "transcribeStream");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_voice_manager(&corpus.voice_manager, &mut report);
     scenarios += settle(&report, "voiceManager");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_narrator(&corpus.narrator, &mut report);
     scenarios += settle(&report, "narrator");
+    conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_narration_service(&corpus.narration_service, &mut report);
     scenarios += settle(&report, "narrationService");
+    conformant += report.conformant;
     println!(
         "voice: {scenarios} comparisons across {} families replayed at {}",
         FAMILIES.len(),
@@ -1466,6 +1479,14 @@ fn the_committed_corpus_replays_against_this_port() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every ledger entry is an `ACCEPTED` divergence `docs/parity.md` records,
+    // one comparison per difference.
+    vibe_core::parity::figures::assert_figures(
+        "voice parity:",
+        "crates/vibe-voice/tests/voice/corpus.json",
+        vibe_core::parity::figures::Figures::decided(conformant, scenarios, scenarios - conformant),
+        serde_json::json!({ "entries": DIVERGENCES.len() }),
     );
 }
 

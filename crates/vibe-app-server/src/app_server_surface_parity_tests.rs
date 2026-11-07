@@ -386,6 +386,21 @@ fn the_inventory_is_exactly_the_reference_inventory() {
         reference.len(),
         undeclared.len()
     );
+    // A unit is a reference method; one the backlog names awaits a story, an
+    // open gap of the row.
+    vibe_core::parity::figures::assert_figures(
+        "app-server method inventory parity:",
+        "crates/vibe-app-server/tests/app-server-surface/corpus.json",
+        vibe_core::parity::figures::Figures {
+            conformant: reference.len() - undeclared.len(),
+            accepted: 0,
+            total: reference.len(),
+            accepted_differences: 0,
+            gap_differences: undeclared.len(),
+            prose_differences: 0,
+        },
+        serde_json::json!({}),
+    );
 }
 
 #[test]

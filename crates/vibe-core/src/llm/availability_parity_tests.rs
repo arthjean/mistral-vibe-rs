@@ -29,6 +29,7 @@ use super::retry::{Clock, SleepFuture, SleepKind};
 use super::utility;
 use super::{BackendContext, Credentials, MapCredentials};
 use crate::credential_cache::read_entries;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::provider::config::{
     ApiSettings, BackendKind, ModelConfig, ModelRouting, ProviderConfig, UtilityFeature,
     UtilityModels,
@@ -231,6 +232,12 @@ fn the_utility_model_is_selected_as_the_corpus_records() {
         "utility selections: {}/{} conformant",
         cases.len(),
         cases.len()
+    );
+    assert_figures(
+        "utility selection parity:",
+        "crates/vibe-core/tests/llm-backends/corpus.json",
+        Figures::decided(cases.len(), cases.len(), 0),
+        json!({}),
     );
 }
 
@@ -460,6 +467,12 @@ fn the_fast_model_probe_answers_every_case_as_the_corpus_records() {
         unexplained.len(),
         unexplained.join("\n")
     );
+    assert_figures(
+        "fast-model probe parity:",
+        "crates/vibe-core/tests/llm-backends/corpus.json",
+        Figures::decided(conformant, results.len(), 0),
+        json!({}),
+    );
 }
 
 /// What the oracle's `RecordingTelemetry` keeps of each event the client
@@ -619,6 +632,12 @@ fn every_utility_completion_is_labeled_and_attributed_as_the_corpus_records() {
         "utility completions: {}/{} conformant",
         cases.len(),
         cases.len()
+    );
+    assert_figures(
+        "utility completion parity:",
+        "crates/vibe-core/tests/llm-backends/corpus.json",
+        Figures::decided(cases.len(), cases.len(), 0),
+        json!({}),
     );
 }
 

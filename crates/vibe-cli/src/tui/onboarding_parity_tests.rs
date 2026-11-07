@@ -1935,21 +1935,27 @@ fn the_committed_corpus_replays_against_this_port() {
         println!("  {case}: {reason}");
     }
     let mut scenarios = 0;
+    let mut conformant = 0;
     let mut report = Report::default();
     run_constants(&corpus.constants, &mut report);
     scenarios += settle(&report, "constants");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_screen_graph(&corpus.screen_graph, &mut report);
     scenarios += settle(&report, "screenGraph");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_terminating(&corpus.terminating, &mut report);
     scenarios += settle(&report, "terminating");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_domain_validation(&corpus.domain_validation, &mut report);
     scenarios += settle(&report, "domainValidation");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_screen_prose(&corpus.screen_prose, &mut report);
     scenarios += settle(&report, "screenProse");
+    conformant += report.conformant;
     println!(
         "onboarding: {scenarios} comparisons across 4 families plus the constants block \
          replayed at {}",
@@ -1959,6 +1965,14 @@ fn the_committed_corpus_replays_against_this_port() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // The ledger is empty, so every comparison conforms or the replay has
+    // already failed.
+    vibe_core::parity::figures::assert_figures(
+        "onboarding parity:",
+        "crates/vibe-cli/tests/onboarding/corpus.json",
+        vibe_core::parity::figures::Figures::decided(conformant, scenarios, scenarios - conformant),
+        serde_json::json!({ "entries": DIVERGENCES.len() }),
     );
 }
 

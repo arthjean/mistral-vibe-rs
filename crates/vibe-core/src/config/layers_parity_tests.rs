@@ -20,6 +20,7 @@ use toml::Value;
 
 use super::*;
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::valued_differences;
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
@@ -357,6 +358,13 @@ fn every_layer_stack_composes_and_writes_as_the_reference_does() {
         cases.len(),
         corpus.stack.writes.len()
     );
+    // Every divergence left after the checks above is a recorded one.
+    assert_figures(
+        "config layers parity (stacks):",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures::decided(cases.len() - diverging, cases.len(), observed.len()),
+        serde_json::json!({}),
+    );
 }
 
 #[test]
@@ -376,6 +384,12 @@ fn every_environment_layer_reads_as_the_reference_reads_it() {
     println!(
         "config surface: {n}/{n} environment layers conform",
         n = corpus.environment.len()
+    );
+    assert_figures(
+        "config layers parity (environment):",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures::decided(corpus.environment.len(), corpus.environment.len(), 0),
+        serde_json::json!({}),
     );
 }
 
@@ -455,5 +469,11 @@ fn every_document_is_written_back_as_the_reference_writes_it() {
     println!(
         "config surface: {n}/{n} documents written back as the reference writes them",
         n = corpus.encoding.len()
+    );
+    assert_figures(
+        "config layers parity (documents):",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures::decided(corpus.encoding.len(), corpus.encoding.len(), 0),
+        serde_json::json!({}),
     );
 }

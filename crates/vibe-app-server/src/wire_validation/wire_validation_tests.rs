@@ -125,6 +125,14 @@ fn validation_answers_as_the_reference_does() {
             .collect::<Vec<_>>()
             .join("\n")
     );
+    // No ledger: every case answers as the reference does or the assertion
+    // above failed.
+    vibe_core::parity::figures::assert_figures(
+        "wire validation parity:",
+        "crates/vibe-app-server/tests/wire-validation/cases.json",
+        vibe_core::parity::figures::Figures::decided(corpus.cases.len(), corpus.cases.len(), 0),
+        serde_json::json!({}),
+    );
 }
 
 /// Pydantic quotes a tag that matches no choice with Python's `str`, so a

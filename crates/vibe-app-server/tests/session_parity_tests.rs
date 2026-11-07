@@ -16,8 +16,10 @@
 //! the live probe at the end, which recaptures the reference, does.
 //!
 //! Both sides reduce a string their server authored to a length and a
-//! SHA-256. This port writes its own prose on purpose (`NOTICE`), so two
-//! digests count as equal wherever both sides hold one, and everything else is
+//! SHA-256. This port writes its own prose on purpose (`NOTICE`): two digests that
+//! differ are a difference unless a `PROSE` entry names their pointer, holds
+//! the count of digests it covers, and finds the port's length within its band
+//! of the reference's; everything else is
 //! compared exactly.
 //!
 //! Every difference the replay finds has to fall under a `LEDGER` entry, and
@@ -28,13 +30,16 @@
 
 use std::path::Path;
 
-use vibe_core::parity::replay::{Capture, Entry, Prose, Replay, entries, scorecard_rows};
+use serde_json::Value;
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("session-parity/corpus.json");
 
-/// The scorecard the ledger's `row` values point into.
-const SCORECARD: &str = include_str!("../../../docs/parity.md");
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/session-parity/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/sessions.py",
@@ -44,30 +49,49 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// A field this port answers differently wherever it appears, and the row of
-/// `docs/parity.md` that answers for it.
-struct Divergence {
-    /// Every difference whose JSON pointer ends with this suffix is covered,
-    /// in any scenario, and so is every element of a list the suffix names.
-    suffix: &'static str,
-    row: &'static str,
-    reason: &'static str,
-}
+const LEDGER: &[PatternDivergence] = &[];
 
-impl Entry for Divergence {
-    fn covers(&self, _scenario: &str, pointer: &str) -> bool {
-        pointer.ends_with(self.suffix)
-            || pointer.rsplit_once('/').is_some_and(|(list, index)| {
-                list.ends_with(self.suffix) && index.parse::<usize>().is_ok()
-            })
-    }
+/// Every text this port words its own way, digest by digest.
+/// The accepted divergences the prose below stands on.
+const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
+const OWN_SENTENCES: &str = "Programmatic mode's own sentences";
 
-    fn label(&self) -> String {
-        self.suffix.to_owned()
-    }
-}
+/// The checkpoint a resumed session closes its history on names the session
+/// in a full sentence where the reference writes a 15-character marker, 2.4
+/// times as long.
+const CHECKPOINT_BAND: Band = Band {
+    low: 0.5,
+    high: 2.5,
+};
 
-const LEDGER: &[Divergence] = &[];
+const PROSE: &[OwnProse] = &[
+    OwnProse {
+        scenarios: &[
+            "continue/after-a-restart",
+            "history/seeded",
+            "lease/second-server",
+            "logging/elsewhere",
+            "resume/after-a-restart",
+        ],
+        pointer: "/*/response/result/state/history/*/message",
+        count: 6,
+        band: CHECKPOINT_BAND,
+        directives: None,
+        row: "16",
+        accepted: OWN_SENTENCES,
+        reason: "the checkpoint a resumed or continued session closes its history on",
+    },
+    OwnProse {
+        scenarios: &["logging/disabled"],
+        pointer: "/*/response/error/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "16",
+        accepted: SERVER_PROSE,
+        reason: "the refusal of a log read while logging is disabled",
+    },
+];
 
 #[test]
 #[cfg_attr(
@@ -84,33 +108,18 @@ fn the_port_answers_every_session_scenario_as_the_corpus_records_or_as_the_ledge
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("session-parity-port.json"),
-        prose: Prose::OwnWords,
     }
-    .run(entries(LEDGER));
+    .run(entries(PROSE).chain(entries(LEDGER)));
 }
 
 #[test]
-fn every_ledger_entry_names_another_scorecard_row() {
-    let rows = scorecard_rows(SCORECARD);
-    for entry in LEDGER {
-        assert!(
-            rows.contains(entry.row),
-            "the ledger entry for {} names row {}, which docs/parity.md does not carry",
-            entry.suffix,
-            entry.row
-        );
-        assert_ne!(
-            entry.row, "16",
-            "row 16 is what this corpus measures, so a difference it keeps is a gap, not a \
-             ledger entry: {}",
-            entry.suffix
-        );
-        assert!(
-            entry.suffix.starts_with('/') && !entry.reason.is_empty(),
-            "the ledger entry for {} needs a pointer suffix and a reason",
-            entry.suffix
-        );
-    }
+fn every_ledger_entry_is_declared_soundly() {
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(PROSE).chain(entries(LEDGER)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

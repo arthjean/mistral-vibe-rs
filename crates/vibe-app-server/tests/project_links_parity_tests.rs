@@ -27,14 +27,14 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Capture, Entry, Prose, Replay, entries, scenarios, scorecard_rows,
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("project-links-parity/corpus.json");
 
-/// The scorecard the ledger's `row` values point into.
-const SCORECARD: &str = include_str!("../../../docs/parity.md");
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/project-links-parity/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/project_links.py",
@@ -47,30 +47,6 @@ const CAPTURE: Capture = Capture {
 /// The accepted divergence the entries below stand on: a difference the
 /// measured row keeps on purpose has to be decided in the scorecard.
 const OWN_PROSE: &str = "Teleport and Vibe Code refusals are this port's own prose";
-
-/// A difference this port keeps in the scenarios named, and the row of
-/// `docs/parity.md` that answers for it.
-struct Divergence {
-    scenarios: &'static [&'static str],
-    /// Every difference whose JSON pointer contains this fragment is covered.
-    fragment: &'static str,
-    row: &'static str,
-    reason: &'static str,
-}
-
-impl Entry for Divergence {
-    fn covers(&self, scenario: &str, pointer: &str) -> bool {
-        self.scenarios.contains(&scenario) && pointer.contains(self.fragment)
-    }
-
-    fn label(&self) -> String {
-        self.fragment.to_owned()
-    }
-
-    fn scenarios(&self) -> &[&str] {
-        self.scenarios
-    }
-}
 
 /// Every scenario answered with a refusal or a failure: a root the picker
 /// cannot use, no key, a Vibe Code answer that failed, a project the link
@@ -111,10 +87,15 @@ const REFUSED: &[&str] = &[
     "save/file-root",
 ];
 
-const LEDGER: &[Divergence] = &[Divergence {
+/// Every text this port words its own way in these scenarios.
+const PROSE: &[OwnProse] = &[OwnProse {
     scenarios: REFUSED,
-    fragment: "/response/error/message/",
+    pointer: "/**/response/error/message",
+    count: 41,
+    band: Band::DEFAULT,
+    directives: None,
     row: "25",
+    accepted: OWN_PROSE,
     reason: "the sentence a refusal or a failure carries; the code, and the absence of data, \
              are the reference's",
 }];
@@ -134,43 +115,16 @@ fn the_port_answers_every_project_links_scenario_as_the_corpus_records_or_as_the
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("project-links-parity-port.json"),
-        prose: Prose::Compared,
     }
-    .run(entries(LEDGER));
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_names_a_scorecard_row_that_answers_for_it() {
-    let rows = scorecard_rows(SCORECARD);
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    let recorded = scenarios(&corpus);
-    for entry in LEDGER {
-        assert!(
-            rows.contains(entry.row),
-            "the ledger entry for {} names row {}, which docs/parity.md does not carry",
-            entry.fragment,
-            entry.row
-        );
-        // Row 25 is what this corpus measures, so a difference it keeps is a
-        // gap unless the scorecard decided to keep it.
-        assert!(
-            entry.row != "25" || SCORECARD.contains(&format!("| {OWN_PROSE} |")),
-            "the ledger entry for {} keeps a row 25 difference that no accepted divergence \
-             decides",
-            entry.fragment
-        );
-        assert!(
-            !entry.scenarios.is_empty()
-                && entry
-                    .scenarios
-                    .iter()
-                    .all(|scenario| recorded.contains_key(*scenario))
-                && entry.fragment.starts_with('/')
-                && !entry.reason.is_empty(),
-            "the ledger entry for {} needs recorded scenarios, a pointer fragment and a reason",
-            entry.fragment
-        );
-    }
+    // Row 25 is what this corpus measures, so a difference it keeps has to
+    // stand on a divergence the scorecard decided to keep.
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

@@ -19,7 +19,8 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
-use crate::parity::replay::{Capture, Prose, differences};
+use crate::parity::figures::{Figures, assert_figures};
+use crate::parity::replay::{Capture, differences};
 use crate::plugins::compatibility::PluginMcpServer;
 use crate::plugins::diagnostics::PluginConfigIssue;
 use crate::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
@@ -407,15 +408,14 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
     let mut conformant = 0;
     for (name, reference) in recorded {
         let port = resolve_case(&declared[name]).await;
-        let found = differences(reference, &port, Prose::Compared);
+        let found = differences(reference, &port);
         if found.is_empty() {
             conformant += 1;
         }
         for pointer in found {
-            match LEDGER
-                .iter()
-                .position(|entry| entry.case == name && pointer.starts_with(entry.pointer))
-            {
+            match LEDGER.iter().position(|entry| {
+                entry.case == name && crate::parity::replay::pointer_within(entry.pointer, &pointer)
+            }) {
                 Some(index) => reproduced[index] += 1,
                 None => unexplained.push(format!(
                     "{name} {pointer}\n  reference: {}\n  port:      {}",
@@ -447,6 +447,14 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
     assert!(
         stale.is_empty(),
         "these ledger entries no longer reproduce: {stale:?}"
+    );
+
+    // The ledger is empty: every case conforms or the replay failed above.
+    assert_figures(
+        "plugins resolve parity:",
+        "crates/vibe-core/tests/plugins-parity/corpus.json",
+        Figures::decided(conformant, recorded.len(), reproduced.iter().sum()),
+        json!({}),
     );
 }
 

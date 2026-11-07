@@ -1218,6 +1218,14 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
         checked >= MINIMUM_FIXTURES,
         "the fixture set shrank to {checked}"
     );
+    // No ledger: every fixture gets the reference's verdict or an assertion
+    // above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tool argument parity:",
+        "crates/vibe-app-server/tests/tool-surface/fixtures.json",
+        vibe_core::parity::figures::Figures::decided(checked, checked, 0),
+        serde_json::json!({}),
+    );
 }
 
 /// Compares one rejection against the shape the reference gave the same payload.
@@ -1420,6 +1428,14 @@ async fn the_configured_filters_publish_what_the_reference_publishes() {
         "the configured filters diverge from the reference: {}",
         divergent.join("; ")
     );
+    // No ledger: every gate publishes what the reference publishes or the
+    // assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tool filter gates parity:",
+        "crates/vibe-app-server/tests/tool-surface/gates.json",
+        vibe_core::parity::figures::Figures::decided(gates.gates.len(), gates.gates.len(), 0),
+        serde_json::json!({ "shared": shared.len() }),
+    );
 }
 
 /// The `selection_priority` a reference shell class declares, which is what
@@ -1561,6 +1577,32 @@ async fn the_four_surface_quadrants_publish_what_the_reference_publishes() {
         withheld.shell_names.len(),
         1,
         "the withheld quadrant publishes more than one shell name"
+    );
+    // Every quadrant measured its recorded gap above; a quadrant whose
+    // recorded gap is empty conforms, and one that records names is an open
+    // gap of the row, one difference per name.
+    let open = quadrants
+        .quadrants
+        .iter()
+        .map(|quadrant| baseline.gap(&quadrant.case))
+        .filter(|gap| !gap.missing_names.is_empty() || !gap.extra_names.is_empty())
+        .collect::<Vec<_>>();
+    let total = quadrants.quadrants.len();
+    vibe_core::parity::figures::assert_figures(
+        "tool surface quadrants parity:",
+        "crates/vibe-app-server/tests/tool-surface/quadrants.json",
+        vibe_core::parity::figures::Figures {
+            conformant: total - open.len(),
+            accepted: 0,
+            total,
+            accepted_differences: 0,
+            gap_differences: open
+                .iter()
+                .map(|gap| gap.missing_names.len() + gap.extra_names.len())
+                .sum(),
+            prose_differences: 0,
+        },
+        serde_json::json!({ "matched": matched }),
     );
 }
 
@@ -1833,6 +1875,21 @@ async fn the_published_surface_matches_the_committed_digest() {
         conformant + ledgered,
         expected,
         "every digest entry must be published and conformant or recorded"
+    );
+    // A schema that differs only at the pointers the baseline records is an
+    // open gap of the row, counted as one difference per schema.
+    vibe_core::parity::figures::assert_figures(
+        "tool surface parity:",
+        "crates/vibe-app-server/tests/tool-surface/digest.json",
+        vibe_core::parity::figures::Figures {
+            conformant,
+            accepted: 0,
+            total: expected,
+            accepted_differences: 0,
+            gap_differences: ledgered,
+            prose_differences: 0,
+        },
+        serde_json::json!({}),
     );
 }
 

@@ -46,6 +46,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{self, ValuedDifference, pinned_reference, valued_differences};
 
 use super::paths::{
@@ -149,7 +150,7 @@ struct Divergence {
     /// test: a gap that spans a family spans it one case at a time, and saying
     /// so is what keeps the ledger from outliving the divergence.
     case: &'static str,
-    /// Matched by prefix against the reported JSON pointer.
+    /// Matched against the reported JSON pointer on a segment boundary.
     pointer: &'static str,
     /// The story that closes this gap, [`LICENSING`] when none can, or
     /// [`RECORDED`] when the scorecard records it and no story is scheduled.
@@ -161,13 +162,13 @@ struct Divergence {
 
 impl Divergence {
     fn covers(&self, family: &str, case: &str, pointer: &str) -> bool {
-        self.family == family && self.case == case && pointer.starts_with(self.pointer)
+        self.family == family && self.case == case && replay::pointer_within(self.pointer, pointer)
     }
 }
 
 /// The divergences this port still carries, each with what closes it.
 ///
-/// A pointer is matched by prefix, so `/prepared` covers every field under it.
+/// A pointer is matched on segment boundaries, so `/prepared` covers every field under it.
 /// Keep the list ordered by family then by case.
 const LEDGER: &[Divergence] = &[];
 
@@ -1263,31 +1264,53 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut conforming = 0usize;
     let mut tolerated: BTreeSet<(String, String)> = BTreeSet::new();
     let mut unlisted = Vec::new();
+    let mut figures = Figures::default();
     for (index, case) in corpus.cases.iter().enumerate() {
         let observed = observed_document(case, scratch.path(), index);
         let found = compare(&case.document(), &observed);
+        figures.total += 1;
         if found.is_empty() {
             conforming += 1;
+            figures.conformant += 1;
+            continue;
         }
+        // A case is at parity when every difference it holds stands on the
+        // licensing boundary or a decision the scorecard records; an entry a
+        // story closes is an open gap.
+        let mut decided = true;
         for difference in found {
             match LEDGER
                 .iter()
                 .find(|entry| entry.covers(&case.family, &case.case, &difference.pointer))
             {
                 Some(entry) => {
+                    match entry.closed_by {
+                        LICENSING => figures.prose_differences += 1,
+                        RECORDED => figures.accepted_differences += 1,
+                        _ => {
+                            figures.gap_differences += 1;
+                            decided = false;
+                        }
+                    }
                     tolerated.insert((
                         format!("{}/{} at {}", entry.family, entry.case, entry.pointer),
                         entry.closed_by.to_owned(),
                     ));
                 }
-                None => unlisted.push(format!(
-                    "{} at {}: the reference says {}, this port says {}",
-                    case.id(),
-                    difference.pointer,
-                    difference.expected,
-                    difference.actual
-                )),
+                None => {
+                    decided = false;
+                    unlisted.push(format!(
+                        "{} at {}: the reference says {}, this port says {}",
+                        case.id(),
+                        difference.pointer,
+                        difference.expected,
+                        difference.actual
+                    ));
+                }
             }
+        }
+        if decided {
+            figures.accepted += 1;
         }
     }
 
@@ -1308,6 +1331,13 @@ fn the_committed_corpus_replays_against_this_port() {
         unlisted.is_empty(),
         "worktree divergences outside the ledger:\n  {}",
         unlisted.join("\n  ")
+    );
+
+    assert_figures(
+        "worktree parity:",
+        "crates/vibe-core/tests/worktree/corpus.json",
+        figures,
+        serde_json::json!({}),
     );
 }
 

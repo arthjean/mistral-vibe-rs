@@ -445,10 +445,12 @@ fn the_committed_corpus_replays_against_this_port() {
         println!("  {case}: {reason}");
     }
     let mut comparisons = 0;
+    let mut conformant = 0;
     for family in FAMILIES {
         let mut report = Report::default();
         run_family(&corpus, family, &mut report);
         comparisons += settle(&report, family.name);
+        conformant += report.conformant;
     }
     println!(
         "promo: {comparisons} comparisons across {} families replayed at {}",
@@ -459,6 +461,21 @@ fn the_committed_corpus_replays_against_this_port() {
         comparisons >= MINIMUM_COMPARISONS,
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every ledger entry is `OPEN`: the promo is not ported, so each
+    // comparison that differs is a gap of row 33, one difference apiece.
+    vibe_core::parity::figures::assert_figures(
+        "VS Code promo parity:",
+        "crates/vibe-cli/tests/promo/corpus.json",
+        vibe_core::parity::figures::Figures {
+            conformant,
+            accepted: 0,
+            total: comparisons,
+            accepted_differences: 0,
+            gap_differences: comparisons - conformant,
+            prose_differences: 0,
+        },
+        serde_json::json!({ "entries": DIVERGENCES.len() }),
     );
 }
 

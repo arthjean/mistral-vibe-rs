@@ -6,8 +6,9 @@ The Rust gate ``vibe_core::parity::live`` appends a line to
 ``target/parity/probes.jsonl`` for every live probe that ran and to
 ``skips.jsonl`` for every one that skipped; every corpus replay appends one to
 ``replays.jsonl``; every capture whose reference side ran appends one to
-``drivers.jsonl`` (``scripts/parity/reference.py``); every recapture of a
-driver no probe calls appends one to ``checks.jsonl``
+``drivers.jsonl`` (``scripts/parity/reference.py``); every replay appends its
+measured figures to ``figures.jsonl`` (``vibe_core::parity::figures``); every
+recapture of a driver no probe calls appends one to ``checks.jsonl``
 (``repin.py check --unprobed``). This script counts them,
 and with a nextest JUnit report classes every failed test:
 
@@ -145,6 +146,7 @@ def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
     replays = read_lines(records / "replays.jsonl")
     drivers = read_lines(records / "drivers.jsonl")
     checks = read_lines(records / "checks.jsonl")
+    figures = read_lines(records / "figures.jsonl")
     probing = {line["test"] for line in probes if line.get("test")}
     failed = failures(arguments.junit)
     # A driver no live probe calls is recaptured by `repin.py check
@@ -172,6 +174,7 @@ def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
         f"| Live probes run | {len(probes)} |",
         f"| Live probes skipped | {len(skips)} |",
         f"| Reference drivers run | {len({line.get('driver') for line in drivers})} |",
+        f"| Replay figures recorded | {len(figures)} |",
     ]
     if checks:
         lines.append(
@@ -191,6 +194,19 @@ def summarize(arguments: argparse.Namespace) -> tuple[list[str], int]:
             reason = str(line.get("reason", "")).replace("|", "\\|")
             lines.append(f"| {line.get('probe')} | {line.get('class')} | {reason} |")
         lines.append("")
+    if figures:
+        # What every replay counted, in the form of a `docs/parity.md`
+        # "Measured figures" line, so a run that moved one shows the line to
+        # restate.
+        lines += [
+            "<details><summary>Measured figures</summary>",
+            "",
+            "| Replay | Platform | Row | Commit | Conformant | Accepted | Units "
+            "| Accepted differences | Gap differences | Own-words differences |",
+            "|---|---|---|---|---|---|---|---|---|---|",
+        ]
+        lines += [str(line.get("line", "")) for line in figures]
+        lines += ["", "</details>", ""]
     if failed:
         lines += ["| Failed test | Class |", "|---|---|"]
         for name, text in failed:

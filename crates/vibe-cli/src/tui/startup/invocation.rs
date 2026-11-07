@@ -225,6 +225,7 @@ mod tests {
             );
         }
         let mut ids = BTreeSet::new();
+        let traces = corpus.traces.len();
         for trace in corpus.traces {
             assert!(ids.insert(trace.id.clone()), "duplicate trace {}", trace.id);
             assert!(
@@ -248,6 +249,14 @@ mod tests {
                 trace.id
             );
         }
+        // No ledger: every trace routes as the reference does or the
+        // assertions above failed.
+        vibe_core::parity::figures::assert_figures(
+            "startup parity:",
+            "crates/vibe-cli/tests/runtime-parity/startup.json",
+            vibe_core::parity::figures::Figures::decided(traces, traces, 0),
+            serde_json::json!({}),
+        );
     }
 
     #[test]

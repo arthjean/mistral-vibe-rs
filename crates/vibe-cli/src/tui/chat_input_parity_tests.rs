@@ -986,6 +986,10 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
     let mut matched = 0usize;
     let mut diverged = 0usize;
     let mut deferred = 0usize;
+    // Gap dimensions whose every divergence a `DIVERGENCES` entry ledgers, and
+    // how many divergences they hold, for the figures this replay declares.
+    let mut gaps = 0usize;
+    let mut gap_differences = 0usize;
     // Calibration mode: rewrite the declared expectations from what this run
     // observed. It is opt-in so a normal run can never silence a regression.
     let calibrating = std::env::var_os("VIBE_PARITY_CALIBRATE").is_some();
@@ -1163,12 +1167,17 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 ("parity", None) => matched = matched.saturating_add(1),
                 ("gap", Some(_)) => {
                     diverged = diverged.saturating_add(1);
-                    failures.extend(unledgered_divergences(
+                    let unledgered = unledgered_divergences(
                         &entry.id,
                         dimension,
                         divergences,
                         &manifest.reference.commit,
-                    ));
+                    );
+                    if unledgered.is_empty() {
+                        gaps = gaps.saturating_add(1);
+                        gap_differences = gap_differences.saturating_add(divergences.len());
+                    }
+                    failures.extend(unledgered);
                 }
                 ("gap", None) => {
                     matched = matched.saturating_add(1);
@@ -1200,6 +1209,21 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
     }
 
     if failures.is_empty() {
+        // A unit is a declared dimension of a trace; a deferred one is not
+        // measured. A ledgered `gap` dimension is an open gap of row 14.
+        vibe_core::parity::figures::assert_figures(
+            "composer parity:",
+            "crates/vibe-cli/tests/parity/manifest.json",
+            vibe_core::parity::figures::Figures {
+                conformant: matched,
+                accepted: 0,
+                total: matched + gaps,
+                accepted_differences: 0,
+                gap_differences,
+                prose_differences: 0,
+            },
+            json!({ "deferred": deferred }),
+        );
         return Ok(());
     }
     let mut report = format!(

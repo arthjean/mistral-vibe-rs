@@ -47,6 +47,13 @@ fn every_captured_page_converts_as_the_reference_converted_it() {
         cases.len(),
         mismatches.join("\n")
     );
+    // Every page is compared byte for byte: no ledger.
+    crate::parity::figures::assert_figures(
+        "web fetch markdown parity:",
+        "crates/vibe-core/tests/web-fetch-markdown/corpus.json",
+        crate::parity::figures::Figures::decided(cases.len(), cases.len(), 0),
+        serde_json::json!({}),
+    );
 }
 
 #[test]

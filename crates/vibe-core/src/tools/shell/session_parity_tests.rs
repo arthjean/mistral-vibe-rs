@@ -33,6 +33,7 @@ use tempfile::TempDir;
 use super::session::{ManagedSession, SessionStatus, kill_managed_session};
 use super::*;
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{ValuedDifference, valued_differences};
 use crate::platform::Platform;
 use crate::policy::{
@@ -1055,10 +1056,17 @@ async fn shell_sessions_match_the_reference_except_for_the_recorded_gap() {
     let mut unlisted = Vec::new();
     let tools: BTreeSet<&str> = corpus.cases.iter().map(|case| case.tool.as_str()).collect();
 
+    let mut figures = Figures::default();
     for (tool, case, found) in &replayed {
+        figures.total += 1;
         if found.is_empty() {
             conforming += 1;
+            figures.conformant += 1;
+            continue;
         }
+        // A case is at parity when every difference it holds stands on an
+        // accepted divergence row; one held by an open row is a gap.
+        let mut decided = true;
         for difference in found {
             match LEDGER
                 .iter()
@@ -1069,16 +1077,28 @@ async fn shell_sessions_match_the_reference_except_for_the_recorded_gap() {
                         "every ledger reason names a divergence row, which \
                          every_recorded_reason_has_exactly_one_divergence_row holds",
                     );
+                    if record.table == Table::Accepted {
+                        figures.accepted_differences += 1;
+                    } else {
+                        figures.gap_differences += 1;
+                        decided = false;
+                    }
                     tolerated.insert((
                         format!("{}/{} at {}", entry.tool, entry.case, entry.pointer),
                         record.row.to_owned(),
                     ));
                 }
-                None => unlisted.push(format!(
-                    "{tool}/{case} at {}: the reference says {}, this port says {}",
-                    difference.pointer, difference.expected, difference.actual
-                )),
+                None => {
+                    decided = false;
+                    unlisted.push(format!(
+                        "{tool}/{case} at {}: the reference says {}, this port says {}",
+                        difference.pointer, difference.expected, difference.actual
+                    ));
+                }
             }
+        }
+        if decided {
+            figures.accepted += 1;
         }
     }
 
@@ -1118,6 +1138,13 @@ async fn shell_sessions_match_the_reference_except_for_the_recorded_gap() {
         unlisted.is_empty(),
         "shell session divergences outside the ledger:\n  {}",
         unlisted.join("\n  ")
+    );
+
+    assert_figures(
+        "shell sessions parity:",
+        "crates/vibe-core/tests/shell-session/corpus.json",
+        figures,
+        serde_json::json!({}),
     );
 }
 

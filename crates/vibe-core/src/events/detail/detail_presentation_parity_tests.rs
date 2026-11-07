@@ -33,6 +33,7 @@ use sha2::{Digest as _, Sha256};
 use crate::text::hex_encode;
 
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::valued_differences;
 
 use super::{EffectDetail, EffectResultDisplay, RemoteSettlement, RemoteToolOrigin};
@@ -430,7 +431,8 @@ struct Divergence {
     /// test: a gap that spans a tool spans it one case at a time, and saying so
     /// is what keeps the ledger from outliving the divergence.
     case: &'static str,
-    /// Matched by prefix against the reported JSON pointer.
+    /// Matched against the reported JSON pointer on a segment boundary, so
+    /// `/display/summary` never covers `/display/summaryDetail`.
     pointer: &'static str,
     /// The story that closes this gap, or [`LICENSING`] when none can.
     closed_by: &'static str,
@@ -444,7 +446,9 @@ struct Divergence {
 
 impl Divergence {
     fn covers(&self, tool: &str, case: &str, pointer: &str) -> bool {
-        self.tool == tool && self.case == case && pointer.starts_with(self.pointer)
+        self.tool == tool
+            && self.case == case
+            && crate::parity::replay::pointer_within(self.pointer, pointer)
     }
 }
 
@@ -788,31 +792,52 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut conforming = 0;
     let mut tolerated: BTreeSet<(String, &'static str)> = BTreeSet::new();
     let mut unlisted = Vec::new();
+    let mut figures = Figures::default();
     for case in &corpus.cases {
         let found = valued_differences(&case.document(), &observed_document(case));
+        figures.total += 1;
         if found.is_empty() {
             conforming += 1;
+            figures.conformant += 1;
             continue;
         }
+        // A case is at parity when every difference it holds stands on a
+        // recorded decision or on the licensing boundary; an entry closed by a
+        // story is an open gap.
+        let mut decided = true;
         for difference in found {
             match ledger
                 .iter()
                 .find(|entry| entry.covers(&case.tool, &case.case, &difference.pointer))
             {
                 Some(entry) => {
+                    match entry.closed_by {
+                        LICENSING => figures.prose_differences += 1,
+                        RECORDED => figures.accepted_differences += 1,
+                        _ => {
+                            figures.gap_differences += 1;
+                            decided = false;
+                        }
+                    }
                     tolerated.insert((
                         format!("{} at {}", case.id(), difference.pointer),
                         entry.closed_by,
                     ));
                 }
-                None => unlisted.push(format!(
-                    "{} at {}: the reference says {}, this port says {}",
-                    case.id(),
-                    difference.pointer,
-                    difference.expected,
-                    difference.actual
-                )),
+                None => {
+                    decided = false;
+                    unlisted.push(format!(
+                        "{} at {}: the reference says {}, this port says {}",
+                        case.id(),
+                        difference.pointer,
+                        difference.expected,
+                        difference.actual
+                    ));
+                }
             }
+        }
+        if decided {
+            figures.accepted += 1;
         }
     }
 
@@ -843,6 +868,13 @@ fn the_committed_corpus_replays_against_this_port() {
         unlisted.is_empty(),
         "presentation divergences outside the ledger:\n  {}",
         unlisted.join("\n  ")
+    );
+
+    assert_figures(
+        "tool presentation parity:",
+        "crates/vibe-core/tests/tool-presentation/corpus.json",
+        figures,
+        json!({}),
     );
 }
 
@@ -884,6 +916,21 @@ fn a_ledger_entry_whose_divergence_is_fixed_fails_the_suite() {
          keeps the ledger from rotting:\n  {}",
         stale.join("\n  ")
     );
+}
+
+#[test]
+fn a_ledger_entry_covers_its_field_and_not_a_longer_sibling() {
+    let entry = Divergence {
+        tool: "bash",
+        case: "one",
+        pointer: "/display/summary",
+        closed_by: LICENSING,
+        why: "a sibling whose name extends this one is another field",
+        row: "row",
+    };
+    assert!(entry.covers("bash", "one", "/display/summary"));
+    assert!(entry.covers("bash", "one", "/display/summary/0"));
+    assert!(!entry.covers("bash", "one", "/display/summaryDetail"));
 }
 
 #[test]

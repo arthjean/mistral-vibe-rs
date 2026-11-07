@@ -219,7 +219,7 @@ impl Divergence {
     fn covers(&self, difference: &Difference) -> bool {
         self.parser == difference.parser
             && self.case == difference.case
-            && difference.pointer.starts_with(self.pointer)
+            && vibe_core::parity::replay::pointer_within(self.pointer, &difference.pointer)
     }
 }
 
@@ -1587,6 +1587,36 @@ fn replaying_the_corpus_finds_no_difference_the_ledger_does_not_name() {
         corpus.cases.len(),
         corpus.parsers.len(),
         &REFERENCE_COMMIT[..12],
+    );
+    // Every entry is `ACCEPTED`; the ones `NOTICE` holds are the text this
+    // port words its own way, and the rest are arguments only this port
+    // declares. A unit is an argv case, and every difference has already been
+    // matched to an entry above.
+    assert!(
+        LEDGER.iter().all(|entry| entry.closed_by == "ACCEPTED"),
+        "a ledger entry is no longer accepted; count its differences as gaps in the figures below"
+    );
+    let prose = differences
+        .iter()
+        .filter(|found| {
+            LEDGER
+                .iter()
+                .find(|entry| entry.covers(found))
+                .is_some_and(|entry| entry.why.contains("NOTICE"))
+        })
+        .count();
+    vibe_core::parity::figures::assert_figures(
+        "cli surface parity:",
+        "crates/vibe-cli/tests/runtime-parity/cli-surface.json",
+        vibe_core::parity::figures::Figures {
+            conformant: matched,
+            accepted: corpus.cases.len() - matched,
+            total: corpus.cases.len(),
+            accepted_differences: differences.len() - prose,
+            gap_differences: 0,
+            prose_differences: prose,
+        },
+        serde_json::json!({ "actions": actions, "exercised": exercised }),
     );
 }
 

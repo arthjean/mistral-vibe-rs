@@ -27,6 +27,7 @@ use sha2::{Digest, Sha256};
 
 use crate::events::ModelMessage;
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::text::hex_encode;
 
 use super::context::{
@@ -701,11 +702,24 @@ async fn the_committed_corpus_replays_every_family_the_reference_answered() {
         scenarios.total,
         &corpus.reference.commit[..12],
     );
+    let tally = scenarios;
     let scenarios = scenarios.total;
     assert!(
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} scenarios, below the {MINIMUM_SCENARIOS} this epic \
          commits to; regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every comparison that departs is one ledgered difference, and every
+    // entry is a licensing decision `docs/parity.md` accepts.
+    assert_figures(
+        "compaction parity:",
+        CORPUS_RELATIVE,
+        Figures::decided(
+            tally.conformant,
+            tally.total,
+            tally.total - tally.conformant,
+        ),
+        serde_json::json!({}),
     );
 }
 

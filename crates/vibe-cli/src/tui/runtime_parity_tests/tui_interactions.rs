@@ -130,6 +130,7 @@ fn the_corpus_names_the_pinned_reference() {
 fn tool_group_summaries_match_the_reference_header() {
     let corpus = corpus();
     assert_eq!(corpus.group_header.len(), 10);
+    let units = corpus.group_header.len();
     for case in corpus.group_header {
         assert_eq!(
             group_label(&case.kinds, case.reasoning, case.running),
@@ -140,6 +141,13 @@ fn tool_group_summaries_match_the_reference_header() {
             case.running
         );
     }
+    // No ledger: every case replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tui interactions parity (groupHeader):",
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+        vibe_core::parity::figures::Figures::decided(units, units, 0),
+        serde_json::json!({}),
+    );
 }
 
 /// Reference `LoadingWidget._update_animation`: each frame shows the sweep's
@@ -147,6 +155,7 @@ fn tool_group_summaries_match_the_reference_header() {
 #[test]
 fn the_loading_sweep_colors_every_frame_as_the_reference_does() {
     let corpus = corpus();
+    let units = corpus.loading_sweep.len();
     for sweep in corpus.loading_sweep {
         let mut loading = LoadingAnimation::seeded(1);
         let cells = loading.status(&sweep.status, 1, 1).chars().count() + 2;
@@ -170,6 +179,13 @@ fn the_loading_sweep_colors_every_frame_as_the_reference_does() {
             .collect::<Vec<_>>();
         assert_eq!(observed, sweep.frames, "{}", sweep.status);
     }
+    // No ledger: every case replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tui interactions parity (loadingSweep):",
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+        vibe_core::parity::figures::Figures::decided(units, units, 0),
+        serde_json::json!({}),
+    );
 }
 
 fn effect_update(revision: u64, output: Option<&str>) -> TranscriptEntry {
@@ -204,6 +220,7 @@ fn effect_update(revision: u64, output: Option<&str>) -> TranscriptEntry {
 fn a_running_call_streams_the_delta_the_reference_patch_carries() {
     let corpus = corpus();
     assert_eq!(corpus.stream_delta.len(), 3);
+    let units = corpus.stream_delta.len();
     for trace in corpus.stream_delta {
         let mut state = TuiState::new("session");
         let mut observed = Vec::new();
@@ -232,6 +249,13 @@ fn a_running_call_streams_the_delta_the_reference_patch_carries() {
         }
         assert_eq!(observed, trace.reference, "{}", trace.id);
     }
+    // No ledger: every case replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tui interactions parity (streamDelta):",
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+        vibe_core::parity::figures::Figures::decided(units, units, 0),
+        serde_json::json!({}),
+    );
 }
 
 /// A grapheme index in `text` as the reference's `row:column` location.
@@ -261,6 +285,7 @@ fn observe_composer(input: &ChatInputState) -> String {
 fn composer_presses_and_drags_select_what_the_reference_selects() {
     let corpus = corpus();
     assert_eq!(corpus.composer.len(), 5);
+    let units = corpus.composer.len();
     for trace in corpus.composer {
         let mut input = ChatInputState::new();
         input.replace_text(trace.text.clone());
@@ -283,11 +308,19 @@ fn composer_presses_and_drags_select_what_the_reference_selects() {
             .collect::<Vec<_>>();
         assert_eq!(observed, trace.reference, "{}", trace.id);
     }
+    // No ledger: every case replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tui interactions parity (composer):",
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+        vibe_core::parity::figures::Figures::decided(units, units, 0),
+        serde_json::json!({}),
+    );
 }
 
 #[test]
 fn transcript_word_and_line_presses_span_what_the_reference_spans() {
     let corpus = corpus();
+    let units: usize = corpus.transcript.iter().map(|case| case.spans.len()).sum();
     for case in corpus.transcript {
         for span in case.spans {
             let mut view = TranscriptView::default();
@@ -307,6 +340,13 @@ fn transcript_word_and_line_presses_span_what_the_reference_spans() {
             assert_eq!(observed, span.reference, "{span:?}");
         }
     }
+    // No ledger: every case replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tui interactions parity (transcript):",
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+        vibe_core::parity::figures::Figures::decided(units, units, 0),
+        serde_json::json!({}),
+    );
 }
 
 fn observe_queue(input: &ChatInputState, state: &TuiState) -> Value {
@@ -361,6 +401,7 @@ fn key_name(name: &str) -> (KeyCode, KeyName) {
 async fn queue_mode_walks_edits_and_removes_what_the_reference_does() {
     let corpus = corpus();
     assert_eq!(corpus.queue.len(), 4);
+    let units = corpus.queue.len();
     for trace in corpus.queue {
         let mut runtime = Some(interactive_test_runtime("queue-mode"));
         let session = runtime.as_ref().map(|runtime| runtime.session_id.clone());
@@ -457,6 +498,13 @@ async fn queue_mode_walks_edits_and_removes_what_the_reference_does() {
             .collect::<Vec<_>>();
         assert_eq!(observed, reference, "{}", trace.id);
     }
+    // No ledger: every case replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "tui interactions parity (queue):",
+        "crates/vibe-cli/tests/runtime-parity/tui-interactions.json",
+        vibe_core::parity::figures::Figures::decided(units, units, 0),
+        serde_json::json!({}),
+    );
 }
 
 /// Recaptures the corpus from the pinned reference and requires it unchanged,

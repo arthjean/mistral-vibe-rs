@@ -49,6 +49,7 @@ use crate::observability::{
     encode_log_message, format_log_line, log_pattern_groups, parse_log_line, process_identifiers,
 };
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::time::UtcTimestamp;
 use crate::tracing::{
@@ -358,7 +359,8 @@ struct PayloadEntry {
     property_types: Option<Value>,
     #[expect(
         dead_code,
-        reason = "the values are the capture's own inputs; the key set and the types are the                   contract, and a value vocabulary the capture invented is not one"
+        reason = "the values are the capture's own inputs; the key set and the types are the \
+                  contract, and a value vocabulary the capture invented is not one"
     )]
     properties: Option<Value>,
     correlated: Option<bool>,
@@ -632,7 +634,14 @@ fn settle(report: &Report, family: &str) -> usize {
         "telemetry: {family} {}/{} conform ({ledgered} ledgered)",
         report.conformant, report.total
     );
+    CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
     report.total
+}
+
+std::thread_local! {
+    /// The conformant comparisons every family [`settle`]d on this thread
+    /// has counted, which the replay's figures read.
+    static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // --------------------------------------------------------------------------
@@ -3281,6 +3290,7 @@ fn the_committed_corpus_replays_against_this_port() {
     for (case, reason) in DIVERGENCES {
         println!("  {case}: {reason}");
     }
+    CONFORMANT.with(|conformant| conformant.set(0));
     let mut comparisons = 0;
 
     let mut report = Report::default();
@@ -3344,6 +3354,15 @@ fn the_committed_corpus_replays_against_this_port() {
         comparisons >= MINIMUM_COMPARISONS,
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every comparison that departs passed `settle`, so `DIVERGENCES`, whose
+    // entries are all accepted divergences, records it.
+    let conformant = CONFORMANT.with(std::cell::Cell::get);
+    assert_figures(
+        "telemetry parity:",
+        "crates/vibe-core/tests/telemetry/corpus.json",
+        Figures::decided(conformant, comparisons, comparisons - conformant),
+        serde_json::json!({}),
     );
 }
 

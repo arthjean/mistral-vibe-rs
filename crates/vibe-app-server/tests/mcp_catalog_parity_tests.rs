@@ -14,8 +14,10 @@
 //! the live probe at the end, which recaptures the reference, does.
 //!
 //! Both sides reduce a string their server authored to a length and a
-//! SHA-256. This port writes its own prose on purpose (`NOTICE`), so two
-//! digests count as equal wherever both sides hold one, and everything else is
+//! SHA-256. This port writes its own prose on purpose (`NOTICE`): two digests that
+//! differ are a difference unless a `PROSE` entry names their pointer, holds
+//! the count of digests it covers, and finds the port's length within its band
+//! of the reference's; everything else is
 //! compared exactly. Every other difference has to fall under a `LEDGER`
 //! entry, and every entry has to still reproduce, so row 11 of
 //! `docs/parity.md` is a reading of the summary this file prints.
@@ -24,10 +26,16 @@
 
 use std::path::Path;
 
-use vibe_core::parity::replay::{Capture, PatternDivergence, Prose, Replay, entries};
+use serde_json::Value;
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("mcp-catalog/corpus.json");
+
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/mcp-catalog/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/mcp_catalog.py",
@@ -36,6 +44,28 @@ const CAPTURE: Capture = Capture {
 };
 
 const LEDGER: &[PatternDivergence] = &[];
+
+/// Every text this port words its own way, digest by digest.
+/// The accepted divergences the prose below stands on.
+const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &[
+        "session/auth-required-then-login",
+        "session/sessionless-mutations-conflict",
+        "session/toggle",
+        "sessionless/add",
+        "sessionless/add-refusals",
+        "sessionless/login-refusals",
+        "sessionless/toggle",
+    ],
+    pointer: "/*/response/error/message",
+    count: 18,
+    band: Band::DEFAULT,
+    directives: None,
+    row: "11",
+    accepted: SERVER_PROSE,
+    reason: "the refusal of a catalog change: a server to sign in first, a conflicting sessionless mutation, a malformed entry",
+}];
 
 #[test]
 fn the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger_names() {
@@ -48,14 +78,18 @@ fn the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("mcp-catalog-port.json"),
-        prose: Prose::OwnWords,
     }
-    .run(entries(LEDGER));
+    .run(entries(PROSE).chain(entries(LEDGER)));
 }
 
 #[test]
-fn every_ledger_entry_states_a_pointer_and_a_reason() {
-    PatternDivergence::assert_ledger(LEDGER);
+fn every_ledger_entry_is_declared_soundly() {
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(PROSE).chain(entries(LEDGER)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

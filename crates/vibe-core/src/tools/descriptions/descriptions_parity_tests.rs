@@ -31,6 +31,7 @@ use serde_json::Value;
 
 use crate::config::{ConfigPaths, ConfigSource, HarnessFiles};
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 
 use super::{SearchInputs, read_overrides, search_paths};
 
@@ -317,6 +318,13 @@ fn the_winning_description_file_matches_the_reference() {
             case.name
         );
     }
+    // Every case is asserted equal above: no ledger.
+    assert_figures(
+        "tool descriptions parity:",
+        CORPUS_RELATIVE,
+        Figures::decided(corpus.cases.len(), corpus.cases.len(), 0),
+        serde_json::json!({}),
+    );
 }
 
 #[test]

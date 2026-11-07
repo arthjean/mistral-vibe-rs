@@ -14,8 +14,11 @@
 //! script's `--live-binary` and record what the system messages of every
 //! request carry.
 //!
-//! The port writes its own prose (`NOTICE`), so two digests count as equal
-//! wherever both sides hold one, and everything else is compared exactly.
+//! The port writes its own prose on purpose (`NOTICE`): two digests that
+//! differ are a difference unless a `PROSE` entry names their pointer, holds
+//! the count of digests it covers, and finds the port's length within its band
+//! of the reference's;
+//! everything else is compared exactly.
 //! A difference has to fall under a `LEDGER` entry, and every entry has to
 //! still reproduce, so row 19 of `docs/parity.md` is a reading of the summary
 //! this file prints. Only the live probe at the end needs the reference
@@ -31,9 +34,9 @@ use sha2::{Digest as _, Sha256};
 use vibe_app_server::workspace::{
     PromptHost, SessionPromptScope, SystemPromptError, WorkspacePaths, WorkspaceService,
 };
-use vibe_core::parity::manifest;
 use vibe_core::parity::replay::{
-    Capture, PatternDivergence, Prose, Tally, differences, entries, scenarios,
+    Band, Capture, OwnProse, PatternDivergence, Tally, assert_ledger, differences, entries,
+    scenarios,
 };
 use vibe_core::prompt::library::PromptFileError;
 use vibe_core::system_prompt::{
@@ -56,6 +59,50 @@ const DATE: &str = "<DATE>";
 const CO_AUTHOR: &str = "Co-Authored-By: Mistral Vibe <vibe@mistral.ai>";
 
 const LEDGER: &[PatternDivergence] = &[];
+
+/// Every section this port words its own way, digest by digest.
+/// The accepted divergence the sections below stand on.
+const PROMPT_TEXT: &str = "System prompt text";
+
+/// The reference commit whose prompt directives this port's sections were
+/// last read against; a re-pin re-reads them before restating it.
+const AUDITED: &str = "376f6a33413a";
+
+const PROSE: &[OwnProse] = &[
+    OwnProse {
+        scenarios: &["*"],
+        pointer: "/sections/*/text",
+        count: 356,
+        band: Band::DEFAULT,
+        directives: Some(AUDITED),
+        row: "19",
+        accepted: PROMPT_TEXT,
+        reason: "a section of the prompt, which this port writes in its own words over the same directives",
+    },
+    OwnProse {
+        scenarios: &["*"],
+        pointer: "/sections/*/entries/*/description",
+        count: 84,
+        band: Band::DEFAULT,
+        directives: Some(AUDITED),
+        row: "19",
+        accepted: PROMPT_TEXT,
+        reason: "an entry a section lists, a tool's or a skill's description, in this port's own words",
+    },
+    OwnProse {
+        scenarios: &["*"],
+        pointer: "/section/text",
+        count: 4,
+        band: Band::DEFAULT,
+        directives: Some(AUDITED),
+        row: "19",
+        accepted: PROMPT_TEXT,
+        reason: "the one section an `os` scenario records, in this port's own words",
+    },
+];
+
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-cli/tests/system-prompt-parity/corpus.json";
 
 /// Replaces the scenario root, however it is spelled, with the placeholder the
 /// corpus records.
@@ -484,12 +531,11 @@ fn replay_live() -> BTreeMap<String, Value> {
     ignore = "windows by design: the corpus was captured on Linux, and the reference prompt names the Windows platform and spells paths with backslashes"
 )]
 fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    manifest::assert_replayed(CORPUS);
+    let mut tally = Tally::new(CORPUS, entries(PROSE).chain(entries(LEDGER)));
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     let live = replay_live();
 
-    let mut tally = Tally::new(entries(LEDGER));
     for (name, reference) in &recorded {
         let scenario = &reference["scenario"];
         let family = reference["family"].as_str();
@@ -503,7 +549,7 @@ fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_th
                     .expect("the live capture holds every live scenario")
             }
         };
-        let found = differences(&reference["observed"], &port, Prose::OwnWords);
+        let found = differences(&reference["observed"], &port);
         tally.record(name, &reference["observed"], &port, found);
     }
     tally.conclude("system prompt parity:");
@@ -511,7 +557,12 @@ fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_th
 
 #[test]
 fn every_ledger_entry_states_a_pointer_and_a_reason() {
-    PatternDivergence::assert_ledger(LEDGER);
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(PROSE).chain(entries(LEDGER)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

@@ -37,6 +37,7 @@ use sha2::{Digest, Sha256};
 
 use super::lines::{FileState, decode_lines};
 use super::matcher::SequenceMatcher;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{pinned_reference, repository};
 use crate::parity::{REFERENCE_COMMIT, pinned_interpreter};
 
@@ -310,6 +311,13 @@ fn line_splitting_matches_the_reference() {
         "line divergences:\n  {}",
         divergent.join("\n  ")
     );
+    // No ledger: every fixture has to match, so the figures are whole.
+    assert_figures(
+        "checkpoint lines parity:",
+        "crates/vibe-core/tests/checkpoints/opcodes.json",
+        Figures::decided(conforming, corpus.line_fixtures.len(), 0),
+        serde_json::json!({}),
+    );
 }
 
 #[test]
@@ -336,6 +344,12 @@ fn opcodes_match_the_reference() {
         divergent.is_empty(),
         "opcode divergences:\n  {}",
         divergent.join("\n  ")
+    );
+    assert_figures(
+        "checkpoint opcodes parity:",
+        "crates/vibe-core/tests/checkpoints/opcodes.json",
+        Figures::decided(conforming, corpus.opcode_fixtures.len(), 0),
+        serde_json::json!({}),
     );
 }
 
@@ -1140,8 +1154,12 @@ fn the_engine_matches_the_reference_over_every_scenario() {
     let corpus = engine_corpus();
     let mut per_family: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
     let mut all = Vec::new();
+    let mut conformant = 0;
     for scenario in &corpus.scenarios {
         let divergences = scenario_divergences(scenario);
+        if divergences.is_empty() {
+            conformant += 1;
+        }
         let diverged: Vec<&'static str> = divergences
             .iter()
             .map(|divergence| divergence.family)
@@ -1164,6 +1182,7 @@ fn the_engine_matches_the_reference_over_every_scenario() {
         }
         all.extend(divergences);
     }
+    let differences = all.len();
     let (unaccounted, stale) = against_ledger(all, LEDGER);
 
     println!(
@@ -1187,6 +1206,14 @@ fn the_engine_matches_the_reference_over_every_scenario() {
             .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join("\n  ")
+    );
+    // The ledger is empty, so the checks above leave every scenario
+    // conformant and the figures whole.
+    assert_figures(
+        "checkpoint engine parity:",
+        "crates/vibe-core/tests/checkpoints/engine.json",
+        Figures::decided(conformant, corpus.scenarios.len(), differences),
+        serde_json::json!({}),
     );
 }
 

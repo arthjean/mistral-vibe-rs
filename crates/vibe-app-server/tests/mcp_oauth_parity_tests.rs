@@ -669,6 +669,9 @@ async fn every_scenario_matches_the_reference_capture() {
     let mut failures = Vec::new();
     let mut used = vec![false; LEDGER.len()];
     let mut replayed = 0;
+    let mut conformant = 0;
+    let mut page_differences = 0;
+    let mut header_differences = 0;
     for entry in corpus["scenarios"].as_array().unwrap() {
         let name = entry["name"].as_str().unwrap();
         if only.as_deref().is_some_and(|only| !name.starts_with(only)) {
@@ -699,6 +702,10 @@ async fn every_scenario_matches_the_reference_capture() {
             .flat_map(|step| step["browser"].as_array().unwrap().iter())
             .filter(|visit| visit.get("page").is_some())
             .count();
+        if found.is_empty() {
+            conformant += 1;
+        }
+        page_differences += pages;
         if pages < expected_pages {
             failures.push(format!(
                 "{name}: a callback page matches the reference's digest"
@@ -713,7 +720,10 @@ async fn every_scenario_matches_the_reference_capture() {
                         observed.pointer(pointer),
                     )
             }) {
-                Some(index) => used[index] = true,
+                Some(index) => {
+                    used[index] = true;
+                    header_differences += 1;
+                }
                 None => failures.push(format!(
                     "{name} {pointer}: expected {} observed {}",
                     entry["observed"].pointer(pointer).unwrap_or(&Value::Null),
@@ -739,6 +749,24 @@ async fn every_scenario_matches_the_reference_capture() {
         failures.len(),
         failures.join("\n")
     );
+    // A scenario that differs differs only by the callback pages this port
+    // writes in its own words and by the two request headers reqwest fixes,
+    // both accepted divergences of row 11; a filtered run measures a subset.
+    if only.is_none() {
+        vibe_core::parity::figures::assert_figures(
+            "MCP OAuth parity:",
+            "crates/vibe-app-server/tests/mcp-oauth/corpus.json",
+            vibe_core::parity::figures::Figures {
+                conformant,
+                accepted: replayed - conformant,
+                total: replayed,
+                accepted_differences: header_differences,
+                gap_differences: 0,
+                prose_differences: page_differences,
+            },
+            json!({}),
+        );
+    }
 }
 
 #[test]

@@ -32,13 +32,15 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{Capture, Divergence, Prose, Replay, entries, scenarios};
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("teleport-parity/corpus.json");
 
-/// The scorecard the ledger's `row` values point into.
-const SCORECARD: &str = include_str!("../../../docs/parity.md");
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/teleport-parity/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/teleport.py",
@@ -102,15 +104,20 @@ const SUMMARIZED: &[&str] = &[
     "telemetry/summary",
 ];
 
-const LEDGER: &[Divergence] = &[
-    Divergence {
+/// Every text this port words its own way in these scenarios.
+const PROSE: &[OwnProse] = &[
+    OwnProse {
         scenarios: OPEN_REFUSALS,
         pointer: "/steps/1/response/error/message",
+        count: 21,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the sentence refusing the picker: a non-Mistral model, an ineligible or \
                  missing key, no history, no GitHub checkout, or a project listing that failed",
     },
-    Divergence {
+    OwnProse {
         scenarios: &[
             "picker/create-blank",
             "picker/create-refused",
@@ -119,88 +126,140 @@ const LEDGER: &[Divergence] = &[
             "picker/select-unknown",
         ],
         pointer: "/steps/2/response/error/message",
+        count: 5,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the sentence refusing a project the picker cannot create or select",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["picker/cancel", "picker/create-blank", "picker/stale-id"],
         pointer: "/steps/3/response/error/message",
+        count: 3,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the sentence refusing a call on a picker that is gone or was never opened",
     },
-    Divergence {
+    OwnProse {
         scenarios: &[
             "run/configure-picker",
             "run/project-id-spaces",
             "run/project-mismatch",
         ],
         pointer: "/steps/4/sequence/0/response/error/message",
+        count: 3,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the sentence refusing a start the picker did not prepare",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["run/detached-head"],
         pointer: "/steps/4/sequence/1/event/error/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the failure a run on a detached HEAD reports",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["run/new-branch-without-origin-head"],
         pointer: "/steps/4/sequence/2/event/error/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the failure a run reports when no base tells how far the branch is ahead",
     },
-    Divergence {
+    OwnProse {
         scenarios: START_FAILURES,
         pointer: "/steps/4/sequence/3/event/error/message",
+        count: 8,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the failure a refused, malformed, exhausted or oversized start reports",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["run/push-denied", "telemetry/push-denied"],
         pointer: "/steps/5/sequence/1/event/error/message",
+        count: 2,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the failure a run reports when the operator declines the push",
     },
-    Divergence {
+    OwnProse {
         scenarios: &[
             "run/push-rejected",
             "summary/empty-answer",
             "summary/model-failure",
         ],
         pointer: "/steps/5/sequence/2/event/error/message",
+        count: 3,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the failure a rejected push or a failed summarization reports",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["lifecycle/respond-without-push"],
         pointer: "/steps/5/sequence/0/response/error/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the sentence refusing a push answer no run is waiting for",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["lifecycle/respond-without-push"],
         pointer: "/steps/6/response/error/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the same refusal, for an operation that already ended",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["lifecycle/cancel-while-push-pending"],
         pointer: "/steps/6/sequence/0/response/error/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the sentence refusing a push answer for a run that was canceled",
     },
-    Divergence {
+    OwnProse {
         scenarios: SUMMARIZED,
         pointer: "/requests/0/conversation/2/content",
+        count: 6,
+        band: Band::DEFAULT,
+        directives: Some("376f6a33413a"),
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the summarization request: the compaction instructions, this port's handoff \
                  section and the quoted prompt",
     },
-    Divergence {
+    OwnProse {
         scenarios: &["summary/history-without-prompt"],
         pointer: "/requests/0/conversation/1/content",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: Some("376f6a33413a"),
         row: "22",
+        accepted: OWN_PROSE,
         reason: "the same request, one message earlier when the prompt is the last message",
     },
 ];
@@ -216,23 +275,16 @@ fn the_port_runs_every_teleport_scenario_as_the_corpus_records_or_as_the_ledger_
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("teleport-parity-port.json"),
-        prose: Prose::Compared,
     }
-    .run(entries(LEDGER));
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_names_a_scorecard_row_that_answers_for_it() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    // Row 22 is what this corpus measures, so a difference it keeps is a gap
-    // unless the scorecard decided to keep it.
-    Divergence::assert_ledger(
-        LEDGER,
-        SCORECARD,
-        &scenarios(&corpus),
-        "22",
-        Some(OWN_PROSE),
-    );
+    // Row 22 is what this corpus measures, so a difference it keeps has to
+    // stand on a divergence the scorecard decided to keep.
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

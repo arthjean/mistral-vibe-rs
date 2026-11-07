@@ -145,7 +145,7 @@ const FETCH_TRUNCATION_MARKER: &str = "the body is cut at the same bound and onl
 
 /// The divergences this port still carries, each with what closes it.
 ///
-/// A pointer is matched by prefix, so `/typedResult` covers every field under
+/// A pointer is matched on segment boundaries, so `/typedResult` covers every field under
 /// it. Keep the list ordered by tool then by case.
 ///
 /// Two kinds of entry live here. One names the story that closes it, and the
@@ -574,7 +574,7 @@ struct Divergence {
     /// test: a gap that spans a tool spans it one case at a time, and saying so
     /// is what keeps the ledger from outliving the divergence.
     case: &'static str,
-    /// Matched by prefix against the reported JSON pointer.
+    /// Matched against the reported JSON pointer on a segment boundary.
     pointer: &'static str,
     /// The story that closes this gap, [`LICENSING`] when none can, or
     /// [`RECORDED`] when this port answers differently on purpose and the
@@ -593,7 +593,9 @@ struct Divergence {
 
 impl Divergence {
     fn covers(&self, tool: &str, case: &str, pointer: &str) -> bool {
-        self.tool == tool && self.case == case && pointer.starts_with(self.pointer)
+        self.tool == tool
+            && self.case == case
+            && vibe_core::parity::replay::pointer_within(self.pointer, pointer)
     }
 }
 
@@ -1601,6 +1603,7 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
     let scratch = tempfile::tempdir().expect("tempdir");
 
     let mut conforming = 0;
+    let mut ledgered = 0;
     let mut tolerated: BTreeSet<(String, String)> = BTreeSet::new();
     let mut unlisted = Vec::new();
     // What the scorecard's row 3 quotes, counted here so the row is read off a
@@ -1633,6 +1636,7 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
                 .find(|entry| entry.covers(&case.tool, &case.case, &difference.pointer))
             {
                 Some(entry) => {
+                    ledgered += 1;
                     tolerated.insert((
                         format!("{}/{} at {}", entry.tool, entry.case, entry.pointer),
                         entry.closed_by.to_owned(),
@@ -1673,6 +1677,25 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
         unlisted.is_empty(),
         "execution divergences outside the ledger:\n  {}",
         unlisted.join("\n  ")
+    );
+    // Every entry is held by `NOTICE`: the sentences this port words its own
+    // way, under the accepted divergence of row 3.
+    assert!(
+        LEDGER.iter().all(|entry| entry.closed_by == LICENSING),
+        "a ledger entry is no longer a licensing entry; classify it in the figures below"
+    );
+    vibe_core::parity::figures::assert_figures(
+        "tool execution parity:",
+        "crates/vibe-app-server/tests/tool-execution/corpus.json",
+        vibe_core::parity::figures::Figures {
+            conformant: conforming,
+            accepted: corpus.cases.len() - conforming,
+            total: corpus.cases.len(),
+            accepted_differences: 0,
+            gap_differences: 0,
+            prose_differences: ledgered,
+        },
+        serde_json::json!({ "exercised": tolerated.len() }),
     );
 }
 

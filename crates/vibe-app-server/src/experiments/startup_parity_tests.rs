@@ -364,6 +364,18 @@ async fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
+    // The ledger is empty: a comparison that differs is unrecorded and has
+    // failed above, so every ledgered one would stand on a recorded decision.
+    vibe_core::parity::figures::assert_figures(
+        "experiments startup parity:",
+        "crates/vibe-app-server/tests/experiments/corpus.json",
+        vibe_core::parity::figures::Figures::decided(
+            comparisons - observed.len(),
+            comparisons,
+            observed.len(),
+        ),
+        serde_json::json!({ "entries": DIVERGENCES.len() }),
+    );
 }
 
 /// The corpus is only an oracle for as long as it still describes the pinned

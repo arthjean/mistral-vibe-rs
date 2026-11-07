@@ -43,6 +43,7 @@ use super::*;
 use crate::provider::config::{ModelRouting, UtilityFeature};
 
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::redaction::is_sensitive_key;
 
@@ -463,6 +464,20 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         local.len(),
         undeclared,
         &corpus.reference.commit[..12]
+    );
+    // A reference field this port does not declare is an open gap.
+    assert_figures(
+        "config surface parity (fields):",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures {
+            conformant: corpus.fields.len() - undeclared,
+            accepted: 0,
+            total: corpus.fields.len(),
+            accepted_differences: 0,
+            gap_differences: undeclared,
+            prose_differences: 0,
+        },
+        serde_json::json!({}),
     );
 }
 
@@ -941,14 +956,22 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
         "no model scenario leaves `active_model` unpinned; drop the recorded \
          divergence instead of carrying it"
     );
+    let conformant = conforming(
+        corpus.model_scenarios.iter().map(|scenario| &scenario.name),
+        &observed,
+    );
     println!(
         "config surface: {}/{} model scenarios conform at {}",
-        conforming(
-            corpus.model_scenarios.iter().map(|scenario| &scenario.name),
-            &observed
-        ),
+        conformant,
         corpus.model_scenarios.len(),
         &corpus.reference.commit[..12]
+    );
+    // Every observed divergence passed `reconcile`, so it is a recorded one.
+    assert_figures(
+        "config surface parity (models):",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures::decided(conformant, corpus.model_scenarios.len(), observed.len()),
+        serde_json::json!({}),
     );
 }
 
@@ -1009,14 +1032,21 @@ fn every_scenario_composes_the_document_the_reference_produces() {
         replay(scenario, &mut observed);
     }
     reconcile("the merge scenarios", &observed, SCENARIO_DIVERGENCES);
+    let conformant = conforming(
+        corpus.scenarios.iter().map(|scenario| &scenario.name),
+        &observed,
+    );
     println!(
         "config surface: {}/{} merge scenarios conform at {}",
-        conforming(
-            corpus.scenarios.iter().map(|scenario| &scenario.name),
-            &observed
-        ),
+        conformant,
         corpus.scenarios.len(),
         &corpus.reference.commit[..12]
+    );
+    assert_figures(
+        "config surface parity (merges):",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures::decided(conformant, corpus.scenarios.len(), observed.len()),
+        serde_json::json!({}),
     );
 }
 

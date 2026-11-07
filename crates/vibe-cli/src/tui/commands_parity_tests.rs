@@ -954,12 +954,14 @@ fn the_committed_corpus_replays_against_this_port() {
         println!("  {case}: {reason}");
     }
     let mut comparisons = 0;
+    let mut conformant = 0;
     let mut problems = Vec::new();
     for family in FAMILIES {
         let mut report = Report::default();
         run_family(&corpus, &contexts, family, &mut report);
         let (total, found) = settle(&report, family.name);
         comparisons += total;
+        conformant += report.conformant;
         problems.extend(found);
     }
     assert!(problems.is_empty(), "{}", problems.join("\n\n"));
@@ -972,6 +974,22 @@ fn the_committed_corpus_replays_against_this_port() {
         comparisons >= MINIMUM_COMPARISONS,
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Every ledger entry is `ACCEPTED`: the text `NOTICE` keeps out, which
+    // this port words its own way, one comparison per difference.
+    let ledgered = comparisons - conformant;
+    vibe_core::parity::figures::assert_figures(
+        "slash commands parity:",
+        CORPUS_RELATIVE,
+        vibe_core::parity::figures::Figures {
+            conformant,
+            accepted: ledgered,
+            total: comparisons,
+            accepted_differences: 0,
+            gap_differences: 0,
+            prose_differences: ledgered,
+        },
+        serde_json::json!({ "entries": DIVERGENCES.len() }),
     );
 }
 

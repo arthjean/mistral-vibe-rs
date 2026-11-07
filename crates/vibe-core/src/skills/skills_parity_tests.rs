@@ -37,6 +37,7 @@ use sha2::{Digest, Sha256};
 
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::skills::builtins::builtin_skills;
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
@@ -506,7 +507,14 @@ pub(super) fn settle(report: &Report, family: &str) -> usize {
         "skills: {family} {}/{} conform",
         report.conformant, report.total
     );
+    CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
     report.total
+}
+
+std::thread_local! {
+    /// The conformant comparisons every family [`settle`]d on this thread
+    /// has counted, which the replay's figures read.
+    static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
 // --------------------------------------------------------------------------
@@ -1476,6 +1484,7 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
 fn the_committed_corpus_replays_every_family_the_reference_answered() {
     crate::parity::manifest::assert_corpus("crates/vibe-core/tests/skills/corpus.json");
     let corpus = corpus();
+    CONFORMANT.with(|conformant| conformant.set(0));
     let mut scenarios = 0;
 
     let mut report = Report::default();
@@ -1729,6 +1738,16 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} scenarios, below the {MINIMUM_SCENARIOS} the PRD \
          commits to; regenerate it with {CAPTURE_SCRIPT}"
+    );
+
+    // Every comparison that departs passed `settle`, so the ledger, whose
+    // entries are all accepted divergences, records it.
+    let conformant = CONFORMANT.with(std::cell::Cell::get);
+    assert_figures(
+        "skills parity:",
+        "crates/vibe-core/tests/skills/corpus.json",
+        Figures::decided(conformant, scenarios, scenarios - conformant),
+        serde_json::json!({}),
     );
 }
 

@@ -806,6 +806,7 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
         BTreeSet::from(["US-024", "US-025", "US-026", "US-027", "US-028"])
     );
 
+    let traces = corpus.traces.len();
     for trace in corpus.traces {
         assert!(!trace.id.is_empty());
         let mut replay = Replay::new();
@@ -815,6 +816,13 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
         }
         assert_eq!(actual, trace.expected, "trace {} diverged", trace.id);
     }
+    // No ledger: a trace replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "active turn parity:",
+        "crates/vibe-cli/tests/runtime-parity/active-turn.json",
+        vibe_core::parity::figures::Figures::decided(traces, traces, 0),
+        serde_json::json!({}),
+    );
 }
 
 /// The position a replayed target was seeded from, which is what the
@@ -863,6 +871,7 @@ fn session_management_corpus_replays_rewind_and_delete_state_machines() {
         }
     }
 
+    let traces = corpus.traces.len();
     for trace in corpus.traces {
         assert!(!trace.id.is_empty());
         let mut replay = SessionManagementReplay::default();
@@ -873,6 +882,13 @@ fn session_management_corpus_replays_rewind_and_delete_state_machines() {
             .collect::<Vec<_>>();
         assert_eq!(actual, trace.expected, "trace {} diverged", trace.id);
     }
+    // No ledger: a trace replays exactly or the assertion above failed.
+    vibe_core::parity::figures::assert_figures(
+        "session management parity:",
+        "crates/vibe-cli/tests/runtime-parity/session-management.json",
+        vibe_core::parity::figures::Figures::decided(traces, traces, 0),
+        serde_json::json!({}),
+    );
 }
 
 #[test]

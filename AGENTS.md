@@ -74,6 +74,18 @@ documentation use the Linux form; read them relative to the local checkout.
   `parity-replay` feature of a dev-dependency on `vibe-core`), whose `Replay`
   compares and ledgers a corpus and whose `Capture::probe` and
   `pinned_reference` pass through that gate.
+- A replay's ledger is bounded and typed. Two prose digests that differ are a
+  difference unless an `OwnProse` entry names their pointer and finds the
+  port's length within its band; an entry that restates reference directives
+  records the commit it was audited at. Every entry declares how many
+  differences it covers, matches pointers on segment boundaries, names a
+  scorecard row and what it stands on (`Class::Accepted` with the name of an
+  "Accepted divergences" row, or `Class::Gap`), and fails the replay when its
+  count moves; an entry over a whole top-level observation lists the
+  sub-pointers it may cover. Each replay, `Tally` or hand-rolled, ends with
+  `vibe_core::parity::figures::assert_figures` against its line of the
+  "Measured figures" table in `docs/parity.md`; a run appends what it counted
+  to `target/parity/figures.jsonl`, the line to restate when one moves.
 - `scripts/parity/manifest.json` lists every committed corpus with its driver,
   test, scorecard row, capture commit, SHA-256 and floors, and
   `python3 scripts/parity/repin.py capture <corpus>` is the only way to change
@@ -103,10 +115,13 @@ documentation use the Linux form; read them relative to the local checkout.
 
 `docs/parity.md` is the scorecard: one numbered row per part, the open
 divergences, and the ledger of divergences kept on purpose. Read a part's row
-before working on it. Work that moves a part's parity restates its row and the
-header's weighted total in the same change (`scorecard_tests` recomputes the
-total), and a divergence kept on purpose gets a ledger row naming what holds it
-in place (`ledger_tests` resolves every path and symbol the row names).
+before working on it. Work that moves a part's parity restates its figures
+lines, its row and the header's weighted total in the same change:
+`scorecard_tests` derives each row's Parity and Conformance from the
+"Measured figures" lines and recomputes the total, and a row no replay
+measures reads `structural` and stays at or below 50. A divergence kept on
+purpose gets a ledger row naming what holds it in place (`ledger_tests`
+resolves every path and symbol the row names).
 
 ## Quality gates
 

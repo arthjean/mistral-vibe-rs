@@ -24,6 +24,7 @@ use super::mcp::{
 use super::*;
 use crate::mcp::{McpAuthConfig, McpServerConfig, McpTransportConfig};
 use crate::parity::REFERENCE_COMMIT;
+use crate::parity::figures::{Figures, assert_figures};
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 
@@ -287,6 +288,13 @@ fn every_recorded_entry_decodes_to_the_reference_values_or_the_same_refusal() {
         corpus.mcp.entries.len(),
         corpus.mcp.urls.len(),
         corpus.mcp.resolutions.len()
+    );
+    // Every entry scenario is asserted equal above: no ledger.
+    assert_figures(
+        "config MCP entries parity:",
+        "crates/vibe-core/tests/config-surface/corpus.json",
+        Figures::decided(corpus.mcp.entries.len(), corpus.mcp.entries.len(), 0),
+        serde_json::json!({}),
     );
 }
 

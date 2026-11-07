@@ -207,3 +207,120 @@ fn the_upstream_row_names_the_newest_tag_the_census_recorded() {
          scripts/parity/repin.py census`"
     );
 }
+
+/// Every row's `(Parity, Conformance)` cells, as the parity table writes
+/// them: Parity a whole number, Conformance a whole number or `structural`.
+fn stated_scores(document: &str) -> BTreeMap<u32, (u32, String)> {
+    let mut rows = BTreeMap::new();
+    let mut inside = false;
+    for line in document.lines() {
+        if line.starts_with("## ") {
+            inside = line.trim() == TABLE_SECTION;
+            continue;
+        }
+        if !inside || !line.starts_with("| ") {
+            continue;
+        }
+        let cells: Vec<&str> = line.trim_matches('|').split(" | ").map(str::trim).collect();
+        let (Some(axis), Some(parity), Some(conformance)) = (
+            cells.first().and_then(|cell| cell.parse::<u32>().ok()),
+            cells.get(2).and_then(|cell| cell.parse::<u32>().ok()),
+            cells.get(3),
+        ) else {
+            continue;
+        };
+        rows.insert(axis, (parity, (*conformance).to_owned()));
+    }
+    rows
+}
+
+/// The ceiling a row that no replay measures may claim (US-011 of
+/// `tasks/prd-trustworthy-parity-v3.md`).
+const STRUCTURAL_CEILING: u32 = 50;
+
+#[test]
+fn every_row_states_the_parity_and_conformance_its_figures_derive() {
+    use super::figures::{self, Figures};
+
+    let document =
+        fs::read_to_string(repo_root().join(SCORECARD)).expect("the scorecard is committed");
+    let stated = stated_scores(&document);
+    assert!(
+        !stated.is_empty(),
+        "no row of `{TABLE_SECTION}` states a Parity and a Conformance, or this parser moved"
+    );
+    let lines = figures::lines(&document);
+    let accepted = super::manifest::load()
+        .accepted()
+        .into_iter()
+        .map(|commit| figures::abbreviate(commit).to_owned())
+        .collect::<Vec<_>>();
+    let mut keys = std::collections::BTreeSet::new();
+    for line in &lines {
+        assert!(
+            keys.insert((line.heading.clone(), line.platform.clone())),
+            "`{}` is declared twice for {}",
+            line.heading,
+            line.platform
+        );
+        assert!(
+            ["all", "linux", "windows", "macos"].contains(&line.platform.as_str()),
+            "`{}` names the platform {}, which no host is",
+            line.heading,
+            line.platform
+        );
+        assert!(
+            accepted.contains(&line.commit),
+            "`{}` was measured at {}, which the manifest no longer accepts",
+            line.heading,
+            line.commit
+        );
+        let numbers = line.figures;
+        assert!(
+            numbers.conformant + numbers.accepted <= numbers.total,
+            "`{}` counts more conformant and accepted units than it compared",
+            line.heading
+        );
+        let row = line.row.parse::<u32>().ok();
+        assert!(
+            row.is_some_and(|row| stated.contains_key(&row)),
+            "`{}` measures row {}, which the parity table does not carry",
+            line.heading,
+            line.row
+        );
+    }
+    let derived = figures::by_row(&lines);
+    let mut mismatches = Vec::new();
+    for (row, (parity, conformance)) in &stated {
+        match derived.get(&row.to_string()) {
+            Some(numbers) => {
+                let Figures { total, .. } = *numbers;
+                let (want_parity, want_conformance) = (numbers.parity(), numbers.conformance());
+                if total == 0
+                    || *parity as usize != want_parity
+                    || conformance.parse::<usize>().ok() != Some(want_conformance)
+                {
+                    mismatches.push(format!(
+                        "row {row} states Parity {parity} and Conformance {conformance}; its \
+                         figures derive {want_parity} and {want_conformance}"
+                    ));
+                }
+            }
+            None => {
+                if conformance != "structural" || *parity > STRUCTURAL_CEILING {
+                    mismatches.push(format!(
+                        "row {row} has no line under \"{}\", so it rests on a structural \
+                         judgment: its Conformance reads `structural` and its Parity is at most \
+                         {STRUCTURAL_CEILING}, not {parity} and {conformance}",
+                        figures::FIGURES_SECTION
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "the parity table disagrees with its figures:\n  {}",
+        mismatches.join("\n  ")
+    );
+}

@@ -13,9 +13,11 @@
 //! the live probe at the end, which recaptures the reference, does.
 //!
 //! The script records shapes rather than values, and reduces the prose a
-//! server authored to a length and a SHA-256. This port writes its own prose
-//! on purpose (`NOTICE`), so two digests count as equal wherever both sides
-//! hold one, and everything else is compared exactly.
+//! server authored to a length and a SHA-256.
+//! This port writes its own prose on purpose (`NOTICE`): two digests that
+//! differ are a difference unless a `PROSE` entry names their pointer, holds
+//! the count of digests it covers, and finds the port's length within its band
+//! of the reference's; everything else is compared exactly.
 //!
 //! Every difference the replay finds has to fall under a `LEDGER` entry, and
 //! every entry has to still reproduce, so row 17 of `docs/parity.md` is a
@@ -25,10 +27,16 @@
 
 use std::path::Path;
 
-use vibe_core::parity::replay::{Capture, Entry, Prose, Replay, entries};
+use serde_json::Value;
+use vibe_core::parity::replay::{
+    Band, Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("protocol-parity/corpus.json");
+
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/protocol-parity/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/app_server_protocol.py",
@@ -38,40 +46,66 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// A pointer this port answers differently in some scenarios, and why.
-struct Divergence {
-    /// The scenario it applies to, `*` for every one, or `<prefix>/*` for every
-    /// scenario one segment below the prefix, which names both probes of one
-    /// method.
-    scenario: &'static str,
-    /// Every difference whose JSON pointer ends with this suffix is covered; an
-    /// empty suffix covers every difference in the scenario.
-    suffix: &'static str,
-    reason: &'static str,
-}
-
-impl Entry for Divergence {
-    fn covers(&self, scenario: &str, pointer: &str) -> bool {
-        let scenario_matches = self.scenario == "*"
-            || self.scenario == scenario
-            || self.scenario.strip_suffix("/*").is_some_and(|prefix| {
-                scenario
-                    .rsplit_once('/')
-                    .is_some_and(|(parent, _)| parent == prefix)
-            });
-        scenario_matches && pointer.ends_with(self.suffix)
-    }
-
-    fn label(&self) -> String {
-        self.reason.to_owned()
-    }
-}
-
 /// What the port still answers differently. The v2.26.0 re-pin (`376f6a3`)
 /// opened eleven fields the reference's public models gained and seven
 /// methods this port neither declared nor routed, and the protocol pass closed
 /// all of them.
-const LEDGER: &[Divergence] = &[];
+const LEDGER: &[PatternDivergence] = &[];
+
+/// Every text this port words its own way, digest by digest.
+/// The accepted divergence the prose below stands on.
+const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
+
+const PROSE: &[OwnProse] = &[
+    OwnProse {
+        scenarios: &[
+            "flows/loops",
+            "flows/turn-queue-refusals",
+            "probe/session/turn/queue/steer/rooted",
+            "probe/vibeCode/projects/open/rooted",
+        ],
+        pointer: "/*/response/error/message",
+        count: 7,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "17",
+        accepted: SERVER_PROSE,
+        reason: "the refusal of a loop, a queue steer or a project open the session's state does \
+                 not allow",
+    },
+    OwnProse {
+        scenarios: &[
+            "flows/shell-command",
+            "flows/turn-queue-refusals",
+            "flows/worktree-reap",
+            "probe/session/settings/update/rooted",
+            "probe/session/shellCommand/rooted",
+        ],
+        pointer: "/*/response/error/data/issues/*/message",
+        count: 11,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "17",
+        accepted: SERVER_PROSE,
+        reason: "the message of a validation issue, under the reference's issue path and kind",
+    },
+];
+
+/// What only a Windows host answers otherwise: the corpus is captured on
+/// Linux.
+const PLATFORM: &[PatternDivergence] = if cfg!(windows) {
+    &[PatternDivergence {
+        scenario: "flows/shell-command",
+        pointer: "/9/response/error/message",
+        count: 1,
+        row: "6",
+        class: Class::Gap,
+        reason: "the refusal of a working directory outside the workspace spells the directory \
+                 with the host's own separators and drive, so its digest differs from the POSIX                  path the corpus records",
+    }]
+} else {
+    &[]
+};
 
 #[test]
 fn the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledger_names() {
@@ -84,9 +118,24 @@ fn the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledg
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("protocol-parity-port.json"),
-        prose: Prose::OwnWords,
     }
-    .run(entries(LEDGER));
+    .run(
+        entries(PROSE)
+            .chain(entries(PLATFORM))
+            .chain(entries(LEDGER)),
+    );
+}
+
+#[test]
+fn every_ledger_entry_is_declared_soundly() {
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(PROSE)
+            .chain(entries(PLATFORM))
+            .chain(entries(LEDGER)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

@@ -22,7 +22,7 @@
 
 use std::path::Path;
 
-use vibe_core::parity::replay::PatternDivergence;
+use vibe_core::parity::replay::{Class, PatternDivergence};
 
 #[path = "support/telemetry_session.rs"]
 mod telemetry_session;
@@ -44,6 +44,11 @@ const SURFACES: Surfaces = Surfaces {
 const LEDGER: &[PatternDivergence] = &[PatternDivergence {
     scenario: "tui/*",
     pointer: "/*/events/*/properties/is_cold_start",
+    // One event per `tui` scenario; a host that does not replay the surface
+    // drops the entry (`support/telemetry_session.rs`).
+    count: 5,
+    row: "27",
+    class: Class::Accepted("`is_cold_start` is null"),
     reason: "the reference reports whether Python rebuilt its bytecode cache, false from a \
                  source checkout and null for its own frozen binaries; this port is a compiled \
                  binary and reports null",

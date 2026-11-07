@@ -1575,45 +1575,59 @@ fn the_committed_corpus_replays_against_this_port() {
         println!("  {case}: {reason}");
     }
     let mut scenarios = 0;
+    let mut conformant = 0;
     let mut report = Report::default();
     run_constants(&corpus.constants, &mut report);
     scenarios += settle(&report, "constants");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_ignore_rules(&corpus, &mut report);
     scenarios += settle(&report, "ignoreRules");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_walk(&corpus, &mut report);
     scenarios += settle(&report, "walk");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_changes(&corpus, &mut report);
     scenarios += settle(&report, "changes");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_ranking(&corpus, &mut report);
     scenarios += settle(&report, "ranking");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_git_walk(&corpus, &mut report);
     scenarios += settle(&report, "gitWalk");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_git_changes(&corpus, &mut report);
     scenarios += settle(&report, "gitChanges");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_collect(&corpus, &mut report);
     scenarios += settle(&report, "collect");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_controller(&corpus, &mut report);
     scenarios += settle(&report, "controller");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_inline_skill(&corpus, &mut report);
     scenarios += settle(&report, "inlineSkill");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_path_prompt(&corpus, &mut report);
     scenarios += settle(&report, "pathPrompt");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_watch_filter(&corpus, &mut report);
     scenarios += settle(&report, "watchFilter");
+    conformant += report.conformant;
     let mut report = Report::default();
     run_fuzzy(&corpus, &mut report);
     scenarios += settle(&report, "fuzzy");
+    conformant += report.conformant;
     println!(
         "autocompletion: {scenarios} comparisons across {} families replayed at {}",
         FAMILIES.len(),
@@ -1623,6 +1637,14 @@ fn the_committed_corpus_replays_against_this_port() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
+    );
+    // Both ledger entries are `ACCEPTED` divergences `docs/parity.md` records,
+    // one comparison per difference.
+    vibe_core::parity::figures::assert_figures(
+        "autocompletion parity:",
+        "crates/vibe-cli/tests/autocompletion/corpus.json",
+        vibe_core::parity::figures::Figures::decided(conformant, scenarios, scenarios - conformant),
+        serde_json::json!({ "entries": DIVERGENCES.len() }),
     );
 }
 

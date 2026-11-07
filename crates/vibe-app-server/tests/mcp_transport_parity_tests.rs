@@ -888,6 +888,12 @@ async fn every_scenario_matches_the_reference_mcp_client() {
     let mut used = BTreeSet::new();
     let mut conformant = 0_usize;
     let mut total = 0_usize;
+    // The strict figures: a scenario conforms only with no difference at all;
+    // a failure sentence this port words its own way is an own-words
+    // difference, and a ledgered pointer an accepted one.
+    let mut strict = 0_usize;
+    let mut accepted_differences = 0_usize;
+    let mut prose_differences = 0_usize;
     for scenario in corpus["scenarios"].as_array().expect("scenarios") {
         let name = scenario["name"].as_str().expect("scenario name");
         if only.as_deref().is_some_and(|only| !name.starts_with(only)) {
@@ -909,10 +915,23 @@ async fn every_scenario_matches_the_reference_mcp_client() {
                 ));
             }
         }
+        let reworded = reference_prose
+            .iter()
+            .filter(|(pointer, reference)| {
+                port_prose
+                    .get(*pointer)
+                    .is_some_and(|port| port != *reference)
+            })
+            .count();
+        prose_differences += reworded;
+        if found.is_empty() && reworded == 0 {
+            strict += 1;
+        }
         let mut unexplained = Vec::new();
         for pointer in found {
             match ledgered(name, &pointer) {
                 Some(entry) => {
+                    accepted_differences += 1;
                     used.insert((entry.scenario, entry.pointer));
                 }
                 None => unexplained.push(pointer),
@@ -966,6 +985,21 @@ async fn every_scenario_matches_the_reference_mcp_client() {
             stale.is_empty(),
             "ledger entries no longer reproduce:\n{}",
             stale.join("\n")
+        );
+        // The one ledger entry stands on the accepted divergence that
+        // sanitizes a remote tool name; a filtered run measures a subset.
+        vibe_core::parity::figures::assert_figures(
+            "MCP transport parity:",
+            "crates/vibe-app-server/tests/mcp-transport/corpus.json",
+            vibe_core::parity::figures::Figures {
+                conformant: strict,
+                accepted: total - strict,
+                total,
+                accepted_differences,
+                gap_differences: 0,
+                prose_differences,
+            },
+            json!({ "ledgeredConformant": conformant }),
         );
     }
 }

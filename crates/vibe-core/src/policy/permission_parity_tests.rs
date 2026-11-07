@@ -36,6 +36,7 @@ use super::store::SESSION_APPROVAL;
 use super::tool_rules::{matched_path_pattern, pure_path_match};
 use super::*;
 use crate::matching::pattern_matches;
+use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 
@@ -379,6 +380,21 @@ fn every_divergence_names_a_corpus_pointer_and_its_evidence() {
     );
 }
 
+/// Asserts the figures of one family of the permission corpus: `conformant`
+/// of `total` units, each compared for equality above, so nothing is ledgered.
+fn measured(heading: &str, conformant: usize, total: usize) {
+    assert_figures(
+        heading,
+        "crates/vibe-core/tests/permission-surface/vocabulary.json",
+        Figures {
+            conformant,
+            total,
+            ..Figures::default()
+        },
+        serde_json::json!({}),
+    );
+}
+
 /// US-105: the four scopes, and nothing else.
 #[test]
 fn the_scope_vocabulary_is_the_reference_one() {
@@ -405,6 +421,11 @@ fn the_scope_vocabulary_is_the_reference_one() {
         spoken.len(),
         corpus.counts.scopes
     );
+    measured(
+        "permission surface parity (scopes):",
+        spoken.len(),
+        corpus.counts.scopes,
+    );
 }
 
 /// The two path grant scopes, each under the value the encoded grant carries.
@@ -430,6 +451,11 @@ fn the_path_grant_scope_vocabulary_is_the_reference_one() {
         "permission surface: path grant scopes {}/{}",
         spoken.len(),
         corpus.path_grant_scopes.len()
+    );
+    measured(
+        "permission surface parity (path grant scopes):",
+        spoken.len(),
+        corpus.path_grant_scopes.len(),
     );
 }
 
@@ -564,6 +590,11 @@ fn the_arity_table_is_the_reference_table() {
         ported.len(),
         corpus.counts.arity_entries
     );
+    measured(
+        "permission surface parity (arity):",
+        ported.len(),
+        corpus.counts.arity_entries,
+    );
 }
 
 /// US-106: the session pattern a command reduces to is the reference's.
@@ -588,6 +619,11 @@ fn every_session_pattern_matches_the_reference() {
         corpus.session_patterns.len(),
         corpus.counts.session_pattern_cases
     );
+    measured(
+        "permission surface parity (session patterns):",
+        corpus.session_patterns.len(),
+        corpus.counts.session_pattern_cases,
+    );
 }
 
 /// US-107: the wildcard rule, including the optional trailing arguments.
@@ -608,6 +644,11 @@ fn every_wildcard_verdict_matches_the_reference() {
         "permission surface: wildcard verdicts {}/{}",
         corpus.wildcard_matches.len(),
         corpus.counts.wildcard_cases
+    );
+    measured(
+        "permission surface parity (wildcard verdicts):",
+        corpus.wildcard_matches.len(),
+        corpus.counts.wildcard_cases,
     );
 }
 
@@ -792,6 +833,11 @@ async fn an_outside_target_raises_the_reference_requirement() {
         outside_cases.len(),
         corpus.counts.outside_targets
     );
+    measured(
+        "permission surface parity (outside targets):",
+        outside_cases.len(),
+        corpus.counts.outside_targets,
+    );
 }
 
 /// The settings a sensitive-pattern case is measured under: one pattern, no
@@ -832,6 +878,11 @@ fn every_sensitive_pattern_verdict_matches_the_reference() {
         "permission surface: sensitive patterns {}/{}, {refused} the reference refused to read",
         corpus.sensitive_matches.len(),
         corpus.counts.sensitive_cases
+    );
+    measured(
+        "permission surface parity (sensitive patterns):",
+        corpus.sensitive_matches.len(),
+        corpus.counts.sensitive_cases,
     );
 }
 
@@ -903,6 +954,11 @@ fn every_path_grant_encoding_matches_the_reference() {
         encodings.len(),
         corpus.counts.path_grant_encoding_cases
     );
+    measured(
+        "permission surface parity (path grant encodings):",
+        encodings.len(),
+        corpus.counts.path_grant_encoding_cases,
+    );
 }
 
 /// An encoded grant, an absolute glob and a relative glob each cover what
@@ -925,6 +981,11 @@ fn every_path_grant_verdict_matches_the_reference() {
         "permission surface: path grant verdicts {}/{}",
         matches.len(),
         corpus.counts.path_match_cases
+    );
+    measured(
+        "permission surface parity (path grant verdicts):",
+        matches.len(),
+        corpus.counts.path_match_cases,
     );
 }
 
@@ -1004,6 +1065,11 @@ fn every_path_scope_offer_and_grant_matches_the_reference() {
         cases.len(),
         corpus.counts.path_scope_cases
     );
+    measured(
+        "permission surface parity (path scope cases):",
+        cases.len(),
+        corpus.counts.path_scope_cases,
+    );
 }
 
 /// A stored approval covers a requirement as `PermissionStore.covers` does:
@@ -1044,6 +1110,11 @@ fn every_covers_verdict_matches_the_reference() {
         "permission surface: covers {}/{}",
         corpus.covers.len(),
         corpus.counts.covers_cases
+    );
+    measured(
+        "permission surface parity (covers):",
+        corpus.covers.len(),
+        corpus.counts.covers_cases,
     );
 }
 
@@ -1108,6 +1179,11 @@ async fn the_list_chain_answers_like_the_reference() {
         corpus.list_chain.len(),
         corpus.counts.list_chain_cases
     );
+    measured(
+        "permission surface parity (list chain):",
+        corpus.list_chain.len(),
+        corpus.counts.list_chain_cases,
+    );
 }
 
 /// US-263: the whole chain, not just the matcher, raises what the reference
@@ -1154,6 +1230,11 @@ fn the_sensitive_chain_answers_like_the_reference() {
         "permission surface: sensitive chain {}/{}",
         corpus.sensitive_chain.len(),
         corpus.counts.sensitive_chain_cases
+    );
+    measured(
+        "permission surface parity (sensitive chain):",
+        corpus.sensitive_chain.len(),
+        corpus.counts.sensitive_chain_cases,
     );
 }
 

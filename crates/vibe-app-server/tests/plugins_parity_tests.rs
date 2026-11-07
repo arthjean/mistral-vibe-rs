@@ -23,10 +23,16 @@
 
 use std::path::Path;
 
-use vibe_core::parity::replay::{Capture, Entry, Prose, Replay, entries};
+use serde_json::Value;
+use vibe_core::parity::replay::{
+    Capture, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("plugins-parity/corpus.json");
+
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-app-server/tests/plugins-parity/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/plugins.py",
@@ -37,29 +43,10 @@ const CAPTURE: Capture = Capture {
     ],
 };
 
-/// A difference this port keeps in one scenario.
-struct Divergence {
-    scenario: &'static str,
-    /// Every difference whose JSON pointer starts with this prefix is covered.
-    pointer: &'static str,
-    reason: &'static str,
-}
+const LEDGER: &[PatternDivergence] = &[];
 
-impl Entry for Divergence {
-    fn covers(&self, scenario: &str, pointer: &str) -> bool {
-        self.scenario == scenario && pointer.starts_with(self.pointer)
-    }
-
-    fn label(&self) -> String {
-        format!("{} ({})", self.pointer, self.reason)
-    }
-
-    fn scenarios(&self) -> &[&str] {
-        std::slice::from_ref(&self.scenario)
-    }
-}
-
-const LEDGER: &[Divergence] = &[];
+/// Every text this port words its own way, digest by digest.
+const PROSE: &[OwnProse] = &[];
 
 #[test]
 #[cfg_attr(
@@ -76,9 +63,18 @@ fn the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_
             env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture"),
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("plugins-parity-port.json"),
-        prose: Prose::Compared,
     }
-    .run(entries(LEDGER));
+    .run(entries(PROSE).chain(entries(LEDGER)));
+}
+
+#[test]
+fn every_ledger_entry_is_declared_soundly() {
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(PROSE).chain(entries(LEDGER)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

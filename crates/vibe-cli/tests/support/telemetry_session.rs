@@ -11,12 +11,15 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Capture, Entry, PatternDivergence, Prose, Tally, differences, pinned_reference,
+    Capture, Entry, PatternDivergence, Tally, assert_ledger, differences, pinned_reference,
     scenario_matches, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("../telemetry-session/corpus.json");
+
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-cli/tests/telemetry-session/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/telemetry_session.py",
@@ -42,7 +45,6 @@ impl Surfaces {
     /// Replays every scenario recorded on the replayed surfaces and compares
     /// it with the corpus under `ledger`.
     pub fn replay(&self, ledger: &[PatternDivergence], output: &Path) {
-        vibe_core::parity::manifest::assert_replayed(CORPUS);
         let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
         let served = on_surfaces(&corpus, self.served);
         assert!(
@@ -58,6 +60,7 @@ impl Surfaces {
         let replayed = CAPTURE.port(&arguments, output);
         // An entry whose scenarios this host does not replay cannot reproduce.
         let mut tally = Tally::new(
+            CORPUS,
             ledger
                 .iter()
                 .filter(|entry| {
@@ -71,17 +74,24 @@ impl Surfaces {
             &CAPTURE,
             &recorded,
             &on_surfaces(&replayed, self.served),
-            |reference, port| differences(reference, port, Prose::Compared),
+            differences,
         );
-        tally.conclude("telemetry session parity:");
+        tally.conclude(&format!(
+            "telemetry session parity ({}):",
+            self.served.join(", ")
+        ));
     }
 
     /// Asserts every entry of `ledger` names a scenario the corpus records on
     /// the served surfaces, a pointer and a reason.
     pub fn assert_ledger(&self, ledger: &[PatternDivergence]) {
-        PatternDivergence::assert_ledger(ledger);
         let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
         let served = on_surfaces(&corpus, self.served);
+        assert_ledger(
+            LISTED,
+            &served,
+            ledger.iter().map(|entry| entry as &dyn Entry),
+        );
         for entry in ledger {
             assert!(
                 served
