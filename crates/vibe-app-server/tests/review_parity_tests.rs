@@ -29,7 +29,8 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, FieldDivergence, OwnProse, Replay, assert_ledger, entries, scenarios,
+    Capture, Class, FieldDivergence, OwnProse, PatternDivergence, Replay, assert_ledger, entries,
+    scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -48,35 +49,261 @@ const CAPTURE: Capture = Capture {
 
 const LEDGER: &[FieldDivergence] = &[];
 
-/// Every text this port words its own way, digest by digest.
-/// The accepted divergences the prose below stands on.
-const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
-const ENVELOPE: &str = "The compaction envelope's two prose runs";
-const PROSE: &[OwnProse] = &[
-    OwnProse {
-        scenarios: &[
-            "compaction/decisions-across-the-boundary",
-            "compaction/reads-across-the-boundary",
-        ],
-        pointer: "/*/context/*/content",
-        count: 2,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "26",
-        accepted: ENVELOPE,
-        reason: "the compaction envelope a context read shows across the boundary",
-    },
-    OwnProse {
-        scenarios: &["refuse/decision-parameters"],
-        pointer: "/*/response/error/message",
-        count: 3,
-        band: Band::DEFAULT,
-        directives: None,
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 reviews this otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
+
+/// Differences an own-words entry covers but whose length v3.1.0 moved out of
+/// its band, one by one; chained first, so they are decided before it.
+const V3_REFUSED: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "compaction/decisions-across-the-boundary",
+        pointer: "/0/context/0/content",
+        count: 1,
         row: "15",
-        accepted: SERVER_PROSE,
-        reason: "the refusal of a decision whose parameters are malformed",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "compaction/reads-across-the-boundary",
+        pointer: "/0/context/0/content",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "refuse/decision-parameters",
+        pointer: "/4/response/error/message",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "refuse/decision-parameters",
+        pointer: "/5/response/error/message",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "refuse/decision-parameters",
+        pointer: "/6/response/error/message",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
 ];
+
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/files/notes.txt",
+        count: 14,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/files/other.txt",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/files/real.txt",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error",
+        count: 188,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error/code",
+        count: 6,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error/data",
+        count: 3,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error/message",
+        count: 3,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result",
+        count: 188,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/agent",
+        count: 2,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/bumpedAt",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/contextUsage/cachedInputTokens",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/loops",
+        count: 2,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/tokenUsage/cachedInputTokens",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/context/*",
+        count: 12,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/notifications/*",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/detail/input/changes",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/detail/input/newString",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/detail/input/oldString",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/detail/input/replaceAll",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/detail/toolName",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/outcome",
+        count: 4,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/state/display/message",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/state/output/previousContent",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/title",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine",
+        count: 1,
+        row: "15",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
+
+const PROSE: &[OwnProse] = &[];
 
 #[test]
 fn the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
@@ -90,7 +317,12 @@ fn the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("review-parity-port.json"),
     }
-    .run(entries(PROSE).chain(entries(LEDGER)));
+    .run(
+        entries(V3_REFUSED)
+            .chain(entries(PROSE))
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
+    );
 }
 
 #[test]
@@ -99,7 +331,10 @@ fn every_ledger_entry_is_declared_soundly() {
     assert_ledger(
         LISTED,
         &scenarios(&corpus),
-        entries(PROSE).chain(entries(LEDGER)),
+        entries(V3_REFUSED)
+            .chain(entries(PROSE))
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
     );
 }
 

@@ -1,23 +1,31 @@
 {
-  "referenceCommit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+  "referenceCommit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
   "platform": "linux",
-  "note": "The divergence left on the Linux surface, recorded per surface quadrant because the managed-shell rollout and the runtime gate publish four different surfaces. All four name sets are clean: EP-013 emptied the invented-name set, EP-014 the universal-tool half of the missing-name set, EP-015 the shell half, and EP-095 the fourth quadrant, where the gate now withholds the managed variant and its four session tools from a client that hosts its own terminal. schemaDivergence is the schema ledger for every Linux surface: the default census, the managed shell rollout and the committed digest each hold their divergence equal to the entries naming their tools, and EP-016 adds the Windows families, which carry none. It is empty: todo /properties/action/enum closed when this port published the v2.25.5 Literal['read', 'write'] as an enum (crates/vibe-core/src/tools/builtins/todo.rs). Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
+  "note": "The divergence left on the Linux surface, recorded per surface quadrant because the managed-shell rollout and the runtime gate publish four different surfaces. Every quadrant carries one invented name: v3.0 deleted exit_plan_mode together with the legacy harness (its module under vibe/core/tools/builtins/ is gone at the pin), and this port still publishes it, so it is an open gap until the port drops the tool. No quadrant misses a name: EP-013, EP-014, EP-015 and EP-095 closed the v2 name gaps. schemaDivergence is the schema ledger for every Linux surface: the default census, the managed shell rollout and the committed digest each hold their divergence equal to the entries naming their tools, and EP-016 adds the Windows families, which carry none. It is empty. The digest replay accepts a published name only when it is in a digest surface or recorded here as invented. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
   "quadrants": {
     "rollout-off-gate-on": {
       "missingNames": [],
-      "extraNames": []
+      "extraNames": [
+        "exit_plan_mode"
+      ]
     },
     "rollout-off-gate-off": {
       "missingNames": [],
-      "extraNames": []
+      "extraNames": [
+        "exit_plan_mode"
+      ]
     },
     "rollout-on-gate-on": {
       "missingNames": [],
-      "extraNames": []
+      "extraNames": [
+        "exit_plan_mode"
+      ]
     },
     "rollout-on-gate-off": {
       "missingNames": [],
-      "extraNames": []
+      "extraNames": [
+        "exit_plan_mode"
+      ]
     }
   },
   "schemaDivergence": {}

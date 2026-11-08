@@ -132,7 +132,7 @@ pub(super) fn replay(
         );
         report.check("loading", &case.case, "issues", &case.issues, &issues);
     }
-    scenarios += settle(&report, "loading");
+    scenarios += settle(report, "loading");
 
     let mut report = Report::default();
     for case in marks {
@@ -154,7 +154,7 @@ pub(super) fn replay(
             .collect::<Vec<_>>();
         report.check("installedMarks", &case.case, "rows", &case.rows, &rows);
     }
-    scenarios += settle(&report, "installedMarks");
+    scenarios += settle(report, "installedMarks");
 
     let mut report = Report::default();
     for case in lifecycle {
@@ -167,7 +167,7 @@ pub(super) fn replay(
         });
         report.check("lifecycle", &case.case, "session", &expected, &observed);
     }
-    scenarios += settle(&report, "lifecycle");
+    scenarios += settle(report, "lifecycle");
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -191,7 +191,7 @@ pub(super) fn replay(
                 &comparable_tree_fields(&observed),
             );
         }
-        scenarios += settle(&report, family);
+        scenarios += settle(report, family);
     }
 
     let mut report = Report::default();
@@ -199,7 +199,7 @@ pub(super) fn replay(
         let name = case["case"].as_str().unwrap_or_default().to_owned();
         report.check("ledger", &name, "answer", case, &ledger_answer(&name));
     }
-    scenarios += settle(&report, "ledger");
+    scenarios += settle(report, "ledger");
 
     scenarios
 }

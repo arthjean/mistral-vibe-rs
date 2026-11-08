@@ -240,12 +240,12 @@ fn corpus_declares_every_gap_trace_and_expectation() -> Result<(), String> {
     // HEAD it finds, so this corpus sat two releases behind the pin until US-142
     // recaptured it. `AGENTS.md` requires a re-pin to regenerate every committed
     // corpus in the same change, and this is what makes that mechanical.
-    if manifest.reference.commit != vibe_core::parity::REFERENCE_COMMIT {
+    if !vibe_core::parity::is_pin_commit(&manifest.reference.commit) {
         return Err(format!(
             "the corpus was captured from `{}` and the pin names `{}`; recapture it with \
              `scripts/parity/oracle.py`",
             manifest.reference.commit,
-            vibe_core::parity::REFERENCE_COMMIT
+            vibe_core::parity::pin_commits().join("` or `")
         ));
     }
     if manifest.reference.version.is_empty() {

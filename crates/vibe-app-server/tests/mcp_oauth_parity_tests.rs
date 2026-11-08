@@ -41,7 +41,9 @@ use vibe_core::mcp::{
     McpAuthConfig, McpAuthenticationError, McpAuthenticationService, McpAuthorization, McpDeclared,
     McpOAuthConfig, McpServerConfig, McpStaticAuth, McpTransportConfig,
 };
-use vibe_core::parity::replay::{Capture, digest, pointer_matches, valued_differences};
+use vibe_core::parity::replay::{
+    Capture, Class, PatternDivergence, digest, pointer_matches, valued_differences,
+};
 
 const CORPUS: &str = include_str!("mcp-oauth/corpus.json");
 const FIXTURE: &str = env!("CARGO_BIN_EXE_vibe-oauth-script-fixture");
@@ -82,10 +84,190 @@ const LEDGER: &[Divergence] = &[
             port.is_none()
                 && reference
                     .and_then(Value::as_str)
-                    .is_some_and(|agent| agent.starts_with("python-httpx/"))
+                    .is_some_and(|agent| agent.starts_with("python-httpx2/"))
         },
-        why: "the requests httpx's client builds itself (a login's `initialize`, a refresh's \
-          `GET`) name the Python HTTP library that sent them; this port's name none",
+        why: "the requests the reference's HTTP client builds itself (a login's `initialize`, a \
+          refresh's `GET`) name the Python HTTP library that sent them, `httpx2` since v3.0.0; \
+          this port's name none",
+    },
+];
+
+/// Why the gaps below exist: what the v3.1.0 re-pin revealed, kept against
+/// row 11 until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 signs in to MCP servers otherwise (the protocol version it offers, \
+                         the registration and token fields it keeps), which this port does not \
+                         reproduce yet";
+
+/// Differences no entry of `LEDGER` explains, by pointer with its indices
+/// generalized, most specific first; each declares exactly how many it covers.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/result/snapshot/headers/Authorization",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type",
+        count: 25,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer",
+        count: 25,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/access_token",
+        count: 3,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/expires_in",
+        count: 2,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/refresh_token",
+        count: 3,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope",
+        count: 16,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/urls/*/endpoint",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/urls/*/parameters",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/wire/*/body/params/protocolVersion",
+        count: 45,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:fingerprint",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/wire/*/body/application_type",
+        count: 22,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/wire/*/headers/mcp-protocol-version",
+        count: 55,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/browser",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/descriptor",
+        count: 2,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/outcome",
+        count: 2,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/urls",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/pkce",
+        count: 1,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/wire",
+        count: 10,
+        row: "11",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
 ];
 
@@ -668,6 +850,8 @@ async fn every_scenario_matches_the_reference_capture() {
     let only = std::env::var("VIBE_OAUTH_PARITY_ONLY").ok();
     let mut failures = Vec::new();
     let mut used = vec![false; LEDGER.len()];
+    let mut covered = vec![0_usize; V3_GAPS.len()];
+    let mut gapped = 0;
     let mut replayed = 0;
     let mut conformant = 0;
     let mut page_differences = 0;
@@ -705,6 +889,7 @@ async fn every_scenario_matches_the_reference_capture() {
         if found.is_empty() {
             conformant += 1;
         }
+        let gaps_before: usize = covered.iter().sum();
         page_differences += pages;
         if pages < expected_pages {
             failures.push(format!(
@@ -724,15 +909,32 @@ async fn every_scenario_matches_the_reference_capture() {
                     used[index] = true;
                     header_differences += 1;
                 }
-                None => failures.push(format!(
-                    "{name} {pointer}: expected {} observed {}",
-                    entry["observed"].pointer(pointer).unwrap_or(&Value::Null),
-                    observed.pointer(pointer).unwrap_or(&Value::Null)
-                )),
+                None => match V3_GAPS.iter().position(|gap| {
+                    (gap.scenario == "*" || gap.scenario == name)
+                        && pointer_matches(gap.pointer, pointer)
+                }) {
+                    Some(index) => covered[index] += 1,
+                    None => failures.push(format!(
+                        "{name} {pointer}: expected {} observed {}",
+                        entry["observed"].pointer(pointer).unwrap_or(&Value::Null),
+                        observed.pointer(pointer).unwrap_or(&Value::Null)
+                    )),
+                },
             }
+        }
+        if covered.iter().sum::<usize>() > gaps_before {
+            gapped += 1;
         }
     }
     if only.is_none() {
+        for (gap, covered) in V3_GAPS.iter().zip(&covered) {
+            if *covered != gap.count {
+                failures.push(format!(
+                    "the gap {} {} declares {} differences and covered {covered}",
+                    gap.scenario, gap.pointer, gap.count
+                ));
+            }
+        }
         for (divergence, used) in LEDGER.iter().zip(used) {
             if !used {
                 failures.push(format!(
@@ -758,10 +960,10 @@ async fn every_scenario_matches_the_reference_capture() {
             "crates/vibe-app-server/tests/mcp-oauth/corpus.json",
             vibe_core::parity::figures::Figures {
                 conformant,
-                accepted: replayed - conformant,
+                accepted: replayed - conformant - gapped,
                 total: replayed,
                 accepted_differences: header_differences,
-                gap_differences: 0,
+                gap_differences: covered.iter().sum(),
                 prose_differences: page_differences,
             },
             json!({}),

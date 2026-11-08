@@ -1376,3 +1376,38 @@ MODEL_SCENARIOS: list[dict[str, Any]] = [
         ],
     },
 ]
+
+# --------------------------------------------------------------------------
+# Field migrations
+# --------------------------------------------------------------------------
+
+#: Documents an older client wrote, each naming a top-level field the schema
+#: renamed or withdrew. ``config_surface.py`` runs the reference migration over
+#: each and records the document it leaves and whether it changed anything,
+#: which is what tells a rename (the value moves to the new name) from a
+#: withdrawal (the key is dropped, or left for the merge to ignore).
+MIGRATION_CASES: list[dict[str, str]] = [
+    {
+        "name": "renamed-field-moves-its-value",
+        "toml": "experimental_worktree_copy_on_write = false\n",
+    },
+    {
+        "name": "renamed-field-keeps-the-new-name-when-both-are-set",
+        "toml": (
+            "experimental_worktree_copy_on_write = false\n"
+            "worktree_copy_on_write = true\n"
+        ),
+    },
+    {
+        "name": "withdrawn-path-list-is-dropped",
+        "toml": 'tool_paths = ["/oracle/tools"]\ntheme = "system"\n',
+    },
+    {
+        "name": "withdrawn-default-agent-switch-is-left-to-the-merge",
+        "toml": "smart_approve_default = true\n",
+    },
+    {
+        "name": "current-document-is-left-alone",
+        "toml": 'worktree_copy_on_write = false\ntheme = "system"\n',
+    },
+]

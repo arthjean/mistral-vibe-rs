@@ -1,35 +1,29 @@
 #!/usr/bin/env python3
 """Capture of the system prompt and its project context, row 19 of ``docs/parity.md``.
 
-Three families of scenarios, each built over a fresh tree: a home whose
-``.vibe`` is the vibe home, a workspace, and whatever directories, Git
-repositories, skills, agents, prompt files and ``AGENTS.md`` documents the
-scenario lays out.
+Every scenario builds a fresh tree: a home whose ``.vibe`` is the vibe home, a
+workspace, and whatever directories, Git repositories, skills, agents, prompt
+files and ``AGENTS.md`` documents it lays out. It then runs the ``vibe`` entry
+point with ``-p`` behind a scripted chat-completions endpoint and records what
+the system messages of every request carry: how many there are, whether one
+leads, in order which of the scenario's data they mention, and the prompt
+itself as a length and a SHA-256.
 
-``compose`` asks the pinned reference's own ``get_universal_system_prompt``
-(``vibe/core/system_prompt.py``) for the prompt of a session opened in that
-tree, loading the configuration, the trust store, the skills and the agents
-the way a session does. Every helper the function calls is observed, so the
-prompt is split into its sections with certainty, and the split is checked to
-rebuild the prompt byte for byte. Each section is then recorded as the data it
-carries (paths, names, Git state, documents, skills as the prompt spells them)
-and its prose as a length and a SHA-256.
-
-``os`` asks the same module which operating system section a Windows session
-gets for each combination of published shell tools and resolved shell, which a
-POSIX host cannot otherwise observe.
-
-``live`` runs the ``vibe`` entry point with ``-p`` behind a scripted
-chat-completions endpoint and records what the system messages of every
-request carry: how many there are and, in order, which of the scenario's data
-they mention. That family drives either implementation, which is how
-``crates/vibe-cli/tests/system_prompt_parity_tests.rs`` measures that the
-port's live sessions send the prompt its composition builds.
+Through v2.26.0 most scenarios asked the reference's own
+``get_universal_system_prompt`` for the prompt section by section. v3.0.0
+moved the composition into its app server (``vibe/app_server/_runtime.py``)
+and the Unified Harness core, which appends the capability sections natively,
+so the prompt a session sends is now the one measurement that covers all of
+it. The Windows shell sections, which only that in-process call could show on
+a POSIX host, left with it. The same scenarios drive either implementation,
+which is how ``crates/vibe-cli/tests/system_prompt_parity_tests.rs`` measures
+this port's live sessions.
 
 ``NOTICE`` forbids committing reference-authored prose, so no prompt text is
-recorded: builtin prompts, templates and fixed sentences are lengths and
-digests, and the replay counts two digests as equal. What the corpus pins is the
-structure and the data.
+recorded: the prompt is a length and a digest, taken with the scenario root,
+the date and what a run mints (commit hashes, the scratchpad, identifiers)
+replaced so it is the same from one run to the next. What the corpus pins in
+cleartext is the structure and the data.
 
 Usage::
 
@@ -42,7 +36,6 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import asyncio
 import copy
 import datetime
 import hashlib
@@ -56,13 +49,11 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import (  # noqa: E402
     OracleError,
-    reexecute_pinned,
     reference_command,
-    reference_interpreter,
 )
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
@@ -75,8 +66,6 @@ ROOT_PLACEHOLDER = "<root>"
 DATE_PLACEHOLDER = "<DATE>"
 #: A shell no machine has, so the value is recognizably the scenario's own.
 ORACLE_SHELL = "/opt/oracle/bin/oracle-shell"
-HASH = re.compile(r"^[0-9a-f]{7,40}(?= |$)")
-CO_AUTHOR = "Co-Authored-By: Mistral Vibe <vibe@mistral.ai>"
 
 
 # --------------------------------------------------------------------------
@@ -327,21 +316,6 @@ def compose_scenarios() -> list[dict[str, Any]]:
     ]
 
 
-def os_scenarios() -> list[dict[str, Any]]:
-    bash = "C:\\Program Files\\Git\\bin\\bash.exe"
-    cmd = "C:\\Windows\\System32\\cmd.exe"
-    cases = [
-        ("os/windows-git-bash-tool", ["git_bash", "powershell"], ("bash", bash)),
-        ("os/windows-powershell-tool", ["powershell"], ("cmd", cmd)),
-        ("os/windows-resolved-bash", [], ("bash", bash)),
-        ("os/windows-resolved-cmd", ["bash"], ("cmd", cmd)),
-    ]
-    return [
-        {"name": name, "family": "os", "tools": tools, "resolved": {"kind": kind, "executable": exe}}
-        for name, tools, (kind, exe) in cases
-    ]
-
-
 def live_scenarios() -> list[dict[str, Any]]:
     base = scenario("live/programmatic")
     base.update({"family": "live", "backend": [{"text": "Done."}], "args": ["-p", "hello"]})
@@ -360,8 +334,34 @@ def live_scenarios() -> list[dict[str, Any]]:
     return [base, task]
 
 
+#: Compose scenarios a headless run cannot tell from the default one: every
+#: live run is headless, and a session places its own scratchpad.
+INDISTINCT = {"compose/headless", "compose/no-scratchpad"}
+
+
+def as_live(entry: dict[str, Any]) -> dict[str, Any]:
+    """A compose scenario run through ``vibe -p`` in the tree it lays out.
+
+    Since v3.0.0 the reference composes the prompt across its app server
+    (``vibe/app_server/_runtime.py``) and the Unified Harness core, which
+    appends the capability sections natively, so no in-process function
+    answers for the whole prompt any more; what a session sends the model is
+    the measurement.
+    """
+
+    entry = copy.deepcopy(entry)
+    arguments = ["-p", "hello"]
+    for directory in entry.get("addDirs", []):
+        arguments += ["--add-dir", f"$ROOT/{directory}"]
+    if entry.get("agent"):
+        arguments += ["--agent", entry["agent"]]
+    entry.update({"family": "live", "backend": [{"text": "Done."}], "args": arguments})
+    return entry
+
+
 def scenarios() -> list[dict[str, Any]]:
-    return [*compose_scenarios(), *os_scenarios(), *live_scenarios()]
+    composed = [as_live(entry) for entry in compose_scenarios() if entry["name"] not in INDISTINCT]
+    return [*composed, *live_scenarios()]
 
 
 # --------------------------------------------------------------------------
@@ -464,359 +464,10 @@ class Normalizer:
             value = value.replace(root, ROOT_PLACEHOLDER)
         return value.replace(self.date, DATE_PLACEHOLDER)
 
-    def prose(self, value: str) -> dict[str, Any]:
-        return digest(self.text(value))
-
-    def commit(self, line: str) -> str:
-        return HASH.sub("<hash>", self.text(line))
-
 
 # --------------------------------------------------------------------------
-# The reference, in-process (run in a child per scenario)
+# A live run
 # --------------------------------------------------------------------------
-
-SKILL_BLOCK = re.compile(r"<available_skills>\n.*\n</available_skills>", re.DOTALL)
-SKILL_ENTRY = re.compile(
-    r"  <skill>\n    <name>(.*?)</name>\n    <description>(.*?)</description>\n"
-    r"(?:    <path>(.*?)</path>\n)?  </skill>",
-    re.DOTALL,
-)
-
-
-def child_compose(scenario: dict[str, Any], root: Path) -> dict[str, Any]:
-    from vibe.core.agents import AgentManager
-    from vibe.core.config.default_orchestrator import build_default_orchestrator
-    from vibe.core.config.harness_files import (
-        get_harness_files_manager,
-        init_harness_files_manager,
-    )
-    from vibe.core.paths import VIBE_HOME
-    from vibe.core.prompts import MissingPromptFileError, load_system_prompt
-    from vibe.core.skills.manager import SkillManager
-    import vibe.core.system_prompt as sp
-
-    normalizer = Normalizer(root)
-    init_harness_files_manager(
-        "user", "project", additional_dirs=[root / d for d in scenario.get("addDirs", [])]
-    )
-    harness = get_harness_files_manager().for_session(Path.cwd())
-    try:
-        orchestrator = asyncio.run(build_default_orchestrator())
-    except Exception as error:  # the validator refused the prompt identifier
-        return {"error": prompt_error(scenario, normalizer, load_system_prompt, MissingPromptFileError, error)}
-    agent = scenario.get("agent")
-    agent_manager = AgentManager(
-        orchestrator,
-        initial_agent=agent or "accept-edits",
-        allow_subagent=agent is not None,
-        harness_files=harness,
-    )
-    config = orchestrator.config
-    skill_manager = SkillManager(lambda: orchestrator.config, harness_files=harness)
-    scratchpad = root / "scratch" if scenario.get("scratchpad") and agent is None else None
-
-    recorded: dict[str, Any] = {}
-
-    def observe(name: str, function: Any) -> Any:
-        def wrapper(*arguments: Any, **keywords: Any) -> Any:
-            result = function(*arguments, **keywords)
-            recorded[name] = {"arguments": arguments, "result": result}
-            return result
-
-        return wrapper
-
-    for name in (
-        "_interpolate_prompt",
-        "_get_headless_section",
-        "_add_commit_signature",
-        "_get_tool_aware_os_system_prompt",
-        "_get_windows_bash_system_prompt",
-        "_get_windows_cmd_system_prompt",
-        "_get_windows_powershell_system_prompt",
-        "_get_available_skills_section",
-        "_get_available_subagents_section",
-        "_get_scratchpad_section",
-        "is_dangerous_directory",
-        "get_agents_md_section",
-    ):
-        setattr(sp, name, observe(name, getattr(sp, name)))
-    provider = sp.ProjectContextProvider
-    original_full = provider.get_full_context
-    original_status = provider.get_git_status
-
-    def full_context(self: Any) -> str:
-        result = original_full(self)
-        recorded["project_context"] = {"result": result, "root": self.root_path}
-        return result
-
-    def git_status(self: Any) -> str:
-        result = original_status(self)
-        recorded["git_status"] = result
-        return result
-
-    provider.get_full_context = full_context
-    provider.get_git_status = git_status
-
-    cwd = Path.cwd()
-    prompt = sp.get_universal_system_prompt(
-        config,
-        skill_manager,
-        agent_manager,
-        scratchpad_dir=scratchpad,
-        headless=bool(scenario.get("headless")),
-        cwd=cwd,
-        harness_files=harness,
-        tool_manager=None,
-    )
-
-    sections: list[tuple[str, str, dict[str, Any]]] = []
-    base = recorded["_interpolate_prompt"]["result"]
-    sections.append(("base", base, base_data(config.system_prompt_id, harness, base, normalizer)))
-    if "_get_headless_section" in recorded:
-        sections.append(("headless", recorded["_get_headless_section"]["result"], {}))
-    if "_add_commit_signature" in recorded:
-        text = recorded["_add_commit_signature"]["result"]
-        sections.append(("commit_signature", text, {"coAuthorTrailer": CO_AUTHOR in text}))
-    if config.include_model_info:
-        alias = config.get_active_model().alias
-        sections.append(("model_info", f"Your model name is: `{alias}`", {"alias": alias}))
-    if "_get_tool_aware_os_system_prompt" in recorded:
-        text = recorded["_get_tool_aware_os_system_prompt"]["result"]
-        sections.append(("operating_system", text, os_data(text, recorded)))
-    skills = recorded.get("_get_available_skills_section", {}).get("result")
-    if skills:
-        sections.append(("skills", skills, skills_data(skills, skill_manager, normalizer)))
-    subagents = recorded.get("_get_available_subagents_section", {}).get("result")
-    if subagents:
-        sections.append(("subagents", subagents, {"lines": [line for line in subagents.split("\n") if line.startswith("- ")]}))
-    scratch = recorded.get("_get_scratchpad_section", {}).get("result")
-    if scratch:
-        sections.append(("scratchpad", scratch, {"path": normalizer.text(str(scratchpad))}))
-    if config.include_project_context:
-        dangerous, reason = recorded["is_dangerous_directory"]["result"]
-        if dangerous:
-            from string import Template
-
-            from vibe.core.prompts import UtilityPrompt
-
-            text = Template(UtilityPrompt.DANGEROUS_DIRECTORY.read()).safe_substitute(
-                reason=reason.lower(), abs_path=cwd.resolve()
-            )
-            sections.append(
-                (
-                    "dangerous_directory",
-                    text,
-                    {"absPath": normalizer.text(str(cwd.resolve())), "description": reason.removeprefix("You are in the ")},
-                )
-            )
-        else:
-            context = recorded["project_context"]
-            sections.append(
-                (
-                    "project_context",
-                    context["result"],
-                    {
-                        "absPath": normalizer.text(str(context["root"])),
-                        "git": git_data(recorded["git_status"], normalizer),
-                    },
-                )
-            )
-        extra = [root_path for root_path in harness.project_roots if root_path.resolve() != cwd.resolve()]
-        if extra:
-            text = (
-                "Additional working directories (treated with the same "
-                "file-access permissions as the primary working directory):\n"
-                + "\n".join(f" - {d}" for d in extra)
-            )
-            sections.append(("additional_directories", text, {"directories": [normalizer.text(str(d)) for d in extra]}))
-        agents = recorded["get_agents_md_section"]
-        if agents["result"]:
-            user_doc, project_docs = agents["arguments"]
-            sections.append(
-                (
-                    "instructions",
-                    agents["result"],
-                    {
-                        "user": (
-                            {"path": normalizer.text(f"{VIBE_HOME.path}/AGENTS.md"), "content": user_doc.strip()}
-                            if user_doc.strip()
-                            else None
-                        ),
-                        "project": [
-                            {"directory": normalizer.text(str(directory)), "content": content.strip()}
-                            for directory, content in project_docs
-                        ],
-                    },
-                )
-            )
-    rebuilt = "\n\n".join(text for _, text, _ in sections)
-    if rebuilt != prompt:
-        raise OracleError(f"{scenario['name']}: the recorded sections do not rebuild the prompt")
-    return {
-        "sections": [
-            {"kind": kind, "text": normalizer.prose(text), **data} for kind, text, data in sections
-        ]
-    }
-
-
-def base_data(prompt_id: str, harness: Any, text: str, normalizer: Normalizer) -> dict[str, Any]:
-    directories = [*harness.project_prompts_dirs, *harness.user_prompts_dirs]
-    file_name = Path(prompt_id).with_suffix(".md").name
-    for directory in directories:
-        if (directory / file_name).is_file():
-            return {
-                "promptId": prompt_id,
-                "source": "file",
-                "file": normalizer.text(str(directory / file_name)),
-                "content": normalizer.text(text),
-            }
-    return {
-        "promptId": prompt_id,
-        "source": "builtin",
-        "dated": normalizer.date in text,
-    }
-
-
-def prompt_error(
-    scenario: dict[str, Any], normalizer: Normalizer, load: Any, missing: Any, raised: Exception
-) -> dict[str, Any]:
-    prompt_id = re.search(r'system_prompt_id = "(.*)"', scenario.get("config", ""))
-    if prompt_id is None:
-        raise OracleError(f"{scenario['name']}: configuration failed to load: {raised}") from raised
-    try:
-        load(prompt_id.group(1))
-    except missing as error:
-        message = str(error)
-        builtins = re.search(r"available prompts \((.*?)\)", message)
-        available = re.search(r"\(available: (.*)\)$", message)
-        directories = re.search(r"\.md file in (.*) \(available", message)
-        return {
-            "kind": "missing",
-            "promptId": error.prompt_id,
-            "builtins": re.findall(r'"([^"]*)"', builtins.group(1)) if builtins else [],
-            "directories": [normalizer.text(d) for d in directories.group(1).split(" or ")] if directories else [],
-            "available": re.findall(r'"([^"]*)"', available.group(1)) if available else [],
-        }
-    except ValueError:
-        return {"kind": "invalid", "promptId": prompt_id.group(1)}
-    raise OracleError(f"{scenario['name']}: configuration failed but the prompt resolves: {raised}")
-
-
-def os_data(text: str, recorded: dict[str, Any]) -> dict[str, Any]:
-    first = text.split("\n", 1)[0]
-    match = re.search(r"The operating system is (.*) with shell `(.*)`$", first)
-    if match is None:
-        raise OracleError(f"unrecognized operating system line: {first!r}")
-    rules = None
-    for name, label in (
-        ("_get_windows_bash_system_prompt", "git_bash"),
-        ("_get_windows_cmd_system_prompt", "cmd"),
-        ("_get_windows_powershell_system_prompt", "powershell"),
-    ):
-        if name in recorded:
-            rules = label
-    return {"platform": match.group(1), "shell": match.group(2), "rules": rules}
-
-
-def skills_data(text: str, skill_manager: Any, normalizer: Normalizer) -> dict[str, Any]:
-    available = skill_manager.available_skills
-    block = SKILL_BLOCK.search(text)
-    entries = []
-    if block is not None:
-        for name, description, path in SKILL_ENTRY.findall(block.group(0)):
-            builtin = next(
-                (skill for skill in available.values() if skill.name == name and skill.skill_path is None),
-                None,
-            )
-            entries.append(
-                {
-                    "name": name,
-                    "description": normalizer.prose(description) if builtin is not None else description,
-                    "path": normalizer.text(path) if path else None,
-                }
-            )
-    return {
-        "modelIntro": any(skill.model_invocable for skill in available.values()),
-        "userIntro": any(skill.user_invocable for skill in available.values()),
-        "entries": entries,
-    }
-
-
-def git_data(status: str, normalizer: Normalizer) -> dict[str, Any]:
-    if status.startswith("Current branch:"):
-        lines = status.split("\n")
-        commits = lines[3:] if len(lines) > 2 and lines[2] == "Recent commits:" else []
-        return {
-            "kind": "repository",
-            "currentBranch": lines[0].removeprefix("Current branch: "),
-            "mainBranch": lines[1].split(": ", 1)[1],
-            "commits": [normalizer.commit(line) for line in commits],
-        }
-    if status.startswith("Git operations timed out"):
-        return {"kind": "timed_out"}
-    if status.startswith("Not a git repository"):
-        return {"kind": "unavailable"}
-    return {"kind": "failed"}
-
-
-def child_os(scenario: dict[str, Any]) -> dict[str, Any]:
-    from types import SimpleNamespace
-
-    import vibe.core.system_prompt as sp
-    from vibe.core.utils import WindowsShellKind
-
-    resolved = scenario["resolved"]
-    shell = SimpleNamespace(
-        kind=WindowsShellKind.BASH if resolved["kind"] == "bash" else WindowsShellKind.CMD,
-        executable=resolved["executable"],
-    )
-    sp.is_windows = lambda: True
-    sp.get_platform_display_name = lambda: "Windows"
-    sp.resolve_windows_shell = lambda: shell
-    recorded: dict[str, Any] = {}
-    for name in (
-        "_get_windows_bash_system_prompt",
-        "_get_windows_cmd_system_prompt",
-        "_get_windows_powershell_system_prompt",
-    ):
-        function = getattr(sp, name)
-
-        def wrapper(function: Any = function, name: str = name) -> str:
-            recorded[name] = True
-            return function()
-
-        setattr(sp, name, wrapper)
-    tools = SimpleNamespace(available_tools={name: None for name in scenario["tools"]})
-    text = sp._get_tool_aware_os_system_prompt(tools)
-    return {"section": {"kind": "operating_system", "text": digest(text), **os_data(text, recorded)}}
-
-
-def run_child(scenario: dict[str, Any], child: list[str]) -> dict[str, Any]:
-    with host_env.scratch_root("vibe-system-prompt-oracle-") as root:
-        if scenario["family"] == "compose":
-            materialize(scenario, root)
-            cwd = root / scenario["cwd"]
-            environment = environment_for(scenario, root)
-        else:
-            cwd = root
-            environment = environment_for({}, root)
-        process = subprocess.run(
-            [*child, "--child", json.dumps(scenario), "--root", str(root)],
-            cwd=cwd,
-            env=environment,
-            capture_output=True,
-            text=True,
-            timeout=RUN_TIMEOUT,
-        )
-        if process.returncode != 0:
-            raise OracleError(f"{scenario['name']}: the reference child failed:\n{process.stderr}")
-        return json.loads(process.stdout.strip().splitlines()[-1])
-
-
-# --------------------------------------------------------------------------
-# The live family: a black-box run of `vibe -p`
-# --------------------------------------------------------------------------
-
 
 def live_tokens(root: Path) -> list[tuple[str, str]]:
     """The scenario data a live system message may carry, as (label, text)."""
@@ -842,14 +493,34 @@ def live_tokens(root: Path) -> list[tuple[str, str]]:
     ]
 
 
+#: A commit hash, a scratchpad directory and a session identifier, which a
+#: run mints and the prompt names.
+MINTED = (
+    (re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b"), "<id>"),
+    (re.compile(r"\b[0-9a-f]{7,40}\b"), "<hash>"),
+    (re.compile(r"\S*vibe-scratchpad-[A-Za-z0-9_]+"), "<scratchpad>"),
+)
+
+
+def prompt_text(text: str, normalizer: Normalizer) -> str:
+    """The system text with the scenario root, the date and what a run mints
+    replaced, so its digest is the same from one run to the next."""
+
+    text = normalizer.text(text)
+    for pattern, placeholder in MINTED:
+        text = pattern.sub(placeholder, text)
+    return text
+
+
 def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
     with host_env.scratch_root("vibe-system-prompt-live-") as root:
         backend = stand_in.Backend(copy.deepcopy(scenario["backend"]), stream=stand_in.always)
         try:
             materialize(scenario, root, backend.base)
             environment = environment_for(scenario, root)
+            arguments = [word.replace("$ROOT", str(root)) for word in scenario["args"]]
             process = subprocess.run(
-                [*command, *scenario["args"]],
+                [*command, *arguments],
                 cwd=root / scenario["cwd"],
                 env=environment,
                 capture_output=True,
@@ -859,6 +530,7 @@ def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
             )
             requests = []
             tokens = live_tokens(root)
+            normalizer = Normalizer(root)
             for body in backend.bodies:
                 systems = [
                     message.get("content") or ""
@@ -873,6 +545,7 @@ def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
                 )
                 requests.append(
                     {
+                        "prompt": digest(prompt_text(joined, normalizer)) if joined else None,
                         "systemMessages": len(systems),
                         "leadingSystem": bool(body.get("messages")) and body["messages"][0].get("role") == "system",
                         "carries": [{"data": label, "occurrences": count} for _, label, count in found],
@@ -888,13 +561,8 @@ def run_live(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
 # --------------------------------------------------------------------------
 
 
-def capture(scenario: dict[str, Any], child: list[str] | None, command: list[str]) -> dict[str, Any]:
-    if scenario["family"] == "live":
-        observed = run_live(scenario, command)
-    else:
-        if child is None:
-            raise OracleError("the compose and os families need the reference interpreter")
-        observed = run_child(scenario, child)
+def capture(scenario: dict[str, Any], command: list[str]) -> dict[str, Any]:
+    observed = run_live(scenario, command)
     return {"name": scenario["name"], "family": scenario["family"], "scenario": scenario, "observed": observed}
 
 
@@ -911,7 +579,6 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--live-binary", type=Path, default=None, help="run the live family against this `vibe`")
     parser.add_argument("--materialize", default=None, help="lay one scenario's tree out under --root")
-    parser.add_argument("--child", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--root", type=Path, default=None)
     return parser.parse_args()
 
@@ -920,14 +587,6 @@ def main() -> int:
     arguments = parse_arguments()
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, live_binary=arguments.live_binary)
     try:
-        if arguments.child is not None:
-            # A child runs reference code, so like every capture that imports
-            # `vibe` it re-executes itself on the pinned tree.
-            reexecute_pinned(arguments.reference, arguments.expected_commit, override=Path(sys.executable))
-            scenario = json.loads(arguments.child)
-            result = child_os(scenario) if scenario["family"] == "os" else child_compose(scenario, arguments.root)
-            print(json.dumps(result))
-            return 0
         if arguments.materialize is not None:
             chosen = next((s for s in scenarios() if s["name"] == arguments.materialize), None)
             if chosen is None or arguments.root is None:
@@ -936,31 +595,21 @@ def main() -> int:
             print(json.dumps({"cwd": chosen["cwd"], "environment": environment_for(chosen, arguments.root)}))
             return 0
         if arguments.live_binary is not None:
-            command = [str(arguments.live_binary.resolve()), *HARNESS_FLAGS]
-            selected = [s for s in live_scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
-            captured = [capture(s, None, command) for s in selected]
+            command = [str(arguments.live_binary.resolve())]
+            selected = [s for s in scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
+            captured = [capture(s, command) for s in selected]
             arguments.output.write_text(rendered({"scenarios": captured}), encoding="utf-8", newline="")
             print(f"captured {len(captured)} live scenarios into {arguments.output}")
             return 0
         commit, vibe = reference_command(arguments.reference, "vibe", arguments.expected_commit)
         reference = {"commit": commit}
-        # A child re-executes itself on the pinned tree, so it is told the
-        # checkout and the pin.
-        child = [
-            str(reference_interpreter(arguments.reference)),
-            str(Path(__file__).resolve()),
-            "--reference",
-            str(arguments.reference.resolve()),
-            "--expected-commit",
-            arguments.expected_commit,
-        ]
-        command = [*vibe, *HARNESS_FLAGS]
+        command = [*vibe]
         selected = [s for s in scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
         captured = []
         for chosen in selected:
-            entry = capture(chosen, child, command)
+            entry = capture(chosen, command)
             if not arguments.check:
-                again = capture(chosen, child, command)
+                again = capture(chosen, command)
                 if again["observed"] != entry["observed"]:
                     raise OracleError(f"{chosen['name']} is not deterministic across two captures")
             captured.append(entry)
@@ -969,9 +618,10 @@ def main() -> int:
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,
             "note": (
-                "Captured by scripts/parity/system_prompt.py from the pinned reference. Sections "
-                "carry their data with paths under <root> and the date as <DATE>; every prompt "
-                "text, template and fixed sentence the reference authored is a length and a SHA-256."
+                "Captured by scripts/parity/system_prompt.py from the pinned reference's `vibe -p`. "
+                "Each request records which of the scenario's data its system messages carry, and "
+                "the prompt itself, with paths under <root>, the date as <DATE> and what a run mints "
+                "replaced, as a length and a SHA-256."
             ),
             "scenarios": captured,
         }

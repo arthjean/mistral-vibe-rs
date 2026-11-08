@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `session/start`, `session/resume`, `session/continue` and `session/fork`
+  refuse an agent configuration whose `system_prompt` is empty or only
+  whitespace with an invalid-parameters error, as the v3.1.0 reference does.
+
 - At debug level, each line a stdio MCP server writes to its standard error
   is logged as `[MCP stderr] <line>`, as the reference does, instead of being
   discarded.

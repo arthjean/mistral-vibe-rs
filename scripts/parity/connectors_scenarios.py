@@ -555,6 +555,7 @@ def scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "lifecycle/auth",
+            "asyncNotifications": True,
             "config": OPT_IN_WIDE,
             "connectors": {
                 "bootstrap": [WIDE],
@@ -581,6 +582,7 @@ def scenarios() -> list[dict[str, Any]]:
             # The SDK answers no page for a failing status or for a body its
             # response model refuses, here one without its `ttl`.
             "name": "lifecycle/auth-failures",
+            "asyncNotifications": True,
             "config": OPT_IN_WIDE,
             "connectors": {
                 "bootstrap": [WIDE],

@@ -18,13 +18,6 @@ test = false
 bench = false
 
 [[bin]]
-name = "vibe-mcp-script-fixture"
-path = "tests/fixtures/mcp_script_fixture.rs"
-required-features = ["test-fixtures"]
-test = false
-bench = false
-
-[[bin]]
 name = "vibe-oauth-script-fixture"
 path = "tests/fixtures/oauth_script_fixture.rs"
 required-features = ["test-fixtures"]

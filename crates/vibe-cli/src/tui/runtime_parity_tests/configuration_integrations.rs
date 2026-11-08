@@ -10,7 +10,7 @@ use serde_json::Value;
 use vibe_app_server::vocabulary::McpSourceStatus;
 use vibe_core::config::{ProxyEnvironmentStore, ProxyKey};
 
-use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
+use super::{Reference, is_pin_commit, pinned_python_oracle};
 use crate::tui::chat_input::{InputMode, Safety, VoicePhase};
 use crate::tui::command_handlers::loops::format_loop_list;
 use crate::tui::completion::CompletionEngine;
@@ -453,9 +453,9 @@ fn corpus_replays_presentations_and_typed_auth_effects() {
     ))
     .expect("strict configuration-integrations corpus");
     assert_eq!(corpus.schema_version, 5);
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     assert_eq!(corpus.oracle.engine, "python-textual-capture");
-    assert_eq!(corpus.oracle.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.oracle.commit));
     assert_eq!(corpus.oracle.deterministic_runs, 10);
     let python_expected = assert_python_oracle_probe(&corpus.oracle_probe);
     assert!(!corpus.reference.version.is_empty());

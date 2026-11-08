@@ -6,7 +6,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
+use super::{Reference, is_pin_commit, pinned_python_oracle};
 use crate::tui::attention::{AttentionNotifier, DEFAULT_TITLE, NotificationContext, THROTTLE_MS};
 use crate::tui::exit::{
     SUSPEND_MESSAGE, SessionExitSummary, SessionUsage, format_session_usage, quit_prompt,
@@ -810,9 +810,9 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
     ))
     .expect("strict terminal-services corpus");
     assert_eq!(corpus.schema_version, 1);
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     assert_eq!(corpus.oracle.engine, "python-reference-capture");
-    assert_eq!(corpus.oracle.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.oracle.commit));
     assert_eq!(corpus.oracle.deterministic_runs, 10);
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 15);

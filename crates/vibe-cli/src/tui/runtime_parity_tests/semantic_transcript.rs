@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use vibe_app_server::client::{EffectDetail, EffectResultDisplay};
 use vibe_core::events::detail::project_output;
 
-use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
+use super::{Reference, is_pin_commit, pinned_python_oracle};
 use crate::tui::diagnostics::{
     Activity, classify, debug_log_line, log_level_color, safe_link_spans,
 };
@@ -356,9 +356,9 @@ fn corpus_replays_semantic_regions_errors_activity_and_diagnostics() {
     ))
     .expect("strict semantic-transcript corpus");
     assert_eq!(corpus.schema_version, 1);
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     assert_eq!(corpus.oracle.engine, "python-textual-capture");
-    assert_eq!(corpus.oracle.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.oracle.commit));
     assert_eq!(corpus.oracle.deterministic_runs, 10);
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 11);

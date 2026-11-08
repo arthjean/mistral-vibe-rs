@@ -8,14 +8,12 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ]
     },
@@ -66,14 +64,12 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ]
     },
@@ -87,14 +83,12 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ]
     },
@@ -108,13 +102,11 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ]
     },
@@ -145,6 +137,6 @@
   ],
   "note": "Published tool names per `enabled_tools` and `disabled_tools` pair, captured from the pinned reference by scripts/parity/tool_surface.py. The lists are authored here; the names are the reference's answer. Regenerate with scripts/parity/tool_surface.py --gates when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+  "referenceCommit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
   "schemaVersion": 1
 }

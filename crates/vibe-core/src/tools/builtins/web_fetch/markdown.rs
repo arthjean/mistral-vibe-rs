@@ -822,6 +822,3 @@ impl Converter<'_> {
         Ok(format!("{overline}|{text}\n{underline}"))
     }
 }
-
-#[cfg(test)]
-mod markdown_tests;

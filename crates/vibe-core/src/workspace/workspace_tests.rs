@@ -440,8 +440,8 @@ async fn the_file_tools_publish_the_reference_names_and_argument_keys() {
     assert_eq!(grep.typed_result["match_count"], 1);
 }
 
-/// An offset past the last line is an explicit out-of-range answer, never
-/// an empty success the model would read as an empty file.
+/// Reading from beyond the final line refuses as out of range, so the model
+/// never mistakes the answer for an empty file.
 #[tokio::test]
 async fn read_file_reports_an_offset_past_the_end_of_the_file() {
     let directory = tempdir().expect("tempdir");

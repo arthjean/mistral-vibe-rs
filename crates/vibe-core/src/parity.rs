@@ -18,17 +18,43 @@
 
 use std::path::{Path, PathBuf};
 
-/// The reference commit every committed corpus in this repository was captured
-/// from. A checkout at any other revision is not an oracle for those corpora.
+/// The reference commit the committed corpora are captured from: the target of
+/// the pin. Outside a transition every corpus records it.
 ///
-/// Re-pinning means changing this constant, the same value in
-/// `scripts/parity/pin.py`, and regenerating every committed corpus in the same
-/// change.
-pub const REFERENCE_COMMIT: &str = "376f6a33413a3eec9b3795b0c0e004066c47b5c1";
+/// A re-pin is rolling: it moves this constant and its mirror in
+/// `scripts/parity/pin.py` to the target, names the commit it leaves in
+/// [`PREVIOUS_COMMIT`], and lists in the manifest's `transition` every corpus
+/// not yet recaptured; each `repin.py capture` at the target drops its corpus
+/// from the list ([`manifest::transition_problems`] states the rules).
+pub const REFERENCE_COMMIT: &str = "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616";
+
+/// The commit a re-pin leaves, still accepted for the corpora the manifest's
+/// `transition` list names, and empty outside a transition. A live probe whose
+/// corpora are at this commit gates on its attested environment
+/// ([`live::gate`]).
+pub const PREVIOUS_COMMIT: &str = "376f6a33413a3eec9b3795b0c0e004066c47b5c1";
+
+/// The pin's commits a corpus may record: [`REFERENCE_COMMIT`], then
+/// [`PREVIOUS_COMMIT`] during a transition.
+#[must_use]
+pub fn pin_commits() -> Vec<&'static str> {
+    std::iter::once(REFERENCE_COMMIT)
+        .chain((!PREVIOUS_COMMIT.is_empty()).then_some(PREVIOUS_COMMIT))
+        .collect()
+}
+
+/// Whether `commit` is one of the [`pin_commits`]. A replay checks the
+/// commit its corpus records with this; the manifest
+/// ([`manifest::assert_corpus`]) then holds a corpus at [`PREVIOUS_COMMIT`]
+/// to the transition list.
+#[must_use]
+pub fn is_pin_commit(commit: &str) -> bool {
+    pin_commits().contains(&commit)
+}
 
 /// The package version [`REFERENCE_COMMIT`] publishes, recorded so a reader can
 /// match the pin against an upstream release without resolving the hash.
-pub const REFERENCE_VERSION: &str = "2.26.0";
+pub const REFERENCE_VERSION: &str = "3.1.0";
 
 /// Where the read-only reference checkout lives by default. Machine-dependent:
 /// [`REFERENCE_VARIABLE`] overrides it.
@@ -43,7 +69,7 @@ pub const REFERENCE_VARIABLE: &str = "VIBE_REFERENCE";
 /// checkout's `HEAD`, nothing requires it; US-029 of
 /// `tasks/prd-trustworthy-parity-v3.md` decides whether it goes.
 pub const RESTORE_COMMAND: &str =
-    "git -C /home/arthur/dev/mistral-vibe checkout 376f6a33413a3eec9b3795b0c0e004066c47b5c1";
+    "git -C /home/arthur/dev/mistral-vibe checkout c96a6dbb34d34f8a868b3f67b279ecabbf1aa616";
 
 /// The checkout root this run should use: [`REFERENCE_VARIABLE`] when set,
 /// otherwise [`REFERENCE_ROOT`]. The checkout is only the object store

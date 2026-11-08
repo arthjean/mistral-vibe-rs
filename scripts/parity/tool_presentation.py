@@ -1,42 +1,62 @@
 #!/usr/bin/env python3
-"""Capture how the pinned Python reference *presents* every tool it publishes.
+"""Capture how the pinned Python reference *presents* a tool call and its result.
 
 The tool-surface oracle compares declarations and the tool-execution oracle
 compares results. Neither one looks at the header a client draws while a call
-runs or after it settles, which is the contract `vibe/core/tools/ui.py`
-publishes through ``ToolUIDataAdapter``: an effect kind, eight call-display
-fields and six result-display fields (``approval_note`` joined the other five
-in v2.25.4, `vibe/utils/tool_presentation.py:53`), plus the projected output a
-widget renders.
+runs or after it settles. Since v3.0 that header comes from one place: the
+harness reports every call generically, under its namespaced key with a raw
+display, and the app server rewrites the calls a client renders richly into a
+typed effect detail and settles their results
+(`vibe/app_server/_unified_tool_projection.py`, ``project_unified_history_entry``,
+over the wire models of `vibe/app_server/models.py` and
+`vibe/app_server/_effect_models.py`). This port mirrors it in
+`crates/vibe-harness/src/tool_projection.rs`.
 
-This oracle builds one adapter per published tool and drives both presentation
-entry points over six cases: a call with valid arguments, a call whose arguments
-never arrived, a call carrying arguments of the wrong class, a successful
-result, an errored result and a skipped one. The tool list is the Linux builtin
-surface plus two stubs built by the reference's own remote factories, so the
-remote half of the contract is captured without a live server.
+Up to v2.26 this oracle drove the legacy ``ToolUIDataAdapter``
+(`vibe/core/tools/ui.py`) over every builtin tool class. v3.0 deleted that
+adapter with the legacy harness, and nothing in the ``vibe`` package builds a
+``ToolCallPresentation`` any more, so the oracle now measures its successor.
+The families, each a scenario name prefix (`tool_presentation_cases.py`):
 
-A second family drives the three file tools over the path shapes a header
-renders differently, with the adapter bound to a session directory the way
-the agent loop binds it (``harness_files``, `vibe/core/tools/ui.py:99-121`):
-inside it, relative to it, the directory itself, dotted and doubled segments,
-a sibling sharing its prefix, outside it, and inside a session scratchpad. Each
-case records the directory it was bound to, so the replay binds the same one.
+``call-``
+    Every projected tool as it starts, both spellings where the harness has
+    two (``read_file`` and ``file_system.read_file``).
+``invalid-``, ``unknown-``
+    Arguments a projector refuses and a tool no projector knows, which stay as
+    the harness sent them.
+``result-``, ``failed-``
+    Each projected tool settling: the typed output and the settled header, the
+    large-output receipt, and a failed call whose state is kept.
+``shell-grep-``
+    Shell calls the projection renders as a file search, and the ones whose
+    flags, pipes or output shape keep the plain shell display.
+``path-``
+    The file tools over the path shapes a header renders differently, with the
+    session directory as the display root.
+``label-``
+    Namespaced tools that only get a human header, as they start and settle.
+``callback-``
+    The call an approval request describes.
+
+The capture validates each authored entry with the reference's own wire model
+(``validate_history_entry``), so the scenario a replay starts from carries
+every default the model fills. A scenario declares whether the reference
+rewrites the entry or leaves it as it came, and the capture fails when it
+disagrees, so a scenario cannot drift into measuring nothing.
 
 Two artifacts come out of a run:
 
 ``.parity/tool-presentation-corpus.json``
-    The full capture, gitignored, because a display carries reference-authored
+    The full capture, gitignored, because a header carries reference-authored
     prose and ``NOTICE`` forbids shipping that.
 
-``crates/vibe-core/tests/tool-presentation/corpus.json``
+``crates/vibe-harness/tests/tool-presentation/corpus.json``
     The committed projection, which the Rust replay reads unconditionally. A
-    captured string survives verbatim only when it is a value this capture
-    supplied or an identifier-shaped token; everything else becomes a
-    ``{"described": "sha256:...", "length": n}`` marker. The corpus therefore
-    carries names, pointers, counts and digests, and no reference sentence,
-    while a digest still fails the replay on any change, which is what a
-    conformance target has to do.
+    captured string survives verbatim only when the scenario supplied it, or it
+    is an identifier or a path; everything else becomes a ``{prose, sha256}``
+    digest. The corpus therefore carries names, pointers, counts and digests,
+    and no reference sentence, while a digest still fails the replay on any
+    change.
 
 Usage::
 
@@ -44,13 +64,6 @@ Usage::
 
 ``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
 default path; ``--reference`` wins over it.
-
-Run it from this repository's root, as the Rust recapture probe does. Since
-v2.24.2 the edit, read_file and write_file displays render a path through
-``display_file_path`` (`vibe/core/tools/utils.py:116`). The six-case family
-binds no session directory, so those displays answer against the process cwd;
-its authored paths live under ``/workspace``, so only a cwd of ``/`` or
-``/workspace`` would change it. The path family binds ``/workspace`` itself.
 
 The wrapper re-executes itself with the reference interpreter, importing the
 pinned commit extracted with ``git archive`` (``scripts/parity/reference.py``).
@@ -66,433 +79,124 @@ from pathlib import Path
 import platform
 import re
 import sys
-import tempfile
 from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
+from inprocess import SocketGuard
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
-from inprocess import SocketGuard
+from tool_presentation_cases import scenarios
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_OUTPUT = Path(".parity/tool-presentation-corpus.json")
-DEFAULT_CORPUS = Path("crates/vibe-core/tests/tool-presentation/corpus.json")
+DEFAULT_CORPUS = Path("crates/vibe-harness/tests/tool-presentation/corpus.json")
 
-#: The marker a projected string carries in place of its content. The key is
-#: what makes a described value unmistakable in the corpus and in Rust, where a
-#: literal is a JSON string and a described value is a JSON object.
-DESCRIBED = "described"
+#: The session every entry belongs to.
+SESSION_ID = "parity-session"
 
 #: An identifier-shaped token: a verb, a status word, an enum member. The bright
 #: line is that it carries no whitespace and no punctuation beyond the hyphen,
-#: so no sentence can pass for one, while the names the corpus is allowed to
-#: carry stay readable in a divergence report.
+#: so no sentence can pass for one.
 _IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,31}")
 
-#: A path or a request target: a pointer, and nothing that could hold a
-#: sentence.
-_POINTER = re.compile(r"/[A-Za-z0-9._~/-]{0,95}")
+#: A path or a size: segments, dots and separators, and nothing that could
+#: hold a sentence.
+_POINTER = re.compile(r"[A-Za-z0-9._~/-]{1,128}")
 
 
-# --------------------------------------------------------------------------
-# The network boundary
-# --------------------------------------------------------------------------
-
-
-#: One guard for the process, consulted by ``main`` after the capture.
+#: One guard for the process, consulted by ``main`` after the capture. A
+#: projection is pure, so nothing here has a reason to open a socket.
 GUARD = SocketGuard()
 
 
 # --------------------------------------------------------------------------
-# The remote stubs
+# Driving the reference
 # --------------------------------------------------------------------------
 
-#: The descriptor both remote stubs are built from. Every field is authored
-#: here rather than discovered from a server, so no third-party name, schema or
-#: sentence enters the corpus and a re-run on a machine with no network is
-#: identical to one on a machine with it.
-REMOTE_NAME = "create_issue"
-REMOTE_ALIAS = "acme"
-REMOTE_DESCRIPTION = "a stub the capture wrote"
-REMOTE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "owner": {"type": "string"},
-        "repo": {"type": "string"},
-    },
-    "required": ["owner", "repo"],
-}
 
-#: A destination that cannot resolve, so a stub built with it is inert even if
-#: the socket guard were removed.
-REMOTE_URL = "https://mcp.invalid/mcp"
+def generic_display(tool: str) -> dict[str, Any]:
+    """The raw header a harness reports before any projection: the tool key."""
 
-#: The one credential the capture carries: the connector stub's key, and the
-#: Mistral key ``main`` exports so ``web_search`` is published whatever the
-#: ambient environment holds.
-CAPTURE_API_KEY = "the-capture-authored-this-key"
-
-#: The arguments and the result both remote stubs are driven with.
-REMOTE_ARGUMENTS: dict[str, Any] = {"owner": "acme", "repo": "api"}
-REMOTE_RESULT: dict[str, Any] = {
-    "ok": True,
-    "server": REMOTE_ALIAS,
-    "tool": REMOTE_NAME,
-    "text": "the stub answer",
-    "structured": None,
-}
-
-
-# --------------------------------------------------------------------------
-# The case list
-# --------------------------------------------------------------------------
-
-#: Valid arguments per builtin, authored so every field the display reads is
-#: populated and every value is host-independent. A path here names nothing on
-#: this machine: no tool runs, only its presentation is computed.
-ARGUMENTS: dict[str, dict[str, Any]] = {
-    "ask_user_question": {
-        "questions": [
-            {
-                "question": "Which target?",
-                "header": "Target",
-                "options": [
-                    {"label": "alpha", "description": "the first target"},
-                    {"label": "beta", "description": "the second target"},
-                ],
-                "multiSelect": False,
-            }
-        ],
-        "footerNote": "pick one",
-    },
-    "bash": {"command": "echo alpha", "timeout": 30},
-    "edit": {
-        "file_path": "/workspace/alpha.txt",
-        "old_string": "one",
-        "new_string": "two",
-        "replace_all": False,
-    },
-    "exit_plan_mode": {},
-    "grep": {"pattern": "alpha", "path": "/workspace", "max_matches": 20},
-    "read_file": {"file_path": "/workspace/alpha.txt", "offset": 3, "limit": 20},
-    "skill": {"name": "reviewer"},
-    "task": {"task": "summarize the corpus", "agent": "explorer"},
-    "todo": {
-        "action": "write",
-        "todos": [
-            {
-                "id": "t1",
-                "content": "capture the presentation",
-                "status": "in_progress",
-                "priority": "high",
-            }
-        ],
-    },
-    "web_fetch": {"url": "https://example.invalid/doc", "timeout": 15},
-    "web_search": {"query": "rust parity oracle"},
-    "write_file": {"file_path": "/workspace/alpha.txt", "content": "alpha"},
-}
-
-#: A successful result per builtin, authored against the tool's declared result
-#: model so ``format_result_display`` and ``project_result`` both run over a
-#: fully populated instance.
-RESULTS: dict[str, dict[str, Any]] = {
-    "ask_user_question": {
-        "answers": [
-            {"question": "Which target?", "answer": "alpha", "isOther": False}
-        ],
-        "cancelled": False,
-    },
-    "bash": {"command": "echo alpha", "stdout": "alpha", "stderr": "", "returncode": 0},
-    "edit": {
-        "file": "/workspace/alpha.txt",
-        "message": "replaced one occurrence",
-        "old_string": "one",
-        "new_string": "two",
-    },
-    "exit_plan_mode": {"switched": True, "message": "the plan was accepted"},
-    "grep": {
-        "matches": "/workspace/alpha.txt:1:alpha",
-        "match_count": 1,
-        "pattern": "alpha",
-        "was_truncated": False,
-        "cwd": "/workspace",
-    },
-    "read_file": {
-        "file_path": "/workspace/alpha.txt",
-        "content": "alpha",
-        "num_lines": 1,
-        "start_line": 3,
-        "requested_offset": 3,
-        "requested_limit": 20,
-        "total_lines": 4,
-        "was_truncated": False,
-    },
-    "skill": {
-        "name": "reviewer",
-        "content": "the skill body",
-        "skill_dir": "/workspace/skills/reviewer",
-    },
-    "task": {"response": "the subagent answer", "turns_used": 2, "completed": True},
-    "todo": {
-        "verb": "Updated",
-        "todos": [
-            {
-                "id": "t1",
-                "content": "capture the presentation",
-                "status": "in_progress",
-                "priority": "high",
-            }
-        ],
-        "total_count": 1,
-    },
-    "web_fetch": {
-        "url": "https://example.invalid/doc",
-        "content": "the fetched body",
-        "content_type": "text/html; charset=utf-8",
-        "was_truncated": False,
-    },
-    "web_search": {
-        "query": "rust parity oracle",
-        "answer": "the search answer",
-        "sources": [{"title": "a source", "url": "https://example.invalid/doc"}],
-    },
-    "write_file": {
-        "file_path": "/workspace/alpha.txt",
-        "bytes_written": 5,
-        "content": "alpha",
-    },
-}
-
-#: The error a failed call reports. Authored here, so the corpus can carry it in
-#: cleartext and a replay can assert the adapter forwards it unchanged.
-ERROR_MESSAGE = "the capture authored this failure"
-
-#: The six cases every tool is driven through, named as they appear in the
-#: corpus and in a ledger entry.
-CALL_CASES = ("valid-arguments", "absent-arguments", "wrong-argument-type")
-RESULT_CASES = ("successful-result", "error-result", "skipped-result")
-
-#: The session directory the path family binds, and the path shapes it drives
-#: the three file tools through. Each shape is a separate branch of
-#: ``display_file_path`` or ``is_scratchpad_display_path``; none names a file on
-#: this machine, and the scratchpad one sits under ``/tmp``, which every Linux
-#: host resolves to itself.
-PATH_CWD = "/workspace"
-PATH_SHAPES: tuple[tuple[str, str], ...] = (
-    ("inside", "/workspace/src/alpha.txt"),
-    ("relative", "src/alpha.txt"),
-    ("the-directory", "/workspace"),
-    ("dotted", "/workspace/src/../alpha.txt"),
-    ("doubled-separator", "/workspace//src/./alpha.txt"),
-    ("sibling-prefix", "/workspace-other/alpha.txt"),
-    ("outside", "/elsewhere/nested/../alpha.txt"),
-    ("scratchpad", "/tmp/vibe-scratchpad-capture-0000/notes.md"),
-)
-
-#: The file tools whose headers render a path, with the argument and the result
-#: field each one names it under.
-PATH_TOOLS: dict[str, tuple[str, str]] = {
-    "edit": ("file_path", "file"),
-    "read_file": ("file_path", "file_path"),
-    "write_file": ("file_path", "file_path"),
-}
-
-
-def path_arguments(tool: str, path: str) -> dict[str, Any]:
-    """The valid arguments of ``tool`` with its path replaced.
-
-    ``read_file`` starts at the top and spells the default window out, which
-    its display leaves unnamed, so the family also measures that neither is
-    rendered.
-    """
-
-    argument, _ = PATH_TOOLS[tool]
-    arguments = {**ARGUMENTS[tool], argument: path}
-    if tool == "read_file":
-        arguments.pop("offset")
-        arguments["limit"] = 2000
-    return arguments
-
-
-def path_result(tool: str, path: str) -> dict[str, Any]:
-    """The successful result of ``tool`` with its path replaced."""
-
-    _, field = PATH_TOOLS[tool]
-    return {**RESULTS[tool], field: path}
-
-
-def capture(tree: Path) -> list[dict[str, Any]]:
-    """One record per tool and case, in tool order then case order."""
-
-    from pydantic import BaseModel
-
-    from vibe.core.config import VibeConfigSchema
-    from vibe.core.config.harness_files import init_harness_files_manager
-    from vibe.core.tools.connectors.connector_registry import (
-        create_connector_proxy_tool_class,
-    )
-    from vibe.core.tools.manager import ToolManager
-    from vibe.core.tools.mcp.tools import create_mcp_http_proxy_tool_class
-    from vibe.core.tools.remote import RemoteTool
-    from vibe.core.tools.ui import ToolUIDataAdapter
-    from vibe.core.types import ToolCallEvent, ToolResultEvent
-
-    class ForeignArgs(BaseModel):
-        """An argument model no tool declares, which is what makes it wrong."""
-
-        unexpected: str = "wrong"
-
-    init_harness_files_manager()
-    config = VibeConfigSchema()
-    with tempfile.TemporaryDirectory() as workdir:
-        manager = ToolManager(lambda: config, defer_mcp=True, cwd=Path(workdir))
-        builtins = dict(manager.available_tools)
-
-    remote = RemoteTool(
-        name=REMOTE_NAME,
-        description=REMOTE_DESCRIPTION,
-        inputSchema=REMOTE_SCHEMA,
-    )
-    stubs = {
-        "mcp": create_mcp_http_proxy_tool_class(
-            url=REMOTE_URL, remote=remote, alias=REMOTE_ALIAS
-        ),
-        "connector": create_connector_proxy_tool_class(
-            connector_name="Acme",
-            connector_alias=REMOTE_ALIAS,
-            connector_id="the-stub-connector",
-            remote=remote,
-            api_key=CAPTURE_API_KEY,
-        ),
+    return {
+        "summary": tool,
+        "verb": "Running",
+        "message": tool,
+        "settledVerb": "Ran",
+        "settledMessage": tool,
+        "statusText": f"Running {tool}",
     }
 
-    entries: list[tuple[str, str, Any, dict[str, Any], dict[str, Any]]] = [
-        ("builtin", name, cls, ARGUMENTS[name], RESULTS[name])
-        for name, cls in sorted(builtins.items())
-        if name in ARGUMENTS
-    ]
-    missing = sorted(set(builtins) - set(ARGUMENTS))
-    if missing:
-        raise OracleError(
-            "the published surface grew and this capture has no case for "
-            + ", ".join(missing)
-        )
-    entries += [
-        (source, cls.get_name(), cls, REMOTE_ARGUMENTS, REMOTE_RESULT)
-        for source, cls in stubs.items()
-    ]
 
-    from vibe.core.config.harness_files import HarnessFilesManager
+def raw_entry(case: dict[str, Any]) -> dict[str, Any]:
+    """The wire entry a harness would report for ``case``."""
+
+    detail = {
+        "kind": "tool",
+        "toolName": case["toolName"],
+        "input": case["input"],
+        "display": generic_display(case["toolName"]),
+    }
+    base = {
+        "id": case["name"],
+        "sessionId": SESSION_ID,
+        "createdAt": 1,
+        "updatedAt": 1,
+        "title": case["toolName"],
+    }
+    if case["kind"] == "callback":
+        return {
+            **base,
+            "type": "callback",
+            "generationStatus": "in_progress",
+            "callbackId": f"callback-{case['name']}",
+            "detail": {"kind": "approval", "effect": detail},
+            "state": {"status": "open"},
+        }
+    return {
+        **base,
+        "type": "effect",
+        "generationStatus": "completed",
+        "detail": detail,
+        "state": case["state"],
+    }
+
+
+def capture() -> list[dict[str, Any]]:
+    """One record per scenario, in table order."""
+
+    from vibe.app_server._unified_tool_projection import project_unified_history_entry
+    from vibe.app_server.models import validate_history_entry
 
     records: list[dict[str, Any]] = []
-    for source, name, cls, arguments, result in entries:
-        adapter = ToolUIDataAdapter(cls)
-        args_model, result_model = cls._get_tool_args_results()
-        valid_args = args_model.model_validate(arguments)
-        valid_result = result_model.model_validate(result)
-        for case in CALL_CASES:
-            event_args: BaseModel | None
-            if case == "valid-arguments":
-                event_args = valid_args
-            elif case == "absent-arguments":
-                event_args = None
-            else:
-                event_args = ForeignArgs()
-            event = ToolCallEvent(
-                tool_call_id="the-capture-call",
-                tool_name=name,
-                tool_class=cls,
-                args=event_args,
+    names: set[str] = set()
+    for case in scenarios():
+        if case["name"] in names:
+            raise OracleError(f"two scenarios are named {case['name']}")
+        names.add(case["name"])
+        source = validate_history_entry(raw_entry(case))
+        roots = [Path(root) for root in case["displayRoots"]]
+        projected = project_unified_history_entry(source, roots)
+        rewritten = projected != source
+        if rewritten != (case["expect"] == "projected"):
+            raise OracleError(
+                f"{case['name']} expects the entry {case['expect']}, and the reference "
+                f"{'rewrote' if rewritten else 'kept'} it"
             )
-            records.append(
-                {
-                    "tool": name,
-                    "source": source,
-                    "case": case,
-                    "phase": "call",
-                    "arguments": arguments if case == "valid-arguments" else None,
-                    "presentation": adapter.get_call_presentation(event).model_dump(
-                        mode="json"
-                    ),
-                }
-            )
-        for case in RESULT_CASES:
-            event = ToolResultEvent(
-                tool_call_id="the-capture-call",
-                tool_name=name,
-                tool_class=cls,
-                result=valid_result if case == "successful-result" else None,
-                error=ERROR_MESSAGE if case == "error-result" else None,
-                skipped=case == "skipped-result",
-                skip_reason=None,
-            )
-            records.append(
-                {
-                    "tool": name,
-                    "source": source,
-                    "case": case,
-                    "phase": "result",
-                    "arguments": arguments,
-                    "output": result if case == "successful-result" else None,
-                    "error": ERROR_MESSAGE if case == "error-result" else None,
-                    "skipped": case == "skipped-result",
-                    "presentation": adapter.get_result_presentation(event).model_dump(
-                        mode="json"
-                    ),
-                }
-            )
-
-    session = HarnessFilesManager(sources=(), cwd=Path(PATH_CWD))
-    for name in sorted(PATH_TOOLS):
-        cls = builtins[name]
-        adapter = ToolUIDataAdapter(cls, harness_files=session)
-        args_model, result_model = cls._get_tool_args_results()
-        for shape, path in PATH_SHAPES:
-            arguments = path_arguments(name, path)
-            result = path_result(name, path)
-            call = ToolCallEvent(
-                tool_call_id="the-capture-call",
-                tool_name=name,
-                tool_class=cls,
-                args=args_model.model_validate(arguments),
-            )
-            records.append(
-                {
-                    "tool": name,
-                    "source": "builtin",
-                    "case": f"path-{shape}-call",
-                    "phase": "call",
-                    "cwd": PATH_CWD,
-                    "arguments": arguments,
-                    "presentation": adapter.get_call_presentation(call).model_dump(
-                        mode="json"
-                    ),
-                }
-            )
-            settled = ToolResultEvent(
-                tool_call_id="the-capture-call",
-                tool_name=name,
-                tool_class=cls,
-                result=result_model.model_validate(result),
-            )
-            records.append(
-                {
-                    "tool": name,
-                    "source": "builtin",
-                    "case": f"path-{shape}-result",
-                    "phase": "result",
-                    "cwd": PATH_CWD,
-                    "arguments": arguments,
-                    "output": result,
-                    "error": None,
-                    "skipped": False,
-                    "presentation": adapter.get_result_presentation(settled).model_dump(
-                        mode="json"
-                    ),
-                }
-            )
+        dumped = projected.model_dump(mode="json", by_alias=True)
+        observed: dict[str, Any] = {"detail": dumped["detail"]}
+        if case["kind"] == "effect":
+            observed["state"] = dumped["state"]
+        records.append(
+            {
+                "name": case["name"],
+                "scenario": {
+                    "entry": source.model_dump(mode="json", by_alias=True),
+                    "displayRoots": case["displayRoots"],
+                },
+                "observed": observed,
+            }
+        )
     return records
 
 
@@ -501,18 +205,17 @@ def capture(tree: Path) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
-def digest(value: str) -> str:
-    """A string's identity without its content."""
+def digest(value: str) -> dict[str, Any]:
+    """Prose as its length in code points and its SHA-256, never its content."""
 
-    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    return {"prose": len(value), "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest()}
 
 
 def literal_values(value: Any, into: set[str]) -> None:
-    """Every string this capture supplied, at any depth."""
+    """Every string ``value`` holds, at any depth."""
 
     if isinstance(value, dict):
-        for key, item in value.items():
-            into.add(key)
+        for item in value.values():
             literal_values(item, into)
     elif isinstance(value, list):
         for item in value:
@@ -524,70 +227,75 @@ def literal_values(value: Any, into: set[str]) -> None:
 def keeps_literal(value: str, authored: set[str]) -> bool:
     """Whether a captured string may be committed as it stands.
 
-    Four shapes may: the empty string, which carries nothing; a value this
-    capture supplied and is only reading back; a path or request target; and an
-    identifier-shaped token such as a display verb. Every one of those is a name
-    or a pointer, which is what ``NOTICE`` allows. Anything else is treated as
-    reference-authored prose, including a two-word header, and is committed as a
-    digest.
+    Three shapes may: a value the scenario supplied and the projection reads
+    back, an identifier-shaped token, and a path or size. Each is a name or a
+    pointer, which is what ``NOTICE`` allows. Anything else is treated as
+    reference-authored prose and committed as a digest.
     """
 
-    if not value or value in authored:
-        return True
-    if _POINTER.fullmatch(value):
-        return True
-    return bool(_IDENTIFIER.fullmatch(value))
+    return (
+        value in authored
+        or bool(_IDENTIFIER.fullmatch(value))
+        or bool(_POINTER.fullmatch(value))
+    )
 
 
 def project(value: Any, authored: set[str]) -> Any:
-    """The committable form: names and pointers verbatim, prose as a marker.
-
-    A digest still fails the replay on any change, so the corpus stays a
-    conformance target while shipping none of the reference's text.
-    """
+    """The committable form: names and pointers verbatim, prose as a digest."""
 
     if isinstance(value, dict):
         return {key: project(item, authored) for key, item in value.items()}
     if isinstance(value, list):
         return [project(item, authored) for item in value]
     if isinstance(value, str) and not keeps_literal(value, authored):
-        return {DESCRIBED: digest(value), "length": len(value)}
+        return digest(value)
     return value
 
 
-def project_case(record: dict[str, Any]) -> dict[str, Any]:
-    """One case projected, with its own inputs as the authored vocabulary.
+def project_record(record: dict[str, Any]) -> dict[str, Any]:
+    """One scenario projected, with its own inputs as the authored vocabulary.
 
-    The arguments, the output and the error are this repository's own text and
-    stay verbatim: a replay has to feed them to this port to compute the display
-    it compares. Only the presentation is projected, because only the
-    presentation is the reference's writing.
+    The scenario is this repository's own text plus the defaults the
+    reference's wire model fills, and stays verbatim: a replay feeds it to this
+    port. A default that is not a name would be reference text, so the capture
+    refuses it rather than ship it.
     """
 
-    authored: set[str] = {ERROR_MESSAGE, REMOTE_NAME, REMOTE_ALIAS, record["tool"]}
-    literal_values(record.get("arguments"), authored)
-    literal_values(record.get("output"), authored)
+    authored: set[str] = set()
+    literal_values(record["scenario"], authored)
+    supplied: set[str] = set()
+    for case in scenarios():
+        if case["name"] == record["name"]:
+            literal_values(case, supplied)
+            literal_values(raw_entry(case), supplied)
+    leaked = sorted(
+        value
+        for value in authored
+        if value and value not in supplied and not _IDENTIFIER.fullmatch(value)
+    )
+    if leaked:
+        raise OracleError(f"{record['name']} carries a default that is not a name: {leaked}")
     return {
-        key: (project(value, authored) if key == "presentation" else value)
-        for key, value in record.items()
+        "name": record["name"],
+        "scenario": record["scenario"],
+        "observed": project(record["observed"], authored),
     }
 
 
 def build_corpus(records: list[dict[str, Any]], reference: dict[str, str]) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
-        "referenceCommit": reference["commit"],
+        "reference": {"commit": reference["commit"]},
         "platform": platform.system().lower(),
         "note": (
-            "Tool presentation corpus: what the pinned reference's ToolUIDataAdapter publishes "
-            "for each tool and case, from get_call_presentation and get_result_presentation. A "
-            "presentation string is committed as it stands only when it is a value this capture "
-            "supplied, a path or an identifier-shaped token; everything else is committed as a "
-            "{described, length} marker carrying a SHA-256 digest, so no reference prose ships "
-            "while any change still fails the replay. Regenerate with "
+            "Tool presentation corpus: what the pinned reference's unified tool projection "
+            "makes of each generic effect entry a harness reports. A presentation string is "
+            "committed as it stands only when the scenario supplied it, or it is an identifier "
+            "or a path; everything else is committed as a {prose, sha256} digest, so no "
+            "reference prose ships while any change still fails the replay. Regenerate with "
             "scripts/parity/tool_presentation.py --corpus when the pinned reference moves."
         ),
-        "cases": [project_case(record) for record in records],
+        "scenarios": [project_record(record) for record in records],
     }
 
 
@@ -635,16 +343,10 @@ def rendered_corpus(records: list[dict[str, Any]], reference: dict[str, str]) ->
 
 def main() -> int:
     arguments = parse_arguments()
-    # No capture may read this machine's stored credentials: the only key any
-    # stub here carries is the fixture one this script authors.
+    # No capture may read this machine's stored credentials.
     os.environ.setdefault("VIBE_TEST_DISABLE_KEYRING", "1")
-    # `web_search` is published only when a Mistral key resolves
-    # (`WebSearch.is_available`, `vibe/core/tools/builtins/web_search.py:66-75`),
-    # so an ambient key would decide whether the corpus covers it. The fixture
-    # key pins it in for every run, the Rust recapture probe included.
-    os.environ["MISTRAL_API_KEY"] = CAPTURE_API_KEY
     try:
-        commit, pinned = reexecute_pinned(
+        commit, _ = reexecute_pinned(
             arguments.reference,
             arguments.expected_commit,
             cache=arguments.cache,
@@ -652,29 +354,30 @@ def main() -> int:
         )
         reference = {"commit": commit, "path": str(arguments.reference)}
         GUARD.install()
-        records = capture(pinned)
+        records = capture()
         if GUARD.attempts:
             # Checked before anything is written, so a capture that reached for
             # the network leaves no partial corpus behind.
             raise OracleError(
                 "the capture attempted network access: " + "; ".join(sorted(set(GUARD.attempts)))
             )
+        rendered = rendered_corpus(records, reference)
         if arguments.check:
             target = arguments.corpus or DEFAULT_CORPUS
             if not target.is_file():
                 raise OracleError(f"no committed corpus at {target} to check against")
-            if target.read_text(encoding="utf-8") != rendered_corpus(records, reference):
+            if target.read_text(encoding="utf-8") != rendered:
                 raise OracleError(
                     f"a fresh capture differs from the committed corpus at {target}"
                 )
-            print(f"{target} matches a fresh capture of {len(records)} cases")
+            print(f"{target} matches a fresh capture of {len(records)} scenarios")
             return 0
         full = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,
             "platform": platform.system().lower(),
             "python": platform.python_version(),
-            "cases": records,
+            "scenarios": records,
         }
         arguments.output.parent.mkdir(parents=True, exist_ok=True)
         staged = arguments.output.with_name(f"{arguments.output.name}.{os.getpid()}.tmp")
@@ -686,16 +389,18 @@ def main() -> int:
         os.replace(staged, arguments.output)
         if arguments.corpus is not None:
             arguments.corpus.parent.mkdir(parents=True, exist_ok=True)
-            arguments.corpus.write_text(
-                rendered_corpus(records, reference), encoding="utf-8", newline=""
-            )
+            arguments.corpus.write_text(rendered, encoding="utf-8", newline="")
     except OracleError as error:
         print(f"tool-presentation capture failed: {error}", file=sys.stderr)
         return 1
-    calls = sum(1 for record in records if record["phase"] == "call")
+    families: dict[str, int] = {}
+    for record in records:
+        family = record["name"].split("-", 1)[0]
+        families[family] = families.get(family, 0) + 1
     print(
-        f"captured {len(records)} cases ({calls} calls, {len(records) - calls} results) "
-        f"from {reference['commit'][:12]} into {arguments.output}"
+        f"captured {len(records)} scenarios ("
+        + ", ".join(f"{family} {count}" for family, count in sorted(families.items()))
+        + f") from {reference['commit'][:12]} into {arguments.output}"
     )
     if arguments.corpus is not None:
         print(f"wrote the committed corpus to {arguments.corpus}")

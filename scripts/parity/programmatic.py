@@ -11,10 +11,12 @@ from the reference: its installed ``vibe`` is the oracle, which is what makes
 the same scenarios replayable against this port's binary by
 ``crates/vibe-cli/tests/programmatic_parity_tests.rs``.
 
-The reference modules behind the contract are ``vibe/cli/programmatic.py``
-(``ProgrammaticOutput`` and ``run_programmatic``), ``vibe/cli/cli.py``
-(``_run_programmatic_mode``, ``_agent_selection``, ``_session_intent``) and
-``vibe/cli/entrypoint.py``; the budgets are ``vibe/core/middleware.py``.
+Since v3.0.0 the reference's ``vibe`` is a Rust binary that the materialized
+console script launches (``vibe/cli/launcher.py``), so the modules behind the
+contract are ``vibe/cli-rust/src/headless_run.rs`` and its ``headless/``
+siblings for the run, ``headless_output.rs`` for what it prints, and
+``run_export/model.rs`` for the outcome a limit ends a run with and the exit
+code it maps to.
 
 Output is recorded three ways. ``json`` and ``streaming`` documents are parsed
 and kept as values, with each object's key order kept apart as a layout and a
@@ -48,7 +50,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
@@ -56,9 +58,6 @@ import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/programmatic-parity/corpus.json"
-#: The same scenarios on the Unified Harness, which every session opens on by
-#: default since v2.26.0.
-UNIFIED_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/programmatic-parity/unified-corpus.json"
 SCHEMA_VERSION = 1
 RUN_TIMEOUT = 120.0
 
@@ -296,6 +295,13 @@ def scenarios() -> list[dict[str, Any]]:
         },
         {"name": "budget/negative-price", "runs": [run("-p", "hello", "--max-price", "-1")]},
         {"name": "budget/negative-tokens", "runs": [run("-p", "hello", "--max-tokens", "-5")]},
+        # v3.0.0 ends a run that reaches a limit with its own exit code, the
+        # wall-clock deadline `--time-limit` sets among them
+        # (`RunOutcome::exit_code` in `vibe/cli-rust/src/run_export/model.rs`).
+        {
+            "name": "budget/time-limit",
+            "runs": [run("-p", "hello", "--time-limit", "1", backend=[{"text": "Late.", "delay": 4}])],
+        },
         # -- Approvals ----------------------------------------------------------
         {
             "name": "approval/denied",
@@ -714,10 +720,24 @@ class Normalizer:
 
 
 def layout(value: Any) -> Any:
-    """The shape of a document with every scalar erased: key order and nesting."""
+    """The shape of a document with every scalar erased: key order and nesting.
+
+    The ``state`` of an effect entry is the exception, laid out with its keys
+    sorted. Since v3.0.0 the reference rebuilds an entry from the session
+    patches its server sends, and those patches list their operations in the
+    order ``jsonpatch`` walks a set of keys (``make_json_patch`` in
+    ``vibe/app_server/_patch.py``), so the keys a tool's completion adds land
+    in another order from one process to the next.
+    """
 
     if isinstance(value, dict):
-        return [[key, layout(item)] for key, item in value.items()]
+        pairs = [[key, layout(item)] for key, item in value.items()]
+        if value.get("type") == "effect":
+            pairs = [
+                [key, sorted(shape, key=lambda pair: pair[0]) if key == "state" and isinstance(shape, list) else shape]
+                for key, shape in pairs
+            ]
+        return pairs
     if isinstance(value, list):
         return [layout(item) for item in value]
     return None
@@ -741,8 +761,24 @@ def output_mode(args: list[str]) -> str:
     return "text"
 
 
-def normalize_stdout(raw: str, mode: str, exit_code: int, normalizer: Normalizer) -> Any:
-    if exit_code == 2 or not raw:
+def parse_failure(stderr: str) -> bool:
+    """Whether a run stopped on its argument parser rather than on the session.
+
+    Through v2.26.0 the reference parsed with argparse, whose refusal exits 2
+    with a block starting ``usage:``. Since v3.0.0 it parses with clap, whose
+    refusal exits 1 with an ``error:`` line and a ``Usage:`` block, and exit 2
+    is a failed model call (``RunOutcome::exit_code`` in
+    ``vibe/cli-rust/src/run_export/model.rs``). The exit code alone no longer
+    tells the two apart, so the shape of the stream does.
+    """
+
+    if stderr.startswith("usage:"):
+        return True
+    return stderr.startswith("error:") and "\nUsage: " in stderr
+
+
+def normalize_stdout(raw: str, mode: str, stderr: str, normalizer: Normalizer) -> Any:
+    if parse_failure(stderr) or not raw:
         return normalizer.text(raw)
     if mode == "json":
         body = raw[:-1] if raw.endswith("\n") else raw
@@ -772,11 +808,15 @@ def normalize_stdout(raw: str, mode: str, exit_code: int, normalizer: Normalizer
     return [normalizer.prose(line) if line else "" for line in raw.split("\n")]
 
 
-def normalize_stderr(raw: str, exit_code: int, normalizer: Normalizer) -> Any:
-    if exit_code == 2:
-        # A parse failure: the usage block, which argparse and clap wrap each
-        # their own way (row 7 owns it), then the error line verbatim.
+def normalize_stderr(raw: str, normalizer: Normalizer) -> Any:
+    if raw.startswith("usage:"):
+        # An argparse refusal: the usage block, which row 7 owns, then the
+        # error line verbatim.
         block, _, error = raw.rstrip("\n").rpartition("\n")
+        return {"usage": normalizer.prose(block), "error": normalizer.text(error)}
+    if parse_failure(raw):
+        # A clap refusal: the error line verbatim, then the usage block.
+        error, _, block = raw.rstrip("\n").partition("\n")
         return {"usage": normalizer.prose(block), "error": normalizer.text(error)}
     lines: list[Any] = []
     for line in raw.split("\n"):
@@ -808,8 +848,8 @@ def normalize(scenario: dict[str, Any], captured: dict[str, Any]) -> list[dict[s
         runs.append(
             {
                 "exit": observed["exit"],
-                "stdout": normalize_stdout(observed["stdout"], mode, observed["exit"], normalizer),
-                "stderr": normalize_stderr(observed["stderr"], observed["exit"], normalizer),
+                "stdout": normalize_stdout(observed["stdout"], mode, observed["stderr"], normalizer),
+                "stderr": normalize_stderr(observed["stderr"], normalizer),
                 "requests": observed["requests"],
                 "created": observed["created"],
             }
@@ -836,13 +876,6 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--binary", type=Path, default=None, help="drive this port's `vibe` instead")
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument(
-        "--harness",
-        choices=["legacy", "unified"],
-        default="legacy",
-        help="the backend both sides run: the legacy one through the escape hatch, or the "
-        "Unified Harness every session opens on by default",
-    )
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--raw", action="store_true")
@@ -851,12 +884,10 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
-    flags = HARNESS_FLAGS if arguments.harness == "legacy" else []
-    default_output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
-    arguments.output = provenance.port_output(arguments.output, default_output, binary=arguments.binary)
+    arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, binary=arguments.binary)
     try:
         if arguments.binary is not None:
-            command = [str(arguments.binary.resolve()), *flags]
+            command = [str(arguments.binary.resolve())]
             reference = {"commit": "binary-override"}
             dialect = "port"
         else:
@@ -864,7 +895,7 @@ def main() -> int:
                 arguments.reference, "vibe", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *flags]
+            command = [*binary]
             dialect = "reference"
         selected = [
             s for s in scenarios() if not arguments.only or any(name in s["name"] for name in arguments.only)

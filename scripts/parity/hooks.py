@@ -40,6 +40,7 @@ import concurrent.futures
 import copy
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import time
@@ -57,9 +58,9 @@ from hook_recorder import (  # noqa: E402
     write_hooks,
     write_responses,
 )
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
-from reference import OracleError, reference_command  # noqa: E402
+from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 from subagent_client import Normalizer, transcript  # noqa: E402
@@ -290,6 +291,8 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any]:
         # A patch that stamps a time names the key in its path.
         if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS:
             operation["value"] = "<time>"
+    if isinstance(params.get("patch"), list):
+        params["patch"] = app_server_client.commuted(params["patch"])
     return {"method": message.get("method"), "params": params}
 
 
@@ -313,6 +316,23 @@ def reduce_result(result: Any, pick: list[str] | None) -> Any:
     return result
 
 
+#: The temporary directory v3.0.0 gives a session's transcript when session
+#: logging is off, created with a random suffix under the system temp root.
+LOGGING_DISABLED_DIRECTORY = re.compile(r"\S*vibe-session-logging-disabled-[A-Za-z0-9_]+")
+
+
+def mask_logging_disabled(value: Any) -> Any:
+    """``value`` with every path under a logging-disabled directory rooted at
+    one placeholder, since its name changes on every run."""
+    if isinstance(value, str):
+        return LOGGING_DISABLED_DIRECTORY.sub("<logging-disabled>", value)
+    if isinstance(value, list):
+        return [mask_logging_disabled(item) for item in value]
+    if isinstance(value, dict):
+        return {key: mask_logging_disabled(item) for key, item in value.items()}
+    return value
+
+
 def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
     normalizer = Normalizer(scenario, run["paths"])
     for identity in run["sessions"]:
@@ -324,8 +344,9 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
         elif "turn" in step:
             reduced.append({"turn": [
                 reduce_notification(message)
-                for message in step["turn"]
-                if str(message.get("method", "")).startswith(("history/", "turn/"))
+                for message in map(app_server_client.without_clock, step["turn"])
+                if message is not None
+                and str(message.get("method", "")).startswith(("history/", "turn/"))
                 and (not scenario.get("noticesOnly") or is_notice(message))
             ]})
         elif "persisted" in step:
@@ -346,7 +367,7 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
     for conversation in conversations:
         if conversation and conversation[0].get("role") == "user" and conversation[0].get("content") not in turns:
             conversation[0]["content"] = "<task prompt>"
-    stdin = copy.deepcopy(run["stdin"])
+    stdin = mask_logging_disabled(copy.deepcopy(run["stdin"]))
     # Identities are numbered before anything is rewritten, walking keys
     # sorted: the order a server writes an object's keys in is not part of
     # the contract, so it must not decide which placeholder an id gets.
@@ -892,14 +913,14 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
         selected = [
             scenario
             for scenario in scenarios()
@@ -924,7 +945,7 @@ def main() -> int:
             return entry
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
-            captured = list(pool.map(capture, selected))
+            captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

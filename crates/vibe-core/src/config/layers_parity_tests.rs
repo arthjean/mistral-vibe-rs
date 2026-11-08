@@ -19,18 +19,28 @@ use serde_json::{Map, Value as JsonValue};
 use toml::Value;
 
 use super::*;
-use crate::parity::REFERENCE_COMMIT;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::valued_differences;
+use crate::parity::is_pin_commit;
+use crate::parity::replay::{Class, PatternDivergence, valued_differences};
+
+use super::surface_parity_tests::{Observed, ROW, reconcile};
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// What the capture writes for the per-scenario temporary root.
 const ROOT_PLACEHOLDER: &str = "{root}";
 
-/// Pointers at which a stack or write case diverges, as `(case, pointer,
-/// reason)`. A comparison descends into tables, so an entry names the one key
-/// that moved.
-const STACK_DIVERGENCES: &[(&str, &str, &str)] = &[];
+/// Pointers at which a stack or write case diverges. A comparison descends
+/// into tables, so an entry names the one key that moved.
+const STACK_DIVERGENCES: &[PatternDivergence] = &[PatternDivergence {
+    scenario: "write-keeps-the-file-order-and-appends-new-keys",
+    pointer: "/afterWrites/active_model",
+    count: 1,
+    row: ROW,
+    class: Class::Gap,
+    reason: "the case writes `active_model = \"local\"`; v3.0.0 withdrew the `local` default \
+             model, so the reference reads the unavailable alias back as unpinned while this \
+             port, which still ships `local`, keeps it",
+}];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -129,7 +139,7 @@ fn corpus() -> Corpus {
         .unwrap_or_else(|error| panic!("configuration corpus at {}: {error}", path.display()));
     let corpus: Corpus = serde_json::from_str(&raw)
         .unwrap_or_else(|error| panic!("configuration corpus at {}: {error}", path.display()));
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     corpus
 }
 
@@ -265,10 +275,10 @@ fn replay_stack(case: &StackCase, observed: &mut Vec<(String, String, String, St
     let effective = json(&snapshot.effective);
     for (key, expected) in &case.effective {
         let found = effective.get(key).cloned().unwrap_or(JsonValue::Null);
-        check(&format!("/{key}"), expected, &found);
+        check(&format!("/effective/{key}"), expected, &found);
     }
     check(
-        "the writable layer",
+        "/writableLayer",
         &JsonValue::from(case.writable_layer.as_str()),
         &JsonValue::from(layer_name(snapshot.selected_target)),
     );
@@ -294,14 +304,14 @@ fn replay_stack(case: &StackCase, observed: &mut Vec<(String, String, String, St
         );
     }
     check(
-        "the files",
+        "/files",
         &json(case.files.as_ref().expect("a write case records its files")),
         &json(&config_files(&root)),
     );
     let after = json(&config.load().expect("the stack reloads").effective);
     for (key, expected) in case.after_writes.iter().flatten() {
         let found = after.get(key).cloned().unwrap_or(JsonValue::Null);
-        check(&format!("after the writes: /{key}"), expected, &found);
+        check(&format!("/afterWrites/{key}"), expected, &found);
     }
 }
 
@@ -319,38 +329,19 @@ fn every_layer_stack_composes_and_writes_as_the_reference_does() {
     for case in &cases {
         replay_stack(case, &mut observed);
     }
-    let unrecorded = observed
-        .iter()
-        .filter(|(case, pointer, ..)| {
-            !STACK_DIVERGENCES
-                .iter()
-                .any(|(name, entry, _)| name == case && entry == pointer)
-        })
-        .map(|(case, pointer, reference, port)| {
-            format!("{case}: {pointer}: reference {reference}, port {port}")
+    let observed = observed
+        .into_iter()
+        .map(|(case, pointer, reference, port)| Observed {
+            case,
+            pointer,
+            reference,
+            port,
         })
         .collect::<Vec<_>>();
-    assert!(
-        unrecorded.is_empty(),
-        "the layer stacks diverge where no ledger entry records it:\n{}",
-        unrecorded.join("\n")
-    );
-    let stale = STACK_DIVERGENCES
-        .iter()
-        .filter(|(name, entry, _)| {
-            !observed
-                .iter()
-                .any(|(case, pointer, ..)| case == name && pointer == entry)
-        })
-        .map(|(name, entry, _)| format!("{name}: {entry}"))
-        .collect::<Vec<_>>();
-    assert!(
-        stale.is_empty(),
-        "the layer stacks: these recorded divergences no longer reproduce: {stale:?}"
-    );
+    let settled = reconcile("the layer stacks", &observed, STACK_DIVERGENCES);
     let diverging = cases
         .iter()
-        .filter(|case| observed.iter().any(|(name, ..)| name == &case.name))
+        .filter(|case| observed.iter().any(|found| found.case == case.name))
         .count();
     println!(
         "config surface: {}/{} layer stacks conform ({diverging} ledgered), {} with writes",
@@ -362,7 +353,7 @@ fn every_layer_stack_composes_and_writes_as_the_reference_does() {
     assert_figures(
         "config layers parity (stacks):",
         "crates/vibe-core/tests/config-surface/corpus.json",
-        Figures::decided(cases.len() - diverging, cases.len(), observed.len()),
+        settled.figures(cases.len() - diverging, cases.len()),
         serde_json::json!({}),
     );
 }

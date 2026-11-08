@@ -469,6 +469,8 @@ def reduce_notification(message: dict[str, Any], time_keys: set[str]) -> dict[st
     for operation in params.get("patch") or []:
         if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in time_keys:
             operation["value"] = "<time>"
+    if isinstance(params.get("patch"), list):
+        params["patch"] = app_server_client.commuted(params["patch"])
     return {"method": message.get("method"), "params": params}
 
 
@@ -519,6 +521,9 @@ def reduce_turn(
         if not method.startswith(FAMILIES):
             continue
         if scenario.get("observe") and not any(method.startswith(m) for m in scenario["observe"]):
+            continue
+        message = app_server_client.without_clock(message)
+        if message is None:
             continue
         reduced = reduce_notification(message, time_keys)
         if method == "session/state":
@@ -586,7 +591,7 @@ def echo_steps(count: int) -> list[dict[str, Any]]:
 #: harness's own publication of the state that answer produced: it lands in a
 #: patch of its own or inside that state's, from one run to the next. The
 #: persisted ``bumped_at`` still records that the bump happened.
-CLOCK_KEYS = {"updatedAt", "createdAt", "bumpedAt"}
+CLOCK_KEYS = app_server_client.CLOCK_KEYS
 
 
 def reduce_patches(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

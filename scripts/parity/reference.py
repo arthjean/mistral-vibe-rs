@@ -35,17 +35,19 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from typing import Any, Callable, TypeVar
 
 import materialize
 import provenance
 from materialize import DEFAULT_CACHE
-from pin import EXPECTED_COMMIT
+from pin import EXPECTED_COMMIT, PREVIOUS_COMMIT
 
 __all__ = [
     "DEFAULT_CACHE",
     "INTERPRETER_VARIABLE",
     "OracleError",
     "environment",
+    "naming_scenarios",
     "reexecute_pinned",
     "reference_command",
     "reference_interpreter",
@@ -69,9 +71,30 @@ _CALLER_PATH = "VIBE_PARITY_CALLER_PYTHONPATH"
 #: directory the Rust gate records its probes in.
 RECORD = "parity/drivers.jsonl"
 
+T = TypeVar("T")
+
 
 class OracleError(RuntimeError):
     """Raised when a capture cannot be produced from an authoritative state."""
+
+
+def naming_scenarios(capture: Callable[[dict[str, Any]], T]) -> Callable[[dict[str, Any]], T]:
+    """``capture``, the function a driver maps over its scenarios, failing as
+    an :class:`OracleError` that names the scenario it was capturing when the
+    driver itself raises. A driver that a new reference breaks then stops on
+    that scenario, and ``repin.py capture`` replaces nothing, instead of
+    ending on a bare traceback from a worker thread."""
+
+    def named(scenario: dict[str, Any]) -> T:
+        try:
+            return capture(scenario)
+        except Exception as error:
+            raise OracleError(
+                f"the driver failed on scenario {scenario.get('name', '<unnamed>')}: "
+                f"{type(error).__name__}: {error}"
+            ) from error
+
+    return named
 
 
 def _target_commit(expected: str | None) -> str:
@@ -107,7 +130,9 @@ def environment(
     one no longer matches its attestation.
 
     The commit is the pin, whatever ``expected`` says, unless
-    ``scripts/parity/repin.py capture`` started the capture: an empty or
+    ``scripts/parity/repin.py capture`` started the capture, or ``reference``
+    is the attested environment of ``PREVIOUS_COMMIT`` during a rolling
+    re-pin, which a live probe of a corpus still at that commit passes: an empty or
     ``None`` ``expected`` (``--expected-commit ''``, ``--allow-unpinned``) or
     another commit is refused anywhere else, since the corpus it wrote would
     record a commit no replay accepts (:func:`provenance.expected_commit`).
@@ -115,17 +140,29 @@ def environment(
 
     commit = _target_commit(expected)
     reference = Path(reference)
-    root = (
-        reference.resolve()
-        if (reference / materialize.ATTESTATION).is_file()
-        else materialize.environment_root(commit, cache)
-    )
+    attested = (reference / materialize.ATTESTATION).is_file()
+    if attested and commit == EXPECTED_COMMIT and PREVIOUS_COMMIT:
+        # A live probe of a corpus a rolling re-pin has not recaptured yet
+        # hands over the environment of the commit it left
+        # (``vibe_core::parity::live::probe_commit``); the capture then
+        # measures and records that commit, which only the corpora the
+        # transition list names may hold.
+        if _attested_commit(reference) == PREVIOUS_COMMIT:
+            commit = PREVIOUS_COMMIT
+    root = reference.resolve() if attested else materialize.environment_root(commit, cache)
     try:
         materialize.verify(root, commit)
     except materialize.AttestationError as error:
         raise OracleError(str(error)) from None
     _record(commit, root)
     return commit, root
+
+
+def _attested_commit(root: Path) -> str | None:
+    try:
+        return json.loads((root / materialize.ATTESTATION).read_text(encoding="utf-8")).get("commit")
+    except (OSError, ValueError, AttributeError):
+        return None
 
 
 def require_pin(reference: Path, expected: str | None = EXPECTED_COMMIT) -> str:
@@ -220,7 +257,11 @@ def reexecute_pinned(
         if not _imports_pinned_vibe(tree):
             raise OracleError(f"the reference interpreter did not import `vibe` from {tree}")
         return commit, tree
-    executable = str(reference_interpreter(root, override, commit))
+    # The interpreter is resolved from the request, not from the commit it
+    # resolved to: a live probe of a corpus still at `PREVIOUS_COMMIT` asks
+    # for the pin and is handed that commit's environment, and asking again
+    # for `PREVIOUS_COMMIT` itself would be refused as an off-pin capture.
+    executable = str(reference_interpreter(root, override, expected))
     environment_variables = dict(os.environ)
     environment_variables[_REEXEC_MARKER] = str(tree)
     caller = environment_variables.get("PYTHONPATH")

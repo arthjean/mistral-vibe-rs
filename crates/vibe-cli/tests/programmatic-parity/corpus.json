@@ -1,7 +1,7 @@
 {
   "note": "Captured by scripts/parity/programmatic.py from the pinned reference's `vibe` entry point. Scenario inputs, paths and identities as placeholders, JSON documents with their key order and rendering; every other string the program authored is a length and a SHA-256.",
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {
@@ -21,13 +21,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -75,13 +75,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -102,6 +102,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -121,11 +122,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -196,6 +200,10 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  null
                 ]
               ],
               [
@@ -261,6 +269,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -305,13 +322,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -333,6 +350,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -405,9 +423,13 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               },
               {
                 "json": {
@@ -420,11 +442,14 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
-                  "inputEntryId": null,
+                  "inputEntryId": "<id-1>",
+                  "outcome": {
+                    "type": "committed"
+                  },
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
-                  "source": null,
+                  "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
                   "updatedAt": "<time>",
@@ -493,9 +518,18 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    [
+                      [
+                        "type",
+                        null
+                      ]
+                    ]
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -538,13 +572,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -592,13 +626,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -619,6 +653,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -638,11 +673,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -713,6 +751,10 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  null
                 ]
               ],
               [
@@ -778,6 +820,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -822,13 +873,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -836,7 +887,13 @@
           "stderr": [
             ""
           ],
-          "stdout": ""
+          "stdout": [
+            {
+              "prose": 1,
+              "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068"
+            },
+            ""
+          ]
         }
       ],
       "scenario": {
@@ -873,13 +930,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -895,13 +952,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -922,6 +979,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -930,75 +988,6 @@
                 "type": "message",
                 "updatedAt": "<time>",
                 "userDisplayContent": null
-              },
-              {
-                "createdAt": "<time>",
-                "detail": {
-                  "display": {
-                    "content": null,
-                    "message": "notes.txt",
-                    "settledMessage": "notes.txt",
-                    "settledVerb": "Read",
-                    "statusText": {
-                      "prose": 12,
-                      "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
-                    },
-                    "suffix": "",
-                    "summary": {
-                      "prose": 17,
-                      "sha256": "85c49f1b7298ed4f2fd20c98096f271acf355cc3e6682a0d9d965e2bc24c3781"
-                    },
-                    "verb": "Reading"
-                  },
-                  "input": {
-                    "filePath": "notes.txt",
-                    "limit": 2000,
-                    "offset": null
-                  },
-                  "kind": "file_read",
-                  "toolName": "read_file"
-                },
-                "generationStatus": "completed",
-                "id": "call_read",
-                "inputEntryId": null,
-                "relatedEntryId": null,
-                "sessionId": "<id-2>",
-                "state": {
-                  "approvalSource": "config",
-                  "approvalType": "always",
-                  "decision": "execute",
-                  "display": {
-                    "approvalNote": null,
-                    "message": {
-                      "prose": 21,
-                      "sha256": "06ce996ef3e0ed8015120a3a6d4c5a0a6f15398da2ddea3adb169f3cc125b7f3"
-                    },
-                    "success": true,
-                    "suffix": "",
-                    "verb": "Read",
-                    "warnings": []
-                  },
-                  "durationMs": "<duration>",
-                  "output": {
-                    "content": {
-                      "prose": 27,
-                      "sha256": "535fa6e621c10b299f9975446418aaac1e7ea407545a3c7d5f1259a4154d147a"
-                    },
-                    "filePath": "<ws>/notes.txt",
-                    "numLines": 1,
-                    "requestedLimit": 2000,
-                    "requestedOffset": null,
-                    "startLine": 1,
-                    "totalLines": 1,
-                    "wasTruncated": false
-                  },
-                  "outputText": "",
-                  "status": "completed"
-                },
-                "title": "read_file",
-                "turnId": "<id-3>",
-                "type": "effect",
-                "updatedAt": "<time>"
               },
               {
                 "content": [
@@ -1010,11 +999,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -1085,210 +1077,10 @@
                 [
                   "userDisplayContent",
                   null
-                ]
-              ],
-              [
+                ],
                 [
-                  "id",
+                  "outcome",
                   null
-                ],
-                [
-                  "sessionId",
-                  null
-                ],
-                [
-                  "turnId",
-                  null
-                ],
-                [
-                  "inputEntryId",
-                  null
-                ],
-                [
-                  "createdAt",
-                  null
-                ],
-                [
-                  "updatedAt",
-                  null
-                ],
-                [
-                  "generationStatus",
-                  null
-                ],
-                [
-                  "relatedEntryId",
-                  null
-                ],
-                [
-                  "type",
-                  null
-                ],
-                [
-                  "title",
-                  null
-                ],
-                [
-                  "detail",
-                  [
-                    [
-                      "toolName",
-                      null
-                    ],
-                    [
-                      "display",
-                      [
-                        [
-                          "summary",
-                          null
-                        ],
-                        [
-                          "content",
-                          null
-                        ],
-                        [
-                          "suffix",
-                          null
-                        ],
-                        [
-                          "verb",
-                          null
-                        ],
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "settledVerb",
-                          null
-                        ],
-                        [
-                          "settledMessage",
-                          null
-                        ],
-                        [
-                          "statusText",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "kind",
-                      null
-                    ],
-                    [
-                      "input",
-                      [
-                        [
-                          "filePath",
-                          null
-                        ],
-                        [
-                          "offset",
-                          null
-                        ],
-                        [
-                          "limit",
-                          null
-                        ]
-                      ]
-                    ]
-                  ]
-                ],
-                [
-                  "state",
-                  [
-                    [
-                      "status",
-                      null
-                    ],
-                    [
-                      "output",
-                      [
-                        [
-                          "filePath",
-                          null
-                        ],
-                        [
-                          "content",
-                          null
-                        ],
-                        [
-                          "numLines",
-                          null
-                        ],
-                        [
-                          "startLine",
-                          null
-                        ],
-                        [
-                          "requestedOffset",
-                          null
-                        ],
-                        [
-                          "requestedLimit",
-                          null
-                        ],
-                        [
-                          "totalLines",
-                          null
-                        ],
-                        [
-                          "wasTruncated",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "outputText",
-                      null
-                    ],
-                    [
-                      "durationMs",
-                      null
-                    ],
-                    [
-                      "display",
-                      [
-                        [
-                          "success",
-                          null
-                        ],
-                        [
-                          "verb",
-                          null
-                        ],
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "warnings",
-                          []
-                        ],
-                        [
-                          "approvalNote",
-                          null
-                        ],
-                        [
-                          "suffix",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "decision",
-                      null
-                    ],
-                    [
-                      "approvalType",
-                      null
-                    ],
-                    [
-                      "approvalSource",
-                      null
-                    ]
-                  ]
                 ]
               ],
               [
@@ -1354,6 +1146,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -1412,13 +1213,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -1434,13 +1235,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -1462,6 +1263,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -1534,285 +1336,13 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "createdAt": "<time>",
-                  "detail": {
-                    "display": {
-                      "content": null,
-                      "message": "notes.txt",
-                      "settledMessage": "notes.txt",
-                      "settledVerb": "Read",
-                      "statusText": {
-                        "prose": 12,
-                        "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
-                      },
-                      "suffix": "",
-                      "summary": {
-                        "prose": 17,
-                        "sha256": "85c49f1b7298ed4f2fd20c98096f271acf355cc3e6682a0d9d965e2bc24c3781"
-                      },
-                      "verb": "Reading"
-                    },
-                    "input": {
-                      "filePath": "notes.txt",
-                      "limit": 2000,
-                      "offset": null
-                    },
-                    "kind": "file_read",
-                    "toolName": "read_file"
-                  },
-                  "generationStatus": "completed",
-                  "id": "call_read",
-                  "inputEntryId": null,
-                  "relatedEntryId": null,
-                  "sessionId": "<id-2>",
-                  "state": {
-                    "approvalSource": "config",
-                    "approvalType": "always",
-                    "decision": "execute",
-                    "display": {
-                      "approvalNote": null,
-                      "message": {
-                        "prose": 21,
-                        "sha256": "06ce996ef3e0ed8015120a3a6d4c5a0a6f15398da2ddea3adb169f3cc125b7f3"
-                      },
-                      "success": true,
-                      "suffix": "",
-                      "verb": "Read",
-                      "warnings": []
-                    },
-                    "durationMs": "<duration>",
-                    "output": {
-                      "content": {
-                        "prose": 27,
-                        "sha256": "535fa6e621c10b299f9975446418aaac1e7ea407545a3c7d5f1259a4154d147a"
-                      },
-                      "filePath": "<ws>/notes.txt",
-                      "numLines": 1,
-                      "requestedLimit": 2000,
-                      "requestedOffset": null,
-                      "startLine": 1,
-                      "totalLines": 1,
-                      "wasTruncated": false
-                    },
-                    "outputText": "",
-                    "status": "completed"
-                  },
-                  "title": "read_file",
-                  "turnId": "<id-3>",
-                  "type": "effect",
-                  "updatedAt": "<time>"
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
-                  ],
-                  [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "title",
-                    null
-                  ],
-                  [
-                    "detail",
-                    [
-                      [
-                        "toolName",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "summary",
-                            null
-                          ],
-                          [
-                            "content",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "settledVerb",
-                            null
-                          ],
-                          [
-                            "settledMessage",
-                            null
-                          ],
-                          [
-                            "statusText",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "kind",
-                        null
-                      ],
-                      [
-                        "input",
-                        [
-                          [
-                            "filePath",
-                            null
-                          ],
-                          [
-                            "offset",
-                            null
-                          ],
-                          [
-                            "limit",
-                            null
-                          ]
-                        ]
-                      ]
-                    ]
-                  ],
-                  [
-                    "state",
-                    [
-                      [
-                        "status",
-                        null
-                      ],
-                      [
-                        "output",
-                        [
-                          [
-                            "filePath",
-                            null
-                          ],
-                          [
-                            "content",
-                            null
-                          ],
-                          [
-                            "numLines",
-                            null
-                          ],
-                          [
-                            "startLine",
-                            null
-                          ],
-                          [
-                            "requestedOffset",
-                            null
-                          ],
-                          [
-                            "requestedLimit",
-                            null
-                          ],
-                          [
-                            "totalLines",
-                            null
-                          ],
-                          [
-                            "wasTruncated",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "outputText",
-                        null
-                      ],
-                      [
-                        "durationMs",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "success",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "warnings",
-                            []
-                          ],
-                          [
-                            "approvalNote",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "decision",
-                        null
-                      ],
-                      [
-                        "approvalType",
-                        null
-                      ],
-                      [
-                        "approvalSource",
-                        null
-                      ]
-                    ]
-                  ]
-                ],
-                "pythonRendering": true
+                "pythonRendering": false
               },
               {
                 "json": {
@@ -1825,11 +1355,14 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
-                  "inputEntryId": null,
+                  "inputEntryId": "<id-1>",
+                  "outcome": {
+                    "type": "committed"
+                  },
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
-                  "source": null,
+                  "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
                   "updatedAt": "<time>",
@@ -1898,9 +1431,18 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    [
+                      [
+                        "type",
+                        null
+                      ]
+                    ]
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -1945,15 +1487,29 @@
       "observed": [
         {
           "created": [],
-          "exit": 2,
+          "exit": 1,
           "requests": [],
-          "stderr": {
-            "error": "vibe: error: argument --output: invalid choice: 'ndjson' (choose from text, json, streaming)",
-            "usage": {
-              "prose": 474,
-              "sha256": "eedab4a8d6515f365d383e3270a48ab1e744e2775e806135f2c593f0910f743f"
-            }
-          },
+          "stderr": [
+            {
+              "prose": 53,
+              "sha256": "9eebb5563c74790e797ef2fe0a07e4f35314941f299a497e7924d9e562ed4c59"
+            },
+            {
+              "prose": 42,
+              "sha256": "3aa35641827d0fcaa9e1330330fde02f9988ff187173244c4cfeea298d6c10c4"
+            },
+            "",
+            {
+              "prose": 37,
+              "sha256": "c0c7bf3a23fda438509eb5d8505f0a4ceb64b58285d5e8efdbe0acea5c944232"
+            },
+            "",
+            {
+              "prose": 35,
+              "sha256": "68a07987c827a1aca3ce04b6e7d2121287704c0c4e33fb46430af93e7fd2ae08"
+            },
+            ""
+          ],
           "stdout": ""
         }
       ],
@@ -1988,13 +1544,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2042,13 +1598,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2161,13 +1717,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2275,8 +1831,8 @@
           "stderr": [
             {
               "message": {
-                "prose": 67,
-                "sha256": "784540ab761f8f57ff1c7ab69f517d05fb2ddd505d55713f82cae9e008603491"
+                "prose": 22,
+                "sha256": "2d4b6b2cf5226e3ff61b9f45017ffc9f2bfbc07b913d9d57b411ca7624f98851"
               },
               "prefix": "Error: "
             },
@@ -2315,13 +1871,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2350,13 +1906,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2377,11 +1933,12 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
-                "source": "harness",
-                "turnId": null,
+                "source": "turn_start",
+                "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
                 "userDisplayContent": null
@@ -2395,33 +1952,19 @@
                 ],
                 "createdAt": "<time>",
                 "generationStatus": "completed",
-                "id": "<id-3>",
-                "inputEntryId": null,
+                "id": "<id-4>",
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
                 "source": "harness",
-                "turnId": null,
+                "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
                 "userDisplayContent": null
-              },
-              {
-                "createdAt": "<time>",
-                "details": null,
-                "generationStatus": "completed",
-                "id": "<id-4>",
-                "inputEntryId": null,
-                "kind": "resume",
-                "message": {
-                  "prose": 15,
-                  "sha256": "85515f3d3de09e75912df6417c23d404efa5a284de77005c8b7a54b0a7451a2a"
-                },
-                "relatedEntryId": null,
-                "sessionId": "<id-2>",
-                "turnId": null,
-                "type": "checkpoint",
-                "updatedAt": "<time>"
               },
               {
                 "content": [
@@ -2434,6 +1977,7 @@
                 "generationStatus": "completed",
                 "id": "<id-5>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -2453,11 +1997,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-7>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-5>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-6>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -2528,120 +2075,9 @@
                 [
                   "userDisplayContent",
                   null
-                ]
-              ],
-              [
-                [
-                  "id",
-                  null
                 ],
                 [
-                  "sessionId",
-                  null
-                ],
-                [
-                  "turnId",
-                  null
-                ],
-                [
-                  "inputEntryId",
-                  null
-                ],
-                [
-                  "createdAt",
-                  null
-                ],
-                [
-                  "updatedAt",
-                  null
-                ],
-                [
-                  "generationStatus",
-                  null
-                ],
-                [
-                  "relatedEntryId",
-                  null
-                ],
-                [
-                  "type",
-                  null
-                ],
-                [
-                  "role",
-                  null
-                ],
-                [
-                  "content",
-                  [
-                    [
-                      [
-                        "type",
-                        null
-                      ],
-                      [
-                        "text",
-                        null
-                      ]
-                    ]
-                  ]
-                ],
-                [
-                  "source",
-                  null
-                ],
-                [
-                  "userDisplayContent",
-                  null
-                ]
-              ],
-              [
-                [
-                  "id",
-                  null
-                ],
-                [
-                  "sessionId",
-                  null
-                ],
-                [
-                  "turnId",
-                  null
-                ],
-                [
-                  "inputEntryId",
-                  null
-                ],
-                [
-                  "createdAt",
-                  null
-                ],
-                [
-                  "updatedAt",
-                  null
-                ],
-                [
-                  "generationStatus",
-                  null
-                ],
-                [
-                  "relatedEntryId",
-                  null
-                ],
-                [
-                  "type",
-                  null
-                ],
-                [
-                  "kind",
-                  null
-                ],
-                [
-                  "message",
-                  null
-                ],
-                [
-                  "details",
+                  "outcome",
                   null
                 ]
               ],
@@ -2708,6 +2144,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ],
               [
@@ -2773,6 +2218,84 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  null
+                ]
+              ],
+              [
+                [
+                  "id",
+                  null
+                ],
+                [
+                  "sessionId",
+                  null
+                ],
+                [
+                  "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
+                  null
+                ],
+                [
+                  "createdAt",
+                  null
+                ],
+                [
+                  "updatedAt",
+                  null
+                ],
+                [
+                  "generationStatus",
+                  null
+                ],
+                [
+                  "relatedEntryId",
+                  null
+                ],
+                [
+                  "type",
+                  null
+                ],
+                [
+                  "role",
+                  null
+                ],
+                [
+                  "content",
+                  [
+                    [
+                      [
+                        "type",
+                        null
+                      ],
+                      [
+                        "text",
+                        null
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "source",
+                  null
+                ],
+                [
+                  "userDisplayContent",
+                  null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -2829,13 +2352,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2864,13 +2387,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -2884,7 +2407,7 @@
                 "json": {
                   "content": [
                     {
-                      "text": "first",
+                      "text": "second",
                       "type": "text"
                     }
                   ],
@@ -2892,257 +2415,12 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
-                  "relatedEntryId": null,
-                  "role": "user",
-                  "sessionId": "<id-2>",
-                  "source": "harness",
-                  "turnId": null,
-                  "type": "message",
-                  "updatedAt": "<time>",
-                  "userDisplayContent": null
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
-                  ],
-                  [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "role",
-                    null
-                  ],
-                  [
-                    "content",
-                    [
-                      [
-                        [
-                          "type",
-                          null
-                        ],
-                        [
-                          "text",
-                          null
-                        ]
-                      ]
-                    ]
-                  ],
-                  [
-                    "source",
-                    null
-                  ],
-                  [
-                    "userDisplayContent",
-                    null
-                  ]
-                ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "content": [
-                    {
-                      "text": "One.",
-                      "type": "text"
-                    }
-                  ],
-                  "createdAt": "<time>",
-                  "generationStatus": "completed",
-                  "id": "<id-3>",
-                  "inputEntryId": null,
-                  "relatedEntryId": null,
-                  "role": "assistant",
-                  "sessionId": "<id-2>",
-                  "source": "harness",
-                  "turnId": null,
-                  "type": "message",
-                  "updatedAt": "<time>",
-                  "userDisplayContent": null
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
-                  ],
-                  [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "role",
-                    null
-                  ],
-                  [
-                    "content",
-                    [
-                      [
-                        [
-                          "type",
-                          null
-                        ],
-                        [
-                          "text",
-                          null
-                        ]
-                      ]
-                    ]
-                  ],
-                  [
-                    "source",
-                    null
-                  ],
-                  [
-                    "userDisplayContent",
-                    null
-                  ]
-                ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "createdAt": "<time>",
-                  "details": null,
-                  "generationStatus": "completed",
-                  "id": "<id-4>",
-                  "inputEntryId": null,
-                  "kind": "resume",
-                  "message": {
-                    "prose": 15,
-                    "sha256": "85515f3d3de09e75912df6417c23d404efa5a284de77005c8b7a54b0a7451a2a"
-                  },
-                  "relatedEntryId": null,
-                  "sessionId": "<id-2>",
-                  "turnId": null,
-                  "type": "checkpoint",
-                  "updatedAt": "<time>"
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
-                  ],
-                  [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "kind",
-                    null
-                  ],
-                  [
-                    "message",
-                    null
-                  ],
-                  [
-                    "details",
-                    null
-                  ]
-                ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "content": [
-                    {
-                      "text": "second",
-                      "type": "text"
-                    }
-                  ],
-                  "createdAt": "<time>",
-                  "generationStatus": "completed",
-                  "id": "<id-5>",
-                  "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
                   "source": "turn_start",
-                  "turnId": "<id-6>",
+                  "turnId": "<id-3>",
                   "type": "message",
                   "updatedAt": "<time>",
                   "userDisplayContent": null
@@ -3210,9 +2488,13 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               },
               {
                 "json": {
@@ -3224,13 +2506,16 @@
                   ],
                   "createdAt": "<time>",
                   "generationStatus": "completed",
-                  "id": "<id-7>",
-                  "inputEntryId": null,
+                  "id": "<id-4>",
+                  "inputEntryId": "<id-1>",
+                  "outcome": {
+                    "type": "committed"
+                  },
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
-                  "source": null,
-                  "turnId": "<id-6>",
+                  "source": "harness",
+                  "turnId": "<id-3>",
                   "type": "message",
                   "updatedAt": "<time>",
                   "userDisplayContent": null
@@ -3298,9 +2583,18 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    [
+                      [
+                        "type",
+                        null
+                      ]
+                    ]
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -3355,13 +2649,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -3390,13 +2684,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -3405,7 +2699,10 @@
             ""
           ],
           "stdout": [
-            "One.",
+            {
+              "prose": 1,
+              "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068"
+            },
             ""
           ]
         }
@@ -3456,13 +2753,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -3483,6 +2780,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -3502,11 +2800,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -3577,6 +2878,10 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  null
                 ]
               ],
               [
@@ -3642,6 +2947,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -3665,13 +2979,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -3734,13 +3048,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3756,13 +3070,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3780,13 +3094,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3806,41 +3120,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
-                "write_file"
-              ]
-            },
-            {
-              "maxTokens": null,
-              "model": "mistral-vibe-cli-latest",
-              "roles": [
-                "system",
-                "user",
-                "assistant",
-                "tool",
-                "assistant",
-                "tool",
-                "assistant",
-                "tool",
-                "assistant",
-                "tool"
-              ],
-              "tools": [
-                "bash",
-                "edit",
-                "grep",
-                "read_file",
-                "skill",
-                "task",
-                "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3857,20 +3143,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3889,20 +3173,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3923,20 +3205,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3959,20 +3239,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -3997,20 +3275,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4037,20 +3313,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4079,20 +3353,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4123,20 +3395,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4169,20 +3439,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4217,20 +3485,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4267,20 +3533,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4319,20 +3583,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4373,20 +3635,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4429,20 +3689,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4487,20 +3745,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4547,20 +3803,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4609,20 +3863,18 @@
                 "assistant",
                 "tool",
                 "assistant",
-                "tool",
-                "assistant",
                 "tool"
               ],
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -4673,6 +3925,68 @@
                 "assistant",
                 "tool",
                 "assistant",
+                "tool"
+              ],
+              "tools": [
+                "bash",
+                "edit",
+                "read_file",
+                "run_typescript",
+                "search_tool_functions",
+                "skill",
+                "todo",
+                "unified_harness_scratchpad",
+                "wait",
+                "write_file"
+              ]
+            },
+            {
+              "maxTokens": null,
+              "model": "mistral-vibe-cli-latest",
+              "roles": [
+                "system",
+                "user",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
+                "tool",
+                "assistant",
                 "tool",
                 "assistant",
                 "tool"
@@ -4680,13 +3994,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -4967,7 +4281,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 3,
           "requests": [
             {
               "maxTokens": null,
@@ -4979,23 +4293,21 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
             {
-              "stopEvent": {
-                "prose": 23,
-                "sha256": "ba698a5f82e6dd00b87d5fd94804b90c25a119c24626970ba33ff02821f7bd9a"
-              }
+              "prose": 19,
+              "sha256": "c7f0ce1fc87229f42827d8213bc47a01fe031609d98357b348b1629937bcbaab"
             },
             ""
           ],
@@ -5013,6 +4325,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -5085,378 +4398,13 @@
                   [
                     "userDisplayContent",
                     null
-                  ]
-                ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "createdAt": "<time>",
-                  "detail": {
-                    "display": {
-                      "content": null,
-                      "message": "notes.txt",
-                      "settledMessage": "notes.txt",
-                      "settledVerb": "Read",
-                      "statusText": {
-                        "prose": 12,
-                        "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
-                      },
-                      "suffix": "",
-                      "summary": {
-                        "prose": 17,
-                        "sha256": "85c49f1b7298ed4f2fd20c98096f271acf355cc3e6682a0d9d965e2bc24c3781"
-                      },
-                      "verb": "Reading"
-                    },
-                    "input": {
-                      "filePath": "notes.txt",
-                      "limit": 2000,
-                      "offset": null
-                    },
-                    "kind": "file_read",
-                    "toolName": "read_file"
-                  },
-                  "generationStatus": "completed",
-                  "id": "call_read",
-                  "inputEntryId": null,
-                  "relatedEntryId": null,
-                  "sessionId": "<id-2>",
-                  "state": {
-                    "approvalSource": "config",
-                    "approvalType": "always",
-                    "decision": "execute",
-                    "display": {
-                      "approvalNote": null,
-                      "message": {
-                        "prose": 21,
-                        "sha256": "06ce996ef3e0ed8015120a3a6d4c5a0a6f15398da2ddea3adb169f3cc125b7f3"
-                      },
-                      "success": true,
-                      "suffix": "",
-                      "verb": "Read",
-                      "warnings": []
-                    },
-                    "durationMs": "<duration>",
-                    "output": {
-                      "content": {
-                        "prose": 27,
-                        "sha256": "535fa6e621c10b299f9975446418aaac1e7ea407545a3c7d5f1259a4154d147a"
-                      },
-                      "filePath": "<ws>/notes.txt",
-                      "numLines": 1,
-                      "requestedLimit": 2000,
-                      "requestedOffset": null,
-                      "startLine": 1,
-                      "totalLines": 1,
-                      "wasTruncated": false
-                    },
-                    "outputText": "",
-                    "status": "completed"
-                  },
-                  "title": "read_file",
-                  "turnId": "<id-3>",
-                  "type": "effect",
-                  "updatedAt": "<time>"
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
                   ],
                   [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "title",
-                    null
-                  ],
-                  [
-                    "detail",
-                    [
-                      [
-                        "toolName",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "summary",
-                            null
-                          ],
-                          [
-                            "content",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "settledVerb",
-                            null
-                          ],
-                          [
-                            "settledMessage",
-                            null
-                          ],
-                          [
-                            "statusText",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "kind",
-                        null
-                      ],
-                      [
-                        "input",
-                        [
-                          [
-                            "filePath",
-                            null
-                          ],
-                          [
-                            "offset",
-                            null
-                          ],
-                          [
-                            "limit",
-                            null
-                          ]
-                        ]
-                      ]
-                    ]
-                  ],
-                  [
-                    "state",
-                    [
-                      [
-                        "status",
-                        null
-                      ],
-                      [
-                        "output",
-                        [
-                          [
-                            "filePath",
-                            null
-                          ],
-                          [
-                            "content",
-                            null
-                          ],
-                          [
-                            "numLines",
-                            null
-                          ],
-                          [
-                            "startLine",
-                            null
-                          ],
-                          [
-                            "requestedOffset",
-                            null
-                          ],
-                          [
-                            "requestedLimit",
-                            null
-                          ],
-                          [
-                            "totalLines",
-                            null
-                          ],
-                          [
-                            "wasTruncated",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "outputText",
-                        null
-                      ],
-                      [
-                        "durationMs",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "success",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "warnings",
-                            []
-                          ],
-                          [
-                            "approvalNote",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "decision",
-                        null
-                      ],
-                      [
-                        "approvalType",
-                        null
-                      ],
-                      [
-                        "approvalSource",
-                        null
-                      ]
-                    ]
-                  ]
-                ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "content": [
-                    {
-                      "text": {
-                        "stopEvent": {
-                          "prose": 23,
-                          "sha256": "ba698a5f82e6dd00b87d5fd94804b90c25a119c24626970ba33ff02821f7bd9a"
-                        }
-                      },
-                      "type": "text"
-                    }
-                  ],
-                  "createdAt": "<time>",
-                  "generationStatus": "completed",
-                  "id": "<id-4>",
-                  "inputEntryId": null,
-                  "relatedEntryId": null,
-                  "role": "assistant",
-                  "sessionId": "<id-2>",
-                  "source": null,
-                  "turnId": "<id-3>",
-                  "type": "message",
-                  "updatedAt": "<time>",
-                  "userDisplayContent": null
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
-                  ],
-                  [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "role",
-                    null
-                  ],
-                  [
-                    "content",
-                    [
-                      [
-                        [
-                          "type",
-                          null
-                        ],
-                        [
-                          "text",
-                          null
-                        ]
-                      ]
-                    ]
-                  ],
-                  [
-                    "source",
-                    null
-                  ],
-                  [
-                    "userDisplayContent",
+                    "outcome",
                     null
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -5503,7 +4451,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 3,
           "requests": [
             {
               "maxTokens": null,
@@ -5515,27 +4463,122 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
             {
-              "stopEvent": {
-                "prose": 23,
-                "sha256": "ba698a5f82e6dd00b87d5fd94804b90c25a119c24626970ba33ff02821f7bd9a"
-              }
+              "prose": 19,
+              "sha256": "c7f0ce1fc87229f42827d8213bc47a01fe031609d98357b348b1629937bcbaab"
             },
             ""
           ],
-          "stdout": ""
+          "stdout": {
+            "json": [
+              {
+                "content": [
+                  {
+                    "text": "read it",
+                    "type": "text"
+                  }
+                ],
+                "createdAt": "<time>",
+                "generationStatus": "completed",
+                "id": "<id-1>",
+                "inputEntryId": null,
+                "outcome": null,
+                "relatedEntryId": null,
+                "role": "user",
+                "sessionId": "<id-2>",
+                "source": "turn_start",
+                "turnId": "<id-3>",
+                "type": "message",
+                "updatedAt": "<time>",
+                "userDisplayContent": null
+              }
+            ],
+            "layout": [
+              [
+                [
+                  "id",
+                  null
+                ],
+                [
+                  "sessionId",
+                  null
+                ],
+                [
+                  "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
+                  null
+                ],
+                [
+                  "createdAt",
+                  null
+                ],
+                [
+                  "updatedAt",
+                  null
+                ],
+                [
+                  "generationStatus",
+                  null
+                ],
+                [
+                  "relatedEntryId",
+                  null
+                ],
+                [
+                  "type",
+                  null
+                ],
+                [
+                  "role",
+                  null
+                ],
+                [
+                  "content",
+                  [
+                    [
+                      [
+                        "type",
+                        null
+                      ],
+                      [
+                        "text",
+                        null
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "source",
+                  null
+                ],
+                [
+                  "userDisplayContent",
+                  null
+                ],
+                [
+                  "outcome",
+                  null
+                ]
+              ]
+            ],
+            "pythonRendering": true,
+            "trailingNewline": true
+          }
         }
       ],
       "scenario": {
@@ -5578,18 +4621,40 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
-          "requests": [],
+          "exit": 3,
+          "requests": [
+            {
+              "maxTokens": null,
+              "model": "mistral-vibe-cli-latest",
+              "roles": [
+                "system",
+                "user"
+              ],
+              "tools": [
+                "bash",
+                "edit",
+                "read_file",
+                "run_typescript",
+                "search_tool_functions",
+                "skill",
+                "todo",
+                "unified_harness_scratchpad",
+                "wait",
+                "write_file"
+              ]
+            }
+          ],
           "stderr": [
             {
-              "stopEvent": {
-                "prose": 23,
-                "sha256": "6a33c32efd9469699977d7983de7ee6b9a700565f8560d549e390cc6e3ea5f1a"
-              }
+              "prose": 19,
+              "sha256": "c7f0ce1fc87229f42827d8213bc47a01fe031609d98357b348b1629937bcbaab"
             },
             ""
           ],
-          "stdout": ""
+          "stdout": [
+            "Done.",
+            ""
+          ]
         }
       ],
       "scenario": {
@@ -5611,7 +4676,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 3,
           "requests": [
             {
               "maxTokens": null,
@@ -5623,23 +4688,21 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
             {
-              "stopEvent": {
-                "prose": 29,
-                "sha256": "a9565ebab2db0dc419a3ef38362251b32df26d2cc19bc4fe66de927a3b7aa39f"
-              }
+              "prose": 20,
+              "sha256": "200562cdffccea766d3cc03fcc987eed75e6175e7d0a2028e3dde735728c0ef3"
             },
             ""
           ],
@@ -5696,13 +4759,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -5740,7 +4803,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 3,
           "requests": [
             {
               "maxTokens": null,
@@ -5752,23 +4815,21 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
             {
-              "stopEvent": {
-                "prose": 37,
-                "sha256": "7f15e3629ad1766d440bbbebd1af5f7242830257155d5d1459f927e8bd8e75d3"
-              }
+              "prose": 20,
+              "sha256": "aed857b54ccce01c85e4cf9473c08a660d27d5eebc21a5c0453db0a92633b0e1"
             },
             ""
           ],
@@ -5813,7 +4874,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 3,
           "requests": [
             {
               "maxTokens": null,
@@ -5825,23 +4886,21 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
             {
-              "stopEvent": {
-                "prose": 38,
-                "sha256": "fe2cdedb2cadd242cd2be93b3b0b0747d14125ef1dd85bc007983c06b5ccc478"
-              }
+              "prose": 20,
+              "sha256": "aed857b54ccce01c85e4cf9473c08a660d27d5eebc21a5c0453db0a92633b0e1"
             },
             ""
           ],
@@ -5892,15 +4951,13 @@
           "created": [],
           "exit": 1,
           "requests": [],
-          "stderr": [
-            {
-              "stopEvent": {
-                "prose": 38,
-                "sha256": "612a806a4f6b6639bf4ec6c23fa6b2d02fb66c445d69bbb7e60ff6409bc0bb82"
-              }
-            },
-            ""
-          ],
+          "stderr": {
+            "error": "error: unexpected argument '-1' found",
+            "usage": {
+              "prose": 131,
+              "sha256": "fd6bb44380e13adbf90d44d3cc6c3612b5fe92f3761c4859e115da85d2edaad7"
+            }
+          },
           "stdout": ""
         }
       ],
@@ -5925,15 +4982,13 @@
           "created": [],
           "exit": 1,
           "requests": [],
-          "stderr": [
-            {
-              "stopEvent": {
-                "prose": 28,
-                "sha256": "17552c5977645f62b7828359da14ca4f3f8c7fa3ee1ffd6420e6e3b35bc2dac9"
-              }
-            },
-            ""
-          ],
+          "stderr": {
+            "error": "error: unexpected argument '-5' found",
+            "usage": {
+              "prose": 131,
+              "sha256": "03d075f95afb409bb811d6b31f15f4aefd4809c85a264802cc5ba07572053732"
+            }
+          },
           "stdout": ""
         }
       ],
@@ -5946,6 +5001,43 @@
               "hello",
               "--max-tokens",
               "-5"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "budget/time-limit",
+      "observed": [
+        {
+          "created": [],
+          "exit": 3,
+          "requests": [],
+          "stderr": [
+            {
+              "prose": 17,
+              "sha256": "16627ef5f0398346195d8e2308abcada32ef404629342bfba1321f552ec7ca97"
+            },
+            ""
+          ],
+          "stdout": ""
+        }
+      ],
+      "scenario": {
+        "name": "budget/time-limit",
+        "runs": [
+          {
+            "args": [
+              "-p",
+              "hello",
+              "--time-limit",
+              "1"
+            ],
+            "backend": [
+              {
+                "delay": 4,
+                "text": "Late."
+              }
             ]
           }
         ]
@@ -5968,13 +5060,35 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
+                "write_file"
+              ]
+            },
+            {
+              "maxTokens": null,
+              "model": "mistral-vibe-cli-latest",
+              "roles": [
+                "system",
+                "user",
+                "assistant",
+                "tool"
+              ],
+              "tools": [
+                "bash",
+                "edit",
+                "read_file",
+                "run_typescript",
+                "search_tool_functions",
+                "skill",
+                "todo",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -5996,6 +5110,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -6068,75 +5183,37 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               },
               {
                 "json": {
-                  "callbackId": "<id-5>",
+                  "content": [
+                    {
+                      "text": "Unreached.",
+                      "type": "text"
+                    }
+                  ],
                   "createdAt": "<time>",
-                  "detail": {
-                    "choices": [
-                      "approve",
-                      "approve_for_session",
-                      "approve_permanently",
-                      "deny",
-                      "cancel_turn"
-                    ],
-                    "effect": {
-                      "display": {
-                        "content": "x",
-                        "message": "a.txt",
-                        "settledMessage": "a.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 13,
-                          "sha256": "8540ab212e1bc683a217ed1aaec4a4a0233f784aed0b31c8d6b3c6b2d0d9fb54"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "x",
-                        "filePath": "a.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "kind": "approval",
-                    "pathScopeChoices": [],
-                    "reason": null,
-                    "relatedEntryId": "call_write",
-                    "requiredPermissions": []
-                  },
                   "generationStatus": "completed",
                   "id": "<id-4>",
-                  "inputEntryId": null,
-                  "relatedEntryId": "call_write",
+                  "inputEntryId": "<id-1>",
+                  "outcome": {
+                    "type": "committed"
+                  },
+                  "relatedEntryId": null,
+                  "role": "assistant",
                   "sessionId": "<id-2>",
-                  "state": {
-                    "output": {
-                      "decision": {
-                        "pathScope": null,
-                        "type": "deny"
-                      },
-                      "feedback": null,
-                      "type": "approval"
-                    },
-                    "status": "answered"
-                  },
-                  "title": {
-                    "prose": 17,
-                    "sha256": "91cb7996f9cf37c5ca4f5eaf6a9d95aac4d57bc12010ea3f11b47214cc3fb21d"
-                  },
+                  "source": "harness",
                   "turnId": "<id-3>",
-                  "type": "callback",
-                  "updatedAt": "<time>"
+                  "type": "message",
+                  "updatedAt": "<time>",
+                  "userDisplayContent": null
                 },
                 "layout": [
                   [
@@ -6176,374 +5253,43 @@
                     null
                   ],
                   [
-                    "callbackId",
+                    "role",
                     null
                   ],
                   [
-                    "title",
-                    null
-                  ],
-                  [
-                    "detail",
+                    "content",
                     [
                       [
-                        "kind",
-                        null
-                      ],
-                      [
-                        "effect",
                         [
-                          [
-                            "toolName",
-                            null
-                          ],
-                          [
-                            "display",
-                            [
-                              [
-                                "summary",
-                                null
-                              ],
-                              [
-                                "content",
-                                null
-                              ],
-                              [
-                                "suffix",
-                                null
-                              ],
-                              [
-                                "verb",
-                                null
-                              ],
-                              [
-                                "message",
-                                null
-                              ],
-                              [
-                                "settledVerb",
-                                null
-                              ],
-                              [
-                                "settledMessage",
-                                null
-                              ],
-                              [
-                                "statusText",
-                                null
-                              ]
-                            ]
-                          ],
-                          [
-                            "kind",
-                            null
-                          ],
-                          [
-                            "input",
-                            [
-                              [
-                                "filePath",
-                                null
-                              ],
-                              [
-                                "content",
-                                null
-                              ]
-                            ]
-                          ]
-                        ]
-                      ],
-                      [
-                        "requiredPermissions",
-                        []
-                      ],
-                      [
-                        "choices",
+                          "type",
+                          null
+                        ],
                         [
-                          null,
-                          null,
-                          null,
-                          null,
+                          "text",
                           null
                         ]
-                      ],
-                      [
-                        "pathScopeChoices",
-                        []
-                      ],
-                      [
-                        "relatedEntryId",
-                        null
-                      ],
-                      [
-                        "reason",
-                        null
                       ]
                     ]
                   ],
                   [
-                    "state",
+                    "source",
+                    null
+                  ],
+                  [
+                    "userDisplayContent",
+                    null
+                  ],
+                  [
+                    "outcome",
                     [
                       [
-                        "status",
-                        null
-                      ],
-                      [
-                        "output",
-                        [
-                          [
-                            "type",
-                            null
-                          ],
-                          [
-                            "decision",
-                            [
-                              [
-                                "type",
-                                null
-                              ],
-                              [
-                                "pathScope",
-                                null
-                              ]
-                            ]
-                          ],
-                          [
-                            "feedback",
-                            null
-                          ]
-                        ]
-                      ]
-                    ]
-                  ]
-                ],
-                "pythonRendering": true
-              },
-              {
-                "json": {
-                  "createdAt": "<time>",
-                  "detail": {
-                    "display": {
-                      "content": "x",
-                      "message": "a.txt",
-                      "settledMessage": "a.txt",
-                      "settledVerb": "Created",
-                      "statusText": {
-                        "prose": 12,
-                        "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                      },
-                      "suffix": "",
-                      "summary": {
-                        "prose": 13,
-                        "sha256": "8540ab212e1bc683a217ed1aaec4a4a0233f784aed0b31c8d6b3c6b2d0d9fb54"
-                      },
-                      "verb": "Creating"
-                    },
-                    "input": {
-                      "content": "x",
-                      "filePath": "a.txt"
-                    },
-                    "kind": "file_write",
-                    "toolName": "write_file"
-                  },
-                  "generationStatus": "completed",
-                  "id": "call_write",
-                  "inputEntryId": null,
-                  "relatedEntryId": null,
-                  "sessionId": "<id-2>",
-                  "state": {
-                    "approvalSource": "user",
-                    "approvalType": "ask",
-                    "decision": "skip",
-                    "display": {
-                      "approvalNote": null,
-                      "message": {
-                        "prose": 29,
-                        "sha256": "8494fa9de8024e1fc092f8190ac791a5ea3e2245fd2c044ee4c6086eeb7a19df"
-                      },
-                      "success": false,
-                      "suffix": "",
-                      "verb": "",
-                      "warnings": []
-                    },
-                    "durationMs": "<duration>",
-                    "outputText": "",
-                    "reason": "Cancelled",
-                    "status": "cancelled"
-                  },
-                  "title": "write_file",
-                  "turnId": "<id-3>",
-                  "type": "effect",
-                  "updatedAt": "<time>"
-                },
-                "layout": [
-                  [
-                    "id",
-                    null
-                  ],
-                  [
-                    "sessionId",
-                    null
-                  ],
-                  [
-                    "turnId",
-                    null
-                  ],
-                  [
-                    "inputEntryId",
-                    null
-                  ],
-                  [
-                    "createdAt",
-                    null
-                  ],
-                  [
-                    "updatedAt",
-                    null
-                  ],
-                  [
-                    "generationStatus",
-                    null
-                  ],
-                  [
-                    "relatedEntryId",
-                    null
-                  ],
-                  [
-                    "type",
-                    null
-                  ],
-                  [
-                    "title",
-                    null
-                  ],
-                  [
-                    "detail",
-                    [
-                      [
-                        "toolName",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "summary",
-                            null
-                          ],
-                          [
-                            "content",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "settledVerb",
-                            null
-                          ],
-                          [
-                            "settledMessage",
-                            null
-                          ],
-                          [
-                            "statusText",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "kind",
-                        null
-                      ],
-                      [
-                        "input",
-                        [
-                          [
-                            "filePath",
-                            null
-                          ],
-                          [
-                            "content",
-                            null
-                          ]
-                        ]
-                      ]
-                    ]
-                  ],
-                  [
-                    "state",
-                    [
-                      [
-                        "status",
-                        null
-                      ],
-                      [
-                        "reason",
-                        null
-                      ],
-                      [
-                        "outputText",
-                        null
-                      ],
-                      [
-                        "durationMs",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "success",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "warnings",
-                            []
-                          ],
-                          [
-                            "approvalNote",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "decision",
-                        null
-                      ],
-                      [
-                        "approvalType",
-                        null
-                      ],
-                      [
-                        "approvalSource",
+                        "type",
                         null
                       ]
                     ]
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -6587,9 +5333,7 @@
       "name": "approval/default-agent-applies-edits",
       "observed": [
         {
-          "created": [
-            "a.txt"
-          ],
+          "created": [],
           "exit": 0,
           "requests": [
             {
@@ -6602,13 +5346,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -6624,13 +5368,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -6692,13 +5436,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -6714,13 +5458,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -6741,6 +5485,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -6773,11 +5518,11 @@
                     "command": "touch made.txt"
                   },
                   "kind": "shell",
-                  "toolName": "bash"
+                  "toolName": "file_system.bash"
                 },
                 "generationStatus": "completed",
-                "id": "call_shell",
-                "inputEntryId": null,
+                "id": "<id-4>",
+                "inputEntryId": "<id-1>",
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -6802,7 +5547,7 @@
                   "outputText": "",
                   "status": "completed"
                 },
-                "title": "bash",
+                "title": "file_system.bash",
                 "turnId": "<id-3>",
                 "type": "effect",
                 "updatedAt": "<time>"
@@ -6816,12 +5561,15 @@
                 ],
                 "createdAt": "<time>",
                 "generationStatus": "completed",
-                "id": "<id-4>",
-                "inputEntryId": null,
+                "id": "<id-5>",
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -6891,6 +5639,10 @@
                 ],
                 [
                   "userDisplayContent",
+                  null
+                ],
+                [
+                  "outcome",
                   null
                 ]
               ],
@@ -6998,36 +5750,15 @@
                   "state",
                   [
                     [
-                      "status",
+                      "approvalSource",
                       null
                     ],
                     [
-                      "output",
-                      [
-                        [
-                          "stdout",
-                          null
-                        ],
-                        [
-                          "stderr",
-                          null
-                        ],
-                        [
-                          "output",
-                          null
-                        ],
-                        [
-                          "truncated",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "outputText",
+                      "approvalType",
                       null
                     ],
                     [
-                      "durationMs",
+                      "decision",
                       null
                     ],
                     [
@@ -7060,15 +5791,36 @@
                       ]
                     ],
                     [
-                      "decision",
+                      "durationMs",
                       null
                     ],
                     [
-                      "approvalType",
+                      "output",
+                      [
+                        [
+                          "stdout",
+                          null
+                        ],
+                        [
+                          "stderr",
+                          null
+                        ],
+                        [
+                          "output",
+                          null
+                        ],
+                        [
+                          "truncated",
+                          null
+                        ]
+                      ]
+                    ],
+                    [
+                      "outputText",
                       null
                     ],
                     [
-                      "approvalSource",
+                      "status",
                       null
                     ]
                   ]
@@ -7137,6 +5889,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -7195,13 +5956,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -7217,13 +5978,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -7244,6 +6005,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -7276,11 +6038,11 @@
                     "command": "touch made.txt"
                   },
                   "kind": "shell",
-                  "toolName": "bash"
+                  "toolName": "file_system.bash"
                 },
                 "generationStatus": "completed",
-                "id": "call_shell",
-                "inputEntryId": null,
+                "id": "<id-4>",
+                "inputEntryId": "<id-1>",
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -7305,7 +6067,7 @@
                   "outputText": "",
                   "status": "completed"
                 },
-                "title": "bash",
+                "title": "file_system.bash",
                 "turnId": "<id-3>",
                 "type": "effect",
                 "updatedAt": "<time>"
@@ -7319,12 +6081,15 @@
                 ],
                 "createdAt": "<time>",
                 "generationStatus": "completed",
-                "id": "<id-4>",
-                "inputEntryId": null,
+                "id": "<id-5>",
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -7394,6 +6159,10 @@
                 ],
                 [
                   "userDisplayContent",
+                  null
+                ],
+                [
+                  "outcome",
                   null
                 ]
               ],
@@ -7501,36 +6270,15 @@
                   "state",
                   [
                     [
-                      "status",
+                      "approvalSource",
                       null
                     ],
                     [
-                      "output",
-                      [
-                        [
-                          "stdout",
-                          null
-                        ],
-                        [
-                          "stderr",
-                          null
-                        ],
-                        [
-                          "output",
-                          null
-                        ],
-                        [
-                          "truncated",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "outputText",
+                      "approvalType",
                       null
                     ],
                     [
-                      "durationMs",
+                      "decision",
                       null
                     ],
                     [
@@ -7563,15 +6311,36 @@
                       ]
                     ],
                     [
-                      "decision",
+                      "durationMs",
                       null
                     ],
                     [
-                      "approvalType",
+                      "output",
+                      [
+                        [
+                          "stdout",
+                          null
+                        ],
+                        [
+                          "stderr",
+                          null
+                        ],
+                        [
+                          "output",
+                          null
+                        ],
+                        [
+                          "truncated",
+                          null
+                        ]
+                      ]
+                    ],
+                    [
+                      "outputText",
                       null
                     ],
                     [
-                      "approvalSource",
+                      "status",
                       null
                     ]
                   ]
@@ -7640,6 +6409,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -7696,7 +6474,14 @@
                 "user"
               ],
               "tools": [
-                "read_file"
+                "bash",
+                "edit",
+                "read_file",
+                "run_typescript",
+                "search_tool_functions",
+                "skill",
+                "wait",
+                "write_file"
               ]
             }
           ],
@@ -7743,14 +6528,15 @@
                 "user"
               ],
               "tools": [
+                "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -7800,13 +6586,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -7822,13 +6608,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -7849,6 +6635,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -7862,16 +6649,13 @@
                 "createdAt": "<time>",
                 "detail": {
                   "display": {
-                    "content": {
-                      "prose": 50,
-                      "sha256": "92efd343ee81496914bc5aed7f81ecd9d827d1fb7bca53d4816ecbc8ed24935e"
-                    },
+                    "content": null,
                     "message": "quotes.txt",
                     "settledMessage": "quotes.txt",
                     "settledVerb": "Edited",
                     "statusText": {
-                      "prose": 13,
-                      "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
+                      "prose": 12,
+                      "sha256": "cba0c8fabef9370f267d9501b92d017af452633b19810c859240a18f820fad26"
                     },
                     "suffix": "",
                     "summary": {
@@ -7887,11 +6671,11 @@
                     "replaceAll": false
                   },
                   "kind": "file_edit",
-                  "toolName": "edit"
+                  "toolName": "file_system.edit"
                 },
                 "generationStatus": "completed",
-                "id": "call_edit",
-                "inputEntryId": null,
+                "id": "<id-4>",
+                "inputEntryId": "<id-1>",
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -7909,20 +6693,22 @@
                   "durationMs": "<duration>",
                   "output": {
                     "file": "<ws>/quotes.txt",
-                    "newString": "say \"hi\"\tnow",
+                    "newString": null,
                     "occurrences": [
                       {
+                        "newStartLine": 1,
                         "newText": "say \"hi\"\tnow",
                         "oldText": "say 'hi'",
                         "startLine": 1
                       }
                     ],
-                    "oldString": "say 'hi'"
+                    "oldString": null,
+                    "previousContent": "say 'hi'\n"
                   },
                   "outputText": "",
                   "status": "completed"
                 },
-                "title": "edit",
+                "title": "file_system.edit",
                 "turnId": "<id-3>",
                 "type": "effect",
                 "updatedAt": "<time>"
@@ -7936,12 +6722,15 @@
                 ],
                 "createdAt": "<time>",
                 "generationStatus": "completed",
-                "id": "<id-4>",
-                "inputEntryId": null,
+                "id": "<id-5>",
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -8011,6 +6800,10 @@
                 ],
                 [
                   "userDisplayContent",
+                  null
+                ],
+                [
+                  "outcome",
                   null
                 ]
               ],
@@ -8130,51 +6923,15 @@
                   "state",
                   [
                     [
-                      "status",
+                      "approvalSource",
                       null
                     ],
                     [
-                      "output",
-                      [
-                        [
-                          "file",
-                          null
-                        ],
-                        [
-                          "oldString",
-                          null
-                        ],
-                        [
-                          "newString",
-                          null
-                        ],
-                        [
-                          "occurrences",
-                          [
-                            [
-                              [
-                                "startLine",
-                                null
-                              ],
-                              [
-                                "oldText",
-                                null
-                              ],
-                              [
-                                "newText",
-                                null
-                              ]
-                            ]
-                          ]
-                        ]
-                      ]
-                    ],
-                    [
-                      "outputText",
+                      "approvalType",
                       null
                     ],
                     [
-                      "durationMs",
+                      "decision",
                       null
                     ],
                     [
@@ -8207,15 +6964,59 @@
                       ]
                     ],
                     [
-                      "decision",
+                      "durationMs",
                       null
                     ],
                     [
-                      "approvalType",
+                      "output",
+                      [
+                        [
+                          "file",
+                          null
+                        ],
+                        [
+                          "oldString",
+                          null
+                        ],
+                        [
+                          "newString",
+                          null
+                        ],
+                        [
+                          "occurrences",
+                          [
+                            [
+                              [
+                                "startLine",
+                                null
+                              ],
+                              [
+                                "newStartLine",
+                                null
+                              ],
+                              [
+                                "oldText",
+                                null
+                              ],
+                              [
+                                "newText",
+                                null
+                              ]
+                            ]
+                          ]
+                        ],
+                        [
+                          "previousContent",
+                          null
+                        ]
+                      ]
+                    ],
+                    [
+                      "outputText",
                       null
                     ],
                     [
-                      "approvalSource",
+                      "status",
                       null
                     ]
                   ]
@@ -8284,6 +7085,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -8344,13 +7154,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -8366,13 +7176,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -8393,6 +7203,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -8401,71 +7212,6 @@
                 "type": "message",
                 "updatedAt": "<time>",
                 "userDisplayContent": null
-              },
-              {
-                "createdAt": "<time>",
-                "detail": {
-                  "display": {
-                    "content": null,
-                    "message": "missing.txt",
-                    "settledMessage": "missing.txt",
-                    "settledVerb": "Read",
-                    "statusText": {
-                      "prose": 12,
-                      "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
-                    },
-                    "suffix": "",
-                    "summary": {
-                      "prose": 19,
-                      "sha256": "02203cfcde4c42b18c0c922b2c9a4336b6e46ecbb332572a28566bd17ada38a7"
-                    },
-                    "verb": "Reading"
-                  },
-                  "input": {
-                    "filePath": "missing.txt",
-                    "limit": 2000,
-                    "offset": null
-                  },
-                  "kind": "file_read",
-                  "toolName": "read_file"
-                },
-                "generationStatus": "completed",
-                "id": "call_read",
-                "inputEntryId": null,
-                "relatedEntryId": null,
-                "sessionId": "<id-2>",
-                "state": {
-                  "approvalSource": "config",
-                  "approvalType": "always",
-                  "decision": "execute",
-                  "display": {
-                    "approvalNote": null,
-                    "message": {
-                      "prose": 53,
-                      "sha256": "8dda2ca406d78eb11d6f591d7310c1fa2be41da9969164e64217e34e1f4a6deb"
-                    },
-                    "success": false,
-                    "suffix": "",
-                    "verb": "",
-                    "warnings": []
-                  },
-                  "durationMs": "<duration>",
-                  "error": {
-                    "code": null,
-                    "details": null,
-                    "message": {
-                      "prose": 53,
-                      "sha256": "8dda2ca406d78eb11d6f591d7310c1fa2be41da9969164e64217e34e1f4a6deb"
-                    }
-                  },
-                  "output": null,
-                  "outputText": "",
-                  "status": "failed"
-                },
-                "title": "read_file",
-                "turnId": "<id-3>",
-                "type": "effect",
-                "updatedAt": "<time>"
               },
               {
                 "content": [
@@ -8477,11 +7223,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -8552,194 +7301,10 @@
                 [
                   "userDisplayContent",
                   null
-                ]
-              ],
-              [
+                ],
                 [
-                  "id",
+                  "outcome",
                   null
-                ],
-                [
-                  "sessionId",
-                  null
-                ],
-                [
-                  "turnId",
-                  null
-                ],
-                [
-                  "inputEntryId",
-                  null
-                ],
-                [
-                  "createdAt",
-                  null
-                ],
-                [
-                  "updatedAt",
-                  null
-                ],
-                [
-                  "generationStatus",
-                  null
-                ],
-                [
-                  "relatedEntryId",
-                  null
-                ],
-                [
-                  "type",
-                  null
-                ],
-                [
-                  "title",
-                  null
-                ],
-                [
-                  "detail",
-                  [
-                    [
-                      "toolName",
-                      null
-                    ],
-                    [
-                      "display",
-                      [
-                        [
-                          "summary",
-                          null
-                        ],
-                        [
-                          "content",
-                          null
-                        ],
-                        [
-                          "suffix",
-                          null
-                        ],
-                        [
-                          "verb",
-                          null
-                        ],
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "settledVerb",
-                          null
-                        ],
-                        [
-                          "settledMessage",
-                          null
-                        ],
-                        [
-                          "statusText",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "kind",
-                      null
-                    ],
-                    [
-                      "input",
-                      [
-                        [
-                          "filePath",
-                          null
-                        ],
-                        [
-                          "offset",
-                          null
-                        ],
-                        [
-                          "limit",
-                          null
-                        ]
-                      ]
-                    ]
-                  ]
-                ],
-                [
-                  "state",
-                  [
-                    [
-                      "status",
-                      null
-                    ],
-                    [
-                      "error",
-                      [
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "code",
-                          null
-                        ],
-                        [
-                          "details",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "output",
-                      null
-                    ],
-                    [
-                      "outputText",
-                      null
-                    ],
-                    [
-                      "durationMs",
-                      null
-                    ],
-                    [
-                      "display",
-                      [
-                        [
-                          "success",
-                          null
-                        ],
-                        [
-                          "verb",
-                          null
-                        ],
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "warnings",
-                          []
-                        ],
-                        [
-                          "approvalNote",
-                          null
-                        ],
-                        [
-                          "suffix",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "decision",
-                      null
-                    ],
-                    [
-                      "approvalType",
-                      null
-                    ],
-                    [
-                      "approvalSource",
-                      null
-                    ]
-                  ]
                 ]
               ],
               [
@@ -8805,6 +7370,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -8860,13 +7434,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -8882,13 +7456,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -8909,6 +7483,7 @@
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
+                "outcome": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -8917,64 +7492,6 @@
                 "type": "message",
                 "updatedAt": "<time>",
                 "userDisplayContent": null
-              },
-              {
-                "createdAt": "<time>",
-                "detail": {
-                  "display": {
-                    "content": null,
-                    "message": "ask_user_question",
-                    "settledMessage": "ask_user_question",
-                    "settledVerb": "Ran",
-                    "statusText": {
-                      "prose": 25,
-                      "sha256": "dd5c658c2f617d34be3bcca9cea606209dae81bf5a32eb11ddb69234f41500eb"
-                    },
-                    "suffix": "",
-                    "summary": "ask_user_question",
-                    "verb": "Running"
-                  },
-                  "input": null,
-                  "kind": "tool",
-                  "toolName": "ask_user_question"
-                },
-                "generationStatus": "completed",
-                "id": "call_ask",
-                "inputEntryId": null,
-                "relatedEntryId": null,
-                "sessionId": "<id-2>",
-                "state": {
-                  "approvalSource": null,
-                  "approvalType": null,
-                  "decision": null,
-                  "display": {
-                    "approvalNote": null,
-                    "message": {
-                      "prose": 51,
-                      "sha256": "cb315b6867b0f8ba324a132939a8e6a186be1a774417e8f9c5d4436b870a09bc"
-                    },
-                    "success": false,
-                    "suffix": "",
-                    "verb": "",
-                    "warnings": []
-                  },
-                  "durationMs": "<duration>",
-                  "error": {
-                    "code": null,
-                    "details": null,
-                    "message": {
-                      "prose": 51,
-                      "sha256": "cb315b6867b0f8ba324a132939a8e6a186be1a774417e8f9c5d4436b870a09bc"
-                    }
-                  },
-                  "output": null,
-                  "outputText": "",
-                  "status": "failed"
-                },
-                "title": "ask_user_question",
-                "turnId": "<id-3>",
-                "type": "effect",
-                "updatedAt": "<time>"
               },
               {
                 "content": [
@@ -8986,11 +7503,14 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
-                "inputEntryId": null,
+                "inputEntryId": "<id-1>",
+                "outcome": {
+                  "type": "committed"
+                },
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
-                "source": null,
+                "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
                 "updatedAt": "<time>",
@@ -9061,181 +7581,10 @@
                 [
                   "userDisplayContent",
                   null
-                ]
-              ],
-              [
+                ],
                 [
-                  "id",
+                  "outcome",
                   null
-                ],
-                [
-                  "sessionId",
-                  null
-                ],
-                [
-                  "turnId",
-                  null
-                ],
-                [
-                  "inputEntryId",
-                  null
-                ],
-                [
-                  "createdAt",
-                  null
-                ],
-                [
-                  "updatedAt",
-                  null
-                ],
-                [
-                  "generationStatus",
-                  null
-                ],
-                [
-                  "relatedEntryId",
-                  null
-                ],
-                [
-                  "type",
-                  null
-                ],
-                [
-                  "title",
-                  null
-                ],
-                [
-                  "detail",
-                  [
-                    [
-                      "toolName",
-                      null
-                    ],
-                    [
-                      "display",
-                      [
-                        [
-                          "summary",
-                          null
-                        ],
-                        [
-                          "content",
-                          null
-                        ],
-                        [
-                          "suffix",
-                          null
-                        ],
-                        [
-                          "verb",
-                          null
-                        ],
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "settledVerb",
-                          null
-                        ],
-                        [
-                          "settledMessage",
-                          null
-                        ],
-                        [
-                          "statusText",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "kind",
-                      null
-                    ],
-                    [
-                      "input",
-                      null
-                    ]
-                  ]
-                ],
-                [
-                  "state",
-                  [
-                    [
-                      "status",
-                      null
-                    ],
-                    [
-                      "error",
-                      [
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "code",
-                          null
-                        ],
-                        [
-                          "details",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "output",
-                      null
-                    ],
-                    [
-                      "outputText",
-                      null
-                    ],
-                    [
-                      "durationMs",
-                      null
-                    ],
-                    [
-                      "display",
-                      [
-                        [
-                          "success",
-                          null
-                        ],
-                        [
-                          "verb",
-                          null
-                        ],
-                        [
-                          "message",
-                          null
-                        ],
-                        [
-                          "warnings",
-                          []
-                        ],
-                        [
-                          "approvalNote",
-                          null
-                        ],
-                        [
-                          "suffix",
-                          null
-                        ]
-                      ]
-                    ],
-                    [
-                      "decision",
-                      null
-                    ],
-                    [
-                      "approvalType",
-                      null
-                    ],
-                    [
-                      "approvalSource",
-                      null
-                    ]
-                  ]
                 ]
               ],
               [
@@ -9301,6 +7650,15 @@
                 [
                   "userDisplayContent",
                   null
+                ],
+                [
+                  "outcome",
+                  [
+                    [
+                      "type",
+                      null
+                    ]
+                  ]
                 ]
               ]
             ],
@@ -9361,13 +7719,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             },
@@ -9383,13 +7741,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -9411,6 +7769,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -9483,9 +7842,13 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               },
               {
                 "json": {
@@ -9525,11 +7888,11 @@
                       ]
                     },
                     "kind": "todo",
-                    "toolName": "todo"
+                    "toolName": "vibe.todo"
                   },
                   "generationStatus": "completed",
-                  "id": "call_todo",
-                  "inputEntryId": null,
+                  "id": "<id-4>",
+                  "inputEntryId": "<id-1>",
                   "relatedEntryId": null,
                   "sessionId": "<id-2>",
                   "state": {
@@ -9558,10 +7921,13 @@
                         }
                       ]
                     },
-                    "outputText": "",
+                    "outputText": {
+                      "prose": 157,
+                      "sha256": "6426af4b154073877356e971458736c10b321f3773a2aa88ac5722731a95f3c1"
+                    },
                     "status": "completed"
                   },
-                  "title": "todo",
+                  "title": "vibe.todo",
                   "turnId": "<id-3>",
                   "type": "effect",
                   "updatedAt": "<time>"
@@ -9693,7 +8059,48 @@
                     "state",
                     [
                       [
-                        "status",
+                        "approvalSource",
+                        null
+                      ],
+                      [
+                        "approvalType",
+                        null
+                      ],
+                      [
+                        "decision",
+                        null
+                      ],
+                      [
+                        "display",
+                        [
+                          [
+                            "success",
+                            null
+                          ],
+                          [
+                            "verb",
+                            null
+                          ],
+                          [
+                            "message",
+                            null
+                          ],
+                          [
+                            "warnings",
+                            []
+                          ],
+                          [
+                            "approvalNote",
+                            null
+                          ],
+                          [
+                            "suffix",
+                            null
+                          ]
+                        ]
+                      ],
+                      [
+                        "durationMs",
                         null
                       ],
                       [
@@ -9729,54 +8136,13 @@
                         null
                       ],
                       [
-                        "durationMs",
-                        null
-                      ],
-                      [
-                        "display",
-                        [
-                          [
-                            "success",
-                            null
-                          ],
-                          [
-                            "verb",
-                            null
-                          ],
-                          [
-                            "message",
-                            null
-                          ],
-                          [
-                            "warnings",
-                            []
-                          ],
-                          [
-                            "approvalNote",
-                            null
-                          ],
-                          [
-                            "suffix",
-                            null
-                          ]
-                        ]
-                      ],
-                      [
-                        "decision",
-                        null
-                      ],
-                      [
-                        "approvalType",
-                        null
-                      ],
-                      [
-                        "approvalSource",
+                        "status",
                         null
                       ]
                     ]
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               },
               {
                 "json": {
@@ -9788,12 +8154,15 @@
                   ],
                   "createdAt": "<time>",
                   "generationStatus": "completed",
-                  "id": "<id-4>",
-                  "inputEntryId": null,
+                  "id": "<id-5>",
+                  "inputEntryId": "<id-1>",
+                  "outcome": {
+                    "type": "committed"
+                  },
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
-                  "source": null,
+                  "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
                   "updatedAt": "<time>",
@@ -9862,9 +8231,18 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    [
+                      [
+                        "type",
+                        null
+                      ]
+                    ]
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -9924,13 +8302,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -9938,8 +8316,8 @@
           "stderr": [
             {
               "message": {
-                "prose": 145,
-                "sha256": "46fcd2c88412deee10a58872b271fea45945a79e6d3b9763926aabb2d08f670f"
+                "prose": 88,
+                "sha256": "b3ccd9ce05ba4492585f0c0d4a8ca33c9fc45264f64c093899c251731627434a"
               },
               "prefix": "Error: "
             },
@@ -9973,7 +8351,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 2,
           "requests": [
             {
               "maxTokens": null,
@@ -9985,13 +8363,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -9999,42 +8377,10 @@
           "stderr": [
             {
               "message": {
-                "prose": 84,
-                "sha256": "65722937c43cc8fc2bb59ec1ec5ee077ef9a7d26e455875795b392a1f478a67b"
+                "prose": 56,
+                "sha256": "d806b3623114757e825a33338f085e5c6e1df233ed2c8195529f439761484e12"
               },
               "prefix": "Error: "
-            },
-            {
-              "prose": 25,
-              "sha256": "001dcf66940649f173e4156c4ce751cb89a4342c162e62073fa030ff3ba720e9"
-            },
-            {
-              "prose": 21,
-              "sha256": "0561f6fb8000ae02152114e0c6ab6b4d1f870a549646a64606b60938dbb3b59f"
-            },
-            {
-              "prose": 17,
-              "sha256": "0c600d86fb45bf271c2b9b6b725025dfbb6a8aa592dedeb686bf3e4e23a2e0f8"
-            },
-            {
-              "prose": 21,
-              "sha256": "aea22a2bb9171b1a9cb2112bd4bf7b70f854436a2720dbd2ce04402129ca1fe3"
-            },
-            {
-              "prose": 32,
-              "sha256": "c011b0d8d5021293598a923cee2bfca9c6b8189bbe5af8a9e5505b466c7c261c"
-            },
-            {
-              "prose": 23,
-              "sha256": "ba43e15053fde02c57cc7c7f2dba827f24bb9712ca2d7e0b7c0f29e5f9d35e3d"
-            },
-            {
-              "prose": 34,
-              "sha256": "5896cdac72ef9f6a870e8006fd4667a412933628d859d368cf0872bd947f590e"
-            },
-            {
-              "prose": 147,
-              "sha256": "1cba874812592c8802a4c0464699554f5b8f4b3ea0781535fac58000fceeeb24"
             },
             ""
           ],
@@ -10052,6 +8398,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -10124,9 +8471,13 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -10160,7 +8511,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 1,
+          "exit": 2,
           "requests": [
             {
               "maxTokens": null,
@@ -10172,13 +8523,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -10186,42 +8537,10 @@
           "stderr": [
             {
               "message": {
-                "prose": 84,
-                "sha256": "65722937c43cc8fc2bb59ec1ec5ee077ef9a7d26e455875795b392a1f478a67b"
+                "prose": 56,
+                "sha256": "d806b3623114757e825a33338f085e5c6e1df233ed2c8195529f439761484e12"
               },
               "prefix": "Error: "
-            },
-            {
-              "prose": 25,
-              "sha256": "001dcf66940649f173e4156c4ce751cb89a4342c162e62073fa030ff3ba720e9"
-            },
-            {
-              "prose": 21,
-              "sha256": "0561f6fb8000ae02152114e0c6ab6b4d1f870a549646a64606b60938dbb3b59f"
-            },
-            {
-              "prose": 17,
-              "sha256": "0c600d86fb45bf271c2b9b6b725025dfbb6a8aa592dedeb686bf3e4e23a2e0f8"
-            },
-            {
-              "prose": 21,
-              "sha256": "aea22a2bb9171b1a9cb2112bd4bf7b70f854436a2720dbd2ce04402129ca1fe3"
-            },
-            {
-              "prose": 32,
-              "sha256": "c011b0d8d5021293598a923cee2bfca9c6b8189bbe5af8a9e5505b466c7c261c"
-            },
-            {
-              "prose": 23,
-              "sha256": "ba43e15053fde02c57cc7c7f2dba827f24bb9712ca2d7e0b7c0f29e5f9d35e3d"
-            },
-            {
-              "prose": 34,
-              "sha256": "5896cdac72ef9f6a870e8006fd4667a412933628d859d368cf0872bd947f590e"
-            },
-            {
-              "prose": 147,
-              "sha256": "1cba874812592c8802a4c0464699554f5b8f4b3ea0781535fac58000fceeeb24"
             },
             ""
           ],
@@ -10259,9 +8578,13 @@
           "requests": [],
           "stderr": [
             {
+              "prose": 89,
+              "sha256": "b415d87c973a4c42e16d924e38a5716412e67027f5addfafa6dafce8d0b2862d"
+            },
+            {
               "message": {
-                "prose": 175,
-                "sha256": "79439454dabf8ac72d250c21fa008452f8b049e48f7d480af693fd57c1decd85"
+                "prose": 65,
+                "sha256": "11d4c18d8e217f0010eccce5573be0111f42daa8c74cedae5b42db634a7c125a"
               },
               "prefix": "Error: "
             },
@@ -10295,8 +8618,8 @@
           "stderr": [
             {
               "message": {
-                "prose": 175,
-                "sha256": "79439454dabf8ac72d250c21fa008452f8b049e48f7d480af693fd57c1decd85"
+                "prose": 40,
+                "sha256": "148c351071d4cd80a21dd77d443681c527beca3914614495ed868b3100379e8a"
               },
               "prefix": "Error: "
             },
@@ -10337,13 +8660,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -10397,17 +8720,22 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
+            {
+              "prose": 89,
+              "sha256": "b415d87c973a4c42e16d924e38a5716412e67027f5addfafa6dafce8d0b2862d"
+            },
             ""
           ],
           "stdout": [
@@ -10448,8 +8776,8 @@
           "stderr": [
             {
               "message": {
-                "prose": 187,
-                "sha256": "9b07159bff2711758004c0e03e76b2acf6c4e52247638f969c4f756aa9444b94"
+                "prose": 77,
+                "sha256": "511652855c9ac17219f42c88223a7c5c7947f246dd6c01653da74b1935d305d0"
               },
               "prefix": "Error: "
             },
@@ -10488,13 +8816,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -10553,13 +8881,13 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
@@ -10599,7 +8927,7 @@
       "observed": [
         {
           "created": [],
-          "exit": 0,
+          "exit": 3,
           "requests": [
             {
               "maxTokens": null,
@@ -10611,18 +8939,22 @@
               "tools": [
                 "bash",
                 "edit",
-                "grep",
                 "read_file",
+                "run_typescript",
+                "search_tool_functions",
                 "skill",
-                "task",
                 "todo",
-                "web_fetch",
-                "web_search",
+                "unified_harness_scratchpad",
+                "wait",
                 "write_file"
               ]
             }
           ],
           "stderr": [
+            {
+              "prose": 19,
+              "sha256": "023d9ff6dc8e3bd81bdfef37ae96df3e88339ed91b663e1d7d02e03d264a3629"
+            },
             ""
           ],
           "stdout": {
@@ -10639,6 +8971,7 @@
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
+                  "outcome": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -10711,15 +9044,13 @@
                   [
                     "userDisplayContent",
                     null
+                  ],
+                  [
+                    "outcome",
+                    null
                   ]
                 ],
-                "pythonRendering": true
-              },
-              {
-                "line": ""
-              },
-              {
-                "line": "Bye!"
+                "pythonRendering": false
               }
             ],
             "trailingNewline": true
@@ -10754,16 +9085,13 @@
           "created": [],
           "exit": 1,
           "requests": [],
-          "stderr": [
-            {
-              "message": {
-                "prose": 145,
-                "sha256": "f69be869e8a07d338c3dc4e8359670b2896445719b89a47b87da86891395d047"
-              },
-              "prefix": "Error: "
-            },
-            ""
-          ],
+          "stderr": {
+            "error": "error: the argument '--prompt [<PROMPT>]' cannot be used with '--teleport'",
+            "usage": {
+              "prose": 86,
+              "sha256": "b76ef82b38cac70fceaa6cbb1cda1ef06234d3e97070fd9b448fa68b0aaf6bd4"
+            }
+          },
           "stdout": ""
         }
       ],
@@ -10793,16 +9121,13 @@
           "created": [],
           "exit": 1,
           "requests": [],
-          "stderr": [
-            {
-              "message": {
-                "prose": 120,
-                "sha256": "a512d486d4e3c6e6c2e8d70e040fc568a794d1dc55051bf190baa69efdd19b21"
-              },
-              "prefix": "Error: "
-            },
-            ""
-          ],
+          "stderr": {
+            "error": "error: the argument '--prompt [<PROMPT>]' cannot be used with '--teleport'",
+            "usage": {
+              "prose": 86,
+              "sha256": "b76ef82b38cac70fceaa6cbb1cda1ef06234d3e97070fd9b448fa68b0aaf6bd4"
+            }
+          },
           "stdout": ""
         }
       ],
@@ -10838,16 +9163,13 @@
           "created": [],
           "exit": 1,
           "requests": [],
-          "stderr": [
-            {
-              "message": {
-                "prose": 90,
-                "sha256": "9519c71ee95cdc1b9cdec44808708cff338d0833853bb21687e743649bda9646"
-              },
-              "prefix": "Error: "
-            },
-            ""
-          ],
+          "stderr": {
+            "error": "error: the argument '--prompt [<PROMPT>]' cannot be used with '--teleport'",
+            "usage": {
+              "prose": 86,
+              "sha256": "b76ef82b38cac70fceaa6cbb1cda1ef06234d3e97070fd9b448fa68b0aaf6bd4"
+            }
+          },
           "stdout": ""
         }
       ],
@@ -10883,16 +9205,13 @@
           "created": [],
           "exit": 1,
           "requests": [],
-          "stderr": [
-            {
-              "message": {
-                "prose": 99,
-                "sha256": "6e7b6b419a3b8ac48c04a7ccdb8795fe8077329724333d7742c2279a9bd015cd"
-              },
-              "prefix": "Error: "
-            },
-            ""
-          ],
+          "stderr": {
+            "error": "error: the argument '--prompt [<PROMPT>]' cannot be used with '--teleport'",
+            "usage": {
+              "prose": 86,
+              "sha256": "b76ef82b38cac70fceaa6cbb1cda1ef06234d3e97070fd9b448fa68b0aaf6bd4"
+            }
+          },
           "stdout": ""
         }
       ],

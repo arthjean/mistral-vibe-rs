@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "note": "Captured by scripts/parity/app_server_surface.py from the pinned reference. Names, aliases, required flags, type kinds, enum values and discriminator values only: no reference-authored prose.",
   "methods": [
@@ -26,9 +26,34 @@
       "response": "AgentsListResponse"
     },
     {
+      "name": "artifacts/list",
+      "params": "ArtifactsListParams",
+      "response": "ArtifactsListResponse"
+    },
+    {
+      "name": "artifacts/markViewed",
+      "params": "ArtifactsMarkViewedParams",
+      "response": "EmptyResponse"
+    },
+    {
+      "name": "artifacts/subscribe",
+      "params": null,
+      "response": "EmptyResponse"
+    },
+    {
+      "name": "artifacts/sync",
+      "params": "ArtifactsSyncParams",
+      "response": "EmptyResponse"
+    },
+    {
       "name": "callback/result",
       "params": "CallbackResultParams",
       "response": "CallbackResultResponse"
+    },
+    {
+      "name": "config/effective/read",
+      "params": "ConfigEffectiveReadParams",
+      "response": "ConfigEffectiveReadResponse"
     },
     {
       "name": "config/fields/read",
@@ -91,6 +116,11 @@
       "response": "ConnectorCatalogAuthRequestResponse"
     },
     {
+      "name": "connector_catalog/connect",
+      "params": "ConnectorCatalogConnectParams",
+      "response": "ConnectorCatalogMutationResponse"
+    },
+    {
       "name": "connector_catalog/read",
       "params": "ConnectorCatalogReadParams",
       "response": "ConnectorCatalogReadResponse"
@@ -104,11 +134,6 @@
       "name": "connector_catalog/toggle",
       "params": "ConnectorCatalogToggleParams",
       "response": "ConnectorCatalogMutationResponse"
-    },
-    {
-      "name": "diagnostics/list",
-      "params": "DiagnosticsListParams",
-      "response": "DiagnosticsListResponse"
     },
     {
       "name": "diagnostics/logs/read",
@@ -139,6 +164,21 @@
       "name": "identity/read",
       "params": "IdentityReadParams",
       "response": "IdentityReadResponse"
+    },
+    {
+      "name": "imports/discover",
+      "params": "ImportDiscoveryParams",
+      "response": "ImportDiscoveryResponse"
+    },
+    {
+      "name": "imports/read",
+      "params": "ImportJobReadParams",
+      "response": "ImportJobReadResponse"
+    },
+    {
+      "name": "imports/start",
+      "params": "ImportJobStartParams",
+      "response": "ImportJobStartResponse"
     },
     {
       "name": "loops/clear",
@@ -241,6 +281,11 @@
       "response": "PluginReloadResponse"
     },
     {
+      "name": "platformCredentials/headers",
+      "params": "PlatformCredentialHeadersParams",
+      "response": "PlatformCredentialHeadersResponse"
+    },
+    {
       "name": "plugins/read",
       "params": "PluginCatalogReadParams",
       "response": "PluginCatalogReadResponse"
@@ -299,6 +344,26 @@
       "name": "projectLinks/unlink",
       "params": "ProjectLinksUnlinkParams",
       "response": "ProjectLinksUnlinkResponse"
+    },
+    {
+      "name": "projects/create",
+      "params": "ProjectsCreateParams",
+      "response": "ProjectMutationResponse"
+    },
+    {
+      "name": "projects/list",
+      "params": "ProjectsListParams",
+      "response": "ProjectsListResponse"
+    },
+    {
+      "name": "projects/remove",
+      "params": "ProjectsRemoveParams",
+      "response": "EmptyResponse"
+    },
+    {
+      "name": "projects/rename",
+      "params": "ProjectsRenameParams",
+      "response": "ProjectMutationResponse"
     },
     {
       "name": "review/approve",
@@ -366,6 +431,11 @@
       "response": "ContextInjectResponse"
     },
     {
+      "name": "session/context/read",
+      "params": "SessionContextReadParams",
+      "response": "SessionContextReadResponse"
+    },
+    {
       "name": "session/delete",
       "params": "SessionDeleteParams",
       "response": "EmptyResponse"
@@ -384,6 +454,11 @@
       "name": "session/history/list",
       "params": "SessionHistoryListParams",
       "response": "SessionHistoryListResponse"
+    },
+    {
+      "name": "session/lease/subscribe",
+      "params": null,
+      "response": "SessionLeaseSubscribeResponse"
     },
     {
       "name": "session/list",
@@ -417,7 +492,7 @@
     },
     {
       "name": "session/ready/read",
-      "params": "SessionReadyReadParams",
+      "params": null,
       "response": "SessionReadyReadResponse"
     },
     {
@@ -471,6 +546,21 @@
       "response": "SessionStopResponse"
     },
     {
+      "name": "session/subagents/interrupt",
+      "params": "SessionSubagentsInterruptParams",
+      "response": "SessionSubagentsInterruptResponse"
+    },
+    {
+      "name": "session/subagents/read",
+      "params": "SessionSubagentsReadParams",
+      "response": "SessionSubagentsReadResponse"
+    },
+    {
+      "name": "session/subagents/wait",
+      "params": "SessionSubagentsWaitParams",
+      "response": "SessionSubagentsWaitResponse"
+    },
+    {
       "name": "session/title/update",
       "params": "SessionTitleUpdateParams",
       "response": "SessionTitleUpdateResponse"
@@ -479,6 +569,31 @@
       "name": "session/turns/list",
       "params": "SessionTurnsListParams",
       "response": "SessionTurnsListResponse"
+    },
+    {
+      "name": "setup/oidc-start",
+      "params": "ProtocolModel",
+      "response": "OidcStartResponse"
+    },
+    {
+      "name": "setup/oidc-poll",
+      "params": "OidcAttemptParams",
+      "response": "OidcPollResponse"
+    },
+    {
+      "name": "setup/oidc-cancel",
+      "params": "OidcAttemptParams",
+      "response": "ProtocolModel"
+    },
+    {
+      "name": "setup/oidc-probe",
+      "params": "ProtocolModel",
+      "response": "OidcProbeResponse"
+    },
+    {
+      "name": "setup/oidc-clear",
+      "params": "ProtocolModel",
+      "response": "ProtocolModel"
     },
     {
       "name": "setup/status",
@@ -536,6 +651,31 @@
       "response": "SkillsListResponse"
     },
     {
+      "name": "skills/local/delete",
+      "params": "SkillsLocalDeleteParams",
+      "response": "EmptyResponse"
+    },
+    {
+      "name": "skills/local/list",
+      "params": "SkillsLocalListParams",
+      "response": "SkillsLocalListResponse"
+    },
+    {
+      "name": "skills/local/read",
+      "params": "SkillsLocalReadParams",
+      "response": "SkillsLocalReadResponse"
+    },
+    {
+      "name": "skills/local/setEnabled",
+      "params": "SkillsLocalSetEnabledParams",
+      "response": "SkillsLocalSetEnabledResponse"
+    },
+    {
+      "name": "skills/local/write",
+      "params": "SkillsLocalWriteParams",
+      "response": "SkillsLocalWriteResponse"
+    },
+    {
       "name": "skills/remove",
       "params": "SkillsRemoveParams",
       "response": "RuntimeMutationResponse"
@@ -571,24 +711,34 @@
       "response": "SkillsVersionsResponse"
     },
     {
-      "name": "stats/read",
-      "params": "StatsReadParams",
-      "response": "StatsReadResponse"
-    },
-    {
       "name": "telemetry/record",
       "params": "TelemetryRecordParams",
       "response": "EmptyResponse"
     },
     {
-      "name": "tools/list",
-      "params": "ToolsListParams",
-      "response": "ToolsListResponse"
-    },
-    {
       "name": "session/turn/enqueue",
       "params": "TurnEnqueueParams",
       "response": "TurnEnqueueResponse"
+    },
+    {
+      "name": "session/turn/queue/edit/cancel",
+      "params": "TurnQueueEditCancelParams",
+      "response": "TurnQueueEditCancelResponse"
+    },
+    {
+      "name": "session/turn/queue/edit/abandon",
+      "params": "TurnQueueEditAbandonParams",
+      "response": "TurnQueueEditAbandonResponse"
+    },
+    {
+      "name": "session/turn/queue/edit/save",
+      "params": "TurnQueueEditSaveParams",
+      "response": "TurnQueueEditSaveResponse"
+    },
+    {
+      "name": "session/turn/queue/edit/start",
+      "params": "TurnQueueEditStartParams",
+      "response": "TurnQueueEditStartResponse"
     },
     {
       "name": "session/turn/queue/read",
@@ -701,16 +851,6 @@
       "response": "WorkspaceWorktreePruneResponse"
     },
     {
-      "name": "workspace/git/worktrees/reap",
-      "params": "WorkspaceWorktreeReapParams",
-      "response": "WorkspaceWorktreeReapResponse"
-    },
-    {
-      "name": "workspace/git/worktrees/reap/cancel",
-      "params": "WorkspaceWorktreeReapCancelParams",
-      "response": "EmptyResponse"
-    },
-    {
       "name": "workspace/git/worktrees/remove",
       "params": "WorkspaceWorktreeRemoveConfirmParams",
       "response": "WorkspaceWorktreeRemoveResponse"
@@ -778,9 +918,69 @@
       "name": "callback/call",
       "params": "CallbackCallParams",
       "response": "CallbackCallResponse"
+    },
+    {
+      "name": "platformCredentials/resolve",
+      "params": "PlatformCredentialsResolveParams",
+      "response": "PlatformCredentialsResolveResponse"
+    },
+    {
+      "name": "session/peer/archive",
+      "params": "SessionPeerArchiveParams",
+      "response": "SessionPeerArchiveResponse"
+    },
+    {
+      "name": "session/peer/list",
+      "params": "SessionPeerListParams",
+      "response": "SessionPeerListResponse"
+    },
+    {
+      "name": "session/peer/read",
+      "params": "SessionPeerReadParams",
+      "response": "SessionPeerReadResponse"
+    },
+    {
+      "name": "session/peer/restore",
+      "params": "SessionPeerRestoreParams",
+      "response": "SessionPeerRestoreResponse"
+    },
+    {
+      "name": "session/peer/send",
+      "params": "SessionPeerSendParams",
+      "response": "SessionPeerSendResponse"
+    },
+    {
+      "name": "session/spawn",
+      "params": "SessionSpawnParams",
+      "response": "SessionSpawnResponse"
     }
   ],
   "notifications": [
+    {
+      "name": "artifacts/created",
+      "params": "ArtifactCreatedParams",
+      "sequenced": true
+    },
+    {
+      "name": "artifacts/updated",
+      "params": "ArtifactUpdatedParams",
+      "sequenced": true
+    },
+    {
+      "name": "session/lease/ended",
+      "params": "SessionLeaseEnded",
+      "sequenced": false
+    },
+    {
+      "name": "imports/updated",
+      "params": "ImportJobUpdatedParams",
+      "sequenced": false
+    },
+    {
+      "name": "agentSocket/aborted",
+      "params": "AgentSocketAbortedParams",
+      "sequenced": false
+    },
     {
       "name": "session/snapshot",
       "params": "SessionSnapshotParams",
@@ -974,6 +1174,15 @@
       ]
     },
     {
+      "name": "ContextCategoryId",
+      "values": [
+        "system",
+        "tools",
+        "skills",
+        "conversation"
+      ]
+    },
+    {
       "name": "HookScope",
       "values": [
         "post_agent",
@@ -987,6 +1196,21 @@
         "ok",
         "warning",
         "error"
+      ]
+    },
+    {
+      "name": "ImportHarness",
+      "values": [
+        "claude"
+      ]
+    },
+    {
+      "name": "ImportJobStatus",
+      "values": [
+        "queued",
+        "running",
+        "completed",
+        "failed"
       ]
     },
     {
@@ -1004,6 +1228,7 @@
         "enabled",
         "needs_auth",
         "needs_setup",
+        "needs_connect",
         "unavailable"
       ]
     },
@@ -1044,6 +1269,30 @@
       ]
     },
     {
+      "name": "ProviderAuthKind",
+      "values": [
+        "api_key",
+        "none",
+        "google_adc"
+      ]
+    },
+    {
+      "name": "ProviderCredentialSourceKind",
+      "values": [
+        "process_env",
+        "vibe_home_env_file",
+        "os_keyring"
+      ]
+    },
+    {
+      "name": "ProviderCredentialSourceState",
+      "values": [
+        "in_use",
+        "available",
+        "unavailable"
+      ]
+    },
+    {
       "name": "PublicEntryGenerationStatus",
       "values": [
         "in_progress",
@@ -1072,7 +1321,8 @@
     {
       "name": "PublicTurnStopReason",
       "values": [
-        "limit"
+        "limit",
+        "length"
       ]
     },
     {
@@ -1087,6 +1337,25 @@
       "values": [
         "normal",
         "ephemeral"
+      ]
+    },
+    {
+      "name": "SubagentInterruptOutcome",
+      "values": [
+        "interrupted",
+        "notRunning",
+        "failed"
+      ]
+    },
+    {
+      "name": "SubagentRunStatus",
+      "values": [
+        "running",
+        "idle",
+        "interrupted",
+        "failed",
+        "closed",
+        "unknown"
       ]
     },
     {
@@ -1243,20 +1512,8 @@
           "value": "agent_changed"
         },
         {
-          "model": "ContextClearedNoticeDetail",
-          "value": "context_cleared"
-        },
-        {
           "model": "SessionTitleUpdatedNoticeDetail",
           "value": "session_title_updated"
-        },
-        {
-          "model": "PlanReviewStartedNoticeDetail",
-          "value": "plan_review_started"
-        },
-        {
-          "model": "PlanReviewEndedNoticeDetail",
-          "value": "plan_review_ended"
         },
         {
           "model": "WaitingForInputNoticeDetail",
@@ -1461,6 +1718,20 @@
           "value": "unavailable"
         }
       ]
+    },
+    {
+      "name": "PlatformCredentialsResolveResponse",
+      "discriminator": null,
+      "variants": [
+        {
+          "model": "PlatformCredentialsSnapshot",
+          "value": null
+        },
+        {
+          "model": "PlatformCredentialsUnavailable",
+          "value": null
+        }
+      ]
     }
   ],
   "models": [
@@ -1484,6 +1755,76 @@
           "alias": "url",
           "required": true,
           "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "AccountApiKeyView",
+      "fields": [
+        {
+          "name": "access_scope",
+          "alias": "accessScope",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "preview",
+          "alias": "preview",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "scope",
+          "alias": "scope",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "AccountBudgetView",
+      "fields": [
+        {
+          "name": "payg_enabled",
+          "alias": "paygEnabled",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "reset_at",
+          "alias": "resetAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "usage_percentage",
+          "alias": "usagePercentage",
+          "required": true,
+          "kind": "float",
           "optional": false,
           "models": [],
           "enums": [],
@@ -1563,6 +1904,30 @@
     {
       "name": "AccountView",
       "fields": [
+        {
+          "name": "api_key",
+          "alias": "apiKey",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "AccountApiKeyView"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "budget",
+          "alias": "budget",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "AccountBudgetView"
+          ],
+          "enums": [],
+          "literals": []
+        },
         {
           "name": "plan",
           "alias": "plan",
@@ -1813,6 +2178,26 @@
           "literals": []
         },
         {
+          "name": "system_prompt",
+          "alias": "systemPrompt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "terminal_key",
+          "alias": "terminalKey",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "tools",
           "alias": "tools",
           "required": false,
@@ -1896,6 +2281,21 @@
       ]
     },
     {
+      "name": "AgentSocketAbortedParams",
+      "fields": [
+        {
+          "name": "message",
+          "alias": "message",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "AgentStatsSnapshot",
       "fields": [
         {
@@ -1964,6 +2364,16 @@
           "required": false,
           "kind": "int",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "model_calls",
+          "alias": "modelCalls",
+          "required": false,
+          "kind": "int",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -2407,6 +2817,172 @@
           "literals": [
             "archived"
           ]
+        }
+      ]
+    },
+    {
+      "name": "ArtifactCreatedParams",
+      "fields": [
+        {
+          "name": "artifact",
+          "alias": "artifact",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "PublicSessionArtifact"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "emitted_at",
+          "alias": "emittedAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "event_id",
+          "alias": "eventId",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ArtifactUpdatedParams",
+      "fields": [
+        {
+          "name": "artifact",
+          "alias": "artifact",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "PublicSessionArtifact"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "emitted_at",
+          "alias": "emittedAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "event_id",
+          "alias": "eventId",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ArtifactsListParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ArtifactsListResponse",
+      "fields": [
+        {
+          "name": "artifacts",
+          "alias": "artifacts",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PublicSessionArtifact"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ArtifactsMarkViewedParams",
+      "fields": [
+        {
+          "name": "artifact_ids",
+          "alias": "artifactIds",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ArtifactsSyncParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -2856,62 +3432,6 @@
       ]
     },
     {
-      "name": "CallbackRespondParams",
-      "fields": [
-        {
-          "name": "callback_id",
-          "alias": "callbackId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "output",
-          "alias": "output",
-          "required": true,
-          "kind": "model",
-          "optional": false,
-          "models": [
-            "ApprovalCallbackOutput",
-            "UserInputCallbackOutput"
-          ],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "CallbackRespondResponse",
-      "fields": [
-        {
-          "name": "status",
-          "alias": "status",
-          "required": true,
-          "kind": "literal",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": [
-            "accepted",
-            "duplicate"
-          ]
-        }
-      ]
-    },
-    {
       "name": "CallbackResult",
       "fields": [
         {
@@ -3188,6 +3708,63 @@
           "models": [],
           "enums": [],
           "literals": []
+        },
+        {
+          "name": "open",
+          "alias": "open",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "ChannelOpen"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ChannelOpen",
+      "fields": [
+        {
+          "name": "agent_socket",
+          "alias": "agentSocket",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "config",
+          "alias": "config",
+          "required": false,
+          "kind": "dict",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "credentials",
+          "alias": "credentials",
+          "required": false,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "run_id",
+          "alias": "runId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -3274,6 +3851,48 @@
           "alias": "disabledNotifications",
           "required": false,
           "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "platform_credentials",
+          "alias": "platformCredentials",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "PlatformCredentialsCapability"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_peer_restore",
+          "alias": "sessionPeerRestore",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_peers",
+          "alias": "sessionPeers",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_spawn",
+          "alias": "sessionSpawn",
+          "required": false,
+          "kind": "bool",
           "optional": false,
           "models": [],
           "enums": [],
@@ -3605,57 +4224,19 @@
       ]
     },
     {
-      "name": "CompactionDetails",
+      "name": "CommittedGenerationOutcome",
       "fields": [
         {
-          "name": "current_context_tokens",
-          "alias": "currentContextTokens",
+          "name": "type",
+          "alias": "type",
           "required": false,
-          "kind": "int",
-          "optional": true,
+          "kind": "literal",
+          "optional": false,
           "models": [],
           "enums": [],
-          "literals": []
-        },
-        {
-          "name": "new_session_id",
-          "alias": "newSessionId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "old_session_id",
-          "alias": "oldSessionId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "summary_length",
-          "alias": "summaryLength",
-          "required": false,
-          "kind": "int",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "threshold",
-          "alias": "threshold",
-          "required": false,
-          "kind": "int",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
+          "literals": [
+            "committed"
+          ]
         }
       ]
     },
@@ -3779,6 +4360,36 @@
           "alias": "type",
           "required": false,
           "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ConfigEffectiveReadParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ConfigEffectiveReadResponse",
+      "fields": [
+        {
+          "name": "config",
+          "alias": "config",
+          "required": true,
+          "kind": "dict",
           "optional": false,
           "models": [],
           "enums": [],
@@ -4114,16 +4725,6 @@
           "literals": []
         },
         {
-          "name": "harness_selection_source",
-          "alias": "harnessSelectionSource",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
           "name": "hooks_count",
           "alias": "hooksCount",
           "required": false,
@@ -4160,18 +4761,6 @@
           "kind": "int",
           "optional": false,
           "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "startup_issue",
-          "alias": "startupIssue",
-          "required": false,
-          "kind": "model",
-          "optional": true,
-          "models": [
-            "ConfigIssue"
-          ],
           "enums": [],
           "literals": []
         },
@@ -4297,6 +4886,16 @@
           "literals": []
         },
         {
+          "name": "cursor_blink",
+          "alias": "cursorBlink",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "default_agent",
           "alias": "defaultAgent",
           "required": false,
@@ -4320,6 +4919,26 @@
           "name": "disable_welcome_banner_animation",
           "alias": "disableWelcomeBannerAnimation",
           "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enable_file_autocomplete",
+          "alias": "enableFileAutocomplete",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enable_mouse_capture",
+          "alias": "enableMouseCapture",
+          "required": false,
           "kind": "bool",
           "optional": false,
           "models": [],
@@ -4360,6 +4979,16 @@
           "name": "enable_update_checks",
           "alias": "enableUpdateChecks",
           "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "experimental_enable_local_projects",
+          "alias": "experimentalEnableLocalProjects",
+          "required": false,
           "kind": "bool",
           "optional": false,
           "models": [],
@@ -4658,6 +5287,16 @@
           "required": false,
           "kind": "list",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "reason",
+          "alias": "reason",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -5009,6 +5648,31 @@
       ]
     },
     {
+      "name": "ConnectorCatalogConnectParams",
+      "fields": [
+        {
+          "name": "alias",
+          "alias": "alias",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "ConnectorCatalogEntryView",
       "fields": [
         {
@@ -5033,6 +5697,7 @@
             "none",
             "oauth",
             "credentials_setup",
+            "no_auth_connect",
             "unknown"
           ]
         },
@@ -5068,6 +5733,7 @@
             "ready",
             "needs_auth",
             "needs_setup",
+            "needs_connect",
             "unavailable"
           ]
         },
@@ -5198,6 +5864,16 @@
           "required": false,
           "kind": "str",
           "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "private_connectors_hidden",
+          "alias": "privateConnectorsHidden",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
           "models": [],
           "enums": [],
           "literals": []
@@ -5513,28 +6189,105 @@
       ]
     },
     {
-      "name": "ContextClearedNoticeDetail",
+      "name": "ContextBreakdown",
       "fields": [
         {
-          "name": "kind",
-          "alias": "kind",
+          "name": "categories",
+          "alias": "categories",
           "required": false,
-          "kind": "literal",
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "ContextCategory"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "compaction_threshold",
+          "alias": "compactionThreshold",
+          "required": true,
+          "kind": "int",
           "optional": false,
           "models": [],
           "enums": [],
-          "literals": [
-            "context_cleared"
-          ]
+          "literals": []
         },
         {
-          "name": "plan_file_path",
-          "alias": "planFilePath",
-          "required": false,
-          "kind": "str",
-          "optional": true,
+          "name": "context_window",
+          "alias": "contextWindow",
+          "required": true,
+          "kind": "int",
+          "optional": false,
           "models": [],
           "enums": [],
+          "literals": []
+        },
+        {
+          "name": "measured",
+          "alias": "measured",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "total_characters",
+          "alias": "totalCharacters",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "used_tokens",
+          "alias": "usedTokens",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ContextCategory",
+      "fields": [
+        {
+          "name": "characters",
+          "alias": "characters",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "estimated_tokens",
+          "alias": "estimatedTokens",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ContextCategoryId"
+          ],
           "literals": []
         }
       ]
@@ -5745,48 +6498,6 @@
       ]
     },
     {
-      "name": "DiagnosticsListParams",
-      "fields": [
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "DiagnosticsListResponse",
-      "fields": [
-        {
-          "name": "hooks_count",
-          "alias": "hooksCount",
-          "required": true,
-          "kind": "int",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "issues",
-          "alias": "issues",
-          "required": true,
-          "kind": "list",
-          "optional": false,
-          "models": [
-            "ConfigIssue"
-          ],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
       "name": "DiagnosticsLogsReadParams",
       "fields": [
         {
@@ -5835,6 +6546,33 @@
           ],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "DiscardedGenerationOutcome",
+      "fields": [
+        {
+          "name": "cause",
+          "alias": "cause",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "type",
+          "alias": "type",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "discarded"
+          ]
         }
       ]
     },
@@ -6588,6 +7326,16 @@
       "name": "FileEditEffectOccurrence",
       "fields": [
         {
+          "name": "new_start_line",
+          "alias": "newStartLine",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "new_text",
           "alias": "newText",
           "required": true,
@@ -6657,6 +7405,16 @@
         {
           "name": "old_string",
           "alias": "oldString",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "previous_content",
+          "alias": "previousContent",
           "required": false,
           "kind": "str",
           "optional": true,
@@ -7181,6 +7939,18 @@
           ]
         },
         {
+          "name": "mcp_app",
+          "alias": "mcpApp",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "McpAppReference"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "tool_name",
           "alias": "toolName",
           "required": true,
@@ -7676,6 +8446,234 @@
       ]
     },
     {
+      "name": "ImportDiscoveryParams",
+      "fields": []
+    },
+    {
+      "name": "ImportDiscoveryResponse",
+      "fields": [
+        {
+          "name": "harnesses",
+          "alias": "harnesses",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "ImportHarnessDiscovery"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportHarnessDiscovery",
+      "fields": [
+        {
+          "name": "harness",
+          "alias": "harness",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ImportHarness"
+          ],
+          "literals": []
+        },
+        {
+          "name": "project_count",
+          "alias": "projectCount",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_count",
+          "alias": "sessionCount",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJob",
+      "fields": [
+        {
+          "name": "created_at",
+          "alias": "createdAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "message",
+          "alias": "message",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ImportJobStatus"
+          ],
+          "literals": []
+        },
+        {
+          "name": "updated_at",
+          "alias": "updatedAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJobReadParams",
+      "fields": [
+        {
+          "name": "after_event_id",
+          "alias": "afterEventId",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "wait_ms",
+          "alias": "waitMs",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJobReadResponse",
+      "fields": [
+        {
+          "name": "event_id",
+          "alias": "eventId",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "job",
+          "alias": "job",
+          "required": true,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "ImportJob"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJobStartParams",
+      "fields": [
+        {
+          "name": "harnesses",
+          "alias": "harnesses",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ImportHarness"
+          ],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJobStartResponse",
+      "fields": [
+        {
+          "name": "job",
+          "alias": "job",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "ImportJob"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ImportJobUpdatedParams",
+      "fields": [
+        {
+          "name": "event_id",
+          "alias": "eventId",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "job",
+          "alias": "job",
+          "required": true,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "ImportJob"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "InitializeParams",
       "fields": [
         {
@@ -7707,6 +8705,16 @@
     {
       "name": "InitializeResponse",
       "fields": [
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
         {
           "name": "server_info",
           "alias": "serverInfo",
@@ -7918,6 +8926,294 @@
       ]
     },
     {
+      "name": "LocalProjectCloudView",
+      "fields": [
+        {
+          "name": "project_id",
+          "alias": "projectId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "requested",
+            "creating",
+            "backed",
+            "retired"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LocalProjectView",
+      "fields": [
+        {
+          "name": "cloud",
+          "alias": "cloud",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "LocalProjectCloudView"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "created_at",
+          "alias": "createdAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "root_paths",
+          "alias": "rootPaths",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "updated_at",
+          "alias": "updatedAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "LocalSkillRefusalData",
+      "fields": [
+        {
+          "name": "reason",
+          "alias": "reason",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "in_the_way",
+            "skipped_file",
+            "locked",
+            "not_a_project_folder",
+            "unreadable"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "LocalSkillSummary",
+      "fields": [
+        {
+          "name": "description",
+          "alias": "description",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enabled",
+          "alias": "enabled",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "locked",
+          "alias": "locked",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "skill_name",
+          "alias": "skillName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "LocalSkillView",
+      "fields": [
+        {
+          "name": "assets",
+          "alias": "assets",
+          "required": true,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "body",
+          "alias": "body",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "description",
+          "alias": "description",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enabled",
+          "alias": "enabled",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "locked",
+          "alias": "locked",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "skill_name",
+          "alias": "skillName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "skipped_paths",
+          "alias": "skippedPaths",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "version",
+          "alias": "version",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "LoopsClearParams",
       "fields": [
         {
@@ -8087,6 +9383,76 @@
           "literals": []
         },
         {
+          "name": "api_key_env",
+          "alias": "apiKeyEnv",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "api_key_format",
+          "alias": "apiKeyFormat",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "api_key_header",
+          "alias": "apiKeyHeader",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "args",
+          "alias": "args",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "command",
+          "alias": "command",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "env",
+          "alias": "env",
+          "required": false,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "headers",
+          "alias": "headers",
+          "required": false,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "name",
           "alias": "name",
           "required": false,
@@ -8117,6 +9483,26 @@
           "literals": []
         },
         {
+          "name": "startup_timeout_sec",
+          "alias": "startupTimeoutSec",
+          "required": false,
+          "kind": "float",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "tool_timeout_sec",
+          "alias": "toolTimeoutSec",
+          "required": false,
+          "kind": "float",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "transport",
           "alias": "transport",
           "required": false,
@@ -8126,15 +9512,16 @@
           "enums": [],
           "literals": [
             "http",
-            "streamable-http"
+            "streamable-http",
+            "stdio"
           ]
         },
         {
           "name": "url",
           "alias": "url",
-          "required": true,
+          "required": false,
           "kind": "str",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -8179,9 +9566,9 @@
         {
           "name": "url",
           "alias": "url",
-          "required": true,
+          "required": false,
           "kind": "str",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -8559,6 +9946,16 @@
           "literals": []
         },
         {
+          "name": "private_connectors_hidden",
+          "alias": "privateConnectorsHidden",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "sources",
           "alias": "sources",
           "required": false,
@@ -8666,6 +10063,51 @@
       ]
     },
     {
+      "name": "McpAppReference",
+      "fields": [
+        {
+          "name": "connector_display_name",
+          "alias": "connectorDisplayName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "connector_id",
+          "alias": "connectorId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "connector_name",
+          "alias": "connectorName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "resource_uri",
+          "alias": "resourceUri",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "MentionStats",
       "fields": [
         {
@@ -8729,6 +10171,16 @@
           "literals": []
         },
         {
+          "name": "auto_compact_threshold",
+          "alias": "autoCompactThreshold",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "display_name",
           "alias": "displayName",
           "required": true,
@@ -8772,6 +10224,22 @@
           "literals": []
         },
         {
+          "name": "source",
+          "alias": "source",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "admin",
+            "growthbook",
+            "catalog",
+            "project",
+            "local"
+          ]
+        },
+        {
           "name": "supports_images",
           "alias": "supportsImages",
           "required": true,
@@ -8785,17 +10253,11 @@
           "name": "thinking",
           "alias": "thinking",
           "required": true,
-          "kind": "literal",
+          "kind": "str",
           "optional": false,
           "models": [],
           "enums": [],
-          "literals": [
-            "off",
-            "low",
-            "medium",
-            "high",
-            "max"
-          ]
+          "literals": []
         },
         {
           "name": "thinking_levels",
@@ -8805,13 +10267,7 @@
           "optional": false,
           "models": [],
           "enums": [],
-          "literals": [
-            "off",
-            "low",
-            "medium",
-            "high",
-            "max"
-          ]
+          "literals": []
         }
       ]
     },
@@ -8843,6 +10299,16 @@
           "alias": "sessionId",
           "required": true,
           "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_only",
+          "alias": "sessionOnly",
+          "required": false,
+          "kind": "bool",
           "optional": false,
           "models": [],
           "enums": [],
@@ -8995,6 +10461,101 @@
       ]
     },
     {
+      "name": "OidcAttemptParams",
+      "fields": [
+        {
+          "name": "attempt_id",
+          "alias": "attemptId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "OidcPollResponse",
+      "fields": [
+        {
+          "name": "authorization_url",
+          "alias": "authorizationUrl",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "detail",
+          "alias": "detail",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "waiting",
+            "exchanging",
+            "completed",
+            "failed"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "OidcProbeResponse",
+      "fields": [
+        {
+          "name": "issuer",
+          "alias": "issuer",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "subject",
+          "alias": "subject",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "OidcStartResponse",
+      "fields": [
+        {
+          "name": "attempt_id",
+          "alias": "attemptId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "OpaqueReviewRegion",
       "fields": [
         {
@@ -9139,6 +10700,343 @@
       ]
     },
     {
+      "name": "PeerPullRequest",
+      "fields": [
+        {
+          "name": "checks",
+          "alias": "checks",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "merge",
+          "alias": "merge",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "number",
+          "alias": "number",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "review",
+          "alias": "review",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "source_branch",
+          "alias": "sourceBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "target_branch",
+          "alias": "targetBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "url",
+          "alias": "url",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PeerSessionArchived",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PeerSessionMessage",
+      "fields": [
+        {
+          "name": "role",
+          "alias": "role",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "user",
+            "assistant",
+            "tool"
+          ]
+        },
+        {
+          "name": "text",
+          "alias": "text",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PeerSessionNotArchived",
+      "fields": [
+        {
+          "name": "error",
+          "alias": "error",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PeerSessionNotRestored",
+      "fields": [
+        {
+          "name": "error",
+          "alias": "error",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PeerSessionRestored",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PeerSessionSummary",
+      "fields": [
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "pull_requests",
+          "alias": "pullRequests",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerPullRequest"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "queued_messages",
+          "alias": "queuedMessages",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "started_by_session_id",
+          "alias": "startedBySessionId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "working",
+            "idle",
+            "waiting_for_user",
+            "failed",
+            "archived"
+          ]
+        },
+        {
+          "name": "status_detail",
+          "alias": "statusDetail",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "updated_at",
+          "alias": "updatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "url",
+          "alias": "url",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "PendingEffectState",
       "fields": [
         {
@@ -9156,28 +11054,90 @@
       ]
     },
     {
-      "name": "PlanReviewEndedNoticeDetail",
+      "name": "PlatformCredentialHeadersParams",
+      "fields": [
+        {
+          "name": "url",
+          "alias": "url",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PlatformCredentialHeadersResponse",
+      "fields": [
+        {
+          "name": "headers",
+          "alias": "headers",
+          "required": true,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PlatformCredentialsCapability",
       "fields": [
         {
           "name": "kind",
           "alias": "kind",
-          "required": false,
+          "required": true,
           "kind": "literal",
           "optional": false,
           "models": [],
           "enums": [],
           "literals": [
-            "plan_review_ended"
+            "oauth_access_token",
+            "oidc_id_token"
+          ]
+        },
+        {
+          "name": "version",
+          "alias": "version",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            1
           ]
         }
       ]
     },
     {
-      "name": "PlanReviewStartedNoticeDetail",
+      "name": "PlatformCredentialsInvalidatedParams",
       "fields": [
         {
-          "name": "file_path",
-          "alias": "filePath",
+          "name": "reason",
+          "alias": "reason",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "logout",
+            "account_changed",
+            "workspace_changed"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "PlatformCredentialsResolveParams",
+      "fields": [
+        {
+          "name": "audience",
+          "alias": "audience",
           "required": true,
           "kind": "str",
           "optional": false,
@@ -9186,15 +11146,125 @@
           "literals": []
         },
         {
+          "name": "minimum_validity_ms",
+          "alias": "minimumValidityMs",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "rejected_revision",
+          "alias": "rejectedRevision",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PlatformCredentialsSnapshot",
+      "fields": [
+        {
+          "name": "audience",
+          "alias": "audience",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "expires_at",
+          "alias": "expiresAt",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "kind",
           "alias": "kind",
-          "required": false,
+          "required": true,
           "kind": "literal",
           "optional": false,
           "models": [],
           "enums": [],
           "literals": [
-            "plan_review_started"
+            "oauth_access_token",
+            "oidc_id_token"
+          ]
+        },
+        {
+          "name": "revision",
+          "alias": "revision",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "ready"
+          ]
+        },
+        {
+          "name": "token",
+          "alias": "token",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PlatformCredentialsUnavailable",
+      "fields": [
+        {
+          "name": "reason",
+          "alias": "reason",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "missing",
+            "reauthentication_required",
+            "transient",
+            "invalid"
+          ]
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "unavailable"
           ]
         }
       ]
@@ -9896,7 +11966,8 @@
             "not_git",
             "unsupported_remote",
             "nested_unresolvable",
-            "no_commits"
+            "no_commits",
+            "git_unavailable"
           ]
         },
         {
@@ -10310,7 +12381,8 @@
             "not_git",
             "unsupported_remote",
             "nested_unresolvable",
-            "no_commits"
+            "no_commits",
+            "git_unavailable"
           ]
         },
         {
@@ -10430,6 +12502,109 @@
       ]
     },
     {
+      "name": "ProjectMutationResponse",
+      "fields": [
+        {
+          "name": "project",
+          "alias": "project",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "LocalProjectView"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProjectsCreateParams",
+      "fields": [
+        {
+          "name": "name",
+          "alias": "name",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "root_path",
+          "alias": "rootPath",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProjectsListParams",
+      "fields": []
+    },
+    {
+      "name": "ProjectsListResponse",
+      "fields": [
+        {
+          "name": "projects",
+          "alias": "projects",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "LocalProjectView"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProjectsRemoveParams",
+      "fields": [
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProjectsRenameParams",
+      "fields": [
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "ProtocolError",
       "fields": [
         {
@@ -10465,6 +12640,10 @@
           "literals": []
         }
       ]
+    },
+    {
+      "name": "ProtocolModel",
+      "fields": []
     },
     {
       "name": "ProviderAuthReadParams",
@@ -10512,6 +12691,38 @@
           "literals": []
         },
         {
+          "name": "api_key_env_var",
+          "alias": "apiKeyEnvVar",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "auth_kind",
+          "alias": "authKind",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ProviderAuthKind"
+          ],
+          "literals": []
+        },
+        {
+          "name": "env_file_path",
+          "alias": "envFilePath",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "model_display_name",
           "alias": "modelDisplayName",
           "required": true,
@@ -10529,6 +12740,47 @@
           "optional": false,
           "models": [],
           "enums": [],
+          "literals": []
+        },
+        {
+          "name": "sources",
+          "alias": "sources",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "ProviderCredentialSourceView"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProviderCredentialSourceView",
+      "fields": [
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ProviderCredentialSourceKind"
+          ],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": false,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "ProviderCredentialSourceState"
+          ],
           "literals": []
         }
       ]
@@ -10767,6 +13019,45 @@
       ]
     },
     {
+      "name": "PublicCheckStatus",
+      "fields": [
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "pass",
+            "fail",
+            "pending"
+          ]
+        },
+        {
+          "name": "url",
+          "alias": "url",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "PublicCheckpointEntry",
       "fields": [
         {
@@ -10892,6 +13183,48 @@
           "models": [],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PublicChecksSummary",
+      "fields": [
+        {
+          "name": "checked_at",
+          "alias": "checkedAt",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks",
+          "alias": "checks",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PublicCheckStatus"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "pass",
+            "fail",
+            "pending",
+            "none"
+          ]
         }
       ]
     },
@@ -11179,6 +13512,498 @@
       ]
     },
     {
+      "name": "PublicGitHubPullRequestDetails",
+      "fields": [
+        {
+          "name": "author",
+          "alias": "author",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks",
+          "alias": "checks",
+          "required": false,
+          "kind": "any",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks_status",
+          "alias": "checksStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "pending",
+            "passing",
+            "failing"
+          ]
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "pull_request"
+          ]
+        },
+        {
+          "name": "merge_commit_sha",
+          "alias": "mergeCommitSha",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "merge_status",
+          "alias": "mergeStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "unknown",
+            "mergeable",
+            "blocked",
+            "conflicting"
+          ]
+        },
+        {
+          "name": "optional_checks_status",
+          "alias": "optionalChecksStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "pending",
+            "passing",
+            "failing"
+          ]
+        },
+        {
+          "name": "pr_status",
+          "alias": "prStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "action_needed",
+            "waiting",
+            "mergeable"
+          ]
+        },
+        {
+          "name": "provider_closed_at",
+          "alias": "providerClosedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_created_at",
+          "alias": "providerCreatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_merged_at",
+          "alias": "providerMergedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_updated_at",
+          "alias": "providerUpdatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "pull_request_number",
+          "alias": "pullRequestNumber",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "repo_host",
+          "alias": "repoHost",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "repo_name",
+          "alias": "repoName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "repo_owner",
+          "alias": "repoOwner",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "review_decision",
+          "alias": "reviewDecision",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "review_required",
+            "changes_requested",
+            "approved"
+          ]
+        },
+        {
+          "name": "schema_version",
+          "alias": "schemaVersion",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "source_branch",
+          "alias": "sourceBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "draft",
+            "open",
+            "merged",
+            "closed"
+          ]
+        },
+        {
+          "name": "target_branch",
+          "alias": "targetBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PublicGitLabMergeRequestDetails",
+      "fields": [
+        {
+          "name": "author",
+          "alias": "author",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks",
+          "alias": "checks",
+          "required": false,
+          "kind": "any",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks_status",
+          "alias": "checksStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "pending",
+            "passing",
+            "failing"
+          ]
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "pull_request"
+          ]
+        },
+        {
+          "name": "merge_commit_sha",
+          "alias": "mergeCommitSha",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "merge_request_iid",
+          "alias": "mergeRequestIid",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "merge_status",
+          "alias": "mergeStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "unknown",
+            "mergeable",
+            "blocked",
+            "conflicting"
+          ]
+        },
+        {
+          "name": "optional_checks_status",
+          "alias": "optionalChecksStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "pending",
+            "passing",
+            "failing"
+          ]
+        },
+        {
+          "name": "pr_status",
+          "alias": "prStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "action_needed",
+            "waiting",
+            "mergeable"
+          ]
+        },
+        {
+          "name": "project_path",
+          "alias": "projectPath",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_closed_at",
+          "alias": "providerClosedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_created_at",
+          "alias": "providerCreatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_merged_at",
+          "alias": "providerMergedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_updated_at",
+          "alias": "providerUpdatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "repo_host",
+          "alias": "repoHost",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "repo_id",
+          "alias": "repoId",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "review_decision",
+          "alias": "reviewDecision",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "review_required",
+            "changes_requested",
+            "approved"
+          ]
+        },
+        {
+          "name": "schema_version",
+          "alias": "schemaVersion",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "source_branch",
+          "alias": "sourceBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "draft",
+            "open",
+            "merged",
+            "closed"
+          ]
+        },
+        {
+          "name": "target_branch",
+          "alias": "targetBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "PublicHistoryPage",
       "fields": [
         {
@@ -11281,6 +14106,19 @@
           "kind": "str",
           "optional": true,
           "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "outcome",
+          "alias": "outcome",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CommittedGenerationOutcome",
+            "DiscardedGenerationOutcome"
+          ],
           "enums": [],
           "literals": []
         },
@@ -11397,10 +14235,7 @@
           "optional": false,
           "models": [
             "AgentChangedNoticeDetail",
-            "ContextClearedNoticeDetail",
             "HookNoticeDetail",
-            "PlanReviewEndedNoticeDetail",
-            "PlanReviewStartedNoticeDetail",
             "ScheduledLoopFiredNoticeDetail",
             "SessionTitleUpdatedNoticeDetail",
             "WaitingForInputNoticeDetail"
@@ -11519,6 +14354,190 @@
       ]
     },
     {
+      "name": "PublicPullRequestSharedEnrichment",
+      "fields": [
+        {
+          "name": "author",
+          "alias": "author",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks",
+          "alias": "checks",
+          "required": false,
+          "kind": "any",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checks_status",
+          "alias": "checksStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "pending",
+            "passing",
+            "failing"
+          ]
+        },
+        {
+          "name": "merge_commit_sha",
+          "alias": "mergeCommitSha",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "merge_status",
+          "alias": "mergeStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "unknown",
+            "mergeable",
+            "blocked",
+            "conflicting"
+          ]
+        },
+        {
+          "name": "optional_checks_status",
+          "alias": "optionalChecksStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "pending",
+            "passing",
+            "failing"
+          ]
+        },
+        {
+          "name": "pr_status",
+          "alias": "prStatus",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "action_needed",
+            "waiting",
+            "mergeable"
+          ]
+        },
+        {
+          "name": "provider_closed_at",
+          "alias": "providerClosedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_created_at",
+          "alias": "providerCreatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_merged_at",
+          "alias": "providerMergedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_updated_at",
+          "alias": "providerUpdatedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "review_decision",
+          "alias": "reviewDecision",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "none",
+            "review_required",
+            "changes_requested",
+            "approved"
+          ]
+        },
+        {
+          "name": "source_branch",
+          "alias": "sourceBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "state",
+          "alias": "state",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "draft",
+            "open",
+            "merged",
+            "closed"
+          ]
+        },
+        {
+          "name": "target_branch",
+          "alias": "targetBranch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "PublicQueuedTurn",
       "fields": [
         {
@@ -11598,6 +14617,19 @@
           "kind": "str",
           "optional": true,
           "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "outcome",
+          "alias": "outcome",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "CommittedGenerationOutcome",
+            "DiscardedGenerationOutcome"
+          ],
           "enums": [],
           "literals": []
         },
@@ -11833,6 +14865,16 @@
           "literals": []
         },
         {
+          "name": "loops",
+          "alias": "loops",
+          "required": false,
+          "kind": "any",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "model",
           "alias": "model",
           "required": false,
@@ -11885,6 +14927,16 @@
         {
           "name": "root_session_id",
           "alias": "rootSessionId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "started_by_session_id",
+          "alias": "startedBySessionId",
           "required": false,
           "kind": "str",
           "optional": true,
@@ -11959,6 +15011,119 @@
           "models": [
             "PublicSessionWorktree"
           ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PublicSessionArtifact",
+      "fields": [
+        {
+          "name": "details",
+          "alias": "details",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "PublicGitHubPullRequestDetails",
+            "PublicGitLabMergeRequestDetails"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "discovered_at",
+          "alias": "discoveredAt",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "display_title",
+          "alias": "displayTitle",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "external_key",
+          "alias": "externalKey",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "external_url",
+          "alias": "externalUrl",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "pull_request"
+          ]
+        },
+        {
+          "name": "provider",
+          "alias": "provider",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "github",
+            "gitlab"
+          ]
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "viewed_at",
+          "alias": "viewedAt",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
           "enums": [],
           "literals": []
         }
@@ -12262,6 +15427,18 @@
       "name": "PublicTurnQueue",
       "fields": [
         {
+          "name": "editing",
+          "alias": "editing",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "PublicTurnQueueEditState"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "items",
           "alias": "items",
           "required": false,
@@ -12288,6 +15465,21 @@
           "alias": "paused",
           "required": false,
           "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PublicTurnQueueEditState",
+      "fields": [
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
           "optional": false,
           "models": [],
           "enums": [],
@@ -13345,16 +16537,6 @@
           "literals": []
         },
         {
-          "name": "experimental_harness",
-          "alias": "experimentalHarness",
-          "required": false,
-          "kind": "bool",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
           "name": "hooks_count",
           "alias": "hooksCount",
           "required": true,
@@ -13447,71 +16629,6 @@
           "required": true,
           "kind": "str",
           "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "SavedSessionSummary",
-      "fields": [
-        {
-          "name": "cwd",
-          "alias": "cwd",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "end_time",
-          "alias": "endTime",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "parent_session_id",
-          "alias": "parentSessionId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "preview",
-          "alias": "preview",
-          "required": false,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "title",
-          "alias": "title",
-          "required": false,
-          "kind": "str",
-          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -13647,6 +16764,41 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ScratchpadEffectOutput",
+      "fields": [
+        {
+          "name": "content",
+          "alias": "content",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "files",
+          "alias": "files",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -13854,6 +17006,16 @@
           "literals": []
         },
         {
+          "name": "require_idle",
+          "alias": "requireIdle",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "session_id",
           "alias": "sessionId",
           "required": true,
@@ -13874,36 +17036,6 @@
           "required": false,
           "kind": "int",
           "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "SessionCloseParams",
-      "fields": [
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "SessionCloseResponse",
-      "fields": [
-        {
-          "name": "closed",
-          "alias": "closed",
-          "required": false,
-          "kind": "bool",
-          "optional": false,
           "models": [],
           "enums": [],
           "literals": []
@@ -14099,6 +17231,7 @@
             "connected",
             "needs_auth",
             "needs_setup",
+            "needs_connect",
             "unavailable"
           ]
         },
@@ -14232,16 +17365,6 @@
           "literals": []
         },
         {
-          "name": "plan_file_path",
-          "alias": "planFilePath",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
           "name": "session_id",
           "alias": "sessionId",
           "required": true,
@@ -14271,6 +17394,38 @@
           "optional": false,
           "models": [
             "PublicSessionState"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionContextReadParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionContextReadResponse",
+      "fields": [
+        {
+          "name": "breakdown",
+          "alias": "breakdown",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "ContextBreakdown"
           ],
           "enums": [],
           "literals": []
@@ -14804,6 +17959,69 @@
       ]
     },
     {
+      "name": "SessionLeaseEnded",
+      "fields": []
+    },
+    {
+      "name": "SessionLeaseHolder",
+      "fields": [
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionLeaseSubscribeResponse",
+      "fields": [
+        {
+          "name": "held",
+          "alias": "held",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "SessionLeaseUpdate"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionLeaseUpdate",
+      "fields": [
+        {
+          "name": "lease_holder",
+          "alias": "leaseHolder",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "SessionLeaseHolder"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "SessionListParams",
       "fields": [
         {
@@ -14831,6 +18049,16 @@
           "alias": "cwds",
           "required": false,
           "kind": "list",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "include",
+          "alias": "include",
+          "required": false,
+          "kind": "any",
           "optional": true,
           "models": [],
           "enums": [],
@@ -14885,22 +18113,22 @@
           "models": [],
           "enums": [],
           "literals": []
+        },
+        {
+          "name": "session_ids",
+          "alias": "sessionIds",
+          "required": false,
+          "kind": "list",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
     {
       "name": "SessionListResponse",
       "fields": [
-        {
-          "name": "continue_session_id",
-          "alias": "continueSessionId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
         {
           "name": "items",
           "alias": "items",
@@ -14928,6 +18156,16 @@
           "alias": "previousCursor",
           "required": false,
           "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "pull_requests",
+          "alias": "pull_requests",
+          "required": false,
+          "kind": "any",
           "optional": true,
           "models": [],
           "enums": [],
@@ -15190,6 +18428,410 @@
       ]
     },
     {
+      "name": "SessionPeerArchiveParams",
+      "fields": [
+        {
+          "name": "session_ids",
+          "alias": "sessionIds",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerArchiveResponse",
+      "fields": [
+        {
+          "name": "archived",
+          "alias": "archived",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerSessionArchived"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "failed",
+          "alias": "failed",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerSessionNotArchived"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerListParams",
+      "fields": [
+        {
+          "name": "cursor",
+          "alias": "cursor",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "limit",
+          "alias": "limit",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_ids",
+          "alias": "sessionIds",
+          "required": false,
+          "kind": "list",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "statuses",
+          "alias": "statuses",
+          "required": false,
+          "kind": "list",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "working",
+            "idle",
+            "waiting_for_user",
+            "failed",
+            "archived"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerListResponse",
+      "fields": [
+        {
+          "name": "next_cursor",
+          "alias": "nextCursor",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "not_found",
+          "alias": "notFound",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "sessions",
+          "alias": "sessions",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerSessionSummary"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerReadParams",
+      "fields": [
+        {
+          "name": "cursor",
+          "alias": "cursor",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "include_tool_calls",
+          "alias": "includeToolCalls",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "limit",
+          "alias": "limit",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "max_message_chars",
+          "alias": "maxMessageChars",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "target_session_id",
+          "alias": "targetSessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerReadResponse",
+      "fields": [
+        {
+          "name": "messages",
+          "alias": "messages",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerSessionMessage"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "next_cursor",
+          "alias": "nextCursor",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "queued_messages",
+          "alias": "queuedMessages",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "working",
+            "idle",
+            "waiting_for_user",
+            "failed",
+            "archived"
+          ]
+        },
+        {
+          "name": "status_detail",
+          "alias": "statusDetail",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "url",
+          "alias": "url",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerRestoreParams",
+      "fields": [
+        {
+          "name": "session_ids",
+          "alias": "sessionIds",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerRestoreResponse",
+      "fields": [
+        {
+          "name": "failed",
+          "alias": "failed",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerSessionNotRestored"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "restored",
+          "alias": "restored",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PeerSessionRestored"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerSendParams",
+      "fields": [
+        {
+          "name": "idempotency_key",
+          "alias": "idempotencyKey",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "target_session_id",
+          "alias": "targetSessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "text",
+          "alias": "text",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionPeerSendResponse",
+      "fields": [
+        {
+          "name": "queued",
+          "alias": "queued",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "url",
+          "alias": "url",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "SessionPinParams",
       "fields": [
         {
@@ -15226,6 +18868,34 @@
           "models": [],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionProjectStamp",
+      "fields": [
+        {
+          "name": "id",
+          "alias": "id",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "local",
+            "cloud"
+          ]
         }
       ]
     },
@@ -15296,21 +18966,6 @@
       ]
     },
     {
-      "name": "SessionReadyReadParams",
-      "fields": [
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
       "name": "SessionReadyReadResponse",
       "fields": [
         {
@@ -15328,6 +18983,16 @@
     {
       "name": "SessionReadyWaitParams",
       "fields": [
+        {
+          "name": "integrations",
+          "alias": "integrations",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
         {
           "name": "session_id",
           "alias": "sessionId",
@@ -15880,6 +19545,211 @@
       ]
     },
     {
+      "name": "SessionSpawnDirectory",
+      "fields": [
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "directory"
+          ]
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSpawnManagedWorktree",
+      "fields": [
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "managed_worktree"
+          ]
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSpawnNewWorktree",
+      "fields": [
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "new_worktree"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SessionSpawnParams",
+      "fields": [
+        {
+          "name": "approval_policy",
+          "alias": "approvalPolicy",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "checkout",
+          "alias": "checkout",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "SessionSpawnDirectory",
+            "SessionSpawnManagedWorktree",
+            "SessionSpawnNewWorktree"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "idempotency_key",
+          "alias": "idempotencyKey",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "model",
+          "alias": "model",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "parent_session_id",
+          "alias": "parentSessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "prompt",
+          "alias": "prompt",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "reasoning_effort",
+          "alias": "reasoningEffort",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSpawnResponse",
+      "fields": [
+        {
+          "name": "client_session_id",
+          "alias": "clientSessionId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "url",
+          "alias": "url",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "SessionStartParams",
       "fields": [
         {
@@ -15890,6 +19760,18 @@
           "optional": false,
           "models": [
             "AgentConfig"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "first_turn",
+          "alias": "firstTurn",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "SessionStartTurn"
           ],
           "enums": [],
           "literals": []
@@ -15925,6 +19807,68 @@
             "SessionKind"
           ],
           "literals": []
+        },
+        {
+          "name": "model",
+          "alias": "model",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "project",
+          "alias": "project",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "SessionProjectStamp"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "reasoning_effort",
+          "alias": "reasoningEffort",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_only",
+          "alias": "sessionOnly",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "started_by_session_id",
+          "alias": "startedBySessionId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "title",
+          "alias": "title",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -15949,6 +19893,35 @@
           "optional": false,
           "models": [
             "PublicSessionState"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionStartTurn",
+      "fields": [
+        {
+          "name": "client_user_message_id",
+          "alias": "clientUserMessageId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "message",
+          "alias": "message",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "ImageContentBlock",
+            "ResourceContentBlock",
+            "TextContentBlock"
           ],
           "enums": [],
           "literals": []
@@ -15987,6 +19960,142 @@
           "name": "closed",
           "alias": "closed",
           "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSubagentsInterruptParams",
+      "fields": [
+        {
+          "name": "reason",
+          "alias": "reason",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSubagentsInterruptResponse",
+      "fields": [
+        {
+          "name": "results",
+          "alias": "results",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "SubagentInterruptResult"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSubagentsReadParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "timeout_ms",
+          "alias": "timeoutMs",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSubagentsReadResponse",
+      "fields": [
+        {
+          "name": "subagents",
+          "alias": "subagents",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "SubagentRun"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSubagentsWaitParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "timeout_ms",
+          "alias": "timeoutMs",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionSubagentsWaitResponse",
+      "fields": [
+        {
+          "name": "running",
+          "alias": "running",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "SubagentRef"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "settled",
+          "alias": "settled",
+          "required": true,
           "kind": "bool",
           "optional": false,
           "models": [],
@@ -16304,6 +20413,18 @@
       "name": "SetupStatusResponse",
       "fields": [
         {
+          "name": "active_credential_source",
+          "alias": "activeCredentialSource",
+          "required": false,
+          "kind": "enum",
+          "optional": true,
+          "models": [],
+          "enums": [
+            "ProviderCredentialSourceKind"
+          ],
+          "literals": []
+        },
+        {
           "name": "active_model",
           "alias": "activeModel",
           "required": true,
@@ -16339,6 +20460,50 @@
           "required": true,
           "kind": "bool",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "mistral_active_credential_source",
+          "alias": "mistralActiveCredentialSource",
+          "required": false,
+          "kind": "enum",
+          "optional": true,
+          "models": [],
+          "enums": [
+            "ProviderCredentialSourceKind"
+          ],
+          "literals": []
+        },
+        {
+          "name": "mistral_provider",
+          "alias": "mistralProvider",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "SetupProviderView"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "oidc_enabled",
+          "alias": "oidcEnabled",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "pinned_console_url",
+          "alias": "pinnedConsoleUrl",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -17533,10 +21698,30 @@
       "name": "SkillsListParams",
       "fields": [
         {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "session_id",
           "alias": "sessionId",
-          "required": true,
+          "required": false,
           "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "trust_workspace",
+          "alias": "trustWorkspace",
+          "required": false,
+          "kind": "bool",
           "optional": false,
           "models": [],
           "enums": [],
@@ -17555,6 +21740,299 @@
           "optional": false,
           "models": [
             "SkillSummary"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalDeleteParams",
+      "fields": [
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "other_project_roots",
+          "alias": "otherProjectRoots",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "project_root",
+          "alias": "projectRoot",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalListParams",
+      "fields": [
+        {
+          "name": "project_root",
+          "alias": "projectRoot",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "trust_workspace",
+          "alias": "trustWorkspace",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalListResponse",
+      "fields": [
+        {
+          "name": "skills",
+          "alias": "skills",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "LocalSkillSummary"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalReadParams",
+      "fields": [
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "project_root",
+          "alias": "projectRoot",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "trust_workspace",
+          "alias": "trustWorkspace",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalReadResponse",
+      "fields": [
+        {
+          "name": "skill",
+          "alias": "skill",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "LocalSkillView"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalSetEnabledParams",
+      "fields": [
+        {
+          "name": "enabled",
+          "alias": "enabled",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "project_root",
+          "alias": "projectRoot",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "trust_workspace",
+          "alias": "trustWorkspace",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalSetEnabledResponse",
+      "fields": [
+        {
+          "name": "skill",
+          "alias": "skill",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "LocalSkillSummary"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalWriteParams",
+      "fields": [
+        {
+          "name": "assets",
+          "alias": "assets",
+          "required": false,
+          "kind": "dict",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "body",
+          "alias": "body",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "description",
+          "alias": "description",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enabled",
+          "alias": "enabled",
+          "required": false,
+          "kind": "bool",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "expected_version",
+          "alias": "expectedVersion",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "project_root",
+          "alias": "projectRoot",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "trust_workspace",
+          "alias": "trustWorkspace",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SkillsLocalWriteResponse",
+      "fields": [
+        {
+          "name": "skill",
+          "alias": "skill",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "LocalSkillView"
           ],
           "enums": [],
           "literals": []
@@ -17942,48 +22420,6 @@
       ]
     },
     {
-      "name": "StatsReadParams",
-      "fields": [
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "StatsReadResponse",
-      "fields": [
-        {
-          "name": "context_window",
-          "alias": "contextWindow",
-          "required": true,
-          "kind": "int",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "stats",
-          "alias": "stats",
-          "required": true,
-          "kind": "model",
-          "optional": false,
-          "models": [
-            "AgentStatsSnapshot"
-          ],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
       "name": "StatsUpdatedParams",
       "fields": [
         {
@@ -18163,6 +22599,292 @@
           "name": "turns_used",
           "alias": "turnsUsed",
           "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SubagentInterruptResult",
+      "fields": [
+        {
+          "name": "error",
+          "alias": "error",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "outcome",
+          "alias": "outcome",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "SubagentInterruptOutcome"
+          ],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SubagentRef",
+      "fields": [
+        {
+          "name": "agent_type",
+          "alias": "agentType",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SubagentRun",
+      "fields": [
+        {
+          "name": "agent_type",
+          "alias": "agentType",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "cost_usd",
+          "alias": "costUsd",
+          "required": false,
+          "kind": "float",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "model",
+          "alias": "model",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "parent_session_id",
+          "alias": "parentSessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "pricing_fallback",
+          "alias": "pricingFallback",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "pricing_model",
+          "alias": "pricingModel",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "root_session_id",
+          "alias": "rootSessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_dir",
+          "alias": "sessionDir",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "spawn_action_id",
+          "alias": "spawnActionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "spawn_call_id",
+          "alias": "spawnCallId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "enum",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "SubagentRunStatus"
+          ],
+          "literals": []
+        },
+        {
+          "name": "steps",
+          "alias": "steps",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "usage",
+          "alias": "usage",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "SubagentUsage"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SubagentUsage",
+      "fields": [
+        {
+          "name": "cached_input_tokens",
+          "alias": "cachedInputTokens",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input_tokens",
+          "alias": "inputTokens",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "output_tokens",
+          "alias": "outputTokens",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "total_tokens",
+          "alias": "totalTokens",
+          "required": false,
           "kind": "int",
           "optional": false,
           "models": [],
@@ -18947,6 +23669,16 @@
       "name": "TokenUsage",
       "fields": [
         {
+          "name": "cached_input_tokens",
+          "alias": "cachedInputTokens",
+          "required": false,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "input_tokens",
           "alias": "inputTokens",
           "required": false,
@@ -19039,54 +23771,12 @@
       "name": "ToolSummary",
       "fields": [
         {
-          "name": "is_custom",
-          "alias": "isCustom",
-          "required": false,
-          "kind": "bool",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
           "name": "name",
           "alias": "name",
           "required": true,
           "kind": "str",
           "optional": false,
           "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "ToolsListParams",
-      "fields": [
-        {
-          "name": "session_id",
-          "alias": "sessionId",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "ToolsListResponse",
-      "fields": [
-        {
-          "name": "tools",
-          "alias": "tools",
-          "required": true,
-          "kind": "list",
-          "optional": false,
-          "models": [
-            "ToolSummary"
-          ],
           "enums": [],
           "literals": []
         }
@@ -19306,6 +23996,16 @@
           "literals": []
         },
         {
+          "name": "sent_by_session",
+          "alias": "sentBySession",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "session_id",
           "alias": "sessionId",
           "required": true,
@@ -19325,6 +24025,16 @@
           "alias": "queueItemId",
           "required": true,
           "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "waits",
+          "alias": "waits",
+          "required": false,
+          "kind": "bool",
           "optional": false,
           "models": [],
           "enums": [],
@@ -19377,6 +24087,207 @@
           "alias": "lastEventId",
           "required": false,
           "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "TurnQueueEditAbandonParams",
+      "fields": [
+        {
+          "name": "edit_id",
+          "alias": "editId",
+          "required": true,
+          "kind": "scalar",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "TurnQueueEditAbandonResponse",
+      "fields": []
+    },
+    {
+      "name": "TurnQueueEditCancelParams",
+      "fields": [
+        {
+          "name": "edit_id",
+          "alias": "editId",
+          "required": true,
+          "kind": "scalar",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "TurnQueueEditCancelResponse",
+      "fields": []
+    },
+    {
+      "name": "TurnQueueEditSaveParams",
+      "fields": [
+        {
+          "name": "edit_id",
+          "alias": "editId",
+          "required": true,
+          "kind": "scalar",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "entries",
+          "alias": "entries",
+          "required": true,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "TurnContextInputEntry",
+            "TurnUserInputEntry"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "idempotency_key",
+          "alias": "idempotencyKey",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "TurnQueueEditSaveResponse",
+      "fields": [
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "TurnQueueEditStartParams",
+      "fields": [
+        {
+          "name": "edit_id",
+          "alias": "editId",
+          "required": true,
+          "kind": "scalar",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "TurnQueueEditStartResponse",
+      "fields": [
+        {
+          "name": "queue_item_id",
+          "alias": "queueItemId",
+          "required": true,
+          "kind": "str",
           "optional": false,
           "models": [],
           "enums": [],
@@ -21859,139 +26770,6 @@
           "required": true,
           "kind": "int",
           "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "WorkspaceWorktreeReapCancelParams",
-      "fields": [
-        {
-          "name": "cwd",
-          "alias": "cwd",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "request_id",
-          "alias": "requestId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "requester_id",
-          "alias": "requesterId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "WorkspaceWorktreeReapParams",
-      "fields": [
-        {
-          "name": "cwd",
-          "alias": "cwd",
-          "required": true,
-          "kind": "str",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "request_id",
-          "alias": "requestId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "requester_id",
-          "alias": "requesterId",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        }
-      ]
-    },
-    {
-      "name": "WorkspaceWorktreeReapResponse",
-      "fields": [
-        {
-          "name": "branch",
-          "alias": "branch",
-          "required": false,
-          "kind": "str",
-          "optional": true,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "branch_deleted",
-          "alias": "branchDeleted",
-          "required": false,
-          "kind": "bool",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "outcome",
-          "alias": "outcome",
-          "required": true,
-          "kind": "literal",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": [
-            "removed",
-            "kept_dirty",
-            "kept_in_use",
-            "kept_unmanaged",
-            "kept_error",
-            "not_found",
-            "kept_cancelled"
-          ]
-        },
-        {
-          "name": "reasons",
-          "alias": "reasons",
-          "required": false,
-          "kind": "list",
-          "optional": false,
-          "models": [],
-          "enums": [],
-          "literals": []
-        },
-        {
-          "name": "root",
-          "alias": "root",
-          "required": false,
-          "kind": "str",
-          "optional": true,
           "models": [],
           "enums": [],
           "literals": []

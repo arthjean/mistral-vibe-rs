@@ -31,8 +31,8 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, Class, Divergence, OwnProse, Replay, Tally, assert_ledger, differences, entries,
-    scenarios,
+    Capture, Class, Divergence, OwnProse, PatternDivergence, Replay, Tally, assert_ledger,
+    differences, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -52,45 +52,693 @@ const CAPTURE: Capture = Capture {
 /// directories, backend and server processes.
 const JOBS: &[&str] = &["--jobs", "4"];
 
-/// The accepted divergence the row 21 entries below stand on: a difference
-/// the measured row keeps on purpose has to be decided in the scorecard.
-const OWN_PROSE: &str = "Connector call failures are this port's own prose";
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 serves connectors otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
 
-const GATEWAY_FAILURES: &[&str] = &["call/gateway-401", "call/gateway-404", "call/gateway-500"];
-
-const PROSE: &[OwnProse] = &[
-    OwnProse {
-        scenarios: GATEWAY_FAILURES,
-        pointer: "/requests/1/conversation/2/content",
-        count: 3,
-        band: Band::DEFAULT,
-        directives: None,
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/bootstraps/*",
+        count: 14,
         row: "21",
-        accepted: OWN_PROSE,
-        reason: "a gateway call that fails tells the model what failed, for which connector and \
-                 with which status, in this port's own sentences",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
-    OwnProse {
-        scenarios: GATEWAY_FAILURES,
-        pointer: "/steps/1/turn/3/patch/0/value/display/message",
-        count: 3,
-        band: Band::DEFAULT,
-        directives: None,
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<cache-key-1>",
+        count: 8,
         row: "21",
-        accepted: OWN_PROSE,
-        reason: "the same sentence, as the failed effect's header",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
-    OwnProse {
-        scenarios: GATEWAY_FAILURES,
-        pointer: "/steps/1/turn/3/patch/0/value/error/message",
-        count: 3,
-        band: Band::DEFAULT,
-        directives: None,
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>",
+        count: 5,
         row: "21",
-        accepted: OWN_PROSE,
-        reason: "the same sentence, as the failed effect's error",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/other-stale",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/error",
+        count: 5,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/error/message",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result",
+        count: 5,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/acceptedSelectionRevision",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/catalogRevision",
+        count: 12,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/disposition",
+        count: 10,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalogRevision",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/counts/connected",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/pendingSelection",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/privateConnectorsHidden",
+        count: 34,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/routeRevision",
+        count: 10,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/connectors/connected",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag_text",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/privateConnectorsHidden",
+        count: 28,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/selectionRevision",
+        count: 8,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/acceptedCatalogRevision",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/acceptedSelectionRevision",
+        count: 7,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/routeRevision",
+        count: 13,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/notifications/*",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/notifications/*/runtime/connectors/connected",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden",
+        count: 12,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/connectors/*",
+        count: 19,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/connectors/*/alias",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/connectors/*/displayName",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/sources/*/status",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/selections/*/disabled",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/selections/*/state",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/alias",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/displayName",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/status",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/siblings/*",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/entryId",
+        count: 8,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/method",
+        count: 6,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/patch",
+        count: 6,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime",
+        count: 3,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag_text",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden",
+        count: 20,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/sessionId",
+        count: 3,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/status",
+        count: 3,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/notifications/*/runtime/mcp/sources/*/status",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/connectors/*/tools/*",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/connectors/*/tools/*/description",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/catalog/connectors/*/tools/*/name",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/sources/*/tools/*/enabled",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/tools/*",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/tools/*/description",
+        count: 10,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/tools/*/enabled",
+        count: 13,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/session/sources/*/tools/*/name",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/patch/*",
+        count: 24,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/notifications/*/runtime/mcp/sources/*/tools/*/enabled",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
 ];
+
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const UNIFIED_V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/authUrls/*",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/callbacks/*/effect/mcpApp",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/response/result/runtime/mcp/privateConnectorsHidden",
+        count: 4,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/requests/*/conversation/*/content",
+        count: 3,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*",
+        count: 3,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/entry/detail/mcpApp",
+        count: 9,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/entryId",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/method",
+        count: 3,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/params",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/patch",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden",
+        count: 9,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/sessionId",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/status",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/patch/*",
+        count: 8,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/patch/*/value/error/message",
+        count: 1,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/steps/*/turn/*/patch/*/value/message",
+        count: 2,
+        row: "21",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
+
+const PROSE: &[OwnProse] = &[];
 
 #[test]
 fn the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger_names() {
@@ -104,7 +752,7 @@ fn the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("connectors-parity-port.json"),
     }
-    .run(entries(PROSE));
+    .run(entries(PROSE).chain(entries(V3_GAPS)));
 }
 
 #[test]
@@ -112,7 +760,11 @@ fn every_ledger_entry_names_a_scorecard_row_that_answers_for_it() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     // Row 21 is what this corpus measures, so a difference it keeps has to
     // stand on a divergence the scorecard decided to keep.
-    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(PROSE).chain(entries(V3_GAPS)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still
@@ -123,14 +775,14 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     CAPTURE.probe("connectors");
 }
 
-/// The Unified Harness family `--harness unified` captures: the same catalog
+/// The `--family programs` scenarios: the same catalog
 /// and gateway reached from `run_typescript`, row 36's measure of the
 /// connector path.
 const UNIFIED_CORPUS: &str = include_str!("connectors-parity/unified-corpus.json");
 
 const UNIFIED_CAPTURE: Capture = Capture {
     script: "scripts/parity/connectors.py",
-    family: &["--harness", "unified"],
+    family: &["--family", "programs"],
     arguments: JOBS,
 };
 
@@ -152,7 +804,7 @@ const UNIFIED_LEDGER: &[Divergence] = &[
         scenarios: &["unified/gateway-401"],
         pointer: "/steps/1/turn/2/patch",
         within: &[],
-        count: 9,
+        count: 1,
         row: "36",
         class: Class::Accepted(REJECTED_MIDTURN),
         reason: "the same failure, as the settled effect and its approval record",
@@ -161,7 +813,10 @@ const UNIFIED_LEDGER: &[Divergence] = &[
 
 #[test]
 fn the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    let mut tally = Tally::new(UNIFIED_CORPUS, entries(UNIFIED_LEDGER));
+    let mut tally = Tally::new(
+        UNIFIED_CORPUS,
+        entries(UNIFIED_LEDGER).chain(entries(UNIFIED_V3_GAPS)),
+    );
     let corpus: Value = serde_json::from_str(UNIFIED_CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     let replayed = UNIFIED_CAPTURE.port(
@@ -183,7 +838,11 @@ fn the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_th
 #[test]
 fn every_unified_ledger_entry_stands_on_an_accepted_divergence() {
     let corpus: Value = serde_json::from_str(UNIFIED_CORPUS).expect("the corpus parses");
-    assert_ledger(UNIFIED_LISTED, &scenarios(&corpus), entries(UNIFIED_LEDGER));
+    assert_ledger(
+        UNIFIED_LISTED,
+        &scenarios(&corpus),
+        entries(UNIFIED_LEDGER).chain(entries(UNIFIED_V3_GAPS)),
+    );
 }
 
 #[test]

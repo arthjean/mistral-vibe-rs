@@ -404,7 +404,10 @@ def session_flows() -> list[dict[str, Any]]:
              {"sleep": 1.0},
              on("session/history/get"),
          ]},
-        {"name": "flows/connector-catalog",
+        # The catalog's `connector_catalog/authRequired` reaches the client
+        # from a background task after the auth request answers, so it waits
+        # for a longer silence before the next step.
+        {"name": "flows/connector-catalog", "quiet": 2.0,
          "config": '[[connectors]]\nname = "Drive"\ndisabled_tools = ["list"]\n\n[[connectors]]\nname = "Ghost"\ndisabled = true\n\n[[connectors]]\nname = "Mail_box"\n',
          "gets": {"/v1/connectors/bootstrap": {"connectors": [
              {"id": "c-drive", "name": "Drive", "display_name": "Google Drive", "protocol": "mcp",
@@ -439,7 +442,11 @@ def session_flows() -> list[dict[str, Any]]:
              on("connectors/refresh", name="Nope"),
              on("connector_catalog/read"),
          ]},
-        {"name": "flows/skills-registry",
+        # The reference reloads a written skill through its watcher, which
+        # debounces for 300 ms (`vibe/app_server/_skill_watch.py`), so the
+        # `runtime/updated` it answers with trails the response by more than
+        # the default silence.
+        {"name": "flows/skills-registry", "quiet": 2.0,
          "gets": {
              "/v1/skills/sk-1": {
                  "skillId": "sk-1", "version": 2,

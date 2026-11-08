@@ -106,7 +106,9 @@ impl Surfaces {
     }
 
     /// Recaptures the pinned reference on the replayed surfaces and asserts
-    /// the committed corpus is still what it answers.
+    /// the committed corpus is still what it answers. The calling test's file
+    /// decides the commit it gates on.
+    #[track_caller]
     pub fn check(&self, probe: &str) {
         if let Some(root) = pinned_reference(probe) {
             CAPTURE.check(&root, &self.surface_arguments());

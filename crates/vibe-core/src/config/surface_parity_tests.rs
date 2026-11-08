@@ -42,28 +42,81 @@ use super::registry::{FIELDS, MergeStrategy};
 use super::*;
 use crate::provider::config::{ModelRouting, UtilityFeature};
 
-use crate::parity::REFERENCE_COMMIT;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Capture, pinned_reference};
+use crate::parity::is_pin_commit;
+use crate::parity::replay::{
+    Capture, Class, Entry as _, PatternDivergence, assert_ledger, entries, pinned_reference,
+};
 use crate::redaction::is_sensitive_key;
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 6;
+const CORPUS_SCHEMA_VERSION: u32 = 7;
+/// The corpus as the manifest lists it, which every typed ledger here is
+/// checked against.
+pub(super) const LISTED: &str = "crates/vibe-core/tests/config-surface/corpus.json";
+/// The row of `docs/parity.md` this corpus measures.
+pub(super) const ROW: &str = "30";
 /// The scenario floor this epic commits to.
 const MINIMUM_SCENARIOS: usize = 24;
 /// What the capture writes where the vibe home is machine-dependent.
 const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
-/// Reference fields this port does not declare, each with the reason.
+/// Reference fields this port does not declare, each with the reason. Each
+/// counts as an unmeasured field in the census figures: an open gap of row 30.
 ///
-/// Empty since `utility_models` (`vibe/core/config/vibe_schema.py:376` at
-/// `376f6a3`), the one field the v2.26.0 re-pin added, was declared. The
-/// replay fails on any field the reference adds, and an entry whose field
-/// becomes declared fails it as stale.
-const UNDECLARED_FIELDS: &[(&str, &str)] = &[];
+/// The replay fails on any field the reference adds without an entry here,
+/// and an entry whose field becomes declared fails it as stale.
+const UNDECLARED_FIELDS: &[(&str, &str)] = &[
+    ("agent_max_output_tokens", ADDED_AT_V3),
+    ("api_stream_idle_timeout", ADDED_AT_V3),
+    ("catalog_model_aliases", ADDED_AT_V3),
+    ("catalog_recommended_model", ADDED_AT_V3),
+    ("compaction_max_output_tokens", ADDED_AT_V3),
+    ("compaction_reasoning_limit_tokens", ADDED_AT_V3),
+    ("cursor_blink", ADDED_AT_V3),
+    ("enable_auto_approve", ADDED_AT_V3),
+    ("enable_background_processes", ADDED_AT_V3),
+    ("enable_file_autocomplete", ADDED_AT_V3),
+    ("enable_mcp", ADDED_AT_V3),
+    ("enable_mouse_capture", ADDED_AT_V3),
+    ("enable_subagents", ADDED_AT_V3),
+    (
+        "experimental_enable_document_library_connector",
+        ADDED_AT_V3,
+    ),
+    ("experimental_enable_local_projects", ADDED_AT_V3),
+    ("experimental_enable_mistral_mcp_connector", ADDED_AT_V3),
+    ("experimental_enable_model_catalog", ADDED_AT_V3),
+    ("experimental_enable_pr_discovery", ADDED_AT_V3),
+    ("experimental_enable_pr_monitoring", ADDED_AT_V3),
+    ("experimental_local_runtime_session_api", ADDED_AT_V3),
+    ("max_concurrent_subagents", ADDED_AT_V3),
+    ("max_subagents", ADDED_AT_V3),
+    ("output_limit_retries", ADDED_AT_V3),
+    ("outside_workdir", ADDED_AT_V3),
+    ("strict_config", ADDED_AT_V3),
+    ("title_prompt_id", ADDED_AT_V3),
+];
+
+/// Why the fields the v3 re-pin found are undeclared.
+const ADDED_AT_V3: &str = "declared by the reference since v3.0.0 (`vibe/core/config/vibe_schema.py` \
+                           at `c96a6db`); this port has no counterpart yet";
+
+/// Reference fields that replaced an older name, as `(field, former name,
+/// reason)`. Each must be proved by a `migrations` case in which the
+/// reference migration moves a value from the former name to the field, and
+/// counts in the census like an undeclared field until this port declares
+/// it. It fails as stale when the corpus stops recording the move.
+const RENAMED_FIELDS: &[(&str, &str, &str)] = &[(
+    "worktree_copy_on_write",
+    "experimental_worktree_copy_on_write",
+    "v3.1.0 renamed the copy-on-write worktree switch and turned it on by default; \
+     `_migrate_renamed_worktree_copy_on_write` (`vibe/core/config/_migration.py`) moves an \
+     older value across. This port declares neither name",
+)];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
 /// implementations now carry it in the document they ship and resolve it when
@@ -77,12 +130,26 @@ const UNPINNED_ACTIVE_MODEL: &str = "";
 /// that holds it still.
 const PINNED_ACTIVE_MODEL: &str = "mistral-medium-3.5";
 
-/// Registry fields the reference no longer declares, each with the reason.
+/// Registry fields the reference no longer declares, each with the reason:
+/// removed upstream, and still declared here.
 ///
 /// The census fails on a registry field with no corpus entry; an entry here
 /// names one the reference withdrew and this port still declares. It fails as
 /// stale when the registry drops the field or the reference declares it again.
-const WITHDRAWN_FIELDS: &[(&str, &str)] = &[];
+const WITHDRAWN_FIELDS: &[(&str, &str)] = &[
+    (
+        "tool_paths",
+        "v3.0.0 stopped loading custom Python tools and withdrew the path list that named \
+         them; `_migrate_removed_tool_paths` (`vibe/core/config/_migration.py`) drops it from \
+         an older file, as the `withdrawn-path-list-is-dropped` migration case records",
+    ),
+    (
+        "smart_approve_default",
+        "v3.0.0 withdrew the switch that made smart-approve the default agent, in favor of \
+         `default_agent` (`CHANGELOG.md` at `c96a6db`); no migration rewrites it, so the merge \
+         ignores it, as the `withdrawn-default-agent-switch-is-left-to-the-merge` case records",
+    ),
+];
 
 /// Fields both sides declare with different merge strategies, as
 /// `(field, reference strategy, port strategy, reason)`.
@@ -97,72 +164,584 @@ const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[];
 const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[];
 
 /// Pointers at which the document this port ships diverges from the reference
-/// default document, as `(pointer, reason)`. A key the port ships and the
-/// reference does not is named at its own pointer.
-const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[];
+/// default document, under the scenario `defaults`. A key the port ships and
+/// the reference does not is named at its own pointer.
+/// Why a v3 model difference stands, shared by the entries it explains.
+const LOCAL_WITHDRAWN: &str = "v3.0.0 withdrew the `local` default model (`_migrate_removed_local`, \
+                               `vibe/core/config/_migration.py`); this port still ships it, so it \
+                               lists, selects and resolves an alias the reference no longer has";
+const LOCAL_SPARSE: &str = "with no shipped `local` entry left, the reference keeps an operator's \
+                            `local` entry as written; this port completes it from the one it ships";
+const LOCAL_WARNING: &str = "the reference warns about a layer that names the withdrawn `local` model \
+                             or an alias it no longer resolves; this port, which still ships `local`, \
+                             has nothing to warn about";
+const DEFAULT_WINDOW: &str = "v3 declares the default model's context window, so the model entry and \
+                              the `max_context_length` settings row carry it; this port declares none";
+const DEFAULT_LEVELS: &str = "v3 narrows the default model's thinking levels to two; this port still \
+                              offers five";
+const UNSET_THRESHOLD: &str = "v3 leaves an unset compaction threshold unset on the model and in its \
+                               settings row, where this port resolves the global default onto it";
+const UNSET_SENTINEL: &str = "v3 leaves an unset compaction threshold unset, where this port writes the \
+                              `-1` sentinel older clients wrote";
+const WINDOW_RATIO: &str = "v3 no longer derives a model's compaction threshold from its context \
+                            window; this port still takes a share of the window";
+const UNSET_IMAGES: &str = "v3 leaves image support unset on a model that does not declare it, where \
+                            this port records `false`";
+const STRICT_THRESHOLD: &str = "v3 refuses a compaction threshold of zero or below, which the stack \
+                                declares; this port accepts it";
+const EMPTY_ALLOWLIST: &str = "the admin allowlist names only the withdrawn `local` model's name, so \
+                               the v3 reference refuses a stack it leaves without a model; this port, \
+                               which still ships `local`, accepts it";
 
-/// Pointers at which a merge scenario diverges, as `(scenario, pointer, reason)`.
-const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
+const DEFAULT_DIVERGENCES: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "defaults",
+        pointer: "/models/local",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "defaults",
+        pointer: "/models/mistral-medium-3.5/max_context_length",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEFAULT_WINDOW,
+    },
+    PatternDivergence {
+        scenario: "defaults",
+        pointer: "/models/mistral-medium-3.5/thinking_levels",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEFAULT_LEVELS,
+    },
+    PatternDivergence {
+        scenario: "defaults",
+        pointer: "/providers/*/preserve_api_base",
+        count: 2,
+        row: ROW,
+        class: Class::Gap,
+        reason: "v3 adds a provider switch that keeps a custom API base as written \
+                 (`ProviderConfig`, `vibe/core/config/models.py`); this port has no such key",
+    },
+    PatternDivergence {
+        scenario: "defaults",
+        pointer: "/show_thinking_nodes",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: "v3 shows thinking nodes by default; this port still hides them",
+    },
+];
 
-/// Pointers at which a model scenario diverges, as `(scenario, pointer,
-/// reason)`. `/active_model` and `/validation_warnings` name the validated alias
-/// and the warning count; `/fields` names the settings rows; every other
-/// pointer lies under the model field it names. Empty since the v2.26.0 model
-/// configuration pass.
-const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
+/// Pointers at which a merge scenario diverges. A field this port composes and
+/// the reference does not is named at its own pointer, and a key the two sides
+/// drop differently under `/droppedKeys`.
+const SCENARIO_DIVERGENCES: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "concat-every-path-list",
+        pointer: "/tool_paths",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: "`tool_paths` is withdrawn upstream (see `WITHDRAWN_FIELDS`), so the reference merge \
+                 drops it; this port still declares and composes it",
+    },
+    PatternDivergence {
+        scenario: "concat-every-path-list",
+        pointer: "/droppedKeys/tool_paths",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: "as above: the reference drops the key the port composes",
+    },
+];
+
+/// Pointers at which a model scenario diverges. `/active_model` and
+/// `/validation_warnings` name the validated alias and the warning count;
+/// `/fields` names the settings rows; every other pointer lies under the model
+/// field it names.
+const MODEL_SCENARIO_DIVERGENCES: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/models/local",
+        count: 37,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-routed-*",
+        pointer: "/models/local/*",
+        count: 9,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_SPARSE,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/available_models",
+        count: 33,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-allowed-models-match-the-model-name",
+        pointer: "/available_models/0",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-allowed-models-match-the-model-name",
+        pointer: "/default_model_alias",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/active_model",
+        count: 5,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/active_model_alias",
+        count: 4,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/compaction_model_alias",
+        count: 4,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/fields/max_context_length/path",
+        count: 4,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-utility-models-resolve-an-alias-and-the-active-selector",
+        pointer: "/utility_models/title",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WITHDRAWN,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/validation_warnings",
+        count: 10,
+        row: ROW,
+        class: Class::Gap,
+        reason: LOCAL_WARNING,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/models/mistral-medium-3.5/max_context_length",
+        count: 39,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEFAULT_WINDOW,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/fields/max_context_length/value",
+        count: 32,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEFAULT_WINDOW,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/fields/max_context_length/layerValues/0",
+        count: 32,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEFAULT_WINDOW,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/models/mistral-medium-3.5/thinking_levels",
+        count: 39,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEFAULT_LEVELS,
+    },
+    PatternDivergence {
+        scenario: "models-window-derives-the-threshold",
+        pointer: "/models/windowed/auto_compact_threshold",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: WINDOW_RATIO,
+    },
+    PatternDivergence {
+        scenario: "models-window-derives-the-threshold",
+        pointer: "/models/odd-window/auto_compact_threshold",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: WINDOW_RATIO,
+    },
+    PatternDivergence {
+        scenario: "models-global-cap-at-the-window-falls-back-to-the-ratio",
+        pointer: "/models/windowed/auto_compact_threshold",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: WINDOW_RATIO,
+    },
+    PatternDivergence {
+        scenario: "models-routed-definition-keeps-the-unset-threshold",
+        pointer: "/models/routed/auto_compact_threshold",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: WINDOW_RATIO,
+    },
+    PatternDivergence {
+        scenario: "models-routed-definition-keeps-the-unset-threshold",
+        pointer: "/fields/auto_compact_threshold/value",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: WINDOW_RATIO,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/models/*/auto_compact_threshold",
+        count: 33,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_THRESHOLD,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/fields/auto_compact_threshold/value",
+        count: 27,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_THRESHOLD,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/fields/auto_compact_threshold/layerValues/0",
+        count: 27,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_THRESHOLD,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/*/auto_compact_threshold",
+        count: 10,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_SENTINEL,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/routed_extra_models/*/auto_compact_threshold",
+        count: 4,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_SENTINEL,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/models/*/supports_images",
+        count: 16,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_IMAGES,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/*/supports_images",
+        count: 8,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_IMAGES,
+    },
+    PatternDivergence {
+        scenario: "models-*",
+        pointer: "/routed_extra_models/*/supports_images",
+        count: 3,
+        row: ROW,
+        class: Class::Gap,
+        reason: UNSET_IMAGES,
+    },
+    PatternDivergence {
+        scenario: "models-cap-the-window-cannot-reach-is-ignored",
+        pointer: "/rejected",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: STRICT_THRESHOLD,
+    },
+    PatternDivergence {
+        scenario: "models-a-hand-written-unset-threshold-is-unset",
+        pointer: "/rejected",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: STRICT_THRESHOLD,
+    },
+    PatternDivergence {
+        scenario: "models-global-threshold-of-zero-disables-every-model",
+        pointer: "/rejected",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: STRICT_THRESHOLD,
+    },
+    PatternDivergence {
+        scenario: "models-admin-allowlist-narrows-by-name",
+        pointer: "/rejected",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: EMPTY_ALLOWLIST,
+    },
+];
+
+/// Settings rows the two sides list differently, under the scenario
+/// `settingsOrder`, each at `/<row>`: a row only one side lists. The rows both
+/// list are compared for their order.
+/// Why a row this port lists is absent from the reference listing.
+const DEPRECATED_ROW: &str = "v3 marks the field deprecated, and `config/fields/read` skips a \
+                              deprecated field (`vibe/app_server/_config_introspect.py`); this \
+                              port still lists it";
+const SETTINGS_ORDER_DIVERGENCES: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/displayed_workdir",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/context_warnings",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/raise_on_compaction_failure",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/include_model_info",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/include_prompt_detail",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/api_connect_timeout",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/api_write_timeout",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+    PatternDivergence {
+        scenario: "settingsOrder",
+        pointer: "/api_pool_timeout",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: DEPRECATED_ROW,
+    },
+];
+
+/// Pointers at which a field migration leaves another document, or another
+/// verdict on whether it changed anything, than the reference migration.
+/// Why a field migration differs.
+const RENAME_MIGRATION: &str = "this port has no `_migrate_renamed_worktree_copy_on_write`, so a \
+                                document written with the former name keeps it";
+const TOOL_PATHS_MIGRATION: &str = "this port has no `_migrate_removed_tool_paths`, so an older \
+                                    document keeps the withdrawn path list";
+const MIGRATION_DIVERGENCES: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "renamed-field-*",
+        pointer: "/changed",
+        count: 2,
+        row: ROW,
+        class: Class::Gap,
+        reason: RENAME_MIGRATION,
+    },
+    PatternDivergence {
+        scenario: "renamed-field-moves-its-value",
+        pointer: "/migrated/worktree_copy_on_write",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: RENAME_MIGRATION,
+    },
+    PatternDivergence {
+        scenario: "renamed-field-*",
+        pointer: "/migrated/experimental_worktree_copy_on_write",
+        count: 2,
+        row: ROW,
+        class: Class::Gap,
+        reason: RENAME_MIGRATION,
+    },
+    PatternDivergence {
+        scenario: "withdrawn-path-list-is-dropped",
+        pointer: "/changed",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: TOOL_PATHS_MIGRATION,
+    },
+    PatternDivergence {
+        scenario: "withdrawn-path-list-is-dropped",
+        pointer: "/migrated/tool_paths",
+        count: 1,
+        row: ROW,
+        class: Class::Gap,
+        reason: TOOL_PATHS_MIGRATION,
+    },
+];
 
 /// One divergence a replay observed: the case, the pointer, and both values
 /// rendered with sensitive values redacted.
 #[derive(Debug)]
-struct Observed {
-    case: String,
-    pointer: String,
-    reference: String,
-    port: String,
+pub(super) struct Observed {
+    pub(super) case: String,
+    pub(super) pointer: String,
+    pub(super) reference: String,
+    pub(super) port: String,
 }
 
-/// Fails on every observed divergence the ledger does not record, and on every
-/// recorded one that no longer reproduces.
-fn reconcile(family: &str, observed: &[Observed], ledger: &[(&str, &str, &str)]) {
-    let mut seen = BTreeSet::new();
-    for (case, pointer, _) in ledger {
-        assert!(
-            seen.insert((*case, *pointer)),
-            "{family}: `{case}` records {pointer} twice"
-        );
+/// What a typed ledger made of one family's divergences.
+#[derive(Debug, Default)]
+pub(super) struct Settled {
+    /// Differences an accepted divergence covers.
+    accepted: usize,
+    /// Differences an open gap covers.
+    gaps: usize,
+    /// The cases at least one gap covers a difference of.
+    gapped_cases: BTreeSet<String>,
+}
+
+impl Settled {
+    /// The family's figures over `total` cases, `conformant` of which replayed
+    /// without a difference: a case that differs only where an accepted
+    /// divergence says it may is accepted, one a gap covers is not.
+    pub(super) fn figures(&self, conformant: usize, total: usize) -> Figures {
+        let differing = total.saturating_sub(conformant);
+        Figures {
+            conformant,
+            accepted: differing.saturating_sub(self.gapped_cases.len()),
+            total,
+            accepted_differences: self.accepted,
+            gap_differences: self.gaps,
+            prose_differences: 0,
+        }
     }
-    let unrecorded = observed
-        .iter()
-        .filter(|found| {
-            !ledger
-                .iter()
-                .any(|(case, pointer, _)| *case == found.case && *pointer == found.pointer)
-        })
-        .map(|found| {
-            format!(
+}
+
+/// Settles every observed divergence against `ledger`, the first entry that
+/// covers one accounting for it. Fails on a divergence no entry covers, on an
+/// entry that covers another number of divergences than it declares (a gap
+/// that closed or widened), and on an entry `assert_ledger` finds unsound.
+pub(super) fn reconcile(
+    family: &str,
+    observed: &[Observed],
+    ledger: &[PatternDivergence],
+) -> Settled {
+    assert_ledger(LISTED, &BTreeMap::new(), entries(ledger));
+    let mut counted = vec![0_usize; ledger.len()];
+    let mut settled = Settled::default();
+    let mut unrecorded = Vec::new();
+    for found in observed {
+        let Some(index) = ledger
+            .iter()
+            .position(|entry| entry.covers(&found.case, &found.pointer))
+        else {
+            unrecorded.push(format!(
                 "{}: {}: reference {}, port {}",
                 found.case, found.pointer, found.reference, found.port
-            )
-        })
-        .collect::<Vec<_>>();
+            ));
+            continue;
+        };
+        counted[index] += 1;
+        match ledger[index].class {
+            Class::Gap => {
+                settled.gaps += 1;
+                settled.gapped_cases.insert(found.case.clone());
+            }
+            Class::Accepted(_) => settled.accepted += 1,
+        }
+    }
     assert!(
         unrecorded.is_empty(),
         "{family} diverges where no ledger entry records it:\n{}",
         unrecorded.join("\n")
     );
-    let stale = ledger
+    let moved = ledger
         .iter()
-        .filter(|(case, pointer, _)| {
-            !observed
-                .iter()
-                .any(|found| found.case == *case && found.pointer == *pointer)
+        .zip(&counted)
+        .filter(|(entry, counted)| entry.count != **counted)
+        .map(|(entry, counted)| {
+            format!(
+                "{}: declared {}, counted {counted}",
+                entry.label(),
+                entry.count
+            )
         })
-        .map(|(case, pointer, _)| format!("{case}: {pointer}"))
         .collect::<Vec<_>>();
     assert!(
-        stale.is_empty(),
-        "{family}: these recorded divergences no longer reproduce: {stale:?}"
+        moved.is_empty(),
+        "{family}: these ledger entries cover another number of differences than they \
+         declare:\n{}",
+        moved.join("\n")
     );
+    settled
 }
 
 /// A ledger as a lookup, so a divergence is named once and read by name.
@@ -205,6 +784,19 @@ struct Corpus {
     origin_rewrite: JsonValue,
     #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
     encoding: JsonValue,
+    /// Documents an older client wrote, and what the reference migration
+    /// leaves of each.
+    migrations: Vec<MigrationCase>,
+}
+
+/// One document an older client wrote, as the reference migration left it.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationCase {
+    name: String,
+    toml: String,
+    changed: bool,
+    migrated: Map<String, JsonValue>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -306,8 +898,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus was captured by another version of {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -321,10 +913,14 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         .map(|spec| (spec.name, spec))
         .collect::<BTreeMap<_, _>>();
     let recorded = ledger(UNDECLARED_FIELDS);
+    let renamed = RENAMED_FIELDS
+        .iter()
+        .map(|(field, former, _)| (*field, *former))
+        .collect::<BTreeMap<_, _>>();
     let mut missing = Vec::new();
     for field in &corpus.fields {
         let Some(spec) = declared.get(field.name.as_str()) else {
-            if !recorded.contains_key(&field.name) {
+            if !recorded.contains_key(&field.name) && !renamed.contains_key(field.name.as_str()) {
                 missing.push(field.name.clone());
             }
             continue;
@@ -396,6 +992,21 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         withdrawn.is_empty(),
         "these recorded gaps name fields the reference no longer declares: {withdrawn:?}"
     );
+    for (field, former) in &renamed {
+        assert!(
+            corpus.fields.iter().any(|entry| entry.name == *field)
+                && !corpus.fields.iter().any(|entry| entry.name == *former),
+            "the reference no longer declares `{field}` in place of `{former}`; its recorded \
+             rename is stale"
+        );
+        assert!(
+            corpus
+                .migrations
+                .iter()
+                .any(|case| moves_a_value(case, former, field)),
+            "no migration case records the reference moving `{former}` to `{field}`"
+        );
+    }
     let stale_strategies = STRATEGY_DIVERGENCES
         .iter()
         .map(|(name, ..)| *name)
@@ -455,14 +1066,21 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
     let undeclared = corpus
         .fields
         .iter()
-        .filter(|field| recorded.contains_key(&field.name))
+        .filter(|field| {
+            recorded.contains_key(&field.name)
+                || (renamed.contains_key(field.name.as_str())
+                    && !declared.contains_key(field.name.as_str()))
+        })
         .count();
     println!(
-        "config surface: {}/{} reference fields declared, {} local, {} recorded undeclared, at {}",
+        "config surface: {}/{} reference fields declared, {} local, {} recorded undeclared \
+         ({} of them renamed), {} withdrawn upstream, at {}",
         corpus.fields.len() - undeclared,
         corpus.fields.len(),
         local.len(),
         undeclared,
+        renamed.len(),
+        retired.len(),
         &corpus.reference.commit[..12]
     );
     // A reference field this port does not declare is an open gap.
@@ -479,6 +1097,20 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
         },
         serde_json::json!({}),
     );
+}
+
+/// Whether the reference migration, in `case`, moved the value `former` held
+/// to `field` and dropped `former`.
+fn moves_a_value(case: &MigrationCase, former: &str, field: &str) -> bool {
+    let Ok(written) = case.toml.parse::<Table>() else {
+        return false;
+    };
+    let Some(value) = written.get(former) else {
+        return false;
+    };
+    !written.contains_key(field)
+        && !case.migrated.contains_key(former)
+        && case.migrated.get(field) == serde_json::to_value(value).ok().as_ref()
 }
 
 /// The shipped defaults are the reference defaults, proved through the real
@@ -525,7 +1157,9 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
         // A field the reference declares and this port does not cannot appear
         // in a document this port composes; the census test above is what names
         // the gap, and this loop would report it a second time.
-        if recorded.contains_key(key.as_str()) {
+        if recorded.contains_key(key.as_str())
+            || RENAMED_FIELDS.iter().any(|(field, ..)| field == key)
+        {
             assert!(
                 actual.get(key).is_none(),
                 "`{key}` is composed now and its recorded gap is stale"
@@ -574,11 +1208,11 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
             port: render(key, &value),
         });
     }
-    let default_ledger = DEFAULT_DIVERGENCES
-        .iter()
-        .map(|(pointer, reason)| ("defaults", *pointer, *reason))
-        .collect::<Vec<_>>();
-    reconcile("the shipped default document", &observed, &default_ledger);
+    reconcile(
+        "the shipped default document",
+        &observed,
+        DEFAULT_DIVERGENCES,
+    );
     assert!(
         unpinned_observed,
         "the reference no longer ships the unpinned `active_model` sentinel; \
@@ -667,7 +1301,54 @@ fn the_settings_rows_are_listed_in_the_reference_order() {
         .filter(|field| registry::field(field.name).is_none_or(|spec| !spec.local))
         .map(|field| field.name.to_owned())
         .collect::<Vec<_>>();
-    assert_eq!(rows, corpus.settings_order);
+    // A reference row this port does not declare is the census's to name, and
+    // a row it withdrew while this port still declares it is too.
+    let unmeasured = UNDECLARED_FIELDS
+        .iter()
+        .map(|(name, _)| *name)
+        .chain(RENAMED_FIELDS.iter().map(|(name, ..)| *name))
+        .collect::<BTreeSet<_>>();
+    let retired = ledger(WITHDRAWN_FIELDS);
+    let reference = corpus
+        .settings_order
+        .iter()
+        .filter(|name| !unmeasured.contains(name.as_str()))
+        .cloned()
+        .collect::<Vec<_>>();
+    let rows = rows
+        .into_iter()
+        .filter(|name| !retired.contains_key(name))
+        .collect::<Vec<_>>();
+    let mut observed = Vec::new();
+    for name in rows.iter().filter(|name| !reference.contains(name)) {
+        observed.push(Observed {
+            case: "settingsOrder".to_owned(),
+            pointer: format!("/{}", escape_pointer_token(name)),
+            reference: "absent".to_owned(),
+            port: "listed".to_owned(),
+        });
+    }
+    for name in reference.iter().filter(|name| !rows.contains(name)) {
+        observed.push(Observed {
+            case: "settingsOrder".to_owned(),
+            pointer: format!("/{}", escape_pointer_token(name)),
+            reference: "listed".to_owned(),
+            port: "absent".to_owned(),
+        });
+    }
+    reconcile("the settings rows", &observed, SETTINGS_ORDER_DIVERGENCES);
+    let shared = |listed: &[String], other: &[String]| {
+        listed
+            .iter()
+            .filter(|name| other.contains(name))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        shared(&rows, &reference),
+        shared(&reference, &rows),
+        "the rows both sides list come in another order"
+    );
 }
 
 /// What reference `create_default_config` writes for a loaded document: it
@@ -946,7 +1627,7 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
             settings_rows_by_name(settings_rows(&snapshot)),
         );
     }
-    reconcile(
+    let settled = reconcile(
         "the validated model scenarios",
         &observed,
         MODEL_SCENARIO_DIVERGENCES,
@@ -969,8 +1650,8 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
     // Every observed divergence passed `reconcile`, so it is a recorded one.
     assert_figures(
         "config surface parity (models):",
-        "crates/vibe-core/tests/config-surface/corpus.json",
-        Figures::decided(conformant, corpus.model_scenarios.len(), observed.len()),
+        LISTED,
+        settled.figures(conformant, corpus.model_scenarios.len()),
         serde_json::json!({}),
     );
 }
@@ -1031,7 +1712,7 @@ fn every_scenario_composes_the_document_the_reference_produces() {
     for scenario in &corpus.scenarios {
         replay(scenario, &mut observed);
     }
-    reconcile("the merge scenarios", &observed, SCENARIO_DIVERGENCES);
+    let settled = reconcile("the merge scenarios", &observed, SCENARIO_DIVERGENCES);
     let conformant = conforming(
         corpus.scenarios.iter().map(|scenario| &scenario.name),
         &observed,
@@ -1044,8 +1725,53 @@ fn every_scenario_composes_the_document_the_reference_produces() {
     );
     assert_figures(
         "config surface parity (merges):",
-        "crates/vibe-core/tests/config-surface/corpus.json",
-        Figures::decided(conformant, corpus.scenarios.len(), observed.len()),
+        LISTED,
+        settled.figures(conformant, corpus.scenarios.len()),
+        serde_json::json!({}),
+    );
+}
+
+/// A document an older client wrote is brought forward as the reference
+/// brings it forward: a renamed field's value moves to its new name, and a
+/// withdrawn field is dropped or left for the merge to ignore.
+#[test]
+fn every_field_migration_leaves_the_document_the_reference_leaves() {
+    let corpus = corpus();
+    assert!(!corpus.migrations.is_empty());
+    let mut observed = Vec::new();
+    for case in &corpus.migrations {
+        let mut document = case
+            .toml
+            .parse::<Table>()
+            .unwrap_or_else(|error| panic!("{}: {error}", case.name));
+        let changed = super::migration::migrate_document(&mut document);
+        observe(
+            &case.name,
+            "/changed",
+            &JsonValue::from(case.changed),
+            &JsonValue::from(changed),
+            &mut observed,
+        );
+        observe(
+            &case.name,
+            "/migrated",
+            &JsonValue::Object(case.migrated.clone()),
+            &serde_json::to_value(&document).expect("a migrated document serializes"),
+            &mut observed,
+        );
+    }
+    let settled = reconcile("the field migrations", &observed, MIGRATION_DIVERGENCES);
+    let conformant = conforming(corpus.migrations.iter().map(|case| &case.name), &observed);
+    println!(
+        "config surface: {}/{} field migrations conform at {}",
+        conformant,
+        corpus.migrations.len(),
+        &corpus.reference.commit[..12]
+    );
+    assert_figures(
+        "config surface parity (migrations):",
+        LISTED,
+        settled.figures(conformant, corpus.migrations.len()),
         serde_json::json!({}),
     );
 }
@@ -1138,24 +1864,48 @@ fn replay(scenario: &Scenario, observed: &mut Vec<Observed>) {
         );
     }
 
-    let unexpected = effective
+    // A field this port composes and the reference does not is a divergence
+    // at its own pointer.
+    for key in effective
         .keys()
         .filter(|key| registry::field(key).is_some())
         .filter(|key| !scenario.merged.contains_key(key.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
-    assert!(
-        unexpected.is_empty(),
-        "{}: the port composed fields the reference did not: {unexpected:?}",
-        scenario.name
-    );
+    {
+        observed.push(Observed {
+            case: scenario.name.clone(),
+            pointer: format!("/{}", escape_pointer_token(key)),
+            reference: "absent".to_owned(),
+            port: render(key, &actual[key.as_str()]),
+        });
+    }
 
-    assert_eq!(
-        snapshot.unregistered_keys(),
-        scenario.dropped_keys,
-        "{}: the keys the reference drops and this port preserves changed",
-        scenario.name
-    );
+    // The keys the reference drops are the ones this port preserves without
+    // registering, which FR-04 requires; a key one side drops and the other
+    // does not is a divergence under `/droppedKeys`.
+    let preserved = snapshot.unregistered_keys();
+    for key in scenario
+        .dropped_keys
+        .iter()
+        .filter(|key| !preserved.contains(&key.as_str()))
+    {
+        observed.push(Observed {
+            case: scenario.name.clone(),
+            pointer: format!("/droppedKeys/{}", escape_pointer_token(key)),
+            reference: "dropped".to_owned(),
+            port: "composed".to_owned(),
+        });
+    }
+    for key in preserved
+        .iter()
+        .filter(|key| !scenario.dropped_keys.iter().any(|dropped| dropped == *key))
+    {
+        observed.push(Observed {
+            case: scenario.name.clone(),
+            pointer: format!("/droppedKeys/{}", escape_pointer_token(key)),
+            reference: "composed".to_owned(),
+            port: "dropped".to_owned(),
+        });
+    }
 }
 
 /// Records, under `case`, every pointer at which two documents disagree.

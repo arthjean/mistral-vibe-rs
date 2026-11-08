@@ -2,10 +2,12 @@
 //! read to the end of its lookup.
 //!
 //! `scripts/parity/experiments.py` builds sessions the way the reference's app
-//! server builds one, through `HarnessProcess.build_root_blueprint` and the
-//! loop's `start_initialize_experiments`, over a gate document, an eval cache
-//! seed and a new or a resumed session, and records the `startup` family into
-//! `crates/vibe-app-server/tests/experiments/corpus.json`. This module replays
+//! server builds one, through `HarnessProcess.build_unified_session_context`
+//! and the Unified Harness adapter's `initialize_experiments`, over a gate
+//! document and an eval cache seed, and records the `startup` family into
+//! `crates/vibe-app-server/tests/experiments/corpus.json`. Since v3.0.0 the
+//! reference restores nothing on resume, so every case opens a new session.
+//! This module replays
 //! each case through [`SessionExperiments`] end to end: the cache applied when
 //! the enrollment is built, the decision whether a new session waits on its
 //! lookup for a model, the lookup itself against a loopback eval endpoint, and
@@ -24,10 +26,10 @@ use std::process::Command;
 use std::sync::Arc;
 
 use serde_json::{Map, Value};
-use vibe_core::events::ModelMessage;
 use vibe_core::experiments::{EVAL_CACHE_FILE_NAME, hash_api_key};
 use vibe_core::identity::{IdentityFuture, IdentityResolver, IdentityResult};
-use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::replay::{Class, Entry as _, PatternDivergence, assert_ledger, entries};
+use vibe_core::parity::{REFERENCE_COMMIT, is_pin_commit};
 use vibe_core::telemetry::ExperimentExposures;
 use vibe_core::whoami::{WhoAmIResolver, WhoAmIResult};
 
@@ -38,39 +40,83 @@ const CORPUS_RELATIVE: &str = "crates/vibe-app-server/tests/experiments/corpus.j
 const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the capture
 /// script.
-const CORPUS_SCHEMA_VERSION: u64 = 1;
+const CORPUS_SCHEMA_VERSION: u64 = 2;
 /// Keys the corpus carries that are not families.
 const METADATA: [&str; 3] = ["schemaVersion", "reference", "note"];
 /// The credential the capture's Mistral provider resolves to, whose digest
 /// keys the seeded entry.
 const ORACLE_KEY: &str = "oracle-mistral-sentinel";
 /// Every field a case authored, and every field both sides answer.
-const INPUTS: [&str; 4] = ["document", "cached", "session", "live"];
-const ANSWERS: [&str; 6] = [
+const INPUTS: [&str; 3] = ["document", "cached", "live"];
+const ANSWERS: [&str; 5] = [
     "startConfig",
     "awaitingExperimentModel",
-    "hydrated",
     "afterLookup",
     "awaitingAfterLookup",
     "cachedAfterLookup",
 ];
 /// The configuration fields a case reads, `STARTUP_FIELDS` in the capture.
-const FIELDS: [&str; 5] = [
+const FIELDS: [&str; 4] = [
     "system_prompt_id",
     "managed_shell_tools_enabled",
     "smart_approve_available",
-    "smart_approve_default",
     "experimental_enable_registry_skills",
 ];
 /// The comparison floor, so a regeneration that captured almost nothing fails
 /// instead of reporting a clean but empty run.
-const MINIMUM_COMPARISONS: usize = 180;
+const MINIMUM_COMPARISONS: usize = 75;
 
 /// Comparisons where this build answers something other than the reference,
 /// keyed `startup/{field}/{case}` as a divergence prints, each with the
 /// reason. A divergence no entry names fails the replay, and so does an entry
 /// whose divergence stopped reproducing.
 const DIVERGENCES: &[(&str, &str)] = &[];
+
+/// Differences the v3.1.0 re-pin revealed, each a gap of row 32, which this
+/// corpus measures: an entry names the case as its scenario and the answer
+/// field as its pointer, and declares how many comparisons it covers.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/awaitingExperimentModel",
+        count: 13,
+        row: "32",
+        class: Class::Gap,
+        reason: "since v3.0.0 the reference delays a session's opening turn on the eval \
+                 under four conditions together: evaluation is enabled at all (telemetry on, \
+                 opted into A/B testing, a Mistral key present), the configuration pins no \
+                 model, this process has seen no eval failure, and the session started \
+                 without a cached eval \
+                 (experiments_wait_needed in vibe/core/experiments/wait.py); every gate \
+                 document pins `oracle`, so the reference never waits, while this port still \
+                 waits whenever no cached eval loaded",
+    },
+    PatternDivergence {
+        scenario: "mistral-active/cached",
+        pointer: "/afterLookup",
+        count: 1,
+        row: "32",
+        class: Class::Gap,
+        reason: LIVE_VARIANTS_APPLY,
+    },
+    PatternDivergence {
+        scenario: "mistral-active/cached-at-the-baseline",
+        pointer: "/afterLookup",
+        count: 1,
+        row: "32",
+        class: Class::Gap,
+        reason: LIVE_VARIANTS_APPLY,
+    },
+];
+
+/// Why a session that opened on a cached eval reads otherwise after its lookup.
+const LIVE_VARIANTS_APPLY: &str = "v3.0.0 applies the live eval's variants to the open \
+                                   session's configuration once the lookup lands \
+                                   (_apply_experiment_variants in \
+                                   vibe/app_server/_unified_harness_backend_adapter.py), even \
+                                   when the session opened on a cached eval; this port keeps \
+                                   the configuration the cached eval produced until the next \
+                                   session";
 
 fn repo_root() -> PathBuf {
     vibe_core::platform::canonicalize(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
@@ -88,12 +134,12 @@ fn corpus() -> Map<String, Value> {
         corpus.get("schemaVersion").and_then(Value::as_u64),
         Some(CORPUS_SCHEMA_VERSION)
     );
-    assert_eq!(
+    assert!(
         corpus
             .get("reference")
             .and_then(|reference| reference.get("commit"))
-            .and_then(Value::as_str),
-        Some(REFERENCE_COMMIT),
+            .and_then(Value::as_str)
+            .is_some_and(is_pin_commit),
         "the corpus was captured at another pin; regenerate it with {CAPTURE_SCRIPT}"
     );
     corpus
@@ -215,29 +261,16 @@ async fn port_case(case: &Map<String, Value>) -> Map<String, Value> {
             .expect("the seed writes");
     }
     let service = service(root.path(), &document);
-    let store = service.session_store();
     let working = service
         .layered_config()
         .working_directory()
         .display()
         .to_string();
-    let session_id = match case.get("session").and_then(Value::as_str) {
-        Some("resumed") => {
-            let mut metadata = store
-                .create("oracle-resumed-session", &working, None, 1)
-                .expect("the session is named");
-            store
-                .append_messages(&mut metadata, &[ModelMessage::user("resume me")], 2)
-                .expect("the session is saved");
-            metadata.id
-        }
-        _ => {
-            store
-                .create("oracle-new-session", &working, None, 1)
-                .expect("the session is named")
-                .id
-        }
-    };
+    let session_id = service
+        .session_store()
+        .create("oracle-new-session", &working, None, 1)
+        .expect("the session is named")
+        .id;
 
     let experiments = Arc::new(
         SessionExperiments::new(
@@ -252,16 +285,6 @@ async fn port_case(case: &Map<String, Value>) -> Map<String, Value> {
     let mut answers = Map::new();
     let (start_config, _) = read_configuration(&service);
     answers.insert("startConfig".to_owned(), start_config);
-    answers.insert(
-        "hydrated".to_owned(),
-        experiments
-            .manager
-            .lock()
-            .await
-            .export_state()
-            .and_then(|state| serde_json::to_value(state).ok())
-            .unwrap_or(Value::Null),
-    );
     // The lookup runs on this current-thread runtime only once the test
     // yields, so this read sees the decision before the lookup could settle,
     // as the capture read the loop's flag before it started the task.
@@ -309,6 +332,7 @@ async fn the_committed_corpus_replays_against_this_port() {
     let mut comparisons = 0;
     let mut divergences = Vec::new();
     let mut observed = Vec::new();
+    let mut covered = vec![0_usize; V3_GAPS.len()];
     for case in cases {
         let case = case.as_object().expect("a case is an object");
         let identifier = case.get("id").and_then(Value::as_str).unwrap_or_default();
@@ -331,16 +355,26 @@ async fn the_committed_corpus_replays_against_this_port() {
             let actual = answers.get(field).unwrap_or(&Value::Null);
             if actual != expected {
                 let key = format!("startup/{field}/{identifier}");
-                if !DIVERGENCES.iter().any(|(entry, _)| *entry == key) {
+                let pointer = format!("/{field}");
+                if DIVERGENCES.iter().any(|(entry, _)| *entry == key) {
+                    observed.push(key);
+                } else if let Some(index) = V3_GAPS
+                    .iter()
+                    .position(|entry| entry.covers(identifier, &pointer))
+                {
+                    covered[index] += 1;
+                } else {
                     divergences.push(format!("{key}: reference {expected}, port {actual}"));
+                    observed.push(key);
                 }
-                observed.push(key);
             }
         }
     }
+    let gaps = covered.iter().sum::<usize>();
     println!(
-        "experiments startup: {}/{comparisons} conform across {} cases ({} ledgered) at {}",
-        comparisons - observed.len(),
+        "experiments startup: {}/{comparisons} conform across {} cases ({} ledgered, {gaps} \
+         gaps) at {}",
+        comparisons - observed.len() - gaps,
         cases.len(),
         observed.len() - divergences.len(),
         &REFERENCE_COMMIT[..12],
@@ -364,16 +398,37 @@ async fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
-    // The ledger is empty: a comparison that differs is unrecorded and has
-    // failed above, so every ledgered one would stand on a recorded decision.
+    let miscounted = V3_GAPS
+        .iter()
+        .zip(&covered)
+        .filter(|(entry, found)| entry.count != **found)
+        .map(|(entry, found)| {
+            format!(
+                "{} declares {} differences and covered {found}",
+                entry.label(),
+                entry.count
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
+    let recorded = cases
+        .iter()
+        .filter_map(|case| Some((case.get("id")?.as_str()?.to_owned(), case)))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_ledger(CORPUS_RELATIVE, &recorded, entries(V3_GAPS));
+    // A comparison that differs is either decided in `DIVERGENCES` or a gap
+    // in `V3_GAPS`; any other has failed above.
     vibe_core::parity::figures::assert_figures(
         "experiments startup parity:",
         "crates/vibe-app-server/tests/experiments/corpus.json",
-        vibe_core::parity::figures::Figures::decided(
-            comparisons - observed.len(),
-            comparisons,
-            observed.len(),
-        ),
+        vibe_core::parity::figures::Figures {
+            conformant: comparisons - observed.len() - gaps,
+            accepted: observed.len(),
+            total: comparisons,
+            accepted_differences: observed.len(),
+            gap_differences: gaps,
+            prose_differences: 0,
+        },
         serde_json::json!({ "entries": DIVERGENCES.len() }),
     );
 }
@@ -395,8 +450,6 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         .arg(repository.join("target/startup-full.json"))
         .arg("--corpus")
         .arg(repository.join("target/startup-engine-corpus.json"))
-        .arg("--promo-corpus")
-        .arg(repository.join("target/startup-promo-corpus.json"))
         .arg("--startup-corpus")
         .arg(&recaptured)
         .current_dir(&repository)

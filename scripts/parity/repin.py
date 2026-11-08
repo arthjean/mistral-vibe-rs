@@ -12,8 +12,11 @@ verified mechanically instead of from memory.
 Usage::
 
     python3 scripts/parity/repin.py list
+    python3 scripts/parity/repin.py plan <sha>
+    python3 scripts/parity/repin.py open-transition
     python3 scripts/parity/repin.py verify
     python3 scripts/parity/repin.py capture <corpus> [--commit <sha>] [--accept-shrink]
+    python3 scripts/parity/repin.py remove <corpus>
     python3 scripts/parity/repin.py add <corpus> --driver "<script> <args>" \\
         --test <file>::<function> --row <n> [--output-flag <flag>] [--kind <kind>]
     python3 scripts/parity/repin.py materialize [<sha>... | --accepted] [--checkout <path>]
@@ -31,6 +34,17 @@ the same invocation. ``--commit`` captures a checkout at another commit, for a
 re-pin; the entry is then marked as captured off-target until the pin names
 that commit. ``--accept-shrink`` lowers the floors of a capture that lost
 observations on purpose; without it the floors only rise.
+
+A re-pin is rolling. The pin names its target (``EXPECTED_COMMIT``) and, while
+the manifest's ``transition`` list names the corpora not yet recaptured, the
+commit it left (``PREVIOUS_COMMIT``): a corpus at that commit is accepted only
+while the list names it, a capture at the target drops its corpus from the
+list, and the transition is closed by clearing ``PREVIOUS_COMMIT`` once the
+list is empty. ``open-transition``, run once both pin sources name the
+target and the previous commit, lists every entry not yet at the target.
+``plan <sha>`` prints every entry with its commit, its driver
+command and the story that owns its recapture (``scripts/parity/repin_plan.json``),
+in the order a re-pin to ``<sha>`` recaptures them.
 
 ``materialize`` builds the attested reference environment of a commit under
 ``.parity/`` (``scripts/parity/materialize.py``), which every capture and every
@@ -80,11 +94,12 @@ import materialize
 import provenance
 import sentinel
 import shingles
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, PREVIOUS_COMMIT
 from provenance import MANIFEST, REPOSITORY
 
 SCORECARD = REPOSITORY / "docs/parity.md"
 REPIN = "python3 scripts/parity/repin.py"
+PLAN = REPOSITORY / "scripts/parity/repin_plan.json"
 
 
 class RepinError(RuntimeError):
@@ -97,9 +112,57 @@ class RepinError(RuntimeError):
 
 
 def accepted_commits(manifest: dict[str, Any]) -> list[str]:
-    """The pin, then every commit the transition list still accepts."""
+    """The pin's commits a corpus may record: the target, then the previous
+    commit while a transition is open."""
 
-    return [EXPECTED_COMMIT, *manifest.get("transition", [])]
+    del manifest
+    return [EXPECTED_COMMIT, *([PREVIOUS_COMMIT] if PREVIOUS_COMMIT else [])]
+
+
+def accepted_for(manifest: dict[str, Any], corpus: str, previous: str = PREVIOUS_COMMIT) -> list[str]:
+    """The commits the corpus ``corpus`` may record: the target, then
+    ``previous`` while the transition list names it."""
+
+    listed = bool(previous) and corpus in manifest.get("transition", [])
+    return [EXPECTED_COMMIT, *([previous] if listed else [])]
+
+
+def transition_problems(manifest: dict[str, Any], previous: str = PREVIOUS_COMMIT) -> list[str]:
+    """Every rule of a rolling re-pin the manifest breaks, as
+    ``vibe_core::parity::manifest::transition_problems`` states them."""
+
+    problems = []
+    transition = manifest.get("transition", [])
+    if previous and not transition:
+        problems.append(
+            f"the transition list is empty but the pin still names the previous commit {previous}; "
+            "clear `PREVIOUS_COMMIT` in crates/vibe-core/src/parity.rs and scripts/parity/pin.py "
+            "to close the transition"
+        )
+    if not previous and transition:
+        problems.append(
+            f"the transition list names {len(transition)} corpora but `PREVIOUS_COMMIT` is empty; "
+            "declare the commit the re-pin left in both pin sources, or empty the list"
+        )
+    if previous and previous == EXPECTED_COMMIT:
+        problems.append(
+            f"`PREVIOUS_COMMIT` is the target {EXPECTED_COMMIT}; a transition leaves another commit"
+        )
+    entries = {entry["corpus"]: entry for entry in manifest["entries"]}
+    seen: set[str] = set()
+    for corpus in transition:
+        if corpus in seen:
+            problems.append(f"the transition list names {corpus} twice")
+        seen.add(corpus)
+        entry = entries.get(corpus)
+        if entry is None:
+            problems.append(f"the transition list names {corpus}, which is not a manifest entry")
+        elif entry.get("commit") == EXPECTED_COMMIT:
+            problems.append(
+                f"the transition list names {corpus}, which is already at the target "
+                f"{EXPECTED_COMMIT}; drop it from the list"
+            )
+    return problems
 
 
 def tracked_corpora() -> list[str]:
@@ -209,8 +272,7 @@ def driver_line(entry: dict[str, Any]) -> str:
 def verify(manifest: dict[str, Any]) -> list[str]:
     """Every provenance rule the manifest and the corpora break."""
 
-    problems: list[str] = []
-    accepted = accepted_commits(manifest)
+    problems: list[str] = transition_problems(manifest)
     entries = manifest["entries"]
     names = [entry["corpus"] for entry in entries]
     if names != sorted(names):
@@ -228,7 +290,7 @@ def verify(manifest: dict[str, Any]) -> list[str]:
     tracked = tracked_files()
     rows = scorecard_rows()
     for entry in entries:
-        problems.extend(verify_entry(entry, accepted, tracked, rows))
+        problems.extend(verify_entry(entry, accepted_for(manifest, entry["corpus"]), tracked, rows))
     return problems
 
 
@@ -328,6 +390,65 @@ def record(entry: dict[str, Any], path: Path, accept_shrink: bool) -> None:
         entry.pop("offTarget", None)
 
 
+def leave_transition(manifest: dict[str, Any], corpora: list[str]) -> None:
+    """Drops ``corpora``, just captured at the target, from the transition
+    list, which names only what a rolling re-pin has not recaptured yet."""
+
+    if manifest.get("transition"):
+        manifest["transition"] = [
+            corpus for corpus in manifest["transition"] if corpus not in corpora
+        ]
+
+
+def load_plan(path: Path = PLAN) -> list[dict[str, Any]]:
+    """The stages of ``scripts/parity/repin_plan.json``, in recapture order."""
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["stages"]
+    except (OSError, ValueError, KeyError) as error:
+        raise RepinError(f"cannot read the re-pin plan {path}: {error}") from None
+
+
+def plan(manifest: dict[str, Any], target: str, stages: list[dict[str, Any]]) -> list[str]:
+    """One line per manifest entry, in the order a re-pin to ``target``
+    recaptures it: by the stage that owns its driver and the driver's place in
+    it, a driver no stage names last, then by corpus. Each line gives the entry's commit (``done`` once it
+    is at ``target``), its driver command and the story that owns it."""
+
+    owner: dict[str, tuple[int, str]] = {}
+    for rank, stage in enumerate(stages):
+        for position, driver in enumerate(stage["drivers"]):
+            # A stage lists its drivers in the order they have to run: one
+            # driver reads what another captured (the protocol probes read
+            # the app-server surface census).
+            owner.setdefault(driver, (rank * 1000 + position, stage["story"]))
+    unplanned = (len(stages) * 1000, "unplanned")
+
+    def stage_of(entry: dict[str, Any]) -> tuple[int, str]:
+        driver = entry.get("driver")
+        if not driver:
+            return unplanned
+        return owner.get(Path(driver[0]).name, unplanned)
+
+    ordered = sorted(manifest["entries"], key=lambda entry: (stage_of(entry)[0], entry["corpus"]))
+    transition = set(manifest.get("transition", []))
+    lines = []
+    for entry in ordered:
+        commit = entry.get("commit") or "-"
+        state = "done" if commit == target else ("transition" if entry["corpus"] in transition else "pending")
+        command = (
+            f"{REPIN} capture {entry['corpus']}"
+            + ("" if target == EXPECTED_COMMIT else f" --commit {target}")
+            if entry["kind"] == "corpus"
+            else driver_line(entry)
+        )
+        lines.append(
+            f"{stage_of(entry)[1]}  {entry['corpus']}  {commit[:12]} ({state})  {entry['kind']}  "
+            f"{driver_line(entry)}  ->  {command}"
+        )
+    return lines
+
+
 def driver_command(driver: list[str]) -> list[str]:
     """The argv that runs ``driver``: a Python script under this interpreter,
     anything else (``cargo test ...``) as written."""
@@ -372,6 +493,7 @@ def capture(
         if recorded != commit:
             raise RepinError(f"{entry['corpus']} records commit {recorded}, not {commit}")
         record(entry, path, accept_shrink)
+        leave_transition(manifest, [entry["corpus"]] if entry["commit"] == EXPECTED_COMMIT else [])
         write_manifest(manifest)
         return [entry["corpus"]]
     if hand_assembled:
@@ -456,6 +578,7 @@ def capture(
             record(member, staged[member["corpus"]], accept_shrink)
             if not in_place:
                 os.replace(staged[member["corpus"]], REPOSITORY / member["corpus"])
+        leave_transition(manifest, [member["corpus"] for member in group if member["commit"] == EXPECTED_COMMIT])
         write_manifest(manifest)
         replaced = True
     finally:
@@ -538,7 +661,14 @@ def check(names: list[str], unprobed: bool, records: Path) -> int:
                     )
                 outcome["outcome"] = "ran"
             else:
-                differing = capture(corpus, EXPECTED_COMMIT, False, False, compare=True)
+                # A corpus a rolling re-pin has not recaptured yet is checked
+                # against the commit it still records.
+                at = (
+                    entry["commit"]
+                    if entry.get("commit") in accepted_for(manifest, corpus)
+                    else EXPECTED_COMMIT
+                )
+                differing = capture(corpus, at, False, False, compare=True)
                 outcome["outcome"] = "differs" if differing else "matches"
                 if differing:
                     outcome["detail"] = "a fresh capture differs for " + ", ".join(differing)
@@ -584,11 +714,29 @@ def add(arguments: argparse.Namespace) -> str:
     if arguments.kind != "fixture":
         record(entry, path, accept_shrink=False)
     problems = verify_entry(
-        entry, accepted_commits(manifest), tracked_files() | {corpus}, scorecard_rows()
+        entry, accepted_for(manifest, corpus), tracked_files() | {corpus}, scorecard_rows()
     )
     if problems:
         raise RepinError("\n".join(problems))
     manifest["entries"].append(entry)
+    write_manifest(manifest)
+    return corpus
+
+
+def remove(arguments: argparse.Namespace) -> str:
+    """Deletes a corpus whose oracle is gone, such as the legacy half of a
+    legacy and unified pair once the reference ships only one backend: its
+    file, its entry, and its name in the transition list. The test that
+    replayed it has to go in the same change, which `manifest_tests` holds."""
+    manifest = provenance.load_manifest()
+    corpus = arguments.corpus.replace("\\", "/")
+    entries = [entry for entry in manifest["entries"] if entry["corpus"] == corpus]
+    if not entries:
+        raise RepinError(f"{corpus} is not in the manifest")
+    manifest["entries"] = [entry for entry in manifest["entries"] if entry["corpus"] != corpus]
+    if corpus in manifest.get("transition", []):
+        manifest["transition"] = [name for name in manifest["transition"] if name != corpus]
+    (REPOSITORY / corpus).unlink(missing_ok=True)
     write_manifest(manifest)
     return corpus
 
@@ -604,6 +752,14 @@ def parse_arguments() -> argparse.Namespace:
     )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list", help="one line per manifest entry")
+    planning = commands.add_parser(
+        "plan", help="every entry in re-pin order, with its commit, driver and owning story"
+    )
+    planning.add_argument("commit", help="the commit the re-pin targets")
+    commands.add_parser(
+        "open-transition",
+        help="list every entry not at the target in the transition list, after a re-pin edit",
+    )
     commands.add_parser("accepted", help="the commits the manifest accepts, pin first")
     materializing = commands.add_parser(
         "materialize", help="build the attested reference environment of a commit"
@@ -669,6 +825,8 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="record an assembled corpus as it now stands, after merging its measurement",
     )
+    removing = commands.add_parser("remove", help="delete a corpus whose oracle is gone")
+    removing.add_argument("corpus")
     adding = commands.add_parser("add", help="list a corpus that is not in the manifest yet")
     adding.add_argument("corpus")
     adding.add_argument("--driver", help="the script and arguments that regenerate it")
@@ -698,6 +856,36 @@ def main() -> int:
                     f"{entry['corpus']}  {driver_line(entry)}  {entry['test']}  "
                     f"row {entry['row']}  {commit}{'  off-target' if entry.get('offTarget') else ''}"
                 )
+            return 0
+        if arguments.command == "plan":
+            manifest = provenance.load_manifest()
+            target = arguments.commit
+            if len(target) != 40 or any(char not in "0123456789abcdef" for char in target):
+                raise RepinError(f"`{target}` is not a full commit; give the 40-character SHA")
+            for line in plan(manifest, target, load_plan()):
+                print(line)
+            return 0
+        if arguments.command == "open-transition":
+            manifest = provenance.load_manifest()
+            if not PREVIOUS_COMMIT:
+                raise RepinError(
+                    "`PREVIOUS_COMMIT` is empty; name the commit the re-pin leaves in "
+                    "crates/vibe-core/src/parity.rs and scripts/parity/pin.py first"
+                )
+            manifest["transition"] = sorted(
+                entry["corpus"]
+                for entry in manifest["entries"]
+                if entry.get("commit") == PREVIOUS_COMMIT
+                or (
+                    entry["kind"] == "fixture"
+                    and provenance.recorded_commit(
+                        json.loads((REPOSITORY / entry["corpus"]).read_text(encoding="utf-8"))
+                    )
+                    == PREVIOUS_COMMIT
+                )
+            )
+            write_manifest(manifest)
+            print(f"the transition list names {len(manifest['transition'])} corpora at {PREVIOUS_COMMIT[:12]}")
             return 0
         if arguments.command == "census":
             entry = sentinel.take(arguments.url, arguments.store.resolve())
@@ -758,6 +946,9 @@ def main() -> int:
             )
             for corpus in refreshed:
                 print(f"captured {corpus}")
+            return 0
+        if arguments.command == "remove":
+            print(f"removed {remove(arguments)}")
             return 0
         print(f"added {add(arguments)}")
         return 0

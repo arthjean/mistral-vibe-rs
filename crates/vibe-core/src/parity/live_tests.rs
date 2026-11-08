@@ -10,8 +10,9 @@ use serde_json::{Value, json};
 
 use super::live::{
     ATTESTATION, CORPUS_PLATFORM, Class, Refusal, decide, environment_root, platform_refusal,
-    verify,
+    probe_commit, verify,
 };
+use super::manifest::{Kind, Manifest, ManifestEntry};
 use crate::parity::REFERENCE_COMMIT;
 use crate::parity::replay::repository;
 
@@ -339,4 +340,164 @@ fn a_capture_runs_the_attested_environment_and_never_the_checkout_it_was_handed(
         !output.status.success() && stderr.contains("no longer matches its attestation"),
         "a drifted environment must refuse the capture: {stderr}"
     );
+}
+
+/// A manifest entry for `corpus` at `commit`, replayed by `test`.
+fn listed(corpus: &str, test: &str, commit: &str) -> ManifestEntry {
+    ManifestEntry {
+        corpus: corpus.to_owned(),
+        kind: Kind::Corpus,
+        driver: Some(vec!["scripts/parity/sample.py".to_owned()]),
+        output: Some("--output".to_owned()),
+        output_root: None,
+        test: test.to_owned(),
+        row: "1".to_owned(),
+        commit: Some(commit.to_owned()),
+        off_target: false,
+        sha256: None,
+        count: None,
+        floors: std::collections::BTreeMap::new(),
+        note: None,
+    }
+}
+
+#[test]
+fn a_probe_gates_on_the_commit_of_the_corpora_its_test_file_replays() {
+    let manifest = Manifest {
+        schema_version: 1,
+        note: None,
+        transition: vec![
+            "crates/a/tests/left.json".to_owned(),
+            "crates/a/tests/mixed-left.json".to_owned(),
+            "crates/c/src/runtime/one.json".to_owned(),
+        ],
+        entries: vec![
+            listed(
+                "crates/a/tests/left.json",
+                "crates/a/tests/left.rs::replays",
+                COMMIT,
+            ),
+            listed(
+                "crates/a/tests/moved.json",
+                "crates/a/tests/moved.rs::replays",
+                REFERENCE_COMMIT,
+            ),
+            listed(
+                "crates/a/tests/mixed-left.json",
+                "crates/a/tests/mixed.rs::one",
+                COMMIT,
+            ),
+            listed(
+                "crates/a/tests/mixed-moved.json",
+                "crates/a/tests/mixed.rs::two",
+                REFERENCE_COMMIT,
+            ),
+            listed(
+                "crates/c/src/runtime/one.json",
+                "crates/c/src/runtime/one.rs::replays",
+                COMMIT,
+            ),
+        ],
+    };
+    assert_eq!(
+        probe_commit(&manifest, "crates/a/tests/left.rs", COMMIT).as_deref(),
+        Ok(COMMIT)
+    );
+    assert_eq!(
+        probe_commit(&manifest, r"crates\a\tests\left.rs", COMMIT).as_deref(),
+        Ok(COMMIT),
+        "a Windows caller path names the same file"
+    );
+    assert_eq!(
+        probe_commit(&manifest, "crates/a/tests/moved.rs", COMMIT).as_deref(),
+        Ok(REFERENCE_COMMIT)
+    );
+    assert_eq!(
+        probe_commit(&manifest, "crates/c/src/runtime.rs", COMMIT).as_deref(),
+        Ok(COMMIT),
+        "a file with no entry of its own answers for the test modules it declares"
+    );
+    assert_eq!(
+        probe_commit(&manifest, "crates/z/src/helper.rs", COMMIT).as_deref(),
+        Ok(REFERENCE_COMMIT),
+        "a file no entry names gates on the target"
+    );
+    assert_eq!(
+        probe_commit(&manifest, "crates/a/tests/left.rs", "").as_deref(),
+        Ok(REFERENCE_COMMIT),
+        "outside a transition every probe gates on the target"
+    );
+    let unlisted = Manifest {
+        transition: Vec::new(),
+        ..manifest
+    };
+    assert_eq!(
+        probe_commit(&unlisted, "crates/a/tests/left.rs", COMMIT).as_deref(),
+        Ok(REFERENCE_COMMIT),
+        "a corpus the transition list does not name is never measured at the previous commit"
+    );
+}
+
+#[test]
+fn a_hand_owned_fixture_beside_corpora_at_the_previous_commit_names_no_commit() {
+    let mut fixture = listed(
+        "crates/a/tests/expectations.json",
+        "crates/a/tests/left.rs::replays",
+        REFERENCE_COMMIT,
+    );
+    fixture.kind = Kind::Fixture;
+    fixture.commit = None;
+    let manifest = Manifest {
+        schema_version: 1,
+        note: None,
+        transition: vec!["crates/a/tests/left.json".to_owned()],
+        entries: vec![
+            listed(
+                "crates/a/tests/left.json",
+                "crates/a/tests/left.rs::replays",
+                COMMIT,
+            ),
+            fixture,
+        ],
+    };
+    assert_eq!(
+        probe_commit(&manifest, "crates/a/tests/left.rs", COMMIT).as_deref(),
+        Ok(COMMIT),
+        "the fixture is no oracle's output, so the file's corpora alone decide"
+    );
+}
+
+#[test]
+fn a_probe_whose_file_replays_both_commits_is_refused_as_a_transition() {
+    let manifest = Manifest {
+        schema_version: 1,
+        note: None,
+        transition: vec!["crates/a/tests/mixed-left.json".to_owned()],
+        entries: vec![
+            listed(
+                "crates/a/tests/mixed-left.json",
+                "crates/a/tests/mixed.rs::one",
+                COMMIT,
+            ),
+            listed(
+                "crates/a/tests/mixed-moved.json",
+                "crates/a/tests/mixed.rs::two",
+                REFERENCE_COMMIT,
+            ),
+        ],
+    };
+    let refusal = probe_commit(&manifest, "crates/a/tests/mixed.rs", COMMIT)
+        .expect_err("a file at both commits has no one oracle");
+    assert_eq!(refusal.class, Class::Transition);
+    assert!(
+        refusal.detail.contains("crates/a/tests/mixed.rs")
+            && refusal.detail.contains("repin.py capture"),
+        "{}",
+        refusal.detail
+    );
+    let records = tempfile::tempdir().expect("a records directory");
+    assert!(decide("mixed", Err(refusal), false, records.path()).is_none());
+    let skips =
+        fs::read_to_string(records.path().join("skips.jsonl")).expect("the skip is recorded");
+    assert!(skips.contains("\"class\":\"transition\""), "{skips}");
 }

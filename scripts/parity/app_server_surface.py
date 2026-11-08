@@ -72,7 +72,12 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "agents/install": ("AgentInstallParams", "AgentsListResponse"),
     "agents/list": ("AgentsListParams", "AgentsListResponse"),
     "agents/uninstall": ("AgentInstallParams", "AgentsListResponse"),
+    "artifacts/list": ("ArtifactsListParams", "ArtifactsListResponse"),
+    "artifacts/markViewed": ("ArtifactsMarkViewedParams", "EmptyResponse"),
+    "artifacts/subscribe": (None, "EmptyResponse"),
+    "artifacts/sync": ("ArtifactsSyncParams", "EmptyResponse"),
     "callback/result": ("CallbackResultParams", "CallbackResultResponse"),
+    "config/effective/read": ("ConfigEffectiveReadParams", "ConfigEffectiveReadResponse"),
     "config/fields/read": ("ConfigFieldsReadParams", "ConfigFieldsReadResponse"),
     "config/model/write": ("ModelConfigWriteParams", "ConfigWriteResponse"),
     "config/proxy/read": ("ConfigProxyReadParams", "ConfigProxyReadResponse"),
@@ -84,6 +89,10 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "connector_catalog/auth/request": (
         "ConnectorCatalogAuthRequestParams",
         "ConnectorCatalogAuthRequestResponse",
+    ),
+    "connector_catalog/connect": (
+        "ConnectorCatalogConnectParams",
+        "ConnectorCatalogMutationResponse",
     ),
     "connector_catalog/read": (
         "ConnectorCatalogReadParams",
@@ -100,7 +109,6 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "connectors/auth/read": ("ConnectorAuthReadParams", "ConnectorAuthReadResponse"),
     "connectors/read": ("ConnectorsReadParams", "ConnectorsReadResponse"),
     "connectors/refresh": ("ConnectorRefreshParams", "ConnectorRefreshResponse"),
-    "diagnostics/list": ("DiagnosticsListParams", "DiagnosticsListResponse"),
     "diagnostics/logs/read": (
         "DiagnosticsLogsReadParams",
         "DiagnosticsLogsReadResponse",
@@ -109,6 +117,9 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "feedback/record": ("FeedbackRecordParams", "EmptyResponse"),
     "feedback/shouldShow": ("FeedbackShouldShowParams", "FeedbackShouldShowResponse"),
     "identity/read": ("IdentityReadParams", "IdentityReadResponse"),
+    "imports/discover": ("ImportDiscoveryParams", "ImportDiscoveryResponse"),
+    "imports/read": ("ImportJobReadParams", "ImportJobReadResponse"),
+    "imports/start": ("ImportJobStartParams", "ImportJobStartResponse"),
     "loops/clear": ("LoopsClearParams", "LoopsClearResponse"),
     "loops/create": ("LoopsCreateParams", "LoopsCreateResponse"),
     "loops/delete": ("LoopsDeleteParams", "LoopsDeleteResponse"),
@@ -127,6 +138,10 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "mcp_catalog/remove": ("MCPRemoveParams", "MCPRemoveResponse"),
     "mcp_catalog/toggle": ("MCPToggleParams", "MCPCatalogMutationResponse"),
     "narration/summarize": ("NarrationSummarizeParams", "NarrationSummarizeResponse"),
+    "platformCredentials/headers": (
+        "PlatformCredentialHeadersParams",
+        "PlatformCredentialHeadersResponse",
+    ),
     "plugin/info": ("PluginInfoParams", "PluginInfoResponse"),
     "plugin/reload": ("PluginReloadParams", "PluginReloadResponse"),
     "plugin_catalog/read": ("PluginCatalogReadParams", "PluginCatalogReadResponse"),
@@ -152,6 +167,10 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     ),
     "projectLinks/save": ("ProjectLinksSaveParams", "ProjectLinkMutationResponse"),
     "projectLinks/unlink": ("ProjectLinksUnlinkParams", "ProjectLinksUnlinkResponse"),
+    "projects/create": ("ProjectsCreateParams", "ProjectMutationResponse"),
+    "projects/list": ("ProjectsListParams", "ProjectsListResponse"),
+    "projects/remove": ("ProjectsRemoveParams", "EmptyResponse"),
+    "projects/rename": ("ProjectsRenameParams", "ProjectMutationResponse"),
     "providerAuth/read": ("ProviderAuthReadParams", "ProviderAuthReadResponse"),
     "review/approve": ("ReviewMutationParams", "EmptyResponse"),
     "review/baseline": ("ReviewBaselineParams", "ReviewBaselineResponse"),
@@ -172,6 +191,7 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     ),
     "session/compact": ("SessionCompactParams", "SessionCompactResponse"),
     "session/context/inject": ("ContextInjectParams", "ContextInjectResponse"),
+    "session/context/read": ("SessionContextReadParams", "SessionContextReadResponse"),
     "session/continue": ("SessionContinueParams", "SessionContinueResponse"),
     "session/delete": ("SessionDeleteParams", "EmptyResponse"),
     "session/fork": ("SessionForkParams", "SessionForkResponse"),
@@ -181,12 +201,14 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     ),
     "session/history/get": ("SessionHistoryGetParams", "SessionHistoryGetResponse"),
     "session/history/list": ("SessionHistoryListParams", "SessionHistoryListResponse"),
+    "session/lease/subscribe": (None, "SessionLeaseSubscribeResponse"),
     "session/list": ("SessionListParams", "SessionListResponse"),
     "session/log/read": ("SessionLogReadParams", "SessionLogReadResponse"),
     "session/markAsSeen": ("SessionMarkAsSeenParams", "EmptyResponse"),
     "session/pin": ("SessionPinParams", "SessionPinResponse"),
     "session/read": ("SessionReadParams", "SessionReadResponse"),
-    "session/ready/read": ("SessionReadyReadParams", "SessionReadyReadResponse"),
+    # Since v3.0.0 the dispatcher reads no parameters for it.
+    "session/ready/read": (None, "SessionReadyReadResponse"),
     "session/ready/wait": ("SessionReadyWaitParams", "SessionReadyWaitResponse"),
     "session/relocate": ("SessionRelocateParams", "SessionRelocateResponse"),
     "session/rename": ("SessionTitleUpdateParams", "SessionTitleUpdateResponse"),
@@ -200,8 +222,21 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     ),
     "session/start": ("SessionStartParams", "SessionStartResponse"),
     "session/stop": ("SessionStopParams", "SessionStopResponse"),
+    "session/subagents/interrupt": (
+        "SessionSubagentsInterruptParams",
+        "SessionSubagentsInterruptResponse",
+    ),
+    "session/subagents/read": ("SessionSubagentsReadParams", "SessionSubagentsReadResponse"),
+    "session/subagents/wait": ("SessionSubagentsWaitParams", "SessionSubagentsWaitResponse"),
     "session/title/update": ("SessionTitleUpdateParams", "SessionTitleUpdateResponse"),
     "session/turn/enqueue": ("TurnEnqueueParams", "TurnEnqueueResponse"),
+    "session/turn/queue/edit/abandon": (
+        "TurnQueueEditAbandonParams",
+        "TurnQueueEditAbandonResponse",
+    ),
+    "session/turn/queue/edit/cancel": ("TurnQueueEditCancelParams", "TurnQueueEditCancelResponse"),
+    "session/turn/queue/edit/save": ("TurnQueueEditSaveParams", "TurnQueueEditSaveResponse"),
+    "session/turn/queue/edit/start": ("TurnQueueEditStartParams", "TurnQueueEditStartResponse"),
     "session/turn/queue/read": ("TurnQueueReadParams", "TurnQueueReadResponse"),
     "session/turn/queue/remove": ("TurnQueueRemoveParams", "TurnQueueRemoveResponse"),
     "session/turn/queue/replace": (
@@ -211,6 +246,11 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "session/turn/queue/resume": ("TurnQueueResumeParams", "TurnQueueResumeResponse"),
     "session/turn/queue/steer": ("TurnQueueSteerParams", "TurnQueueSteerResponse"),
     "session/turns/list": ("SessionTurnsListParams", "SessionTurnsListResponse"),
+    "setup/oidc-cancel": ("OidcAttemptParams", "ProtocolModel"),
+    "setup/oidc-clear": ("ProtocolModel", "ProtocolModel"),
+    "setup/oidc-poll": ("OidcAttemptParams", "OidcPollResponse"),
+    "setup/oidc-probe": ("ProtocolModel", "OidcProbeResponse"),
+    "setup/oidc-start": ("ProtocolModel", "OidcStartResponse"),
     # The reference still declares `shell/interrupt` (vibe/app_server/protocol.py:196)
     # but deleted its models and routes it nowhere: interrupting a shell is now an
     # action of `session/shellCommand` (vibe/app_server/_shell_requests.py:54-60).
@@ -234,6 +274,11 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "skills/import": ("SkillsImportParams", "RuntimeMutationResponse"),
     "skills/installed": ("SkillsInstalledParams", "SkillsInstalledResponse"),
     "skills/list": ("SkillsListParams", "SkillsListResponse"),
+    "skills/local/delete": ("SkillsLocalDeleteParams", "EmptyResponse"),
+    "skills/local/list": ("SkillsLocalListParams", "SkillsLocalListResponse"),
+    "skills/local/read": ("SkillsLocalReadParams", "SkillsLocalReadResponse"),
+    "skills/local/setEnabled": ("SkillsLocalSetEnabledParams", "SkillsLocalSetEnabledResponse"),
+    "skills/local/write": ("SkillsLocalWriteParams", "SkillsLocalWriteResponse"),
     "skills/remove": ("SkillsRemoveParams", "RuntimeMutationResponse"),
     "skills/setAlias": ("SkillsSetAliasParams", "RuntimeMutationResponse"),
     "skills/setEnabled": ("SkillsSetEnabledParams", "RuntimeMutationResponse"),
@@ -241,9 +286,7 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "skills/setVersion": ("SkillsSetVersionParams", "RuntimeMutationResponse"),
     "skills/updates": ("SkillsUpdatesParams", "SkillsUpdatesResponse"),
     "skills/versions": ("SkillsVersionsParams", "SkillsVersionsResponse"),
-    "stats/read": ("StatsReadParams", "StatsReadResponse"),
     "telemetry/record": ("TelemetryRecordParams", "EmptyResponse"),
-    "tools/list": ("ToolsListParams", "ToolsListResponse"),
     "turn/interrupt": ("TurnInterruptParams", "TurnInterruptResponse"),
     "turn/start": ("TurnStartParams", "TurnStartResponse"),
     "turn/steer": ("TurnSteerParams", "TurnSteerResponse"),
@@ -291,14 +334,6 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
         "WorkspaceWorktreePruneParams",
         "WorkspaceWorktreePruneResponse",
     ),
-    "workspace/git/worktrees/reap": (
-        "WorkspaceWorktreeReapParams",
-        "WorkspaceWorktreeReapResponse",
-    ),
-    "workspace/git/worktrees/reap/cancel": (
-        "WorkspaceWorktreeReapCancelParams",
-        "EmptyResponse",
-    ),
     # Since v2.26.0 the dispatcher validates the removal with the subclass that
     # adds `inspect` (vibe/app_server/_host.py:540-541).
     "workspace/git/worktrees/remove": (
@@ -328,6 +363,20 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
 #: replay before the delegation is implemented.
 SERVER_REQUEST_MODELS: dict[str, tuple[str, str]] = {
     "callback/call": ("CallbackCallParams", "CallbackCallResponse"),
+    # Since v3.0.0 a session asks the client to start and reach its peer
+    # sessions (`vibe/app_server/protocol.py`, `SESSION_SPAWN_METHOD` and the
+    # `SESSION_PEER_*_METHOD` names), and the server asks it for platform
+    # credentials (`vibe/app_server/server.py`), whose answer is a union.
+    "platformCredentials/resolve": (
+        "PlatformCredentialsResolveParams",
+        "PlatformCredentialsResolveResponse",
+    ),
+    "session/peer/archive": ("SessionPeerArchiveParams", "SessionPeerArchiveResponse"),
+    "session/peer/list": ("SessionPeerListParams", "SessionPeerListResponse"),
+    "session/peer/read": ("SessionPeerReadParams", "SessionPeerReadResponse"),
+    "session/peer/restore": ("SessionPeerRestoreParams", "SessionPeerRestoreResponse"),
+    "session/peer/send": ("SessionPeerSendParams", "SessionPeerSendResponse"),
+    "session/spawn": ("SessionSpawnParams", "SessionSpawnResponse"),
 }
 CLIENT_TOOL_MODELS: dict[str, tuple[str, str]] = {
     "clientTool/readTextFile": (
@@ -356,6 +405,14 @@ CLIENT_TOOL_MODELS: dict[str, tuple[str, str]] = {
 #: dispatched by the reference client projection; the rest are proved by their
 #: params model resolving.
 NOTIFICATION_MODELS: dict[str, str] = {
+    # Since v3.0.0: a session's artifacts, the end of a lease, an import job's
+    # progress, and an abort on a `vibe -p --agent-socket` connection
+    # (`vibe/app_server/_agent_socket.py`).
+    "artifacts/created": "ArtifactCreatedParams",
+    "artifacts/updated": "ArtifactUpdatedParams",
+    "session/lease/ended": "SessionLeaseEnded",
+    "imports/updated": "ImportJobUpdatedParams",
+    "agentSocket/aborted": "AgentSocketAbortedParams",
     "session/snapshot": "SessionSnapshotParams",
     "session/compacted": "SessionCompactedParams",
     "session/contextCleared": "SessionContextClearedParams",
@@ -399,21 +456,19 @@ UNION_ROOTS: tuple[tuple[str, str], ...] = (
     ("vibe.app_server.models", "TeleportEvent"),
     ("vibe.app_server.protocol", "SessionMCPServer"),
     ("vibe.app_server.protocol", "BackgroundProcessOutputResponse"),
+    ("vibe.app_server._connection_protocol", "PlatformCredentialsResolveResponse"),
 )
 UNION_NAMES = frozenset(name for _, name in UNION_ROOTS)
 
 #: Models no routed method reaches but that still cross the wire: the JSON-RPC
 #: envelopes, the structured `invalid_params` detail, the notification bases and
 #: the per-tool effect output shapes carried inside the untyped `output` value.
-#: `CompactionDetails` is declared by the pinned reference and referenced by
-#: nothing in it; it is rooted here so the completeness check below stays a
-#: statement about the whole declared surface rather than the reachable part.
-#: The same holds since v2.25.7 for the models of the retired `callback/respond`
-#: and `session/close` methods, for `PublicHistoryPage`, which v2.24.0 reached
-#: from `PublicSessionState.history` and `history/list`, and for
-#: `SavedSessionSummary`, which v2.24.0 reached from `session/list`: all still
-#: declared (vibe/app_server/protocol.py:475-479,1991-1997,
-#: vibe/app_server/models.py:803,1088) and reached by no root. The
+#: A model declared and reached by no root is rooted here so the completeness
+#: check below stays a statement about the whole declared surface rather than
+#: the reachable part: `PublicHistoryPage`, which v2.24.0 reached from
+#: `PublicSessionState.history` and `history/list`, is one. v3.0.0 deleted the
+#: other unreached ones (`CompactionDetails`, `SavedSessionSummary`, and the
+#: models of the retired `callback/respond` and `session/close`). The
 #: `EventWatermarkResponse` base (vibe/app_server/protocol.py:249) is only
 #: inherited.
 #: `SessionOptions` is an alias of `AgentConfig` since v2.25.7
@@ -424,10 +479,18 @@ UNION_NAMES = frozenset(name for _, name in UNION_ROOTS)
 #: the reap and its cancellation each validate a subclass of it
 #: (vibe/app_server/protocol.py:1665,1712,1731).
 EXTRA_MODEL_ROOTS: tuple[str, ...] = (
-    "CallbackRespondParams",
-    "CallbackRespondResponse",
+    # Since v3.0.0: the client's `platformCredentials/invalidated`
+    # notification, which no server table lists, the `data` of a refused
+    # local-skill write, the scratchpad tool's effect output, and the base a
+    # pull request's provider details share with the checks it summarizes,
+    # whose fields only the base declares.
+    "LocalSkillRefusalData",
+    "PlatformCredentialsInvalidatedParams",
+    "PublicCheckStatus",
+    "PublicChecksSummary",
+    "PublicPullRequestSharedEnrichment",
+    "ScratchpadEffectOutput",
     "ChannelFrame",
-    "CompactionDetails",
     "EventNotificationParams",
     "EventWatermarkResponse",
     "FileEditEffectOutput",
@@ -441,10 +504,7 @@ EXTRA_MODEL_ROOTS: tuple[str, ...] = (
     "Notification",
     "ProtocolError",
     "PublicHistoryPage",
-    "SavedSessionSummary",
     "ServerRequest",
-    "SessionCloseParams",
-    "SessionCloseResponse",
     "SessionHandoffParams",
     "SessionOpenParams",
     "SessionOptions",
@@ -483,6 +543,12 @@ SOURCE_MODULES: tuple[str, ...] = (
     "vibe.app_server.config",
     "vibe.app_server.review",
     "vibe.app_server.multiplex",
+    # Since v3.0.0 two dispatchers declare the models of the methods they
+    # route beside themselves: the OIDC setup flow and the platform
+    # credential headers.
+    "vibe.app_server._setup_oidc",
+    "vibe.app_server._platform_credential_headers",
+    "vibe.app_server._agent_socket",
     # Three contracts the app-server publishes are declared outside it: the
     # effect displays every entry detail carries, the question models the
     # user-input callback and the `ask_user_question` effect take, and the
@@ -742,7 +808,9 @@ def capture(commit: str) -> dict[str, Any]:
     server_requests = []
     for name, (params_name, response_name) in SERVER_REQUEST_MODELS.items():
         census.record(census.model(params_name))
-        census.record(census.model(response_name))
+        # An answer declared as a union is recorded with the union roots.
+        if response_name not in UNION_NAMES:
+            census.record(census.model(response_name))
         server_requests.append({
             "name": name,
             "params": params_name,

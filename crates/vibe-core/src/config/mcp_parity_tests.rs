@@ -23,10 +23,26 @@ use super::mcp::{
 };
 use super::*;
 use crate::mcp::{McpAuthConfig, McpServerConfig, McpTransportConfig};
-use crate::parity::REFERENCE_COMMIT;
-use crate::parity::figures::{Figures, assert_figures};
+use crate::parity::figures::assert_figures;
+use crate::parity::is_pin_commit;
+use crate::parity::replay::{Class, PatternDivergence};
+
+use super::surface_parity_tests::{Observed, ROW, reconcile};
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
+
+/// Decoded values at which an entry scenario diverges, each at
+/// `/<camelCase field>`. Every other decoded value is asserted equal.
+const ENTRY_DIVERGENCES: &[PatternDivergence] = &[PatternDivergence {
+    scenario: "*",
+    pointer: "/samplingEnabled",
+    count: 10,
+    row: ROW,
+    class: Class::Gap,
+    reason: "v3.0.0 turned MCP sampling off for an entry that does not ask for it \
+             (`vibe/core/config/models.py` at `c96a6db`); this port still enables it by \
+             default",
+}];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,8 +159,8 @@ fn corpus() -> Corpus {
         .unwrap_or_else(|error| panic!("configuration corpus at {}: {error}", path.display()));
     let corpus: Corpus = serde_json::from_str(&raw)
         .unwrap_or_else(|error| panic!("configuration corpus at {}: {error}", path.display()));
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -253,6 +269,7 @@ fn every_recorded_add_resolves_to_the_reference_name_or_the_same_refusal() {
 #[test]
 fn every_recorded_entry_decodes_to_the_reference_values_or_the_same_refusal() {
     let corpus = corpus();
+    let mut observed = Vec::new();
     for case in &corpus.mcp.entries {
         let outcome = servers(&case.toml);
         let Some(expected) = &case.decoded else {
@@ -280,20 +297,33 @@ fn every_recorded_entry_decodes_to_the_reference_values_or_the_same_refusal() {
             "scenario `{}` declares one entry",
             case.name
         );
-        compare_entry(&case.name, expected, &decoded[0], &corpus.mcp);
+        compare_entry(
+            &case.name,
+            expected,
+            &decoded[0],
+            &corpus.mcp,
+            &mut observed,
+        );
     }
+    let settled = reconcile("the MCP entries", &observed, ENTRY_DIVERGENCES);
+    let conformant = corpus
+        .mcp
+        .entries
+        .iter()
+        .filter(|case| !observed.iter().any(|found| found.case == case.name))
+        .count();
     println!(
         "config surface: {}/{} MCP entry scenarios conform, {} URL scenarios, {} add resolutions",
-        corpus.mcp.entries.len(),
+        conformant,
         corpus.mcp.entries.len(),
         corpus.mcp.urls.len(),
         corpus.mcp.resolutions.len()
     );
-    // Every entry scenario is asserted equal above: no ledger.
+    // Every decoded value is asserted equal above or settled by the ledger.
     assert_figures(
         "config MCP entries parity:",
         "crates/vibe-core/tests/config-surface/corpus.json",
-        Figures::decided(corpus.mcp.entries.len(), corpus.mcp.entries.len(), 0),
+        settled.figures(conformant, corpus.mcp.entries.len()),
         serde_json::json!({}),
     );
 }
@@ -303,6 +333,7 @@ fn compare_entry(
     expected: &DecodedEntry,
     actual: &McpServerConfig,
     corpus: &McpCorpus,
+    observed: &mut Vec<Observed>,
 ) {
     assert_eq!(actual.alias, expected.name, "scenario `{scenario}` name");
     assert_eq!(
@@ -314,10 +345,14 @@ fn compare_entry(
         actual.prompt, expected.prompt,
         "scenario `{scenario}` prompt"
     );
-    assert_eq!(
-        actual.sampling_enabled, expected.sampling_enabled,
-        "scenario `{scenario}` sampling"
-    );
+    if actual.sampling_enabled != expected.sampling_enabled {
+        observed.push(Observed {
+            case: scenario.to_owned(),
+            pointer: "/samplingEnabled".to_owned(),
+            reference: expected.sampling_enabled.to_string(),
+            port: actual.sampling_enabled.to_string(),
+        });
+    }
     assert_eq!(
         !actual.enabled, expected.disabled,
         "scenario `{scenario}` enablement"

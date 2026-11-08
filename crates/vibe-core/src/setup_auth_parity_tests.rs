@@ -56,8 +56,8 @@ use crate::auth::{
 use crate::config::registry::default_document;
 use crate::config::{ConfigPaths, DotenvValues, LayeredConfig};
 use crate::identity::IdentityFuture;
-use crate::parity::REFERENCE_COMMIT;
 use crate::parity::figures::{Figures, assert_figures};
+use crate::parity::is_pin_commit;
 use crate::parity::replay::{Capture, pinned_reference};
 use crate::pycompat::{Dumps, dumps};
 use crate::whoami::{
@@ -385,8 +385,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus

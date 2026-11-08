@@ -1,49 +1,33 @@
 //! Replays the committed system prompt corpus against this port.
 //!
 //! `scripts/parity/system_prompt.py` captured the corpus from the pinned
-//! reference in three families. `compose` scenarios lay a tree out (a home
-//! whose `.vibe` is the vibe home, a workspace, Git repositories, skills,
-//! agents, prompt files and `AGENTS.md` documents) and record the sections of
-//! the prompt a session opened there gets, each as the data it carries and its
-//! prose as a length and a SHA-256. The replay lays the same tree out through
-//! the script's `--materialize`, asks
-//! [`WorkspaceService::system_prompt_inputs`] and
-//! [`vibe_core::system_prompt::compose`] for the port's prompt, and records it
-//! the same way. `os` scenarios fix a Windows host's published tools and
-//! resolved shell. `live` scenarios run this crate's `vibe -p` through the
-//! script's `--live-binary` and record what the system messages of every
-//! request carry.
+//! reference's `vibe -p`: every scenario lays a tree out (a home whose `.vibe`
+//! is the vibe home, a workspace, Git repositories, skills, agents, prompt
+//! files and `AGENTS.md` documents), runs a headless session there behind a
+//! scripted chat-completions endpoint, and records what the system messages
+//! of every request carry: how many there are, whether one leads, which of the
+//! scenario's data they mention, and the prompt as a length and a SHA-256.
+//! The replay runs this crate's `vibe` through the script's `--live-binary`
+//! and records the same.
 //!
 //! The port writes its own prose on purpose (`NOTICE`): two digests that
 //! differ are a difference unless a `PROSE` entry names their pointer, holds
 //! the count of digests it covers, and finds the port's length within its band
-//! of the reference's;
-//! everything else is compared exactly.
-//! A difference has to fall under a `LEDGER` entry, and every entry has to
-//! still reproduce, so row 19 of `docs/parity.md` is a reading of the summary
-//! this file prints. Only the live probe at the end needs the reference
-//! checkout.
+//! of the reference's; everything else is compared exactly. A difference has
+//! to fall under a ledger entry, and every entry has to still reproduce, so
+//! row 19 of `docs/parity.md` is a reading of the summary this file prints.
+//! Only the live probe at the end needs the reference checkout.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use serde_json::{Value, json};
-use sha2::{Digest as _, Sha256};
-use vibe_app_server::workspace::{
-    PromptHost, SessionPromptScope, SystemPromptError, WorkspacePaths, WorkspaceService,
-};
+use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, OwnProse, PatternDivergence, Tally, assert_ledger, differences, entries,
+    Band, Capture, Class, OwnProse, PatternDivergence, Tally, assert_ledger, differences, entries,
     scenarios,
 };
-use vibe_core::prompt::library::PromptFileError;
-use vibe_core::system_prompt::{
-    ComposedSystemPrompt, GitContext, ProjectContextSettings, ProjectInputs, SectionKind,
-    ShellEnvironment, SystemPromptInputs, compose,
-};
-use vibe_core::tools::shell::WindowsShell;
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("system-prompt-parity/corpus.json");
@@ -54,466 +38,80 @@ const CAPTURE: Capture = Capture {
     arguments: &[],
 };
 
-const ROOT: &str = "<root>";
-const DATE: &str = "<DATE>";
-const CO_AUTHOR: &str = "Co-Authored-By: Mistral Vibe <vibe@mistral.ai>";
-
 const LEDGER: &[PatternDivergence] = &[];
 
-/// Every section this port words its own way, digest by digest.
-/// The accepted divergence the sections below stand on.
+/// The accepted divergence the prose below stands on.
 const PROMPT_TEXT: &str = "System prompt text";
 
-/// The reference commit whose prompt directives this port's sections were
-/// last read against; a re-pin re-reads them before restating it.
-const AUDITED: &str = "376f6a33413a";
+/// The reference commit whose prompt directives this port's prompt was last
+/// read against; a re-pin re-reads them before restating it. At `c96a6db` the
+/// read found four directives the prompt does not cover yet, which
+/// `docs/parity.md` lists as an open divergence of row 19.
+const AUDITED: &str = "c96a6dbb34d3";
 
-const PROSE: &[OwnProse] = &[
-    OwnProse {
-        scenarios: &["*"],
-        pointer: "/sections/*/text",
-        count: 356,
-        band: Band::DEFAULT,
-        directives: Some(AUDITED),
-        row: "19",
-        accepted: PROMPT_TEXT,
-        reason: "a section of the prompt, which this port writes in its own words over the same directives",
-    },
-    OwnProse {
-        scenarios: &["*"],
-        pointer: "/sections/*/entries/*/description",
-        count: 84,
-        band: Band::DEFAULT,
-        directives: Some(AUDITED),
-        row: "19",
-        accepted: PROMPT_TEXT,
-        reason: "an entry a section lists, a tool's or a skill's description, in this port's own words",
-    },
-    OwnProse {
-        scenarios: &["*"],
-        pointer: "/section/text",
-        count: 4,
-        band: Band::DEFAULT,
-        directives: Some(AUDITED),
-        row: "19",
-        accepted: PROMPT_TEXT,
-        reason: "the one section an `os` scenario records, in this port's own words",
-    },
-];
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &["*"],
+    pointer: "/requests/*/prompt",
+    count: 45,
+    band: Band::DEFAULT,
+    directives: Some(AUDITED),
+    row: "19",
+    accepted: PROMPT_TEXT,
+    reason: "the prompt a session sends, which this port writes in its own words over the same directives",
+}];
 
 /// The corpus as `scripts/parity/manifest.json` lists it.
 const LISTED: &str = "crates/vibe-cli/tests/system-prompt-parity/corpus.json";
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 composes the prompt otherwise across its app server and harness core, which this port does not reproduce yet";
 
-/// Replaces the scenario root, however it is spelled, with the placeholder the
-/// corpus records.
-struct Normalizer {
-    roots: Vec<String>,
-}
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/exit",
+        count: 3,
+        row: "19",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/requests/*",
+        count: 1,
+        row: "19",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/requests/*/carries/*",
+        count: 47,
+        row: "19",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/requests/*/carries/*/data",
+        count: 264,
+        row: "19",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/requests/*/carries/*/occurrences",
+        count: 39,
+        row: "19",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
 
-impl Normalizer {
-    fn new(root: &Path) -> Self {
-        let mut roots = vec![root.display().to_string()];
-        if let Ok(resolved) = vibe_core::platform::canonicalize(root) {
-            roots.push(resolved.display().to_string());
-        }
-        roots.sort_by_key(|root| std::cmp::Reverse(root.len()));
-        roots.dedup();
-        Self { roots }
-    }
-
-    fn text(&self, value: &str) -> String {
-        let mut value = value.to_owned();
-        for root in &self.roots {
-            value = value.replace(root.as_str(), ROOT);
-        }
-        value
-    }
-
-    fn path(&self, path: &Path) -> String {
-        self.text(&path.display().to_string())
-    }
-
-    fn prose(&self, value: &str) -> Value {
-        let text = self.text(value);
-        json!({
-            "prose": text.chars().count(),
-            "sha256": Sha256::digest(text.as_bytes())
-                .iter()
-                .map(|byte| format!("{byte:02x}"))
-                .collect::<String>(),
-        })
-    }
-
-    /// A `git log --oneline` line with its abbreviated hash replaced.
-    fn commit(&self, line: &str) -> String {
-        let text = self.text(line);
-        let hash = text
-            .split(' ')
-            .next()
-            .filter(|hash| hash.len() >= 7 && hash.chars().all(|c| c.is_ascii_hexdigit()));
-        match hash {
-            Some(hash) => format!("<hash>{}", &text[hash.len()..]),
-            None => text,
-        }
-    }
-}
-
-/// `Path(prompt_id).with_suffix(".md").name` for the identifiers the corpus
-/// names.
-fn prompt_file_name(prompt_id: &str) -> String {
-    let stem = match prompt_id.rfind('.') {
-        Some(index) if index > 0 => &prompt_id[..index],
-        _ => prompt_id,
-    };
-    format!("{stem}.md")
-}
-
-fn base_data(
-    inputs: &SystemPromptInputs,
-    text: &str,
-    directories: &[PathBuf],
-    normalizer: &Normalizer,
-) -> Value {
-    let file_name = prompt_file_name(&inputs.prompt_id);
-    for directory in directories {
-        if directory.join(&file_name).is_file() {
-            return json!({
-                "promptId": inputs.prompt_id,
-                "source": "file",
-                "file": normalizer.path(&directory.join(&file_name)),
-                "content": normalizer.text(text),
-            });
-        }
-    }
-    json!({
-        "promptId": inputs.prompt_id,
-        "source": "builtin",
-        "dated": text.contains(DATE),
-    })
-}
-
-fn os_data(platform: &str, shell: &ShellEnvironment, text: &str) -> Value {
-    let (label, rules) = match shell {
-        ShellEnvironment::Posix { shell } => (shell.clone(), Value::Null),
-        ShellEnvironment::GitBashTool => ("Git Bash".to_owned(), json!("git_bash")),
-        ShellEnvironment::PowerShellTool => ("PowerShell".to_owned(), json!("powershell")),
-        ShellEnvironment::Bash { executable } => {
-            (format!("bash ({executable})"), json!("git_bash"))
-        }
-        ShellEnvironment::Cmd { executable } => (executable.clone(), json!("cmd")),
-    };
-    assert!(
-        text.contains(platform) && text.contains(&format!("`{label}`")),
-        "the operating system section names neither {platform} nor `{label}`: {text}"
-    );
-    json!({"platform": platform, "shell": label, "rules": rules})
-}
-
-fn skills_data(inputs: &SystemPromptInputs, text: &str, normalizer: &Normalizer) -> Value {
-    let mut model = inputs
-        .skills
-        .iter()
-        .filter(|skill| skill.model_invocable)
-        .collect::<Vec<_>>();
-    model.sort_by(|left, right| left.name.cmp(&right.name));
-    let entries = model
-        .iter()
-        .map(|skill| {
-            let description = vibe_core::system_prompt::html_escape(&skill.description);
-            assert!(
-                text.contains(&format!("<name>{}</name>", skill.name))
-                    && text.contains(&description),
-                "the skills section does not list {}",
-                skill.name
-            );
-            json!({
-                "name": skill.name,
-                "description": match skill.path {
-                    Some(_) => json!(description),
-                    None => normalizer.prose(&description),
-                },
-                "path": skill.path.as_deref().map(|path| {
-                    let escaped = vibe_core::system_prompt::html_escape(&path.display().to_string());
-                    assert!(text.contains(&escaped), "the skills section omits {escaped}");
-                    json!(normalizer.path(path))
-                }),
-            })
-        })
-        .collect::<Vec<_>>();
-    json!({
-        "modelIntro": inputs.skills.iter().any(|skill| skill.model_invocable),
-        "userIntro": inputs.skills.iter().any(|skill| skill.user_invocable),
-        "entries": entries,
-    })
-}
-
-fn git_data(git: &GitContext, normalizer: &Normalizer) -> Value {
-    match git {
-        GitContext::Repository {
-            current_branch,
-            main_branch,
-            recent_commits,
-        } => json!({
-            "kind": "repository",
-            "currentBranch": current_branch,
-            "mainBranch": main_branch,
-            "commits": recent_commits
-                .iter()
-                .map(|line| normalizer.commit(line))
-                .collect::<Vec<_>>(),
-        }),
-        GitContext::TimedOut => json!({"kind": "timed_out"}),
-        GitContext::Unavailable => json!({"kind": "unavailable"}),
-        GitContext::Failed(_) => json!({"kind": "failed"}),
-    }
-}
-
-fn user_data(inputs: &ProjectInputs, normalizer: &Normalizer) -> Value {
-    let (path, content) = &inputs.user_instructions;
-    let content = content.trim();
-    if content.is_empty() {
-        Value::Null
-    } else {
-        json!({"path": normalizer.path(path), "content": content})
-    }
-}
-
-/// The sections of `composed` as the corpus records them.
-fn observed_sections(
-    inputs: &SystemPromptInputs,
-    composed: &ComposedSystemPrompt,
-    prompt_directories: &[PathBuf],
-    normalizer: &Normalizer,
-) -> Value {
-    let project = &inputs.project;
-    let cwd =
-        vibe_core::platform::canonicalize(&project.cwd).unwrap_or_else(|_| project.cwd.clone());
-    let sections = composed
-        .sections
-        .iter()
-        .map(|section| {
-            let text = section.text.as_str();
-            let data = match section.kind {
-                SectionKind::Base => base_data(inputs, text, prompt_directories, normalizer),
-                SectionKind::Headless => json!({}),
-                SectionKind::CommitSignature => json!({"coAuthorTrailer": text.contains(CO_AUTHOR)}),
-                SectionKind::ModelInfo => {
-                    assert!(text.contains(&format!("`{}`", inputs.model_alias)));
-                    json!({"alias": inputs.model_alias})
-                }
-                SectionKind::OperatingSystem => os_data(&inputs.platform, &inputs.shell, text),
-                SectionKind::Skills => skills_data(inputs, text, normalizer),
-                SectionKind::Subagents => json!({
-                    "lines": text
-                        .split('\n')
-                        .filter(|line| line.starts_with("- "))
-                        .collect::<Vec<_>>(),
-                }),
-                SectionKind::Scratchpad => {
-                    let path = inputs.scratchpad.as_deref().expect("a scratchpad");
-                    assert!(text.contains(&path.display().to_string()));
-                    json!({"path": normalizer.path(path)})
-                }
-                SectionKind::ProjectContext => {
-                    assert!(text.contains(&cwd.display().to_string()));
-                    json!({
-                        "absPath": normalizer.path(&cwd),
-                        "git": git_data(composed.git.as_ref().expect("a snapshot"), normalizer),
-                    })
-                }
-                SectionKind::DangerousDirectory => json!({
-                    "absPath": normalizer.path(&cwd),
-                    "description": composed.dangerous.expect("a description"),
-                }),
-                SectionKind::AdditionalDirectories => json!({
-                    "directories": composed
-                        .additional_directories
-                        .iter()
-                        .map(|directory| {
-                            assert!(text.contains(&directory.display().to_string()));
-                            normalizer.path(directory)
-                        })
-                        .collect::<Vec<_>>(),
-                }),
-                SectionKind::Instructions => json!({
-                    "user": user_data(project, normalizer),
-                    "project": project
-                        .project_instructions
-                        .iter()
-                        .map(|(directory, content)| {
-                            assert!(text.contains(content.trim()));
-                            json!({"directory": normalizer.path(directory), "content": content.trim()})
-                        })
-                        .collect::<Vec<_>>(),
-                }),
-            };
-            let mut entry = json!({"kind": section.kind.name(), "text": normalizer.prose(text)});
-            if let (Some(entry), Value::Object(data)) = (entry.as_object_mut(), data) {
-                entry.extend(data);
-            }
-            entry
-        })
-        .collect::<Vec<_>>();
-    json!({"sections": sections})
-}
-
-fn error_data(error: SystemPromptError, normalizer: &Normalizer) -> Value {
-    match error {
-        SystemPromptError::Prompt(PromptFileError::Missing {
-            prompt_id,
-            builtins,
-            directories,
-            available,
-            ..
-        }) => json!({"error": {
-            "kind": "missing",
-            "promptId": prompt_id,
-            "builtins": builtins,
-            "directories": directories.iter().map(|d| normalizer.path(d)).collect::<Vec<_>>(),
-            "available": available,
-        }}),
-        SystemPromptError::Prompt(PromptFileError::InvalidId { prompt_id, .. }) => {
-            json!({"error": {"kind": "invalid", "promptId": prompt_id}})
-        }
-        SystemPromptError::Config(message) => {
-            json!({"error": {"kind": "config", "message": message}})
-        }
-    }
-}
-
-fn string_list(value: &Value) -> Vec<String> {
-    value
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
-/// The port's prompt for one `compose` scenario.
-fn replay_compose(scenario: &Value) -> Value {
-    let name = scenario["name"].as_str().expect("a name");
-    let temporary = tempfile::tempdir().expect("a scenario root");
-    let root = vibe_core::platform::canonicalize(temporary.path()).expect("the root resolves");
-    // The trust file records the root as typed; a Windows verbatim root would
-    // never match the workspace the port resolves.
-    let root = root
-        .to_str()
-        .and_then(|root| root.strip_prefix(r"\\?\"))
-        .map_or(root.clone(), PathBuf::from);
-    let output = CAPTURE.run(&[
-        "--materialize".as_ref(),
-        name.as_ref(),
-        "--root".as_ref(),
-        root.as_os_str(),
-    ]);
-    assert!(
-        output.status.success(),
-        "{name}: materializing failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let normalizer = Normalizer::new(&root);
-    let vibe_home = root.join("home/.vibe");
-    let cwd = root.join(scenario["cwd"].as_str().expect("a working directory"));
-    let trusted =
-        vibe_core::trust::TrustStore::for_vibe_home(&vibe_home).is_trusted(&cwd) == Some(true);
-    let service = WorkspaceService::new(
-        WorkspacePaths {
-            vibe_home: vibe_home.clone(),
-            working_directory: cwd.clone(),
-            session_root: root.join("sessions"),
-        },
-        trusted,
-    )
-    .expect("the workspace service opens");
-    let agent = scenario["agent"].as_str().map(ToOwned::to_owned);
-    let scope = SessionPromptScope {
-        working_directory: cwd,
-        trusted,
-        add_directories: string_list(&scenario["addDirs"])
-            .into_iter()
-            .map(|directory| root.join(directory).display().to_string())
-            .collect(),
-        project_file_trust: None,
-        scratchpad: (scenario["scratchpad"] == json!(true) && agent.is_none())
-            .then(|| root.join("scratch")),
-        agent,
-        model: None,
-        headless: scenario["headless"] == json!(true),
-        tool_names: Vec::new(),
-        skill_seed: None,
-    };
-    let host = PromptHost {
-        home: Some(root.join("home")),
-        current_date: DATE.to_owned(),
-        platform: vibe_core::system_prompt::platform_display_name().to_owned(),
-        shell: ShellEnvironment::Posix {
-            shell: scenario["shell"].as_str().unwrap_or("sh").to_owned(),
-        },
-    };
-    match service.system_prompt_inputs(&scope, &host) {
-        Ok(inputs) => {
-            let composed = compose(&inputs);
-            let directories = service.layered_config().harness_files().prompts_dirs();
-            observed_sections(&inputs, &composed, &directories, &normalizer)
-        }
-        Err(error) => error_data(error, &normalizer),
-    }
-}
-
-/// The port's operating system section for one `os` scenario.
-fn replay_os(scenario: &Value) -> Value {
-    let resolved = &scenario["resolved"];
-    let executable = PathBuf::from(resolved["executable"].as_str().expect("an executable"));
-    let resolved = match resolved["kind"].as_str() {
-        Some("bash") => WindowsShell::Bash(executable),
-        _ => WindowsShell::Cmd(executable),
-    };
-    let shell = ShellEnvironment::for_windows(&string_list(&scenario["tools"]), resolved);
-    let inputs = SystemPromptInputs {
-        prompt_id: String::new(),
-        base: String::new(),
-        current_date: String::new(),
-        headless: false,
-        include_commit_signature: false,
-        include_model_info: false,
-        include_prompt_detail: true,
-        include_project_context: false,
-        model_alias: String::new(),
-        platform: "Windows".to_owned(),
-        shell: shell.clone(),
-        skills: Vec::new(),
-        subagents: Vec::new(),
-        scratchpad: None,
-        project: ProjectInputs {
-            cwd: PathBuf::new(),
-            home: None,
-            settings: ProjectContextSettings::default(),
-            project_roots: Vec::new(),
-            user_instructions: (PathBuf::new(), String::new()),
-            project_instructions: Vec::new(),
-        },
-    };
-    let composed = compose(&inputs);
-    let text = &composed
-        .sections
-        .iter()
-        .find(|section| section.kind == SectionKind::OperatingSystem)
-        .expect("an operating system section")
-        .text;
-    let normalizer = Normalizer { roots: Vec::new() };
-    let mut section = json!({"kind": "operating_system", "text": normalizer.prose(text)});
-    if let (Some(section), Value::Object(data)) =
-        (section.as_object_mut(), os_data("Windows", &shell, text))
-    {
-        section.extend(data);
-    }
-    json!({"section": section})
-}
-
-/// The port's live requests, captured by the script driving this crate's
-/// `vibe`.
+/// The port's requests, captured by the script driving this crate's `vibe`.
 fn replay_live() -> BTreeMap<String, Value> {
     let captured = CAPTURE.port(
         &["--live-binary", env!("CARGO_BIN_EXE_vibe")],
@@ -531,24 +129,20 @@ fn replay_live() -> BTreeMap<String, Value> {
     ignore = "windows by design: the corpus was captured on Linux, and the reference prompt names the Windows platform and spells paths with backslashes"
 )]
 fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    let mut tally = Tally::new(CORPUS, entries(PROSE).chain(entries(LEDGER)));
+    let mut tally = Tally::new(
+        CORPUS,
+        entries(PROSE)
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
+    );
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     let live = replay_live();
-
     for (name, reference) in &recorded {
-        let scenario = &reference["scenario"];
-        let family = reference["family"].as_str();
-        let port = match family {
-            Some("compose") => replay_compose(scenario),
-            Some("os") => replay_os(scenario),
-            _ => {
-                assert_eq!(family, Some("live"), "{name}: unknown family");
-                live.get(name)
-                    .cloned()
-                    .expect("the live capture holds every live scenario")
-            }
-        };
+        let port = live
+            .get(name)
+            .cloned()
+            .expect("the live capture holds every scenario");
         let found = differences(&reference["observed"], &port);
         tally.record(name, &reference["observed"], &port, found);
     }
@@ -561,7 +155,9 @@ fn every_ledger_entry_states_a_pointer_and_a_reason() {
     assert_ledger(
         LISTED,
         &scenarios(&corpus),
-        entries(PROSE).chain(entries(LEDGER)),
+        entries(PROSE)
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
     );
 }
 

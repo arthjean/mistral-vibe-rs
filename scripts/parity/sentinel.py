@@ -185,7 +185,8 @@ def row(record: dict[str, Any]) -> str:
     if not record["releasesBehind"]:
         return (
             f"{UPSTREAM_ROW} Equal to the pinned score: the pin ({pin}) is the {newest} on "
-            f"{record['checkedAt']}, per `scripts/parity/upstream-census.json` (`repin.py census`) |"
+            f"{record['checkedAt']}, so the census reads {record['summary']}, per "
+            f"`scripts/parity/upstream-census.json` (`repin.py census`) |"
         )
     return (
         f"{UPSTREAM_ROW} Not measured: the pin ({pin}) is {len(record['releasesBehind'])} releases "

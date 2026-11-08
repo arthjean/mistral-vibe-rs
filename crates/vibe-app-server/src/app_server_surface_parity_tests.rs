@@ -41,7 +41,7 @@ use crate::server::{
     stdio_routed_methods,
 };
 
-use vibe_core::parity::{REFERENCE_COMMIT, pinned_interpreter};
+use vibe_core::parity::{is_pin_commit, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/app_server_surface.py";
 const CORPUS_RELATIVE: &str = "tests/app-server-surface/corpus.json";
@@ -68,21 +68,211 @@ const UNROUTED_METHODS: &[(&str, &str)] = &[];
 /// Reference methods `SERVER_METHODS` does not declare, each with the reference
 /// declaration and dispatcher it was measured from.
 ///
-/// The v2.26.0 re-pin grew the reference inventory from 136 to 146 names
-/// (`vibe/app_server/protocol.py:108-255` at 376f6a3); the slash command pass
-/// declared `providerAuth/read` and the protocol pass the other nine. An
-/// undeclared method is unrouted too, so an entry here also accounts for it in
-/// the unrouted backlog, and a method declared while listed fails the replay
-/// as a stale entry.
-const UNDECLARED_METHODS: &[(&str, &str)] = &[];
+/// The v2.26.0 re-pin grew the reference inventory from 136 to 146 names; the
+/// slash command pass declared `providerAuth/read` and the protocol pass the
+/// other nine. The v3.1.0 re-pin (`c96a6db`) grew it to 174 (`SERVER_METHODS` in
+/// `vibe/app_server/protocol.py`): the 33 methods below are open gaps of row
+/// 17, which a protocol follow-on closes. An undeclared method is unrouted
+/// too, so an entry here also accounts for it in the unrouted backlog, and a
+/// method declared while listed fails the replay as a stale entry.
+const UNDECLARED_METHODS: &[(&str, &str)] = &[
+    (
+        "artifacts/list",
+        "added at v3.0.0 by the session artifacts (`vibe/app_server/_session_artifacts.py`)",
+    ),
+    (
+        "artifacts/markViewed",
+        "added at v3.0.0 by the session artifacts (`vibe/app_server/_session_artifacts.py`)",
+    ),
+    (
+        "artifacts/subscribe",
+        "added at v3.0.0 by the session artifacts (`vibe/app_server/_session_artifacts.py`)",
+    ),
+    (
+        "artifacts/sync",
+        "added at v3.0.0 by the session artifacts (`vibe/app_server/_session_artifacts.py`)",
+    ),
+    (
+        "config/effective/read",
+        "added at v3.0.0 by the effective configuration read (`vibe/app_server/_unified_harness_backend_adapter.py`)",
+    ),
+    (
+        "connector_catalog/connect",
+        "added at v3.0.0 by the connector catalog (`vibe/app_server/connector_catalog.py`)",
+    ),
+    (
+        "imports/discover",
+        "added at v3.0.0 by the harness imports (`vibe/app_server/_imports.py`)",
+    ),
+    (
+        "imports/read",
+        "added at v3.0.0 by the harness imports (`vibe/app_server/_imports.py`)",
+    ),
+    (
+        "imports/start",
+        "added at v3.0.0 by the harness imports (`vibe/app_server/_imports.py`)",
+    ),
+    (
+        "platformCredentials/headers",
+        "added at v3.0.0 by the platform credential headers (`vibe/app_server/_platform_credential_headers.py`)",
+    ),
+    (
+        "projects/create",
+        "added at v3.0.0 by the local projects (`vibe/app_server/_local_projects_controller.py`)",
+    ),
+    (
+        "projects/list",
+        "added at v3.0.0 by the local projects (`vibe/app_server/_local_projects_controller.py`)",
+    ),
+    (
+        "projects/remove",
+        "added at v3.0.0 by the local projects (`vibe/app_server/_local_projects_controller.py`)",
+    ),
+    (
+        "projects/rename",
+        "added at v3.0.0 by the local projects (`vibe/app_server/_local_projects_controller.py`)",
+    ),
+    (
+        "session/context/read",
+        "added at v3.0.0 by the context breakdown (`vibe/app_server/_unified_harness_backend_adapter.py`)",
+    ),
+    (
+        "session/lease/subscribe",
+        "added at v3.0.0 by the session leases (`vibe/app_server/_session_lease_subscription.py`)",
+    ),
+    (
+        "session/subagents/interrupt",
+        "added at v3.0.0 by the subagent controls (`vibe/app_server/_unified_harness_backend_adapter.py`)",
+    ),
+    (
+        "session/subagents/read",
+        "added at v3.0.0 by the subagent controls (`vibe/app_server/_unified_harness_backend_adapter.py`)",
+    ),
+    (
+        "session/subagents/wait",
+        "added at v3.0.0 by the subagent controls (`vibe/app_server/_unified_harness_backend_adapter.py`)",
+    ),
+    (
+        "session/turn/queue/edit/abandon",
+        "added at v3.0.0 by the queued-turn editor (`vibe/app_server/server.py`)",
+    ),
+    (
+        "session/turn/queue/edit/cancel",
+        "added at v3.0.0 by the queued-turn editor (`vibe/app_server/server.py`)",
+    ),
+    (
+        "session/turn/queue/edit/save",
+        "added at v3.0.0 by the queued-turn editor (`vibe/app_server/server.py`)",
+    ),
+    (
+        "session/turn/queue/edit/start",
+        "added at v3.0.0 by the queued-turn editor (`vibe/app_server/server.py`)",
+    ),
+    (
+        "setup/oidc-cancel",
+        "added at v3.0.0 by the OIDC setup (`vibe/app_server/_setup_oidc.py`)",
+    ),
+    (
+        "setup/oidc-clear",
+        "added at v3.0.0 by the OIDC setup (`vibe/app_server/_setup_oidc.py`)",
+    ),
+    (
+        "setup/oidc-poll",
+        "added at v3.0.0 by the OIDC setup (`vibe/app_server/_setup_oidc.py`)",
+    ),
+    (
+        "setup/oidc-probe",
+        "added at v3.0.0 by the OIDC setup (`vibe/app_server/_setup_oidc.py`)",
+    ),
+    (
+        "setup/oidc-start",
+        "added at v3.0.0 by the OIDC setup (`vibe/app_server/_setup_oidc.py`)",
+    ),
+    (
+        "skills/local/delete",
+        "added at v3.0.0 by the local skills (`vibe/app_server/_local_skills_controller.py`)",
+    ),
+    (
+        "skills/local/list",
+        "added at v3.0.0 by the local skills (`vibe/app_server/_local_skills_controller.py`)",
+    ),
+    (
+        "skills/local/read",
+        "added at v3.0.0 by the local skills (`vibe/app_server/_local_skills_controller.py`)",
+    ),
+    (
+        "skills/local/setEnabled",
+        "added at v3.0.0 by the local skills (`vibe/app_server/_local_skills_controller.py`)",
+    ),
+    (
+        "skills/local/write",
+        "added at v3.0.0 by the local skills (`vibe/app_server/_local_skills_controller.py`)",
+    ),
+];
+
+/// Methods `SERVER_METHODS` declares and this build routes that the reference
+/// no longer declares, each with the release that removed it. The port keeps
+/// serving them on purpose until a protocol follow-on retires them: its own
+/// clients still read two of them (the terminal client `diagnostics/list` in
+/// `crates/vibe-cli/src/tui/session.rs`, the headless client `stats/read`), and
+/// `vibe-protocol` is outside the re-pin's scope.
+/// "Open divergences" in `docs/parity.md` carries the row. A method listed here
+/// that the reference declares again, or that this build stops routing, fails
+/// the replay as a stale entry.
+const PORT_ONLY_METHODS: &[(&str, &str)] = &[
+    (
+        "diagnostics/list",
+        "removed at v3.0.0 with the legacy backend's diagnostics",
+    ),
+    (
+        "stats/read",
+        "removed at v3.0.0; the session stats travel on `session/statsUpdated`",
+    ),
+    (
+        "tools/list",
+        "removed at v3.0.0; the tool rows travel on `runtime/updated`",
+    ),
+    (
+        "workspace/git/worktrees/reap",
+        "removed at v3.0.0 with the managed worktree reaper",
+    ),
+    (
+        "workspace/git/worktrees/reap/cancel",
+        "removed at v3.0.0 with the managed worktree reaper",
+    ),
+];
 
 /// Reference notifications this build does not emit yet.
 ///
 /// US-085 emptied the list; the v2.25.7 re-pin added seven notifications, and
 /// the last of them, `session/childSessionUpdated`, came with the Unified
-/// Harness subagents. A notification that stops being emitted has to earn an
-/// entry here before the replay accepts it.
-const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
+/// Harness subagents. The v3.1.0 re-pin added the five below, open gaps of row
+/// 17 that come with the methods `UNDECLARED_METHODS` lists. A notification
+/// that stops being emitted has to earn an entry here before the replay
+/// accepts it.
+const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[
+    (
+        "agentSocket/aborted",
+        "added at v3.0.0 for `vibe -p --agent-socket` connections \
+         (`vibe/app_server/_agent_socket.py`)",
+    ),
+    (
+        "artifacts/created",
+        "added at v3.0.0 with the session artifacts",
+    ),
+    (
+        "artifacts/updated",
+        "added at v3.0.0 with the session artifacts",
+    ),
+    (
+        "imports/updated",
+        "added at v3.0.0 with the harness imports",
+    ),
+    (
+        "session/lease/ended",
+        "added at v3.0.0 with the session leases",
+    ),
+];
 
 /// Notification names this build emits that the reference does not declare.
 ///
@@ -93,16 +283,74 @@ const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 /// Enum vocabularies the reference declares that this port does not model yet.
 ///
 /// The v2.26.0 re-pin opened `PathGrantScope`, which the path grant pass
-/// closed by modeling it as `vibe_core::policy::PathGrantScope`.
-const UNMODELED_ENUMS: &[(&str, &str)] = &[];
+/// closed by modeling it as `vibe_core::policy::PathGrantScope`. The v3.1.0
+/// re-pin opened the eight below, the vocabularies of the methods
+/// `UNDECLARED_METHODS` lists and of the provider credential sources, open
+/// gaps of row 17.
+const UNMODELED_ENUMS: &[(&str, &str)] = &[
+    (
+        "ContextCategoryId",
+        "added at v3.0.0 by `session/context/read`",
+    ),
+    ("ImportHarness", "added at v3.0.0 by the harness imports"),
+    ("ImportJobStatus", "added at v3.0.0 by the harness imports"),
+    (
+        "ProviderAuthKind",
+        "added at v3.0.0 to the provider credentials",
+    ),
+    (
+        "ProviderCredentialSourceKind",
+        "added at v3.0.0 to the provider credentials",
+    ),
+    (
+        "ProviderCredentialSourceState",
+        "added at v3.0.0 to the provider credentials",
+    ),
+    (
+        "SubagentInterruptOutcome",
+        "added at v3.0.0 by `session/subagents/interrupt`",
+    ),
+    (
+        "SubagentRunStatus",
+        "added at v3.0.0 by the subagent controls",
+    ),
+];
 
 /// Values a vocabulary this port declares is missing, each with the reference
 /// declaration that added it. The comparison below still fails on any other
 /// difference, on order, and on an entry whose value this port now spells.
 ///
 /// The v2.26.0 re-pin opened `ToolEffectKind/scratchpad`, which the path grant
-/// pass closed by spelling it.
-const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[];
+/// pass closed by spelling it. The v3.1.0 re-pin opened the one below.
+const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[
+    (
+        "MCPSourceStatus",
+        "needs_connect",
+        "added at v3.0.0 for a connector the catalog lists but the user has not connected, \
+         which `connector_catalog/connect` (undeclared here) resolves",
+    ),
+    (
+        "PublicTurnStopReason",
+        "length",
+        "added at v3.0.0 for a turn whose last answer the output-token cap cut off",
+    ),
+];
+
+/// History entry details the reference no longer declares, which this port
+/// still publishes. v3.0.0 deleted `ContextClearedNoticeDetail`,
+/// `PlanReviewStartedNoticeDetail` and `PlanReviewEndedNoticeDetail` from the
+/// `NoticeDetail` union (`vibe/app_server/models.py`): the reference stopped
+/// announcing a cleared context and a plan review as notices. These are open
+/// gaps of row 17; a kind listed here that the union declares again fails the
+/// replay as a stale entry.
+const REMOVED_NOTICE_KINDS: &[(&str, &str)] = &[
+    ("context_cleared", "removed from `NoticeDetail` at v3.0.0"),
+    (
+        "plan_review_started",
+        "removed from `NoticeDetail` at v3.0.0",
+    ),
+    ("plan_review_ended", "removed from `NoticeDetail` at v3.0.0"),
+];
 
 /// Protocol error codes the reference declares that this port does not speak.
 const UNSPOKEN_ERROR_CODES: &[(&str, &str)] = &[];
@@ -121,7 +369,27 @@ const DIVERGENT_HANDSHAKE: &[(&str, &str)] = &[];
 /// `PublicSessionState`, and the protocol pass closed the two configuration
 /// reads with the reference `ConfigView`. Any other response that stops validating has
 /// to earn an entry here before the replay accepts it.
-const DIVERGENT_RESPONSES: &[(&str, &str)] = &[];
+///
+/// The v3.1.0 re-pin opened the three below: v3.0.0 removed the legacy backend
+/// and with it every field that reported the harness selection, which this
+/// port still publishes because it keeps `--legacy-harness` (an open
+/// divergence of row 8), and two fields nothing read any more.
+const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
+    (
+        "config/read",
+        "`harnessSelectionSource` and `startupIssue` left `ConfigReadResponse` at v3.0.0 with \
+         the harness selection",
+    ),
+    (
+        "runtime/read",
+        "`RuntimeSnapshot.experimentalHarness` left with the harness selection and \
+         `ToolSummary.isCustom` left the tool rows at v3.0.0",
+    ),
+    (
+        "session/list",
+        "`SessionListResponse.continueSessionId` left the session list at v3.0.0",
+    ),
+];
 
 /// Read-only methods the probe calls, with the parameters they take.
 ///
@@ -327,8 +595,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus was captured by another version of {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -367,10 +635,23 @@ fn the_inventory_is_exactly_the_reference_inventory() {
         Vec::<&&str>::new(),
         "the reference declares these methods and SERVER_METHODS does not"
     );
+    let port_only = ledger(PORT_ONLY_METHODS);
     assert_eq!(
-        declared.difference(&reference).collect::<Vec<_>>(),
+        declared
+            .difference(&reference)
+            .filter(|method| !port_only.contains_key(**method))
+            .collect::<Vec<_>>(),
         Vec::<&&str>::new(),
         "SERVER_METHODS invents these methods"
+    );
+    let revived = port_only
+        .keys()
+        .filter(|method| reference.contains(method.as_str()) || !declared.contains(method.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        revived.is_empty(),
+        "these port-only entries are stale: the reference declares them again, or this build \
+         dropped them: {revived:?}"
     );
     let stale = backlog
         .keys()
@@ -411,9 +692,10 @@ fn every_stdio_routed_method_is_in_the_reference_inventory() {
         .iter()
         .map(|entry| entry.name.as_str())
         .collect::<BTreeSet<_>>();
+    let port_only = ledger(PORT_ONLY_METHODS);
     let invented = stdio_routed_methods()
         .into_iter()
-        .filter(|method| !reference.contains(method))
+        .filter(|method| !reference.contains(method) && !port_only.contains_key(*method))
         .collect::<Vec<_>>();
     assert_eq!(
         invented,
@@ -584,9 +866,10 @@ fn the_unemitted_reference_notifications_are_exactly_the_recorded_backlog() {
         .iter()
         .filter(|entry| entry.sequenced)
         .count();
+    // v3.0.0 sequences the two artifact notifications too.
     assert_eq!(
-        sequenced, 11,
-        "the reference sequences eleven notifications"
+        sequenced, 13,
+        "the reference sequences thirteen notifications"
     );
 }
 
@@ -1135,7 +1418,11 @@ fn every_probed_response_validates_against_the_census() {
     let mut unreachable = Vec::new();
     let mut conforming = Vec::new();
     let mut divergent = BTreeMap::new();
+    let port_only = ledger(PORT_ONLY_METHODS);
     for (method, params) in probe_requests() {
+        if port_only.contains_key(method) {
+            continue;
+        }
         let Some(result) = probe(&server, &mut connection, method, &params) else {
             unreachable.push(method);
             continue;
@@ -1501,7 +1788,7 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
         .unwrap_or_else(|| unreachable!("a started compaction projects a checkpoint entry"));
     assert_eq!(entry["generationStatus"], "in_progress");
     assert_eq!(entry["message"], "Compacting context");
-    census.validate("", "CompactionDetails", &entry["details"], &mut issues);
+    census.validate("", "PublicCheckpointEntry", entry, &mut issues);
     assert_eq!(entry["details"]["currentContextTokens"], 180_000);
     assert_eq!(entry["details"]["threshold"], 150_000);
 
@@ -1536,7 +1823,7 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
     let entry = entries[0];
     assert_eq!(entry["generationStatus"], "completed");
     assert_eq!(entry["message"], "Context compacted");
-    census.validate("", "CompactionDetails", &entry["details"], &mut issues);
+    census.validate("", "PublicCheckpointEntry", entry, &mut issues);
     assert_eq!(entry["details"]["summaryLength"], 412);
     assert_eq!(entry["details"]["oldSessionId"], "session-old");
     assert_eq!(entry["details"]["newSessionId"], "session-new");
@@ -1560,13 +1847,13 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
         .iter()
         .find(|entry| entry["kind"] == "compaction")
         .unwrap_or_else(|| unreachable!("an unmatched end still projects an entry"));
-    census.validate("", "CompactionDetails", &entry["details"], &mut issues);
+    census.validate("", "PublicCheckpointEntry", entry, &mut issues);
 
     assert!(
         issues.is_empty(),
         "the compaction details diverge from the census: {issues:?}"
     );
-    eprintln!("app-server surface: CompactionDetails 3/3 projections validate");
+    eprintln!("app-server surface: compaction checkpoints 3/3 projections validate");
 }
 
 /// Every `ToolEffectKind` is published with a detail that validates, which is
@@ -1829,7 +2116,20 @@ fn every_notice_variant_validates_against_the_census() {
         .unwrap_or_else(|| unreachable!("the corpus carries the notice union"));
     let mut issues = Vec::new();
     let mut covered = BTreeSet::new();
+    let removed = ledger(REMOVED_NOTICE_KINDS);
+    for kind in removed.keys() {
+        assert!(
+            !union
+                .variants
+                .iter()
+                .any(|variant| variant.value.as_ref().and_then(Value::as_str) == Some(kind)),
+            "the reference declares the notice kind {kind} again; its removal entry is stale"
+        );
+    }
     for (kind, detail) in notice_probes() {
+        if removed.contains_key(kind) {
+            continue;
+        }
         let entry = json!({
             "type": "notice",
             "id": "notice-1",

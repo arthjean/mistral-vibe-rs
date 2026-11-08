@@ -7,7 +7,6 @@ model endpoint replaced by a scripted stand-in this module authors:
 ``captureSignal``     the recorder's level meter over authored sample blocks
 ``audioDevices``      what the recorder and the player ask miniaudio to open
 ``decodeWav``         what the player decodes out of authored WAV payloads
-``audioMetadata``     the request metadata the terminal attaches to audio calls
 ``transcribeStream``  the realtime client over a scripted websocket: the
                       frames it sends, the headers it opens with and the
                       events it yields
@@ -20,6 +19,14 @@ model endpoint replaced by a scripted stand-in this module authors:
                       the backend seam
 ``acpBridge``         the editor's voice extension over the same stand-ins:
                       what each call answers and which notifications it sends
+
+Through schema 3 an ``audioMetadata`` family also recorded the request metadata
+the terminal attached to audio calls. At v3 that builder left the Python
+package: ``vibe/cli/audio_request_metadata.py`` keeps only the getter type, the
+Python editor bridge builds its managers with no getter (``vibe/acp/voice.py``),
+and the metadata is now assembled by the Rust terminal
+(``audio_request_metadata`` in ``vibe/cli-rust/src/tts.rs``), which no Python
+oracle can drive. The family is dropped rather than measured against nothing.
 
 Every text the reference authors (an error, a notice, a prompt) is recorded as
 its length and SHA-256 only. Texts this module authors are recorded as they
@@ -247,34 +254,6 @@ def capture_decode_wav() -> list[dict[str, Any]]:
         except Exception as error:
             record["error"] = type(error).__name__
         records.append(record)
-    return records
-
-
-# --------------------------------------------------------------------------
-# Request metadata
-# --------------------------------------------------------------------------
-
-
-def capture_audio_metadata() -> list[dict[str, Any]]:
-    from vibe.cli.audio_request_metadata import build_audio_request_metadata
-
-    records = []
-    for case, session, parent in [
-        ("root", "fixture-session", None),
-        ("child", "fixture-child", "fixture-parent"),
-    ]:
-        metadata = build_audio_request_metadata(session_id=session, parent_session_id=parent)
-        records.append({
-            "case": case,
-            "sessionId": session,
-            "parentSessionId": parent,
-            "keys": list(metadata),
-            "values": {
-                key: value
-                for key, value in metadata.items()
-                if key in ("session_id", "parent_session_id", "call_type", "call_source")
-            },
-        })
     return records
 
 
@@ -1163,36 +1142,40 @@ NARRATION_CASES: list[dict[str, Any]] = [
 
 
 async def capture_narration_service(sentinel: str, build_config: Any) -> list[dict[str, Any]]:
+    """The turn summary request, taken where the app server hands it off.
+
+    At v3 ``NarrationService.summarize`` no longer opens a backend of its own:
+    it calls ``complete_once`` (``vibe/core/llm/completion.py``), which passes
+    the request to the Harness provider adapters, compiled outside the Python
+    package. That call is the last Python seam, so it is replaced here and
+    every argument the service decides is recorded from it. The user agent the
+    request carried through schema 3 is now set inside the Harness adapters,
+    which no Python seam exposes, so it is no longer recorded.
+    """
+
     import vibe.app_server._narration as narration_module
     from vibe.app_server.protocol import NarrationSummarizeParams
     from vibe.core.config import ProviderConfig
 
     records = []
-    original = narration_module.create_backend
+    original = narration_module.complete_once
     base = await build_config("")
     try:
         for case in NARRATION_CASES:
-            requests: list[dict[str, Any]] = []
+            calls: list[dict[str, Any]] = []
             answer = case["answer"]
 
-            class Backend:
-                async def __aenter__(self) -> Any:
-                    return self
+            async def complete(**keywords: Any) -> Any:
+                calls.append(keywords)
+                if answer.get("raise"):
+                    raise RuntimeError("fixture backend failure")
+                # The Harness answers a reply without text with an empty
+                # string, never None (``UtilityReply`` in the
+                # ``mistralai_vibe_local_harness`` package the reference
+                # depends on), so a scripted answer without content does too.
+                return SimpleNamespace(text=answer["content"] or "")
 
-                async def __aexit__(self, *exc: Any) -> None:
-                    return None
-
-                async def complete(self, **keywords: Any) -> Any:
-                    requests.append(keywords)
-                    if answer.get("raise"):
-                        raise RuntimeError("fixture backend failure")
-                    return SimpleNamespace(message=SimpleNamespace(content=answer["content"]))
-
-            def create(*, provider: Any, **keywords: Any) -> Any:
-                requests.append({"provider": provider.name})
-                return Backend()
-
-            narration_module.create_backend = create  # type: ignore[assignment]
+            narration_module.complete_once = complete  # type: ignore[assignment]
             config = base
             if "providers" in case:
                 config = base.model_copy(update={
@@ -1219,14 +1202,11 @@ async def capture_narration_service(sentinel: str, build_config: Any) -> list[di
             )
             summary = await service.summarize(params)
             request: dict[str, Any] | None = None
-            calls = [entry for entry in requests if "model" in entry]
             if calls:
                 call = calls[0]
                 metadata = call.get("metadata") or {}
                 request = {
-                    "provider": next(
-                        (entry["provider"] for entry in requests if "provider" in entry), None
-                    ),
+                    "provider": call["provider"].name,
                     "model": call["model"].name,
                     "temperature": call["temperature"],
                     "maxTokens": call["max_tokens"],
@@ -1234,7 +1214,6 @@ async def capture_narration_service(sentinel: str, build_config: Any) -> list[di
                         {"role": str(message.role), "content": prose(message.content)}
                         for message in call["messages"]
                     ],
-                    "userAgent": _normalize(call["extra_headers"]["user-agent"], sentinel),
                     "metadataKeys": sorted(metadata),
                     "metadata": {
                         key: metadata.get(key)
@@ -1247,7 +1226,7 @@ async def capture_narration_service(sentinel: str, build_config: Any) -> list[di
                 "request": request,
             })
     finally:
-        narration_module.create_backend = original  # type: ignore[assignment]
+        narration_module.complete_once = original  # type: ignore[assignment]
     return records
 
 
@@ -1461,7 +1440,6 @@ async def capture_behavior(sentinel: str, build_config: Any) -> dict[str, Any]:
         "captureSignal": capture_signal(),
         "audioDevices": capture_devices(),
         "decodeWav": capture_decode_wav(),
-        "audioMetadata": capture_audio_metadata(),
         "transcribeStream": await capture_transcribe_stream(sentinel),
         "voiceManager": await capture_voice_manager(),
         "narrator": await capture_narrator(),

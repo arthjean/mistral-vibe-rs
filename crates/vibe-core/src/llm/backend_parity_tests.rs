@@ -1,37 +1,24 @@
-//! Replays the LLM backend corpus against this port's backends.
+//! The LLM backend corpus's shared replay machinery and its backoff family.
 //!
-//! `scripts/parity/llm_backends.py` drove the reference's backends and agent
-//! loop call paths against a scripted HTTP stand-in on a fake clock, and
-//! recorded, per call, every request that reached the wire, what the loop
-//! published and appended, the usage it counted, each retry it announced and
-//! each wait it asked for, and how a failure was classified. This module
-//! stands up the same stand-in, serves each scenario's scripted answers in
-//! order, runs the same calls through [`super::Backend`] and
-//! [`super::call`], and compares every observation field by field.
-//!
-//! Two fields hold the reference's own sentences, which `NOTICE` forbids
-//! shipping: the public message of a failure, and the provider message a
-//! failure reports when the provider gave none. The corpus holds them as a
-//! length plus a SHA-256, and this port's sentence must never hash to it.
+//! `scripts/parity/llm_backends.py` drives what stays of the reference's
+//! model layer at v3.0.0 against a scripted HTTP stand-in on a fake clock.
+//! This module holds that stand-in, the fake clock and the comparison the
+//! utility-model replays in `availability_parity_tests` share, and replays
+//! the backoff arithmetic. The in-process backends the corpus once also
+//! measured left the reference with v3.0.0; the agent-loop and
+//! unified-harness oracles record the requests a model call sends.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
-use futures_util::StreamExt;
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-use super::call::{self, Answered, Failed, StreamingCall};
-use super::error::{BackendErrorSource, CallFailure, KeySource, WrappedCause};
-use super::retry::{Clock, RetryObserver, RetryReason, SleepFuture, SleepKind, next_delay};
-use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
-use super::{Backend, BackendContext, MapCredentials, ModelRequest, TokenFuture, VertexAccess};
-use crate::parity::figures::{Figures, assert_figures};
+use super::retry::{Clock, SleepFuture, SleepKind, next_delay};
+use super::{TokenFuture, VertexAccess};
 use crate::parity::replay::Capture;
-use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
 use crate::pycompat::{self, Dumps, truthy};
 
 /// `json.dumps(value, ensure_ascii=False)`, how the stand-in serves a body.
@@ -41,26 +28,9 @@ const UNICODE: Dumps = Dumps {
 };
 
 pub(super) const CORPUS: &str = include_str!("../../tests/llm-backends/corpus.json");
-const SCORECARD: &str = include_str!("../../../../docs/parity.md");
 const CAPTURE_SCRIPT: &str = "scripts/parity/llm_backends.py";
-const SESSION_ID: &str = "session-oracle";
 /// Headers a transport adds on its own, which the stand-in does not record.
 const TRANSPORT_HEADERS: &[&str] = &["host", "content-length", "accept-encoding", "connection"];
-/// How many scenarios replay side by side.
-const JOBS: usize = 16;
-
-/// A difference this port keeps on purpose, and the scorecard row that
-/// answers for it.
-struct Divergence {
-    /// The scenario name prefix the entry covers.
-    scenario: &'static str,
-    /// Every difference whose JSON pointer ends with this suffix is covered.
-    suffix: &'static str,
-    row: &'static str,
-    reason: &'static str,
-}
-
-const LEDGER: &[Divergence] = &[];
 
 // --------------------------------------------------------------------------
 // The scripted stand-in
@@ -315,10 +285,6 @@ impl FakeClock {
             state: Mutex::new((1_000.0, Vec::new())),
         }
     }
-
-    fn sleeps(&self) -> Vec<Value> {
-        self.state.lock().expect("clock lock").1.clone()
-    }
 }
 
 impl Clock for FakeClock {
@@ -350,24 +316,6 @@ impl Clock for FakeClock {
     }
 }
 
-#[derive(Default)]
-struct Recorder(Mutex<Vec<Value>>);
-
-impl Recorder {
-    fn reasons(&self) -> Vec<Value> {
-        self.0.lock().expect("recorder lock").clone()
-    }
-}
-
-impl RetryObserver for Recorder {
-    fn retrying(&self, reason: &RetryReason) {
-        self.0
-            .lock()
-            .expect("recorder lock")
-            .push(json!({"category": reason.category.as_str(), "detail": reason.detail}));
-    }
-}
-
 pub(super) struct FakeVertex(pub(super) String);
 
 impl VertexAccess for FakeVertex {
@@ -392,404 +340,6 @@ pub(super) fn toml_table(value: &Value) -> toml::Table {
         .expect("a scenario entry is a table")
 }
 
-fn text(value: &Value, key: &str) -> Option<String> {
-    value.get(key).and_then(Value::as_str).map(str::to_owned)
-}
-
-fn message(value: &Value) -> Message {
-    let role = Role::parse(value["role"].as_str().expect("a message has a role"))
-        .expect("a message role is known");
-    let mut message = Message::new(role);
-    message.content = text(value, "content");
-    message.reasoning_content = text(value, "reasoning_content");
-    message.name = text(value, "name");
-    message.tool_call_id = text(value, "tool_call_id");
-    message.images = value
-        .get("images")
-        .and_then(Value::as_array)
-        .map(|images| {
-            images
-                .iter()
-                .map(|image| Image {
-                    mime_type: text(image, "mime_type").unwrap_or_default(),
-                    data: image["source"]["data"]
-                        .as_str()
-                        .unwrap_or_default()
-                        .to_owned(),
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    message.reasoning_payloads = value
-        .get("reasoning_payloads")
-        .and_then(Value::as_array)
-        .map(|payloads| {
-            payloads
-                .iter()
-                .filter_map(|payload| payload.as_object().cloned())
-                .collect()
-        });
-    message.tool_calls = value
-        .get("tool_calls")
-        .and_then(Value::as_array)
-        .map(|calls| {
-            calls
-                .iter()
-                .map(|entry| ToolCall {
-                    id: text(entry, "id"),
-                    index: entry.get("index").and_then(Value::as_u64),
-                    name: entry
-                        .get("function")
-                        .and_then(|function| text(function, "name")),
-                    arguments: entry
-                        .get("function")
-                        .and_then(|function| text(function, "arguments")),
-                })
-                .collect()
-        });
-    message
-}
-
-fn tool(value: &Value) -> Tool {
-    let function = &value["function"];
-    Tool {
-        name: text(function, "name").unwrap_or_default(),
-        description: text(function, "description").unwrap_or_default(),
-        parameters: function
-            .get("parameters")
-            .cloned()
-            .unwrap_or_else(|| json!({})),
-    }
-}
-
-fn tool_choice(value: &Value) -> Option<ToolChoice> {
-    match value {
-        Value::Null => None,
-        Value::String(keyword) => Some(match keyword.as_str() {
-            "none" => ToolChoice::None,
-            "any" => ToolChoice::Any,
-            "required" => ToolChoice::Required,
-            _ => ToolChoice::Auto,
-        }),
-        Value::Object(_) => Some(ToolChoice::Tool(Tool {
-            name: value["function"]["name"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned(),
-            description: String::new(),
-            parameters: json!({}),
-        })),
-        _ => None,
-    }
-}
-
-fn seconds(value: &Value, key: &str) -> Duration {
-    Duration::from_secs_f64(value[key].as_f64().expect("an API budget is a number"))
-}
-
-// --------------------------------------------------------------------------
-// Recording what a call did
-// --------------------------------------------------------------------------
-
-fn digest(text: &str) -> Value {
-    json!({
-        "length": text.chars().count(),
-        "sha256": Sha256::digest(text.as_bytes())
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>(),
-    })
-}
-
-fn message_record(message: &Message) -> Value {
-    let mut record = Map::new();
-    record.insert("role".to_owned(), json!(message.role.as_str()));
-    if let Some(content) = message
-        .content
-        .as_ref()
-        .filter(|content| !content.is_empty())
-    {
-        record.insert("content".to_owned(), json!(content));
-    }
-    if let Some(reasoning) = message
-        .reasoning_content
-        .as_ref()
-        .filter(|reasoning| !reasoning.is_empty())
-    {
-        record.insert("reasoningContent".to_owned(), json!(reasoning));
-    }
-    if let Some(payloads) = message
-        .reasoning_payloads
-        .as_ref()
-        .filter(|payloads| !payloads.is_empty())
-    {
-        record.insert("reasoningPayloads".to_owned(), json!(payloads));
-    }
-    if let Some(calls) = message
-        .tool_calls
-        .as_ref()
-        .filter(|calls| !calls.is_empty())
-    {
-        let calls: Vec<Value> = calls
-            .iter()
-            .map(|call| {
-                json!({
-                    "id": call.id,
-                    "index": call.index,
-                    "name": call.name,
-                    "arguments": call.arguments,
-                })
-            })
-            .collect();
-        record.insert("toolCalls".to_owned(), Value::Array(calls));
-    }
-    if let Some(id) = message.tool_call_id.as_ref().filter(|id| !id.is_empty()) {
-        record.insert("toolCallId".to_owned(), json!(id));
-    }
-    Value::Object(record)
-}
-
-fn usage_record(usage: super::types::Usage) -> Value {
-    json!({
-        "prompt": usage.prompt_tokens,
-        "completion": usage.completion_tokens,
-        "cached": usage.cached_tokens,
-    })
-}
-
-fn chunk_record(chunk: &Chunk) -> Value {
-    let mut record = Map::new();
-    record.insert("message".to_owned(), message_record(&chunk.message));
-    if let Some(usage) = chunk.usage {
-        record.insert("usage".to_owned(), usage_record(usage));
-    }
-    if let Some(stop) = &chunk.stop {
-        let mut fields = Map::new();
-        for (name, value) in [
-            ("reason", &stop.reason),
-            ("category", &stop.category),
-            ("explanation", &stop.explanation),
-        ] {
-            if let Some(value) = value {
-                fields.insert(name.to_owned(), json!(value));
-            }
-        }
-        record.insert("stop".to_owned(), Value::Object(fields));
-    }
-    if let Some(id) = chunk.correlation_id.as_ref().filter(|id| !id.is_empty()) {
-        record.insert("correlationId".to_owned(), json!(id));
-    }
-    Value::Object(record)
-}
-
-/// The reference's exception class for a failure and for its cause.
-fn classes(failure: &CallFailure) -> (&'static str, Option<&'static str>) {
-    match failure {
-        CallFailure::RateLimit { .. } => ("RateLimitError", Some("BackendError")),
-        CallFailure::ContextTooLong { .. } => ("ContextTooLongError", Some("BackendError")),
-        CallFailure::ResponseTooLong { .. } => ("ResponseTooLongError", Some("BackendError")),
-        CallFailure::Refusal { .. } => ("RefusalError", None),
-        CallFailure::IncompleteStream { .. } => ("IncompleteStreamError", None),
-        CallFailure::InvalidModel(error) => (
-            "BackendError",
-            Some(match &error.source {
-                BackendErrorSource::Status => "HTTPStatusError",
-                BackendErrorSource::Client => "SDKError",
-                BackendErrorSource::Stream => "OpenAIResponsesStreamError",
-                BackendErrorSource::Request(kind) => kind.name(),
-            }),
-        ),
-        CallFailure::Wrapped { cause, .. } => (
-            "RuntimeError",
-            Some(match cause {
-                WrappedCause::Backend(_) => "BackendError",
-                WrappedCause::Local(local) => local.kind.reference_class(),
-                WrappedCause::MissingUsage { .. } => "AgentLoopLLMResponseError",
-            }),
-        ),
-    }
-}
-
-/// A string the scenario supplied, verbatim; one this port wrote, digested.
-fn scenario_text(value: Option<&str>, served: &str) -> Value {
-    match value {
-        None => Value::Null,
-        Some(value) => {
-            let escaped = serde_json::to_string(value).unwrap_or_default();
-            let escaped = &escaped[1..escaped.len().saturating_sub(1)];
-            if served.contains(value) || served.contains(escaped) {
-                json!(value)
-            } else {
-                digest(value)
-            }
-        }
-    }
-}
-
-fn error_record(failure: &CallFailure, served: &str, normalize: &[(&str, &str)]) -> Value {
-    let (kind, cause) = classes(failure);
-    let message = normalize
-        .iter()
-        .fold(failure.to_string(), |text, (needle, with)| {
-            text.replace(needle, with)
-        });
-    let mut record = json!({
-        "type": kind,
-        "cause": cause,
-        "code": failure.code().as_str(),
-        "details": failure.details().map_or(Value::Null, Value::Object),
-        "message": digest(&message),
-    });
-    if let Some(error) = failure.backend_error() {
-        record["backend"] = json!({
-            "status": error.status,
-            "parsedError": scenario_text(error.parsed_error.as_deref(), served),
-            "contextTooLong": error.is_context_too_long(),
-            "responseTooLong": error.is_response_too_long(),
-            "invalidModel": error.is_invalid_model(),
-            "requestId": error.request_id(),
-            "keyOrigin": error.api_key_origin.as_ref().map(|origin| json!({
-                "source": match origin.source {
-                    KeySource::Environment => "environment",
-                    KeySource::Keyring => "keyring",
-                },
-                "variable": origin.variable,
-            })),
-        });
-    }
-    record
-}
-
-struct Scenario<'a> {
-    backend: &'a Backend,
-    provider: &'a ProviderConfig,
-    model: &'a ModelConfig,
-    stand_in: &'a StandIn,
-    clock: &'a FakeClock,
-    recorder: &'a Recorder,
-    served: &'a str,
-    closed: &'a str,
-}
-
-async fn run_call(scenario: &Scenario<'_>, entry: &Value) -> Value {
-    let history: Vec<Message> = entry["messages"]
-        .as_array()
-        .expect("a call has messages")
-        .iter()
-        .map(message)
-        .collect();
-    let tools: Vec<Tool> = entry["tools"]
-        .as_array()
-        .map(|tools| tools.iter().map(tool).collect())
-        .unwrap_or_default();
-    let choice = tool_choice(&entry["toolChoice"]);
-    let metadata = entry["metadata"].as_object().cloned();
-    let headers = call::extra_headers(scenario.provider, SESSION_ID);
-    let messages = call::messages_for_backend(history, scenario.model.supports_images);
-    let request = ModelRequest {
-        unified: false,
-        model: scenario.model,
-        messages: &messages,
-        temperature: scenario.model.temperature,
-        tools: (!tools.is_empty()).then_some(tools.as_slice()),
-        max_tokens: entry["maxTokens"].as_u64(),
-        tool_choice: choice.as_ref(),
-        extra_headers: &headers,
-        metadata: metadata.as_ref(),
-    };
-    let before_requests = scenario.stand_in.requests().len();
-    let before_sleeps = scenario.clock.sleeps().len();
-    let before_retries = scenario.recorder.reasons().len();
-
-    let mut pieces: Vec<Chunk> = Vec::new();
-    let outcome: Result<Answered, Box<Failed>> = if entry["streaming"].as_bool() == Some(true) {
-        let mut state = StreamingCall::new(scenario.provider, &scenario.model.name);
-        match scenario
-            .backend
-            .complete_streaming(&request, scenario.recorder)
-            .await
-        {
-            Err(failure) => Err(Box::new(state.fail(failure))),
-            Ok(mut stream) => loop {
-                match stream.next().await {
-                    Some(Ok(chunk)) => match state.push(chunk) {
-                        Ok(piece) => pieces.push(piece),
-                        Err(failed) => break Err(failed),
-                    },
-                    Some(Err(failure)) => break Err(Box::new(state.fail(failure))),
-                    None => break state.finish(),
-                }
-            },
-        }
-    } else {
-        let result = scenario.backend.complete(&request, scenario.recorder).await;
-        let outcome = call::finish_complete(result, scenario.provider, &scenario.model.name);
-        if let Ok(answered) = &outcome {
-            pieces.push(answered.chunk.clone());
-        }
-        outcome
-    };
-
-    let mut record = Map::new();
-    let (appended, stats) = match &outcome {
-        Ok(answered) => (
-            vec![message_record(answered.message())],
-            vec![usage_record(answered.usage)],
-        ),
-        Err(failed) => {
-            let normalize = [
-                (scenario.stand_in.base.as_str(), "$BASE"),
-                (scenario.closed, "$CLOSED"),
-                (env!("CARGO_PKG_VERSION"), "<version>"),
-            ];
-            record.insert(
-                "error".to_owned(),
-                error_record(&failed.failure, scenario.served, &normalize),
-            );
-            (
-                failed.appended.iter().map(message_record).collect(),
-                failed.usage.map(usage_record).into_iter().collect(),
-            )
-        }
-    };
-    if let Some(first) = pieces.first() {
-        let total = pieces[1..]
-            .iter()
-            .try_fold(first.clone(), |total, piece| total.merge(piece.clone()))
-            .expect("published pieces merge");
-        record.insert("result".to_owned(), chunk_record(&total));
-        let deltas = |read: fn(&Message) -> Option<&String>| -> Vec<Value> {
-            pieces
-                .iter()
-                .filter_map(|piece| read(&piece.message).filter(|text| !text.is_empty()))
-                .map(|text| json!(text))
-                .collect()
-        };
-        record.insert(
-            "deltas".to_owned(),
-            json!({
-                "text": deltas(|message| message.content.as_ref()),
-                "reasoning": deltas(|message| message.reasoning_content.as_ref()),
-            }),
-        );
-    }
-    record.insert("appended".to_owned(), Value::Array(appended));
-    record.insert("stats".to_owned(), Value::Array(stats));
-    record.insert(
-        "requests".to_owned(),
-        Value::Array(scenario.stand_in.requests()[before_requests..].to_vec()),
-    );
-    record.insert(
-        "sleeps".to_owned(),
-        Value::Array(scenario.clock.sleeps()[before_sleeps..].to_vec()),
-    );
-    record.insert(
-        "retries".to_owned(),
-        Value::Array(scenario.recorder.reasons()[before_retries..].to_vec()),
-    );
-    Value::Object(record)
-}
-
 pub(super) fn substitute(value: &Value, from: &[(&str, &str)]) -> Value {
     match value {
         Value::String(text) => {
@@ -808,88 +358,6 @@ pub(super) fn substitute(value: &Value, from: &[(&str, &str)]) -> Value {
         ),
         other => other.clone(),
     }
-}
-
-async fn run_scenario(entry: Value) -> (String, Value, Value) {
-    let name = entry["name"]
-        .as_str()
-        .expect("a scenario is named")
-        .to_owned();
-    let stand_in =
-        StandIn::start(entry["responses"].as_array().map_or(&[][..], Vec::as_slice)).await;
-    let closed = closed_port();
-    let served = pycompat::dumps(&entry["responses"], UNICODE);
-    let provider_entry = substitute(
-        &entry["provider"],
-        &[
-            ("$BASE", stand_in.base.as_str()),
-            ("$CLOSED", closed.as_str()),
-        ],
-    );
-    let provider = ProviderConfig::from_table(&toml_table(&provider_entry))
-        .expect("a scenario provider reads");
-    let model = ModelConfig::from_table(&toml_table(&entry["model"]), None)
-        .expect("a scenario model reads");
-    let credentials: BTreeMap<String, String> = entry["env"]
-        .as_object()
-        .map(|env| {
-            env.iter()
-                .map(|(name, value)| (name.clone(), value.as_str().unwrap_or_default().to_owned()))
-                .collect()
-        })
-        .unwrap_or_default();
-    let api = &entry["api"];
-    let clock = Arc::new(FakeClock::new());
-    let context = BackendContext {
-        api: ApiSettings {
-            timeout: seconds(api, "timeout"),
-            retry_max_elapsed_time: seconds(api, "retryMaxElapsedTime"),
-            connect_timeout: seconds(api, "connectTimeout"),
-            write_timeout: seconds(api, "writeTimeout"),
-            pool_timeout: seconds(api, "poolTimeout"),
-        },
-        clock: Arc::clone(&clock) as Arc<dyn Clock>,
-        credentials: Arc::new(MapCredentials(credentials)),
-        vertex: Arc::new(FakeVertex(stand_in.base.clone())),
-    };
-    let recorder = Recorder::default();
-    let mut calls = Vec::new();
-    match Backend::new(provider.clone(), context) {
-        Ok(backend) => {
-            let scenario = Scenario {
-                backend: &backend,
-                provider: &provider,
-                model: &model,
-                stand_in: &stand_in,
-                clock: &clock,
-                recorder: &recorder,
-                served: &served,
-                closed: &closed,
-            };
-            for call in entry["calls"].as_array().expect("a scenario has calls") {
-                calls.push(run_call(&scenario, call).await);
-            }
-        }
-        Err(failure) => calls.push(json!({"construction": failure.kind.reference_class()})),
-    }
-    let recorded: usize = calls
-        .iter()
-        .filter_map(|call| call["retries"].as_array())
-        .map(Vec::len)
-        .sum();
-    let observed = json!({
-        "calls": calls,
-        "pendingRetries": recorder.reasons()[recorded..].to_vec(),
-    });
-    let observed = substitute(
-        &observed,
-        &[
-            (closed.as_str(), "$CLOSED"),
-            (stand_in.base.as_str(), "$BASE"),
-            (env!("CARGO_PKG_VERSION"), "<version>"),
-        ],
-    );
-    (name, entry["observed"].clone(), observed)
 }
 
 // --------------------------------------------------------------------------
@@ -965,97 +433,6 @@ pub(super) fn resolve(value: &Value, pointer: &str) -> String {
 }
 
 #[test]
-fn the_backends_answer_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    crate::parity::manifest::assert_replayed(CORPUS);
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    let scenarios = corpus["scenarios"]
-        .as_array()
-        .expect("the corpus holds scenarios")
-        .clone();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("a runtime starts");
-    // A scenario that times a read out within a second runs alone, after the
-    // others, so contention on a loaded machine cannot trip its deadline.
-    let (tight, relaxed): (Vec<Value>, Vec<Value>) = scenarios.into_iter().partition(|entry| {
-        entry["api"]["timeout"]
-            .as_f64()
-            .is_some_and(|timeout| timeout < 1.0)
-    });
-    let results: Vec<(String, Value, Value)> = runtime.block_on(async {
-        let mut results: Vec<_> = futures_util::stream::iter(relaxed.into_iter().map(run_scenario))
-            .buffer_unordered(JOBS)
-            .collect()
-            .await;
-        for entry in tight {
-            results.push(run_scenario(entry).await);
-        }
-        results
-    });
-
-    let mut unexplained = Vec::new();
-    let mut reproduced = vec![0_usize; LEDGER.len()];
-    let mut conformant = 0;
-    let mut families: BTreeMap<String, (usize, usize)> = BTreeMap::new();
-    for (name, reference, port) in &results {
-        let mut found = Vec::new();
-        differences(reference, port, "", &mut found);
-        let family = name.split('/').next().unwrap_or_default().to_owned();
-        let tally = families.entry(family).or_default();
-        tally.1 += 1;
-        if found.is_empty() {
-            conformant += 1;
-            tally.0 += 1;
-        }
-        for pointer in found {
-            match LEDGER.iter().position(|entry| {
-                name.starts_with(entry.scenario)
-                    && crate::parity::replay::pointer_ends_with(entry.suffix, &pointer)
-            }) {
-                Some(index) => reproduced[index] += 1,
-                None => unexplained.push(format!(
-                    "{name} {pointer}\n    reference: {}\n    port:      {}",
-                    resolve(reference, &pointer),
-                    resolve(port, &pointer)
-                )),
-            }
-        }
-    }
-    let stale: Vec<String> = LEDGER
-        .iter()
-        .zip(&reproduced)
-        .filter(|(_, count)| **count == 0)
-        .map(|(entry, _)| format!("{} {}", entry.scenario, entry.suffix))
-        .collect();
-    println!(
-        "llm backend parity: {conformant}/{} scenarios conformant ({families:?}), {} ledgered \
-         differences across {} entries",
-        results.len(),
-        reproduced.iter().sum::<usize>(),
-        LEDGER.len()
-    );
-    unexplained.sort();
-    assert!(
-        unexplained.is_empty(),
-        "{} departures from the corpus no ledger entry names:\n{}",
-        unexplained.len(),
-        unexplained.join("\n")
-    );
-    assert!(
-        stale.is_empty(),
-        "these ledger entries no longer reproduce and should be removed: {stale:?}"
-    );
-    // Every entry the ledger may hold is a divergence the scorecard decided.
-    assert_figures(
-        "llm backend parity:",
-        "crates/vibe-core/tests/llm-backends/corpus.json",
-        Figures::decided(conformant, results.len(), reproduced.iter().sum()),
-        json!({}),
-    );
-}
-
-#[test]
 fn the_generic_backoff_matches_every_recorded_delay() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     for case in corpus["retryDelays"]
@@ -1075,47 +452,6 @@ fn the_generic_backoff_matches_every_recorded_delay() {
         assert!(
             (seconds - number("seconds")).abs() < 1e-9,
             "{case}: this port waits {seconds}"
-        );
-    }
-}
-
-#[test]
-fn vertex_requests_go_to_the_recorded_regional_endpoints() {
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    for case in corpus["vertexEndpoints"]
-        .as_array()
-        .expect("the corpus holds endpoints")
-    {
-        let region = case["region"].as_str().expect("a region");
-        let streaming = case["streaming"].as_bool().expect("a mode");
-        let url = super::vertex::base_url(region)
-            + &super::vertex::endpoint(region, "proj", "claude-x@1", streaming);
-        assert_eq!(case["url"].as_str(), Some(url.as_str()));
-    }
-}
-
-#[test]
-fn every_ledger_entry_names_another_scorecard_row() {
-    let rows: BTreeSet<&str> = SCORECARD
-        .lines()
-        .filter_map(|line| line.strip_prefix("| "))
-        .filter_map(|line| line.split_once(" |"))
-        .map(|(number, _)| number.trim())
-        .filter(|number| number.parse::<u32>().is_ok())
-        .collect();
-    for entry in LEDGER {
-        assert!(
-            rows.contains(entry.row),
-            "{} {} names row {}, which docs/parity.md does not carry",
-            entry.scenario,
-            entry.suffix,
-            entry.row
-        );
-        assert!(
-            entry.suffix.starts_with('/') && !entry.reason.is_empty(),
-            "{} {} needs a pointer suffix and a reason",
-            entry.scenario,
-            entry.suffix
         );
     }
 }

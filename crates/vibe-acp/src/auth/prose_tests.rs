@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest as _, Sha256};
-use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::is_pin_commit;
 
 use super::{browser_method, terminal_method};
 
@@ -67,8 +67,8 @@ fn recorded_runs() -> BTreeMap<String, Digested> {
     let path = repo_root().join(CORPUS_RELATIVE);
     let raw = fs::read_to_string(&path).expect("the setup-auth corpus is readable");
     let corpus: Corpus = serde_json::from_str(&raw).expect("the setup-auth corpus parses");
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus

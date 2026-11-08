@@ -1,40 +1,131 @@
 {
   "schemaVersion": 1,
   "note": "Every corpus a parity replay reads. Written only by scripts/parity/repin.py; crates/vibe-core/src/parity/manifest_tests.rs checks it.",
-  "transition": [],
+  "transition": [
+    "crates/vibe-cli/tests/autocompletion/corpus.json",
+    "crates/vibe-cli/tests/commands/corpus.json",
+    "crates/vibe-cli/tests/parity/manifest.json",
+    "crates/vibe-cli/tests/parity/traces/async-cancelled-by-space.json",
+    "crates/vibe-cli/tests/parity/traces/async-generation-supersedes.json",
+    "crates/vibe-cli/tests/parity/traces/async-history-recall-closes.json",
+    "crates/vibe-cli/tests/parity/traces/clipboard-implicit-empty-paste.json",
+    "crates/vibe-cli/tests/parity/traces/clipboard-whitespace-paste.json",
+    "crates/vibe-cli/tests/parity/traces/commands-excluded.json",
+    "crates/vibe-cli/tests/parity/traces/commands-full-surface.json",
+    "crates/vibe-cli/tests/parity/traces/commands-unknown-alias.json",
+    "crates/vibe-cli/tests/parity/traces/corpus-dot-query.json",
+    "crates/vibe-cli/tests/parity/traces/corpus-gitignore.json",
+    "crates/vibe-cli/tests/parity/traces/corpus-hidden-files.json",
+    "crates/vibe-cli/tests/parity/traces/corpus-nested-ranking.json",
+    "crates/vibe-cli/tests/parity/traces/dnd-absolute-image.json",
+    "crates/vibe-cli/tests/parity/traces/dnd-escaped-image.json",
+    "crates/vibe-cli/tests/parity/traces/dnd-text-path-untouched.json",
+    "crates/vibe-cli/tests/parity/traces/external-editor-refreshes-completion.json",
+    "crates/vibe-cli/tests/parity/traces/external-editor-replaces-text.json",
+    "crates/vibe-cli/tests/parity/traces/external-editor-unchanged.json",
+    "crates/vibe-cli/tests/parity/traces/feedback-other-character.json",
+    "crates/vibe-cli/tests/parity/traces/feedback-rating-keys.json",
+    "crates/vibe-cli/tests/parity/traces/feedback-snooze-key.json",
+    "crates/vibe-cli/tests/parity/traces/history-down-restores-draft.json",
+    "crates/vibe-cli/tests/parity/traces/history-edit-after-recall.json",
+    "crates/vibe-cli/tests/parity/traces/history-loads-existing.json",
+    "crates/vibe-cli/tests/parity/traces/history-persists-submission.json",
+    "crates/vibe-cli/tests/parity/traces/history-suppresses-duplicates.json",
+    "crates/vibe-cli/tests/parity/traces/history-tolerates-corrupt-lines.json",
+    "crates/vibe-cli/tests/parity/traces/history-up-from-first-line.json",
+    "crates/vibe-cli/tests/parity/traces/history-up-moves-inside-multiline.json",
+    "crates/vibe-cli/tests/parity/traces/history-wrapped-line-navigation.json",
+    "crates/vibe-cli/tests/parity/traces/long-prompt-resize.json",
+    "crates/vibe-cli/tests/parity/traces/long-prompt-unicode.json",
+    "crates/vibe-cli/tests/parity/traces/long-prompt-viewport-40.json",
+    "crates/vibe-cli/tests/parity/traces/long-prompt-viewport-80.json",
+    "crates/vibe-cli/tests/parity/traces/mention-directory-submission.json",
+    "crates/vibe-cli/tests/parity/traces/mention-external-path-submission.json",
+    "crates/vibe-cli/tests/parity/traces/mention-image-payload-submission.json",
+    "crates/vibe-cli/tests/parity/traces/mention-missing-path-submission.json",
+    "crates/vibe-cli/tests/parity/traces/mention-text-file-submission.json",
+    "crates/vibe-cli/tests/parity/traces/mode-backspace-keeps-text.json",
+    "crates/vibe-cli/tests/parity/traces/mode-backspace-resets.json",
+    "crates/vibe-cli/tests/parity/traces/mode-teleport-unavailable.json",
+    "crates/vibe-cli/tests/parity/traces/modes-bang-prefix.json",
+    "crates/vibe-cli/tests/parity/traces/modes-prompt-default.json",
+    "crates/vibe-cli/tests/parity/traces/modes-slash-prefix.json",
+    "crates/vibe-cli/tests/parity/traces/modes-teleport-available.json",
+    "crates/vibe-cli/tests/parity/traces/mouse-click-wide-character.json",
+    "crates/vibe-cli/tests/parity/traces/mouse-out-of-bounds.json",
+    "crates/vibe-cli/tests/parity/traces/mouse-shift-selection.json",
+    "crates/vibe-cli/tests/parity/traces/paste-control-characters.json",
+    "crates/vibe-cli/tests/parity/traces/paste-empty-triggers-clipboard.json",
+    "crates/vibe-cli/tests/parity/traces/paste-large-payload.json",
+    "crates/vibe-cli/tests/parity/traces/paste-mode-characters.json",
+    "crates/vibe-cli/tests/parity/traces/paste-multiline-atomic.json",
+    "crates/vibe-cli/tests/parity/traces/path-accept-directory.json",
+    "crates/vibe-cli/tests/parity/traces/path-accept-inserts-space.json",
+    "crates/vibe-cli/tests/parity/traces/path-mid-token-completion.json",
+    "crates/vibe-cli/tests/parity/traces/path-trigger-after-punctuation.json",
+    "crates/vibe-cli/tests/parity/traces/path-trigger-bare-at.json",
+    "crates/vibe-cli/tests/parity/traces/path-trigger-basic.json",
+    "crates/vibe-cli/tests/parity/traces/path-trigger-nested.json",
+    "crates/vibe-cli/tests/parity/traces/path-trigger-space-closes.json",
+    "crates/vibe-cli/tests/parity/traces/popup-render-120.json",
+    "crates/vibe-cli/tests/parity/traces/popup-render-40.json",
+    "crates/vibe-cli/tests/parity/traces/popup-render-80.json",
+    "crates/vibe-cli/tests/parity/traces/popup-render-path-bound.json",
+    "crates/vibe-cli/tests/parity/traces/safety-destructive-chrome.json",
+    "crates/vibe-cli/tests/parity/traces/safety-transition.json",
+    "crates/vibe-cli/tests/parity/traces/slash-double-marker.json",
+    "crates/vibe-cli/tests/parity/traces/slash-no-match.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-arrows.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-caret-at-line-start.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-enter-submits.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-escape.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-mid-token-cursor.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-right.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-tab-applies.json",
+    "crates/vibe-cli/tests/parity/traces/slash-popup-wraps-selection.json",
+    "crates/vibe-cli/tests/parity/traces/slash-ranking-c.json",
+    "crates/vibe-cli/tests/parity/traces/slash-ranking-empty-boosts.json",
+    "crates/vibe-cli/tests/parity/traces/slash-ranking-fuzzy.json",
+    "crates/vibe-cli/tests/parity/traces/slash-skill-entries.json",
+    "crates/vibe-cli/tests/parity/traces/slash-uppercase-alias.json",
+    "crates/vibe-cli/tests/parity/traces/submit-empty-composer.json",
+    "crates/vibe-cli/tests/parity/traces/submit-multiline-shift-enter.json",
+    "crates/vibe-cli/tests/parity/traces/submit-strips-whitespace.json",
+    "crates/vibe-cli/tests/parity/traces/submit-whitespace-only.json",
+    "crates/vibe-cli/tests/parity/traces/switching-blocks-submission.json",
+    "crates/vibe-cli/tests/parity/traces/switching-resolves.json",
+    "crates/vibe-cli/tests/parity/traces/unicode-combining-backspace.json",
+    "crates/vibe-cli/tests/parity/traces/unicode-emoji-motion.json",
+    "crates/vibe-cli/tests/parity/traces/unicode-home-end.json",
+    "crates/vibe-cli/tests/parity/traces/unicode-shift-selection.json",
+    "crates/vibe-cli/tests/parity/traces/unicode-wide-characters.json",
+    "crates/vibe-cli/tests/parity/traces/unicode-word-motion.json",
+    "crates/vibe-cli/tests/parity/traces/voice-ctrl-c-cancels.json",
+    "crates/vibe-cli/tests/parity/traces/voice-disabled-ignores-key.json",
+    "crates/vibe-cli/tests/parity/traces/voice-key-stops-recording.json",
+    "crates/vibe-cli/tests/parity/traces/voice-start-failure.json",
+    "crates/vibe-cli/tests/parity/traces/voice-start-recording.json",
+    "crates/vibe-cli/tests/parity/traces/voice-transcript-insertion.json",
+    "crates/vibe-cli/tests/runtime-parity/active-turn.json",
+    "crates/vibe-cli/tests/runtime-parity/configuration-integrations.json",
+    "crates/vibe-cli/tests/runtime-parity/semantic-transcript.json",
+    "crates/vibe-cli/tests/runtime-parity/session-management.json",
+    "crates/vibe-cli/tests/runtime-parity/startup.json",
+    "crates/vibe-cli/tests/runtime-parity/terminal-services.json",
+    "crates/vibe-cli/tests/runtime-parity/tui-interactions.json"
+  ],
   "entries": [
     {
       "corpus": "crates/vibe-acp/tests/acp-parity/corpus.json",
       "kind": "corpus",
       "driver": [
-        "scripts/parity/acp.py",
-        "--harness",
-        "legacy"
+        "scripts/parity/acp.py"
       ],
       "output": "--output",
-      "test": "crates/vibe-acp/tests/acp_parity_tests.rs::the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "test": "crates/vibe-acp/tests/acp_parity_tests.rs::the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "8",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "5cafee5bfd90f474860fbb3ffd97335a4891c467786cbd6bcd8c66e2f5a73e10",
-      "count": 104,
-      "floors": {
-        "argv": 22,
-        "scenarios": 77
-      }
-    },
-    {
-      "corpus": "crates/vibe-acp/tests/acp-parity/unified-corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/acp.py",
-        "--harness",
-        "unified"
-      ],
-      "output": "--output",
-      "test": "crates/vibe-acp/tests/acp_parity_tests.rs::the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names",
-      "row": "8",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "1e53823a113987d21b15f8a7e4b6e75425e828ac4dff38a25447a91e05e3f1e3",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "386e4521f7949c544a7177ff756193c04df2afa13ca4d5f14ddb389c6a4262f8",
       "count": 104,
       "floors": {
         "argv": 22,
@@ -50,15 +141,16 @@
       "output": "--output",
       "test": "crates/vibe-app-server/src/wire_validation/wire_validation_tests.rs::every_validator_the_schema_names_is_implemented",
       "row": "17",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "11c3756a025882fcb05d6e4a40e1f84006611f58ef6cb0891d30e8ae8021b7ac",
-      "count": 344,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "56426b11673914d1d27ee5867b22ca251ce3284d373ef44fccd5d8c5eac03d1a",
+      "count": 386,
       "floors": {
-        "defs": 178,
+        "defs": 192,
         "functions": 9,
         "lifecycle": 1,
-        "methods": 139,
-        "nested": 1
+        "methods": 162,
+        "nested": 0,
+        "unreduced": 4
       }
     },
     {
@@ -70,11 +162,11 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/agent_loop_parity_tests.rs::the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "34",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "491746552f497d952a9c44ad6cbd9ee86eabda32b87a517fd3ccf5abc45537dc",
-      "count": 33,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "b41b27bac1272f72941f2f81e0d712221937668d3a2710605413c9a2efd603d5",
+      "count": 31,
       "floors": {
-        "scenarios": 32
+        "scenarios": 30
       }
     },
     {
@@ -86,11 +178,11 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/agents_parity_tests.rs::the_port_runs_every_agent_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "20",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "8548ce06e2d60ff812170faa43cb9bca8ff10e3e66c8015fe441778f23d3aaf0",
-      "count": 38,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "d49701d568cf1b1291e34b88efa21ced39188f2e686f052c38e3314d9860fd39",
+      "count": 34,
       "floors": {
-        "scenarios": 37
+        "scenarios": 33
       }
     },
     {
@@ -102,34 +194,32 @@
       "output": "--output",
       "test": "crates/vibe-app-server/src/app_server_surface_parity_tests.rs::the_inventory_is_exactly_the_reference_inventory",
       "row": "17",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "bb3a384544500905c5604f97caf662c99de8125038efb207936139fabfe0cc65",
-      "count": 751,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "ed4679a4516b051a712002571e8e99f13af1e0a84acbea6ac55c530fd0a5f70a",
+      "count": 897,
       "floors": {
         "absentEnums": 0,
         "clientToolMethods": 7,
-        "enums": 24,
+        "enums": 32,
         "errorCodes": 15,
-        "methods": 139,
-        "models": 498,
-        "notifications": 21,
-        "serverRequests": 1,
-        "unions": 11
+        "methods": 166,
+        "models": 590,
+        "notifications": 26,
+        "serverRequests": 8,
+        "unions": 12
       }
     },
     {
       "corpus": "crates/vibe-app-server/tests/connectors-parity/corpus.json",
       "kind": "corpus",
       "driver": [
-        "scripts/parity/connectors.py",
-        "--harness",
-        "legacy"
+        "scripts/parity/connectors.py"
       ],
       "output": "--output",
       "test": "crates/vibe-app-server/tests/connectors_parity_tests.rs::the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "21",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "adeffcef9dc51204a5f1731d336466d5cf584b37ec61f92685babbc6e9c8323c",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "6d38f106f321de568ce18d8c0a2ace10345657029ec1abfa1e95d3a45d444da5",
       "count": 43,
       "floors": {
         "scenarios": 41
@@ -140,14 +230,14 @@
       "kind": "corpus",
       "driver": [
         "scripts/parity/connectors.py",
-        "--harness",
-        "unified"
+        "--family",
+        "programs"
       ],
       "output": "--output",
       "test": "crates/vibe-app-server/tests/connectors_parity_tests.rs::the_port_runs_every_unified_connector_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "21",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "e9e4bebbd9fccc3bc29ddc0bd901c02ae252e87c8f9d8f4d0cf7f16283e755d7",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "ca73173c9f7f2d9af6f8b975fe9e53013b1ae480ba890361ad6c26236d925c8c",
       "count": 9,
       "floors": {
         "scenarios": 9
@@ -162,11 +252,11 @@
       "output": "--startup-corpus",
       "test": "crates/vibe-app-server/src/experiments/startup_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "32",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "d31d8b818b8d4334683e3b39f26b2fd4bbd35200638cb88d112db8eb99e8a72a",
-      "count": 30,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "ef37073778e02fb7442b25970f7c321bd77ebff894e3cd65f48eba21b9514911",
+      "count": 15,
       "floors": {
-        "startup": 29
+        "startup": 15
       }
     },
     {
@@ -178,8 +268,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/hooks_parity_tests.rs::the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "18",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "b2582d3945b9648d4e957d7e5690c43864df8c66f92328713a6873b20539d6f4",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "86f518a047ddf19726df0d47129bd543136de9402115405e8f820edec441d54d",
       "count": 39,
       "floors": {
         "scenarios": 38
@@ -194,8 +284,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/mcp_catalog_parity_tests.rs::the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "11",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "5acd1f7d995f0fbe62b2c14e80c7190b88eff1cf1e19e3abba8548e8493f5104",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "d71b93ec037bb64f5ca47c52f2605d02c1585b0a6409545ecffe208aa5b5c4c3",
       "count": 15,
       "floors": {
         "scenarios": 15
@@ -210,28 +300,11 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/mcp_oauth_parity_tests.rs::every_scenario_matches_the_reference_capture",
       "row": "11",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "242f11694d68e8f7a16c19106890c3eee2b967e78bccf056f24915a537ecf54f",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "843d9b4660e7aba97a15362e8cf7781eebcbdb3f8a9536070bbdb7e45ed0e814",
       "count": 49,
       "floors": {
         "scenarios": 47
-      }
-    },
-    {
-      "corpus": "crates/vibe-app-server/tests/mcp-transport/corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/mcp_transport.py"
-      ],
-      "output": "--output",
-      "test": "crates/vibe-app-server/tests/mcp_transport_parity_tests.rs::every_scenario_matches_the_reference_mcp_client",
-      "row": "11",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "aacc2133f831a637eddb5bfdcf59524d74ea871b8b1de854c6711dafd0299108",
-      "count": 53,
-      "floors": {
-        "inheritedNames": 6,
-        "scenarios": 45
       }
     },
     {
@@ -245,11 +318,11 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/plugins_parity_tests.rs::the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "35",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "c35ff4308ee1fa1910696deefffd8c5746673e2779f68ddcfe37afc66ce2c3b6",
-      "count": 11,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "df4d2a70480c89c41ea95a38ffc95f9523b6ce915f0b570c4925ef653e82ebff",
+      "count": 9,
       "floors": {
-        "scenarios": 11
+        "scenarios": 9
       },
       "note": "needs `cargo build -p vibe-app-server --features test-fixtures --bin vibe-mcp-stdio-fixture` first"
     },
@@ -262,8 +335,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/project_links_parity_tests.rs::the_port_answers_every_project_links_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "25",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "8c225b35b15d51cfe8c7ebc1660d8e677d0ceed1a6a2dd9734a40f69e5b6d592",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "d0d4947668aa925d02bf90530951ac408e922b12070acb592b591ff0e90489e2",
       "count": 120,
       "floors": {
         "scenarios": 114
@@ -278,11 +351,11 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/protocol_parity_tests.rs::the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "17",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "f523ae605bf38330baf4217a84544f8750a304d83ee5b8f4635d6a8599887e33",
-      "count": 344,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36",
+      "count": 400,
       "floors": {
-        "scenarios": 327
+        "scenarios": 380
       }
     },
     {
@@ -294,8 +367,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/review_parity_tests.rs::the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "15",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "9c650ad5999ac0904fb9a158a2bdef1c7c95d7d4267a49bd6679e7d55c1867c0",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4",
       "count": 29,
       "floors": {
         "scenarios": 28
@@ -310,8 +383,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/rewind_parity_tests.rs::the_port_rewinds_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "9",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "f358524acedb857c13315f66ec2ebd7bfa3214a82f973aa64e0d59be15ae0bcb",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d",
       "count": 12,
       "floors": {
         "scenarios": 12
@@ -326,8 +399,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/session_parity_tests.rs::the_port_answers_every_session_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "16",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "2187e95d0ad23b977ceb56af877b888694ab5fa36c68283abd991e8aee77b2a9",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "cad5f4d21d89dc8c9992f8220d4abdc79dffa692bb3034f06611525e70de7ff8",
       "count": 25,
       "floors": {
         "scenarios": 24
@@ -342,8 +415,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/teleport_parity_tests.rs::the_port_runs_every_teleport_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "22",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "b9a28029a3914466ed2c8036f130882ce6a72c8f41319bd85a99e07686a49bec",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "1a309270e0321e637073928a2b68af06f1330b11d85558bde9dc13c29283d6d7",
       "count": 104,
       "floors": {
         "scenarios": 99
@@ -358,11 +431,11 @@
       "output": "--corpus",
       "test": "crates/vibe-app-server/src/tool_execution_parity_tests.rs::tool_execution_matches_the_reference_except_for_the_recorded_gap",
       "row": "3",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "84c758abc5004ac3e7f04b0921ae80e76fa2a3b977d4ed7ae2f9a1b988b0aaee",
-      "count": 103,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "d101c68671cd46e7d426a3529588f641a35047e40f9e3cb06af16b5d54491229",
+      "count": 4,
       "floors": {
-        "cases": 98
+        "cases": 4
       },
       "note": "records the host platform: capture on Linux"
     },
@@ -382,12 +455,12 @@
       "output": "--digest",
       "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_published_tool_surface_matches_the_reference_except_for_the_recorded_gap",
       "row": "3",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "c36d272a6e991c9ed9e543a409c7605c09763e9e345d4a925560e4cb375d7bd8",
-      "count": 30,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "5464306c93e16dac8c763acdef619c57c510a1dc7d00fa0b3b19edd8a2fbf9e9",
+      "count": 26,
       "floors": {
-        "managedTools": 16,
-        "tools": 12,
+        "managedTools": 14,
+        "tools": 10,
         "windowsTools": 2
       },
       "note": "records the host platform: capture on Linux"
@@ -401,11 +474,11 @@
       "output": "--fixtures",
       "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::arguments_the_reference_rejects_are_rejected_here_too",
       "row": "3",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "bf13d8a5fb366279fafdc59d0a5dbde945452f42545800746fbb9dd1bd7231aa",
-      "count": 102,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "3f1c45e2429496f30b6468c88464aa9cdc3cec670cdcc1dc7160f24a20f692c3",
+      "count": 95,
       "floors": {
-        "fixtures": 89,
+        "fixtures": 82,
         "multiArgument": 9
       },
       "note": "records the host platform: capture on Linux"
@@ -419,8 +492,8 @@
       "output": "--gates",
       "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_configured_filters_publish_what_the_reference_publishes",
       "row": "3",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "330d17e68be7aebcccc913638410c5ccd75a588a1c0ae8ef6bbace7b58811277",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "224c0dfc66e848fec7b8f52939e5d63b7abbb46ec42f4030d01331cfc55e8f36",
       "count": 10,
       "floors": {
         "gates": 10
@@ -436,8 +509,8 @@
       "output": "--quadrants",
       "test": "crates/vibe-app-server/src/tool_surface_parity_tests.rs::the_four_surface_quadrants_publish_what_the_reference_publishes",
       "row": "3",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "617d904d5a51121b9dc155f0645c8603ee9ed79b458ec7a0d5e9fa30293a7400",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "1c36eb95c0f0c90fe4a936d7685f9b70fca8c22f21b0691b0811ef5e904452cd",
       "count": 4,
       "floors": {
         "quadrants": 4
@@ -453,11 +526,11 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/unified_harness_parity_tests.rs::the_port_runs_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "36",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "bed5a2acc95600bfb7dd51559da8db0aa5bde69ff8a431c5f24e4bc62601fc73",
-      "count": 91,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "8840141379ecde5f4b3e1e2347c563977076e8969a10f71878ad8361ae03fd57",
+      "count": 89,
       "floors": {
-        "scenarios": 87
+        "scenarios": 85
       }
     },
     {
@@ -469,11 +542,11 @@
       "output": "--cases",
       "test": "crates/vibe-app-server/src/wire_validation/wire_validation_tests.rs::validation_answers_as_the_reference_does",
       "row": "17",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "d443d7b43950c3991ed47e9190fc8183da74d6a488cdd06458d1c06aa449d5c0",
-      "count": 7034,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "b66c6446d753da9657101569e482e0d8ed4acb772f5cf936f28d767e82112627",
+      "count": 8036,
       "floors": {
-        "cases": 6683
+        "cases": 7635
       },
       "note": "the same run captures crates/vibe-app-server/src/wire_validation/schema.json, listed as its own entry"
     },
@@ -486,8 +559,8 @@
       "output": "--output",
       "test": "crates/vibe-app-server/tests/workspace_trust_parity_tests.rs::the_port_answers_every_trust_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "12",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "c53e19036b76e2b07d8da01f697943d5546616698ef6f56fe45cd65598e7e686",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "a6a3ee9b1451b4b7c8bcdc23978dbc38abd4c6a409f61312b0ee06ff05ce838a",
       "count": 29,
       "floors": {
         "scenarios": 28
@@ -548,26 +621,6 @@
         "logLevelPicker": 11,
         "parse": 58,
         "traits": 33
-      }
-    },
-    {
-      "corpus": "crates/vibe-cli/tests/onboarding/corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/onboarding.py"
-      ],
-      "output": "--corpus",
-      "test": "crates/vibe-cli/src/tui/onboarding_parity_tests.rs::the_committed_corpus_replays_against_this_port",
-      "row": "31",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "250ab87afa029ff4cc6b11ee9bc079de733cf9630b8dcfe282a60bf9022315ba",
-      "count": 88,
-      "floors": {
-        "constants": 7,
-        "domainValidation": 25,
-        "screenGraph": 39,
-        "screenProse": 9,
-        "terminating": 5
       }
     },
     {
@@ -2721,55 +2774,16 @@
       "corpus": "crates/vibe-cli/tests/programmatic-parity/corpus.json",
       "kind": "corpus",
       "driver": [
-        "scripts/parity/programmatic.py",
-        "--harness",
-        "legacy"
+        "scripts/parity/programmatic.py"
       ],
       "output": "--output",
       "test": "crates/vibe-cli/tests/programmatic_parity_tests.rs::the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "13",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "226d9611dde2b319458d90b2bae521766527655860288f1abe795d66ea4bd64d",
-      "count": 56,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e",
+      "count": 57,
       "floors": {
-        "scenarios": 54
-      }
-    },
-    {
-      "corpus": "crates/vibe-cli/tests/programmatic-parity/unified-corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/programmatic.py",
-        "--harness",
-        "unified"
-      ],
-      "output": "--output",
-      "test": "crates/vibe-cli/tests/programmatic_parity_tests.rs::the_port_answers_every_unified_programmatic_scenario_as_the_corpus_records",
-      "row": "13",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "5ed63e3f6539ce6de91b44855024d51b47ae21c0f2300cc2da1e6a220177fd8f",
-      "count": 56,
-      "floors": {
-        "scenarios": 54
-      }
-    },
-    {
-      "corpus": "crates/vibe-cli/tests/promo/corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/experiments.py"
-      ],
-      "output": "--promo-corpus",
-      "test": "crates/vibe-cli/src/tui/promo_parity_tests.rs::the_committed_corpus_replays_against_this_port",
-      "row": "33",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "2be87597e306f83e6a50dec4bc04602fe3c3bc81544572b441295ec15e84cf4e",
-      "count": 48,
-      "floors": {
-        "promoConstants": 7,
-        "promoPredicate": 24,
-        "promoProse": 2,
-        "promoState": 14
+        "scenarios": 55
       }
     },
     {
@@ -2796,16 +2810,13 @@
         "crates/vibe-cli/tests/runtime-parity/cli-surface-oracle.py"
       ],
       "output": "--corpus",
-      "test": "crates/vibe-cli/src/cli_surface_parity_tests.rs::replaying_the_corpus_finds_no_difference_the_ledger_does_not_name",
+      "test": "crates/vibe-cli/src/cli_surface_parity_tests.rs::the_port_answers_every_surface_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "7",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "424e6ff8f6e6041d66a819c64be62116807c065cca14c9c702bad16e8fbfb00a",
-      "count": 200,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "8c88d9408d8e69dcb1c70576ff16781ce904184955431aba607b5624788b67d3",
+      "count": 67,
       "floors": {
-        "capture": 7,
-        "cases": 178,
-        "interpreter": 2,
-        "parsers": 4
+        "scenarios": 64
       }
     },
     {
@@ -2950,11 +2961,11 @@
       "output": "--output",
       "test": "crates/vibe-cli/tests/system_prompt_parity_tests.rs::the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "19",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "ec0fce313917498dfe1c762bb610519c61ae99ea9586f436eea4e2bf90f01604",
-      "count": 55,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "b5f68d8e4ee92800dfe21a5ee600b3c89fe8e5433ba4f31a222b0ea2f03f1f53",
+      "count": 49,
       "floors": {
-        "scenarios": 53
+        "scenarios": 47
       }
     },
     {
@@ -2966,8 +2977,8 @@
       "output": "--output",
       "test": "crates/vibe-cli/tests/telemetry_session_parity_tests.rs::the_port_reports_every_session_as_the_corpus_records_or_as_the_ledger_names",
       "row": "27",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "0fe252b9b2ad35cc5bf32df64d372b419ac1a35bbe44f5203f68308404769e50",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "232ac5cb5fc2eed836caef4bed418832a9c435ad75ca20b579203739e09c153a",
       "count": 41,
       "floors": {
         "scenarios": 39
@@ -2983,8 +2994,8 @@
       "output": "--output",
       "test": "crates/vibe-core/src/checkpoints/checkpoint_parity_tests.rs::the_engine_matches_the_reference_over_every_scenario",
       "row": "29",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "129f4c65309adc0416ef2ea1c1f45d5815e033620485130f00221c2df60f5d07",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "8f45809f6ce79a1cefdcc2719fec80a1a871af140183ca91a21abc92b83ec08d",
       "count": 73,
       "floors": {
         "scenarios": 70
@@ -2999,8 +3010,8 @@
       "output": "--output",
       "test": "crates/vibe-core/src/checkpoints/checkpoint_parity_tests.rs::opcodes_match_the_reference",
       "row": "29",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "668e48e24fcd48c5c0d909c34271b623ae2d425ad159e8ab18ea942a670d97e1",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "0511ec05fee9e6ff7db267d51deccfe5bad0adc01087d25da03df8c9f4c7ab7c",
       "count": 68,
       "floors": {
         "lineFixtures": 31,
@@ -3016,21 +3027,11 @@
       "output": "--corpus",
       "test": "crates/vibe-core/src/compaction/compaction_parity_tests.rs::the_committed_corpus_replays_every_family_the_reference_answered",
       "row": "26",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "d27e3e80880874436f9576c0019f76661d61bedf92f5f7ba81541e0eca4410ca",
-      "count": 90,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "b068759fa04bb9da2efa4f4a58f7342a11eec6895de8be473341be3a2f6298e5",
+      "count": 16,
       "floors": {
-        "constants": 1,
-        "envelopeParses": 11,
-        "envelopeProse": 2,
-        "envelopeRenders": 8,
-        "managerScenarios": 11,
-        "messageSelections": 16,
-        "placeholderSummary": 2,
-        "roundDrops": 8,
-        "summaryExtractions": 10,
-        "tokenCounts": 10,
-        "truncations": 11
+        "summaryExtractions": 16
       }
     },
     {
@@ -3042,21 +3043,22 @@
       "output": "--output",
       "test": "crates/vibe-core/src/config/surface_parity_tests.rs::every_scenario_composes_the_document_the_reference_produces",
       "row": "30",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "bcb8d46a27ad399bd0fd70486decdd5df40ea7d124b86a5dfa44234492099b42",
-      "count": 288,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "32af5fa438e89ed4daf8c5faf40a099ba71c8da7b068a8275fadaca1efa041e6",
+      "count": 334,
       "floors": {
         "agentProfiles": 2,
         "defaults": 2,
         "dotenv": 2,
         "encoding": 19,
         "environment": 7,
-        "fields": 76,
+        "fields": 99,
         "mcp": 6,
+        "migrations": 5,
         "modelScenarios": 47,
         "originRewrite": 7,
         "scenarios": 36,
-        "settingsOrder": 70,
+        "settingsOrder": 85,
         "stack": 2,
         "strategies": 3
       }
@@ -3070,9 +3072,9 @@
       "output": "--corpus",
       "test": "crates/vibe-core/src/experiments_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "32",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "005e6a4b8e3c1be598fddc80cffaeb4bdb8ce28c4f286b0b1e8c04a113879a87",
-      "count": 251,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "f31f980df63b6c0a384e86cf0559d36a829b874b8fa86d698438229f2ccd42cd",
+      "count": 238,
       "floors": {
         "attributes": 10,
         "bucketingKey": 4,
@@ -3085,9 +3087,9 @@
         "evalUrl": 12,
         "featureResolution": 14,
         "layerPrecedence": 12,
-        "sessionGates": 27,
-        "surfaces": 10,
-        "typedMapping": 36,
+        "sessionGates": 16,
+        "surfaces": 11,
+        "typedMapping": 34,
         "typedVariants": 7,
         "variantLabels": 9,
         "variantResolution": 11
@@ -3100,19 +3102,17 @@
         "scripts/parity/llm_backends.py"
       ],
       "output": "--corpus",
-      "test": "crates/vibe-core/src/llm/backend_parity_tests.rs::the_backends_answer_every_scenario_as_the_corpus_records_or_as_the_ledger_names",
+      "test": "crates/vibe-core/src/llm/availability_parity_tests.rs::the_utility_model_is_selected_as_the_corpus_records",
       "row": "10",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "a3f3fa1dee029c048ec92a6d573a8ae53accf09c8514c687141d3f253b1e2207",
-      "count": 506,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "5b9a3e5c17dd59cfd28059ef5437dfaa7493079e66b4e209ac720f43453d976d",
+      "count": 142,
       "floors": {
         "availabilityKeys": 8,
         "availabilityProbes": 40,
         "retryDelays": 31,
-        "scenarios": 341,
         "utilityCompletions": 11,
-        "utilitySelections": 47,
-        "vertexEndpoints": 6
+        "utilitySelections": 47
       }
     },
     {
@@ -3124,8 +3124,8 @@
       "output": "--output",
       "test": "crates/vibe-core/src/policy/permission_parity_tests.rs::the_scope_vocabulary_is_the_reference_one",
       "row": "4",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "840e02cac3cf316ba58ed76cb0c89798af5430139d278d18ef141eb0818a6fa5",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "b3c6594cab3d4c2134a8d234fc98faf4a5ce0ade663fe076988e0a64ff2a6f50",
       "count": 270,
       "floors": {
         "arity": 132,
@@ -3155,8 +3155,8 @@
       "output": "--output",
       "test": "crates/vibe-core/src/plugins/plugins_parity_tests.rs::every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledger_names",
       "row": "35",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "14c14db033195522f7bf19c2f40c40989c47e0fc50a0d9cf362b32f2cb3c49fe",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "194db6bf4f612ef9b3251a4b252926c6adc9bcfc091f85e7dd8112ae2f076ccc",
       "count": 12,
       "floors": {
         "cases": 12
@@ -3178,8 +3178,8 @@
       "output": "--corpus",
       "test": "crates/vibe-core/src/setup_auth_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "31",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "ac36fc016ed7ab3b557729b4333c7acf3b12eef371bc207aecbbd6e8d15ffdc3",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "8ccd806cc447eb836c3b01f103e7bbabf7ccee76529b11458e4f990e3b33c95b",
       "count": 328,
       "floors": {
         "acpAuthProse": 5,
@@ -3205,39 +3205,21 @@
       "output": "--output",
       "test": "crates/vibe-core/src/shell/shell_parity_tests.rs::every_resolution_matches_the_reference",
       "row": "6",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "2362703b3158a54a7f8953695077bac8987faa284ee3109319588cf80ebb8e2c",
-      "count": 364,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "cca3de77eea73bf45b3bc5f179945d8200e56ab35c31fd8f4faed9bd7addaf79",
+      "count": 342,
       "floors": {
         "allowlistGrants": 27,
         "commandSets": 6,
-        "counts": 10,
+        "counts": 9,
         "extraction": 45,
         "managedResolutions": 16,
         "outsidePaths": 27,
         "pathGrantMatches": 31,
         "repositoryResolutions": 38,
         "resolutions": 126,
-        "stdinPermissions": 20,
         "windowsGrammar": 4
       }
-    },
-    {
-      "corpus": "crates/vibe-core/tests/shell-session/corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/shell_session.py"
-      ],
-      "output": "--corpus",
-      "test": "crates/vibe-core/src/tools/shell/session_parity_tests.rs::shell_sessions_match_the_reference_except_for_the_recorded_gap",
-      "row": "6",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "bbc9c769aa67a99461b880b82b960588ee5440ca233b275e4f18956782fafbba",
-      "count": 88,
-      "floors": {
-        "cases": 84
-      },
-      "note": "records the host platform: capture on Linux"
     },
     {
       "corpus": "crates/vibe-core/tests/skills/corpus.json",
@@ -3248,12 +3230,11 @@
       "output": "--output",
       "test": "crates/vibe-core/src/skills/skills_parity_tests.rs::the_committed_corpus_replays_every_family_the_reference_answered",
       "row": "28",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "429149159fef1cac9b8ed9c58be8ed3bcd80b2d4bbf45d1910ad72bf046b3cf1",
-      "count": 262,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "f1bf103ab3b8102c48d7614a3fcc2e05a1f879b63f35f85d085576fd739a2da8",
+      "count": 260,
       "floors": {
         "builtins": 2,
-        "command": 2,
         "discovery": 27,
         "filtering": 13,
         "frontmatter": 29,
@@ -3278,17 +3259,17 @@
       "output": "--corpus",
       "test": "crates/vibe-core/src/telemetry/telemetry_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "27",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "60710dbb7d46aa6404cbde740a7005501e8c353cd5bb5e2383e099360abce3d5",
-      "count": 236,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94",
+      "count": 250,
       "floors": {
         "attachmentCounts": 4,
         "baseMetadata": 12,
         "constants": 6,
         "documents": 9,
         "envelope": 19,
-        "eventPayloads": 26,
-        "eventVocabulary": 26,
+        "eventPayloads": 33,
+        "eventVocabulary": 33,
         "exporterConfig": 15,
         "logConfig": 10,
         "logEncoding": 11,
@@ -3309,14 +3290,14 @@
       "output": "--output",
       "test": "crates/vibe-core/src/tools/config/config_parity_tests.rs::the_declared_tool_configuration_matches_the_reference_enumeration",
       "row": "4",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "78f901f3321aa4b711714eeef121aae826b5127e8b2a79cc13c58ddab39abe87",
-      "count": 53,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "45ab7b4defbf7678fcddedf5676c2158c919aa1de67cad85d3faaf10219d29c5",
+      "count": 51,
       "floors": {
         "counts": 3,
-        "keys": 21,
+        "keys": 20,
         "shellLists": 2,
-        "tools": 25
+        "tools": 24
       }
     },
     {
@@ -3326,47 +3307,15 @@
         "scripts/parity/tool_descriptions.py"
       ],
       "output": "--corpus",
-      "test": "crates/vibe-core/src/tools/descriptions/descriptions_parity_tests.rs::the_winning_description_file_matches_the_reference",
+      "test": "crates/vibe-core/src/tools/descriptions/descriptions_parity_tests.rs::the_tool_directories_and_ignored_files_match_the_reference",
       "row": "4",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "b5136d36697276593cb0359af6e8729532f01d5aa00eda8289159cc0ef667c86",
-      "count": 10,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "e4e7682e632762096089cd689010f097159661bd8e5de5aaaa40709ce46e1087",
+      "count": 15,
       "floors": {
-        "cases": 7,
+        "redescribable": 5,
+        "scenarios": 7,
         "tree": 3
-      }
-    },
-    {
-      "corpus": "crates/vibe-core/tests/tool-presentation/corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/tool_presentation.py"
-      ],
-      "output": "--corpus",
-      "test": "crates/vibe-core/src/events/detail/detail_presentation_parity_tests.rs::the_committed_corpus_replays_against_this_port",
-      "row": "4",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "15774aa4ec5cc98f70055b0d4228087631b4a1eec3fea51d928c9d0c01898f93",
-      "count": 132,
-      "floors": {
-        "cases": 126
-      },
-      "note": "records the host platform: capture on Linux"
-    },
-    {
-      "corpus": "crates/vibe-core/tests/web-fetch-markdown/corpus.json",
-      "kind": "corpus",
-      "driver": [
-        "scripts/parity/web_fetch_markdown.py"
-      ],
-      "output": "--output",
-      "test": "crates/vibe-core/src/tools/builtins/web_fetch/markdown/markdown_tests.rs::every_captured_page_converts_as_the_reference_converted_it",
-      "row": "3",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "bf70bac40e21b8cd8a0fc348941e89f8ed07dd5aeb30ecbf2545e30fdaabf613",
-      "count": 478,
-      "floors": {
-        "cases": 455
       }
     },
     {
@@ -3378,14 +3327,30 @@
       "output": "--corpus",
       "test": "crates/vibe-core/src/worktree/worktree_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "5",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "e79d044e9132be575c281aae6e6f50d21e3b7386ef6a315df3bc4177cde542e0",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "e36619bb5dd40a9d804beeca4c46e66891b115ba75f014662d5367c59ed35110",
       "count": 147,
       "floors": {
         "cases": 132,
         "setups": 9
       },
       "note": "records the host platform: capture on Linux"
+    },
+    {
+      "corpus": "crates/vibe-harness/tests/tool-presentation/corpus.json",
+      "kind": "corpus",
+      "driver": [
+        "scripts/parity/tool_presentation.py"
+      ],
+      "output": "--corpus",
+      "test": "crates/vibe-harness/src/tool_projection/tool_projection_parity_tests.rs::the_tool_projection_matches_the_reference",
+      "row": "4",
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "7fa3b30357703ac503d246f13dbb2f0cbe549efca98972ddd9ec0737739ba97d",
+      "count": 133,
+      "floors": {
+        "scenarios": 127
+      }
     },
     {
       "corpus": "crates/vibe-voice/tests/voice/corpus.json",
@@ -3396,13 +3361,12 @@
       "output": "--corpus",
       "test": "crates/vibe-voice/src/voice_parity_tests.rs::the_committed_corpus_replays_against_this_port",
       "row": "24",
-      "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
-      "sha256": "4b56d421c8d999ab277cc3d2dc4161bd65bdee588c1da67fc337f425f1a053ab",
-      "count": 213,
+      "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+      "sha256": "451067b3a609b3669a097b889bb9f661a027ebc00b4102edb0764786e2164e75",
+      "count": 211,
       "floors": {
         "acpBridge": 11,
         "audioDevices": 4,
-        "audioMetadata": 2,
         "captureSignal": 9,
         "constants": 5,
         "decodeWav": 10,

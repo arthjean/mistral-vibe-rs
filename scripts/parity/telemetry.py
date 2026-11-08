@@ -6,14 +6,15 @@ isolation: the datalake client under ``vibe/core/telemetry/``, all of OpenTeleme
 in ``vibe/core/tracing.py``, the log formatter and the crash reporter under
 ``vibe/observability/``, and the backward-paginated reader in
 ``vibe/core/log_reader.py``. This capture drives every one of them directly, over
-inputs this script authors, and records fourteen families the Rust replay in
+inputs this script authors, and records fifteen families the Rust replay in
 ``crates/vibe-core/src/telemetry/telemetry_parity_tests.rs`` compares this build
 against:
 
 ``constants``        endpoints, timeouts, tracer names, attribute keys, vocabularies
 ``envelope``         the datalake request a scripted configuration produces
 ``baseMetadata``     the 16 base fields, the 4 request fields and their omissions
-``eventVocabulary``  the 27 names raised from ``EMISSION_SITES``, each with its site
+``attachmentCounts`` the image count a turn reports, with and without image support
+``eventVocabulary``  the 34 names raised from ``EMISSION_SITES``, each with its site
 ``eventPayloads``    the property key set each event carries
 ``exporterConfig``   the exporter endpoint and headers per configuration
 ``spans``            the four span families, their attributes and their statuses
@@ -24,6 +25,21 @@ against:
 ``logParse``         the parse verdict per line
 ``logPagination``    the backward-paginated page per limit and offset
 ``logConfig``        the resolved level and rotation size per environment
+
+At v3.0.0 the reference moved its terminal client to the Rust binary under
+``vibe/cli-rust/`` and removed the in-process backends, and every family still
+resolves against the Python package. What moved: the attachment counting
+left ``vibe/core/telemetry/build_metadata.py`` for the unified backend in
+``vibe/app_server/_unified_harness_backend_adapter.py``; the finished event of
+a tool call is the module function ``send_unified_tool_call_finished`` in
+``vibe/core/telemetry/send.py``; and a send now resolves a credential snapshot
+before it posts, so each driven sender is awaited to completion. What left the
+oracle: the startup, mention, copied-text, voice-toggle, slash-command and
+cancelled-action senders of the Textual client now live in
+``vibe/cli-rust/src/telemetry.rs``, which this capture does not drive, so their
+events are recorded only where a Python call site still raises them; and
+``vibe/core/llm/exceptions.py`` is gone, so the backend-error span cases raise
+a stand-in of the same class name.
 
 Two artifacts come out of a run::
 
@@ -60,6 +76,7 @@ import logging
 import os
 from pathlib import Path
 import platform
+import re
 import sys
 import tempfile
 from typing import Any, get_args
@@ -239,7 +256,7 @@ def authorization_variable(header: str | None) -> str | None:
 # --------------------------------------------------------------------------
 
 
-def capture_constants(reference: Path) -> dict[str, Any]:
+def capture_constants(tree: Path) -> dict[str, Any]:
     from vibe.core.config import DEFAULT_MISTRAL_API_ENV_KEY, DEFAULT_MISTRAL_SERVER_URL
     from vibe.core.config.models import OtelRedactionMode
     from vibe.core.log_reader import DEFAULT_LOG_PATTERN, LOG_POLL_INTERVAL
@@ -374,11 +391,29 @@ def capture_constants(reference: Path) -> dict[str, Any]:
         # DSNs are None at the pin, which is what makes the subtree dormant and
         # what the port's absent crash reporter is measured against. Recorded as
         # booleans: a DSN is a credential-shaped value and never enters a corpus.
+        # Since v3.0.0 the terminal client's DSN is compiled into the Rust
+        # binary (``vibe/cli-rust/src/observability/sentry.rs``), so it is read
+        # off that declaration rather than imported.
         "sentry": {
-            "cliDsnConfigured": sentry_module._CLI_SENTRY_DSN is not None,
+            "cliDsnConfigured": compiled_cli_dsn_configured(tree),
             "acpDsnConfigured": sentry_module._ACP_SENTRY_DSN is not None,
         },
     }
+
+
+#: The terminal client's compiled-in crash reporter DSN, as v3 declares it.
+CLI_DSN_DECLARATION = re.compile(r"const CLI_SENTRY_DSN: Option<&str> = (None|Some\()")
+
+
+def compiled_cli_dsn_configured(tree: Path) -> bool:
+    """Whether the Rust terminal client compiles a DSN in; only which branch of
+    the ``Option`` the declaration takes is read, never a value."""
+
+    source = (tree / "vibe/cli-rust/src/observability/sentry.rs").read_text(encoding="utf-8")
+    found = CLI_DSN_DECLARATION.search(source)
+    if found is None:
+        raise OracleError("the terminal client no longer declares CLI_SENTRY_DSN")
+    return found.group(1) != "None"
 
 
 def build_client(config: Any, **keywords: Any) -> Any:
@@ -472,7 +507,7 @@ async def _send_one(
         "configuration": configuration,
         "correlationIdRequested": correlation_id is not None,
         "enabled": client._is_enabled(),
-        "credentialResolved": client._get_mistral_api_key() is not None,
+        "credentialResolved": client._mistral() is not None,
         "active": client.is_active(),
         "sent": bool(recorder.requests),
         "flushed": recorder.closed,
@@ -599,35 +634,44 @@ def capture_base_metadata() -> list[dict[str, Any]]:
 
 
 def capture_attachment_counts() -> list[dict[str, Any]]:
-    from vibe.core.telemetry.build_metadata import build_attachment_counts
-    from vibe.core.types import LLMMessage
+    """The per-turn attachment counts. Since v3.0.0 the rule lives on the app
+    server's unified backend, which counts the image blocks of the turn it
+    starts (``_track_turn_attachments``) or of the last user entry a queued turn
+    carries (``_track_queue_attachments``), both in
+    vibe/app_server/_unified_harness_backend_adapter.py. Both methods are driven
+    unbound over a stand-in that answers the image support, so the counts are
+    the reference's own and no session is opened."""
 
-    def message(count: int) -> Any:
-        images = [
-            {
-                "source": {"kind": "file", "path": f"/oracle/workspace/image-{index}.png"},
-                "alias": f"image-{index}",
-                "mime_type": "image/png",
-            }
-            for index in range(count)
-        ]
-        return LLMMessage(role="user", content="oracle prompt", images=images)
+    from types import SimpleNamespace
+
+    from vibe.app_server import _unified_harness_backend_adapter as adapter
+
+    backend = adapter.UnifiedHarnessBackendAdapter
+    image = adapter.ImageContentBlock.model_construct()
+    text = adapter.TextContentBlock.model_construct()
+
+    def count(blocks: list[Any] | None, supports_images: bool) -> dict[str, int]:
+        host = SimpleNamespace(
+            _active_model_supports_images=lambda: supports_images,
+            _turn_attachment_counts={},
+        )
+        if blocks is None:
+            # A queued turn with no user entry is the reference's "no message".
+            backend._track_queue_attachments(host, SimpleNamespace(entries=[]))
+        else:
+            backend._track_turn_attachments(host, blocks)
+        return {kind.value: value for kind, value in host._turn_attachment_counts.items()}
 
     cases = [
         ("no-message", None, True),
-        ("no-images", message(0), True),
-        ("images-with-support", message(2), True),
-        ("images-without-support", message(2), False),
+        ("no-images", [text], True),
+        ("images-with-support", [text, image, image], True),
+        ("images-without-support", [text, image, image], False),
     ]
-    records = []
-    for case, value, supports_images in cases:
-        counts = build_attachment_counts(value, supports_images=supports_images)
-        records.append({
-            "case": case,
-            "supportsImages": supports_images,
-            "counts": {kind.value: count for kind, count in counts.items()},
-        })
-    return records
+    return [
+        {"case": case, "supportsImages": supports_images, "counts": count(blocks, supports_images)}
+        for case, blocks, supports_images in cases
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -635,18 +679,20 @@ def capture_attachment_counts() -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 #: Where each event is raised, read off the reference tree. A file listed here
-#: is parsed for the literal payloads its call sites pass. The list is not the
-#: reference's whole vocabulary: at 4a96003186b1, vibe.tool_classification
-#: (vibe/app_server/_unified_harness_backend_adapter.py:6974) and
-#: vibe.multimodal_fallback_switch (vibe/app_server/_vision.py:55) are raised
-#: from files outside it and are not captured.
+#: is parsed for the literal payloads its call sites pass. Since v3.0.0 the
+#: terminal client is the Rust binary under ``vibe/cli-rust/``, which raises its
+#: own events (``vibe/cli-rust/src/telemetry.rs``) and is not parsed here; the
+#: Python sites are the app server's unified backend and sign-in, the session
+#: telemetry, the voice and narrator managers, the editor agent and the client.
 EMISSION_SITES = (
-    "vibe/cli/textual_ui/app.py",
+    "vibe/app_server/_setup_oidc.py",
+    "vibe/app_server/_unified_harness_backend_adapter.py",
     "vibe/cli/voice_manager/voice_manager.py",
     "vibe/cli/narrator_manager/narrator_manager.py",
     "vibe/acp/agent.py",
     "vibe/acp/commands/controller.py",
     "vibe/core/telemetry/send.py",
+    "vibe/core/telemetry/session.py",
 )
 
 #: The methods a call site raises an event through.
@@ -774,11 +820,19 @@ def capture_event_payloads(tree: Path) -> tuple[list[dict[str, Any]], list[dict[
 
 
 async def _drive_named_senders() -> dict[str, dict[str, Any]]:
-    """Every ``send_*`` method on the client, called with scripted arguments."""
+    """Every ``send_*`` method on the client, called with scripted arguments.
+
+    Since v3.0.0 the finished event of a tool call is sent by the module
+    function ``send_unified_tool_call_finished`` in
+    ``vibe/core/telemetry/send.py``, which the server calls once the harness
+    reconciles an effect, and the copied-text, cancelled-action, slash-command
+    and mention senders left the client with the Textual terminal client.
+    """
 
     from types import SimpleNamespace
 
     from vibe.core.config.admin_config import AdminConfigOutcome
+    from vibe.core.telemetry.send import send_unified_tool_call_finished
     from vibe.core.telemetry.types import LaunchContext
     from vibe.utils.terminal import TerminalEmulator
 
@@ -800,36 +854,37 @@ async def _drive_named_senders() -> dict[str, dict[str, Any]]:
     client._client = recorder
     client.last_correlation_id = "oracle-last-request"
 
-    tool_call = SimpleNamespace(
-        tool_name="write_file",
-        args_dict={"file_path": "/oracle/workspace/file.rs", "background": False},
-    )
-    # ``approval_source`` is read since the reference started reporting who
-    # approved a call (vibe/core/telemetry/send.py:363-367); a user approval
-    # reaches its non-null branch.
-    decision = SimpleNamespace(
-        verdict=SimpleNamespace(value="approved"),
-        approval_type=SimpleNamespace(value="session"),
-        approval_source=SimpleNamespace(value="user"),
-    )
-
     senders: list[tuple[str, Any]] = [
         (
-            "send_tool_call_finished",
-            lambda: client.send_tool_call_finished(
-                tool_call=tool_call,
+            "send_unified_tool_call_finished",
+            lambda: send_unified_tool_call_finished(
+                client,
+                tool_name="write_file",
                 status="success",
-                decision=decision,
-                agent_profile_name="oracle-profile",
                 model="oracle-model",
-                result={"background": False},
+                agent_profile_name="oracle-profile",
+                nb_files_created=1,
+                nb_files_modified=0,
+                file_extension=".rs",
                 message_id="oracle-message",
+                decision="execute",
+                approval_type="ask",
+                approval_source="user",
             ),
         ),
-        ("send_user_copied_text", lambda: client.send_user_copied_text("oracle text")),
         (
-            "send_user_cancelled_action",
-            lambda: client.send_user_cancelled_action("interrupt_agent"),
+            "send_tool_call_detected",
+            lambda: client.send_tool_call_detected(
+                model="oracle-model",
+                backend="mistral",
+                api_style="chat_completions",
+                call_type="main_call",
+                reasons=["invalid_json"],
+                nb_unusable_attempts=1,
+                nb_dropped_tool_calls=2,
+                status="success",
+                message_id="oracle-message",
+            ),
         ),
         (
             "send_auto_compact_triggered",
@@ -850,13 +905,15 @@ async def _drive_named_senders() -> dict[str, dict[str, Any]]:
             ),
         ),
         (
-            "send_slash_command_used",
-            lambda: client.send_slash_command_used("/oracle", "builtin"),
-        ),
-        (
             "send_new_session",
             lambda: client.send_new_session(
-                has_agents_md=True, nb_skills=3, nb_mcp_servers=2, nb_models=4
+                has_agents_md=True,
+                nb_skills=3,
+                nb_mcp_servers=2,
+                nb_models=4,
+                has_outside_workdir_deny=True,
+                nb_post_agent_scoped_hooks=1,
+                nb_post_agent_main_hooks=2,
             ),
         ),
         ("send_session_closed", client.send_session_closed),
@@ -885,15 +942,6 @@ async def _drive_named_senders() -> dict[str, dict[str, Any]]:
             ),
         ),
         ("send_ready", lambda: client.send_ready(init_duration_ms=1234)),
-        (
-            "send_at_mention_inserted",
-            lambda: client.send_at_mention_inserted(
-                nb_mentions=2,
-                context_types={"file": 2},
-                file_extensions={".rs": 2},
-                message_id="oracle-message",
-            ),
-        ),
         (
             "send_user_rating_feedback",
             lambda: client.send_user_rating_feedback(5, "oracle-model"),
@@ -944,7 +992,10 @@ async def _drive_named_senders() -> dict[str, dict[str, Any]]:
     for sender, invoke in senders:
         before = len(recorder.requests)
         invoke()
-        await asyncio.sleep(0)
+        # Since v3.0.0 a send resolves its credential snapshot before it posts,
+        # so one scheduler turn no longer reaches the request: wait for every
+        # send this sender started, which keeps each request with its sender.
+        await asyncio.gather(*list(client._pending_tasks), return_exceptions=True)
         for request in recorder.requests[before:]:
             body = request["json"] or {}
             recorded[body["event"]] = {
@@ -1173,7 +1224,6 @@ def capture_spans() -> list[dict[str, Any]]:
 
 async def _run_spans(exporter: Any) -> list[dict[str, Any]]:
     from vibe.core import tracing
-    from vibe.core.llm.exceptions import BackendError
 
     records: list[dict[str, Any]] = []
 
@@ -1329,30 +1379,27 @@ async def _run_spans(exporter: Any) -> list[dict[str, Any]]:
     return records
 
 
+class BackendError(Exception):
+    """A model-call failure the capture raises.
+
+    v3.0.0 removed ``vibe.core.llm.exceptions`` with the in-process backends;
+    the model-call span now words its status from the class name alone
+    (``_exception_status`` in ``vibe/core/tracing.py``), so a failure of the
+    same name is what the cases below need, its provider and status kept as
+    attributes for the port's side of the comparison.
+    """
+
+    def __init__(self, provider: str, status: int | None) -> None:
+        super().__init__("oracle reason")
+        self.provider = provider
+        self.status = status
+
+
 def _backend_error(status: int | None) -> Exception:
     """A backend failure built from script-authored values, so the status
     description the span carries is decided here rather than by a live call."""
 
-    from vibe.core.llm.exceptions import BackendError, PayloadSummary
-
-    return BackendError(
-        provider="mistral",
-        endpoint="https://api.mistral.ai/v1/chat/completions",
-        status=status,
-        reason="oracle reason",
-        headers={},
-        body_text="oracle body",
-        parsed_error=None,
-        model="oracle-model",
-        payload_summary=PayloadSummary(
-            model="oracle-model",
-            message_count=3,
-            approx_chars=512,
-            temperature=0.3,
-            has_tools=False,
-            tool_choice=None,
-        ),
-    )
+    return BackendError(provider="mistral", status=status)
 
 
 def _attribute_value(value: Any) -> Any:
@@ -1773,7 +1820,7 @@ def _capture_invalid_max_bytes() -> dict[str, Any] | None:
 def build_families(tree: Path, reference: Path) -> dict[str, Any]:
     vocabulary, payloads = capture_event_payloads(tree)
     return {
-        "constants": capture_constants(reference),
+        "constants": capture_constants(tree),
         "envelope": capture_envelope(),
         "baseMetadata": capture_base_metadata(),
         "attachmentCounts": capture_attachment_counts(),

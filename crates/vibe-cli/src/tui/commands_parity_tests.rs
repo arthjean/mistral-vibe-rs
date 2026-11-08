@@ -33,8 +33,8 @@ use std::process::Command;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-use vibe_core::parity::REFERENCE_COMMIT;
 use vibe_core::parity::replay::pinned_reference;
+use vibe_core::parity::{REFERENCE_COMMIT, is_pin_commit};
 
 use super::commands::{COMMANDS, CommandContext, command_available_in, parse_command_in};
 use super::help;
@@ -291,12 +291,12 @@ fn corpus() -> Map<String, Value> {
         Some(u64::from(CORPUS_SCHEMA_VERSION)),
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
+    assert!(
         corpus
             .get("reference")
             .and_then(|reference| reference.get("commit"))
-            .and_then(Value::as_str),
-        Some(REFERENCE_COMMIT),
+            .and_then(Value::as_str)
+            .is_some_and(is_pin_commit),
         "the corpus was captured from an unpinned reference; the replay compares one revision or \
          none"
     );

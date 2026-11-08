@@ -51,9 +51,11 @@ use crate::experiments::{
 };
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
-use crate::parity::REFERENCE_COMMIT;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Capture, pinned_reference};
+use crate::parity::replay::{
+    Capture, Class, Entry as _, PatternDivergence, assert_ledger, entries, pinned_reference,
+};
+use crate::parity::{REFERENCE_COMMIT, is_pin_commit};
 use crate::pycompat::{Dumps, dumps};
 use crate::telemetry::{
     ExperimentAssignment, HARNESS_LEGACY, LaunchContext, platform_arch, platform_id, version,
@@ -67,7 +69,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// The comparison floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
-const MINIMUM_COMPARISONS: usize = 680;
+const MINIMUM_COMPARISONS: usize = 628;
 
 /// Keys the corpus carries that are not families: the pin, the layout and the
 /// prose-free note.
@@ -223,6 +225,115 @@ const FAMILIES: &[Family] = &[
 /// on its own the moment this build answers it.
 const DIVERGENCES: &[(&str, &str)] = &[];
 
+/// Why the v3.1.0 corpus differs from this port where [`V3_GAPS`] says so.
+const V3_REASON: &str = "v3.0.0 removed the smart-approve default, Unified Harness and Rust TUI \
+                         rollouts from the experiment set and added the default agent, PR \
+                         monitoring, Mistral MCP connector and local runtime session API \
+                         experiments (vibe/core/experiments/active.py, \
+                         vibe/core/config/layers/growthbook.py), which this port's experiment \
+                         set does not reproduce yet";
+
+/// Differences the v3.1.0 re-pin revealed, each a gap of row 32, which this
+/// corpus measures. An entry reads a divergence key `family/field/case` as the
+/// scenario `family` and the pointer `/field/case`, and declares how many
+/// comparisons it covers across the replay.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "constants",
+        pointer: "/value/experimentNames",
+        count: 1,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "constants",
+        pointer: "/value/defaultVariants",
+        count: 1,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "constants",
+        pointer: "/value/configuredFields",
+        count: 1,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "evalFailures",
+        pointer: "/variants/*",
+        count: 9,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "variantResolution",
+        pointer: "/variants/*",
+        count: 11,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "variantResolution",
+        pointer: "/variantsOrNone/*",
+        count: 11,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "typedVariants",
+        pointer: "/variants/*",
+        count: 7,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "typedVariants",
+        pointer: "/variantsOrNone/*",
+        count: 7,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "surfaces",
+        pointer: "/surfaces/*",
+        count: 4,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "surfaces",
+        pointer: "/eligible/*",
+        count: 4,
+        row: "32",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "layerPrecedence",
+        pointer: "/effective/routing-variant-for-an-unpinned-user",
+        count: 1,
+        row: "32",
+        class: Class::Gap,
+        reason: UNSET_THRESHOLD_REASON,
+    },
+];
+
+/// Why a routed model definition reads otherwise at v3.1.0.
+const UNSET_THRESHOLD_REASON: &str = "v3.0.0 made a model's `auto_compact_threshold` optional \
+                                      with no value by default (vibe/core/config/models.py), \
+                                      where it used to carry an unset sentinel; this port still \
+                                      writes the sentinel -1 into a routed model definition";
+
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.
 struct Family {
@@ -266,12 +377,12 @@ fn corpus() -> Map<String, Value> {
         Some(u64::from(CORPUS_SCHEMA_VERSION)),
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
+    assert!(
         corpus
             .get("reference")
             .and_then(|reference| reference.get("commit"))
-            .and_then(Value::as_str),
-        Some(REFERENCE_COMMIT),
+            .and_then(Value::as_str)
+            .is_some_and(is_pin_commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -340,13 +451,18 @@ impl Report {
 
 /// What the ledger has to say about one family's report: the divergences it does
 /// not name, and the entries whose divergence no longer reproduces.
-fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>, Vec<String>) {
+fn audit(
+    report: &Report,
+    family: &str,
+    ledger: &[(&str, &str)],
+    gaps: &[PatternDivergence],
+) -> (Vec<String>, Vec<String>) {
     let unrecorded = report
         .divergences
         .iter()
         .filter(|line| {
             let key = line.split(':').next().unwrap_or_default();
-            !ledger.iter().any(|(entry, _)| covers(entry, key))
+            !ledger.iter().any(|(entry, _)| covers(entry, key)) && gap_of(gaps, key).is_none()
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -360,10 +476,23 @@ fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>
     (unrecorded, stale)
 }
 
+/// The scenario and pointer a typed entry reads a divergence key
+/// `family/field/case` as: the family, and `/field/case`.
+fn gap_address(key: &str) -> (&str, String) {
+    let (family, rest) = key.split_once('/').unwrap_or((key, ""));
+    (family, format!("/{rest}"))
+}
+
+/// The first entry of `gaps` that covers the divergence `key`.
+fn gap_of(gaps: &[PatternDivergence], key: &str) -> Option<usize> {
+    let (family, pointer) = gap_address(key);
+    gaps.iter().position(|entry| entry.covers(family, &pointer))
+}
+
 /// Fails on any divergence the ledger does not name, and on any ledger entry
 /// whose divergence no longer reproduces, then reports the family's count.
 fn settle(report: &Report, family: &str) -> usize {
-    let (unrecorded, stale) = audit(report, family, DIVERGENCES);
+    let (unrecorded, stale) = audit(report, family, DIVERGENCES, V3_GAPS);
     assert!(
         unrecorded.is_empty(),
         "{family} diverges from the reference and is unrecorded:\n{}",
@@ -2003,7 +2132,7 @@ fn the_ledger_reports_an_unrecorded_divergence_and_a_stale_entry() {
         &Value::String("https://reference.example.test".to_owned()),
         Some(&Value::String("https://port.example.test".to_owned())),
     );
-    let (unrecorded, stale) = audit(&report, "evalUrl", &ledger);
+    let (unrecorded, stale) = audit(&report, "evalUrl", &ledger, &[]);
     assert_eq!(unrecorded.len(), 1, "the unnamed divergence is reported");
     let reported = &unrecorded[0];
     assert!(reported.starts_with("evalUrl/url/unnamed:"), "{reported}");
@@ -2022,7 +2151,7 @@ fn the_ledger_reports_an_unrecorded_divergence_and_a_stale_entry() {
     // ledgered gap from passing quietly once it closes.
     let mut absent = Report::default();
     absent.check("evalUrl", "url", "named", &Value::Null, None);
-    let (unrecorded, stale) = audit(&absent, "evalUrl", &ledger);
+    let (unrecorded, stale) = audit(&absent, "evalUrl", &ledger, &[]);
     assert!(unrecorded.is_empty(), "the ledger names it: {unrecorded:?}");
     assert!(stale.is_empty(), "it still diverges: {stale:?}");
     assert!(absent.divergences[0].ends_with("port absent"));
@@ -2075,15 +2204,43 @@ fn the_committed_corpus_replays_against_this_port() {
     }
     let mut comparisons = 0;
     let mut conformant = 0;
+    let mut covered = vec![0_usize; V3_GAPS.len()];
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for family in FAMILIES {
         let mut report = Report::default();
         run_family(&corpus, family, &runtime, &mut report);
         let total = settle(&report, family.name);
+        for key in &report.observed {
+            if DIVERGENCES.iter().any(|(entry, _)| covers(entry, key)) {
+                continue;
+            }
+            if let Some(index) = gap_of(V3_GAPS, key) {
+                covered[index] += 1;
+            }
+        }
         counts.insert(family.name, total);
         comparisons += total;
         conformant += report.conformant;
     }
+    let miscounted = V3_GAPS
+        .iter()
+        .zip(&covered)
+        .filter(|(entry, found)| entry.count != **found)
+        .map(|(entry, found)| {
+            format!(
+                "{} declares {} differences and covered {found}",
+                entry.label(),
+                entry.count
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
+    let recorded = FAMILIES
+        .iter()
+        .filter_map(|family| Some((family.name.to_owned(), corpus.get(family.name)?)))
+        .collect::<BTreeMap<_, _>>();
+    assert_ledger(CORPUS_RELATIVE, &recorded, entries(V3_GAPS));
+    let gaps = covered.iter().sum::<usize>();
     println!(
         "experiments: {comparisons} comparisons across {} families replayed at {}",
         FAMILIES.len(),
@@ -2094,12 +2251,21 @@ fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
-    // Every comparison that departs passed `settle`, so it is recorded in
-    // `DIVERGENCES`, whose entries are decisions.
+    // Every comparison that departs passed `settle`, so it is recorded either
+    // in `DIVERGENCES`, whose entries are decisions, or in `V3_GAPS`, whose
+    // entries are gaps to close.
+    let accepted = comparisons - conformant - gaps;
     assert_figures(
         "experiments parity:",
         "crates/vibe-core/tests/experiments/corpus.json",
-        Figures::decided(conformant, comparisons, comparisons - conformant),
+        Figures {
+            conformant,
+            accepted,
+            total: comparisons,
+            accepted_differences: accepted,
+            gap_differences: gaps,
+            prose_differences: 0,
+        },
         serde_json::json!({}),
     );
 }
@@ -2114,9 +2280,8 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     };
     let target = repo_root().join("target");
     let recaptured = target.join("experiments-corpus.json");
-    let (full, promo, startup) = (
+    let (full, startup) = (
         target.join("experiments-full.json"),
-        target.join("experiments-promo-corpus.json"),
         target.join("experiments-startup-corpus.json"),
     );
     let capture = Capture {
@@ -2131,8 +2296,6 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
             full.as_os_str(),
             "--corpus".as_ref(),
             recaptured.as_os_str(),
-            "--promo-corpus".as_ref(),
-            promo.as_os_str(),
             "--startup-corpus".as_ref(),
             startup.as_os_str(),
         ],

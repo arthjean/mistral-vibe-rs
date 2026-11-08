@@ -28,8 +28,8 @@ use std::path::Path;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::REFERENCE_COMMIT;
 use super::replay::repository;
+use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT};
 
 /// The manifest, relative to the workspace root.
 pub const MANIFEST: &str = "scripts/parity/manifest.json";
@@ -65,8 +65,8 @@ pub struct Manifest {
     pub schema_version: u32,
     #[serde(default)]
     pub note: Option<String>,
-    /// Commits a corpus may still be at while a re-pin moves the rest, after
-    /// [`REFERENCE_COMMIT`].
+    /// The corpora a rolling re-pin has not recaptured yet, which may still
+    /// record [`PREVIOUS_COMMIT`]; empty outside a transition.
     #[serde(default)]
     pub transition: Vec<String>,
     pub entries: Vec<ManifestEntry>,
@@ -128,12 +128,18 @@ pub struct ManifestEntry {
 }
 
 impl Manifest {
-    /// The commits a corpus may record: the pin, then the transition list.
+    /// The commits the corpus at `corpus` may record: [`REFERENCE_COMMIT`],
+    /// then [`PREVIOUS_COMMIT`] while the transition list names it.
     #[must_use]
-    pub fn accepted(&self) -> Vec<&str> {
-        std::iter::once(REFERENCE_COMMIT)
-            .chain(self.transition.iter().map(String::as_str))
-            .collect()
+    pub fn accepted_for(&self, corpus: &str) -> Vec<&'static str> {
+        accepted_commits(&self.transition, PREVIOUS_COMMIT, corpus)
+    }
+
+    /// The commit the corpus at `corpus` records according to the manifest,
+    /// or [`None`] when no entry lists it or the entry records none.
+    #[must_use]
+    pub fn commit_of(&self, corpus: &str) -> Option<&str> {
+        self.entry(corpus).and_then(|entry| entry.commit.as_deref())
     }
 
     /// The entry listing `corpus`, a workspace-relative path.
@@ -141,6 +147,73 @@ impl Manifest {
     pub fn entry(&self, corpus: &str) -> Option<&ManifestEntry> {
         self.entries.iter().find(|entry| entry.corpus == corpus)
     }
+}
+
+/// The commits a corpus may record when `transition` lists the corpora still
+/// at `previous`: the pin's target, and `previous` for a corpus the list names.
+#[must_use]
+pub fn accepted_commits<'p>(
+    transition: &[String],
+    previous: &'p str,
+    corpus: &str,
+) -> Vec<&'p str> {
+    let listed = !previous.is_empty() && transition.iter().any(|named| named == corpus);
+    std::iter::once(REFERENCE_COMMIT)
+        .chain(listed.then_some(previous))
+        .collect()
+}
+
+/// Every rule of a rolling re-pin that `manifest` breaks while the pin leaves
+/// `previous` ([`PREVIOUS_COMMIT`], empty outside a transition):
+///
+/// - a non-empty `previous` needs a non-empty transition list, and a
+///   non-empty list needs a `previous`, so a finished transition is closed by
+///   clearing [`PREVIOUS_COMMIT`] and never stays open by accident;
+/// - every corpus the list names is a manifest entry, named once;
+/// - the list names no corpus already at the target, which `repin.py capture`
+///   drops from it.
+#[must_use]
+pub fn transition_problems(manifest: &Manifest, previous: &str) -> Vec<String> {
+    let mut problems = Vec::new();
+    if !previous.is_empty() && manifest.transition.is_empty() {
+        problems.push(format!(
+            "the transition list is empty but the pin still names the previous commit \
+             {previous}; clear `PREVIOUS_COMMIT` in crates/vibe-core/src/parity.rs and \
+             scripts/parity/pin.py to close the transition"
+        ));
+    }
+    if previous.is_empty() && !manifest.transition.is_empty() {
+        problems.push(format!(
+            "the transition list names {} corpora but `PREVIOUS_COMMIT` is empty; declare the \
+             commit the re-pin left in both pin sources, or empty the list",
+            manifest.transition.len()
+        ));
+    }
+    if !previous.is_empty() && previous == REFERENCE_COMMIT {
+        problems.push(format!(
+            "`PREVIOUS_COMMIT` is the target {REFERENCE_COMMIT}; a transition leaves another \
+             commit"
+        ));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for corpus in &manifest.transition {
+        if !seen.insert(corpus.as_str()) {
+            problems.push(format!("the transition list names {corpus} twice"));
+        }
+        match manifest.entry(corpus) {
+            None => problems.push(format!(
+                "the transition list names {corpus}, which is not a manifest entry"
+            )),
+            Some(entry) if entry.commit.as_deref() == Some(REFERENCE_COMMIT) => {
+                problems.push(format!(
+                    "the transition list names {corpus}, which is already at the target \
+                     {REFERENCE_COMMIT}; drop it from the list"
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    problems
 }
 
 /// The committed manifest.
@@ -304,7 +377,7 @@ pub fn assert_corpus(corpus: &str) {
     });
     let text = std::fs::read_to_string(repository().join(corpus))
         .unwrap_or_else(|error| panic!("{corpus} is unreadable: {error}"));
-    let problems = content_problems(entry, &text, &manifest.accepted());
+    let problems = content_problems(entry, &text, &manifest.accepted_for(corpus));
     assert!(problems.is_empty(), "{}", report(&problems));
     record_replay(corpus);
 }
@@ -327,7 +400,6 @@ fn record_replay(corpus: &str) {
 /// and the entry whose file on disk holds the same text is the one reported.
 pub fn assert_replayed(text: &str) -> String {
     let manifest = load();
-    let accepted = manifest.accepted();
     let digest = crate::text::sha256_hex(text.as_bytes());
     let entry = manifest
         .entries
@@ -347,10 +419,10 @@ pub fn assert_replayed(text: &str) -> String {
         panic!(
             "the replayed corpus (captured from {commit}; accepted: {}) matches no entry of \
              {MANIFEST}; list it with `{REPIN} add`",
-            accepted.join(", ")
+            super::pin_commits().join(", ")
         );
     };
-    let problems = content_problems(entry, text, &accepted);
+    let problems = content_problems(entry, text, &manifest.accepted_for(&entry.corpus));
     assert!(problems.is_empty(), "{}", report(&problems));
     record_replay(&entry.corpus);
     entry.corpus.clone()

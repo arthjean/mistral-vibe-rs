@@ -23,6 +23,12 @@
 //! host itself, such as the Windows credential vault one, gates through
 //! [`gate_native`] instead.
 //!
+//! During a rolling re-pin the corpora sit at two commits, so a probe gates
+//! on the commit of the corpora its own test file replays: the manifest lists
+//! each corpus with the `<file>::<function>` that replays it, and [`gate`]
+//! reads the calling file through `#[track_caller]`, which is why no call site
+//! names a commit ([`probe_commit`] states the rule).
+//!
 //! Every probe that runs appends a line to `target/parity/probes.jsonl` and
 //! every probe that skips one to `target/parity/skips.jsonl`, so a CI summary
 //! can count what measured nothing; [`REQUIRE_LIVE`] set to `1` turns a skip
@@ -45,8 +51,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest as _, Sha256};
 
-use super::REFERENCE_COMMIT;
+use super::manifest::{Kind, Manifest, ManifestEntry};
 use super::replay::repository;
+use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT};
 
 /// Set to `1`, a probe that would skip fails instead.
 pub const REQUIRE_LIVE: &str = "VIBE_PARITY_REQUIRE_LIVE";
@@ -90,6 +97,9 @@ pub enum Class {
     Drift,
     /// The host is not the platform the committed corpora were captured on.
     Platform,
+    /// The probe's test file replays corpora at both commits of a rolling
+    /// re-pin, so no one environment answers for it.
+    Transition,
 }
 
 impl Class {
@@ -100,6 +110,7 @@ impl Class {
             Self::Missing => "missing",
             Self::Drift => "environment-drift",
             Self::Platform => "platform",
+            Self::Transition => "transition",
         }
     }
 }
@@ -134,7 +145,7 @@ impl Refusal {
     #[must_use]
     pub fn message(&self, probe: &str) -> String {
         match self.class {
-            Class::Missing | Class::Platform => {
+            Class::Missing | Class::Platform | Class::Transition => {
                 format!("skipping the live {probe} probe: {}", self.detail)
             }
             Class::Drift => format!("refusing the live {probe} probe: {}", self.detail),
@@ -336,6 +347,96 @@ pub fn pinned_environment() -> Result<PathBuf, Refusal> {
     verified(REFERENCE_COMMIT)
 }
 
+/// The attested environment of `commit`, one of the pin's commits, or why
+/// there is none.
+///
+/// # Errors
+///
+/// The [`Refusal`] [`verify`] returned.
+pub fn environment_at(commit: &str) -> Result<PathBuf, Refusal> {
+    verified(commit)
+}
+
+/// The commit a live probe called from the source file `file` gates on, given
+/// the pin leaves `previous` ([`PREVIOUS_COMMIT`]): the commit of the corpora
+/// whose manifest `test` sits in that file.
+///
+/// A file's corpora are those whose test sits in it or, when none does, in
+/// the test modules it declares (`<file stem>/`). A file whose corpora are all
+/// named by the transition list and recorded at `previous` gates on
+/// `previous`; any other file, including one no entry names (a probe without
+/// a corpus, or one that replays another file's corpus), gates on the target. A
+/// file whose corpora sit at both commits is refused as [`Class::Transition`]:
+/// whichever environment it ran would be the wrong oracle for half of them,
+/// so the remaining corpora are recaptured, or the replays split by file.
+///
+/// # Errors
+///
+/// The [`Class::Transition`] refusal of a file that replays both commits.
+pub fn probe_commit(manifest: &Manifest, file: &str, previous: &str) -> Result<String, Refusal> {
+    let file = file.replace('\\', "/");
+    // A hand-owned fixture is no oracle's output, so it names no commit a
+    // probe could gate on.
+    let owner = |entry: &ManifestEntry| -> Option<String> {
+        (entry.kind != Kind::Fixture)
+            .then(|| entry.test.split_once("::"))
+            .flatten()
+            .map(|(owner, _)| owner.to_owned())
+    };
+    // The corpora the file's own tests replay, else those of the test modules
+    // it declares (`runtime_parity_tests.rs` owns `runtime_parity_tests/`).
+    let directory = format!("{}/", file.trim_end_matches(".rs"));
+    let mut owned: Vec<&ManifestEntry> = manifest
+        .entries
+        .iter()
+        .filter(|entry| owner(entry).is_some_and(|owner| owner == file))
+        .collect();
+    if owned.is_empty() {
+        owned = manifest
+            .entries
+            .iter()
+            .filter(|entry| owner(entry).is_some_and(|owner| owner.starts_with(&directory)))
+            .collect();
+    }
+    let commits: BTreeSet<&str> = owned
+        .into_iter()
+        .map(|entry| {
+            let left = !previous.is_empty()
+                && entry.commit.as_deref() == Some(previous)
+                && manifest.transition.contains(&entry.corpus);
+            if left { previous } else { REFERENCE_COMMIT }
+        })
+        .collect();
+    match commits.len() {
+        0 => Ok(REFERENCE_COMMIT.to_owned()),
+        1 => Ok(commits
+            .into_iter()
+            .next()
+            .unwrap_or(REFERENCE_COMMIT)
+            .to_owned()),
+        _ => Err(Refusal {
+            class: Class::Transition,
+            detail: format!(
+                "{file} replays corpora at both {} and {} while the re-pin is rolling; \
+                 recapture the rest of them at the target with `python3 \
+                 scripts/parity/repin.py capture <corpus>`",
+                short(REFERENCE_COMMIT),
+                short(previous)
+            ),
+        }),
+    }
+}
+
+/// The environment the probe called from `file` runs: the attested
+/// environment of [`probe_commit`].
+fn probe_environment(file: &str) -> Result<PathBuf, Refusal> {
+    if PREVIOUS_COMMIT.is_empty() {
+        return pinned_environment();
+    }
+    probe_commit(&super::manifest::load(), file, PREVIOUS_COMMIT)
+        .and_then(|commit| environment_at(&commit))
+}
+
 /// The platform every committed corpus was captured on, and the only host a
 /// live probe measures from through [`gate`].
 pub const CORPUS_PLATFORM: &str = "linux";
@@ -358,9 +459,16 @@ pub fn platform_refusal(os: &str) -> Option<Refusal> {
 /// after recording why it skips: on a host other than [`CORPUS_PLATFORM`],
 /// or for want of an attested environment. Under [`REQUIRE_LIVE`] a skip
 /// panics with its reason instead.
+///
+/// The environment is that of the commit the calling file's corpora record
+/// ([`probe_commit`]); a helper that calls this on behalf of a test carries
+/// `#[track_caller]` too, so the file is the test's.
 #[must_use]
+#[track_caller]
 pub fn gate(probe: &str) -> Option<PathBuf> {
-    let verdict = platform_refusal(std::env::consts::OS).map_or_else(pinned_environment, Err);
+    let file = std::panic::Location::caller().file();
+    let verdict =
+        platform_refusal(std::env::consts::OS).map_or_else(|| probe_environment(file), Err);
     decide(probe, verdict, live_required(), &records())
 }
 
@@ -368,8 +476,10 @@ pub fn gate(probe: &str) -> Option<PathBuf> {
 /// that reads what the reference stored in the Windows credential vault: it
 /// runs on any host that holds an attested environment.
 #[must_use]
+#[track_caller]
 pub fn gate_native(probe: &str) -> Option<PathBuf> {
-    decide(probe, pinned_environment(), live_required(), &records())
+    let file = std::panic::Location::caller().file();
+    decide(probe, probe_environment(file), live_required(), &records())
 }
 
 /// What [`gate`] does with `verdict`, recording under `records`.
@@ -381,9 +491,10 @@ pub(super) fn decide(
 ) -> Option<PathBuf> {
     match verdict {
         Ok(root) => {
+            let commit = attested_commit(&root).unwrap_or_else(|| REFERENCE_COMMIT.to_owned());
             append(
                 &records.join("probes.jsonl"),
-                &json!({"probe": probe, "commit": REFERENCE_COMMIT, "test": test_name()}),
+                &json!({"probe": probe, "commit": commit, "test": test_name()}),
             );
             Some(root)
         }
@@ -408,6 +519,16 @@ pub(super) fn decide(
             None
         }
     }
+}
+
+/// The commit the attestation at `root` names, for the probe record.
+fn attested_commit(root: &Path) -> Option<String> {
+    let text = fs::read_to_string(root.join(ATTESTATION)).ok()?;
+    serde_json::from_str::<Value>(&text)
+        .ok()?
+        .get("commit")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// The test running on this thread, as libtest and nextest name its thread.

@@ -551,6 +551,5 @@ scripts/parity/commands_scenarios.py	ea621d4580b08426	8
 scripts/parity/config_surface_cases.py	4a5287f2fbd1e6ff	8
 scripts/parity/config_surface_cases.py	78ab0740527ddc52	9
 scripts/parity/plugins.py	4ff00a3008ea5a27	9
-scripts/parity/system_prompt.py	52ab199c94c68cec	15
 scripts/parity/unified_harness_scenarios.py	887f68552f3f476e	9
 scripts/parity/unified_harness_scenarios.py	887f68552f3f476e	9

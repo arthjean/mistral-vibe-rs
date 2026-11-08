@@ -48,9 +48,11 @@ use crate::observability::{
     LOG_RELATIVE_FILE, LogInitError, LogLevel, LogReader, LogSettings, decode_log_message,
     encode_log_message, format_log_line, log_pattern_groups, parse_log_line, process_identifiers,
 };
-use crate::parity::REFERENCE_COMMIT;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Capture, pinned_reference};
+use crate::parity::is_pin_commit;
+use crate::parity::replay::{
+    Capture, Class, Entry as _, PatternDivergence, assert_ledger, entries, pinned_reference,
+};
 use crate::time::UtcTimestamp;
 use crate::tracing::{
     AGENT_NAME, AgentSpan, BackendFailure, HOOK_NAME_KEY, HOOK_TYPE_KEY, HookSpan,
@@ -168,6 +170,178 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "logPagination/cursor/file-shrank-between-polls",
         "ACCEPTED: as above",
+    ),
+];
+
+/// Open gaps of row 27: what the reference answers and this build does not
+/// yet, each covering `count` comparisons across the replay. A comparison is
+/// matched as `scenario` (its case) and `pointer` (`/family/field`), after the
+/// accepted entries of [`DIVERGENCES`] had their turn. The replay fails when
+/// an entry's count moves either way, so a gap closing or widening is always
+/// named.
+const GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "vibe.artifact_*",
+        pointer: "/eventVocabulary/published",
+        count: 6,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 added the artifact lifecycle events to the session telemetry \
+                 (`vibe/core/telemetry/session.py`); this build publishes none of them",
+    },
+    PatternDivergence {
+        scenario: "vibe.artifact_*",
+        pointer: "/eventPayloads/propertyKeys",
+        count: 6,
+        row: "27",
+        class: Class::Gap,
+        reason: "as above: an event this build does not publish carries no key set",
+    },
+    PatternDivergence {
+        scenario: "vibe.onboarding_sign_in.*",
+        pointer: "/eventVocabulary/published",
+        count: 2,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 reports the start and the end of the app server's browser sign-in \
+                 (`vibe/app_server/_setup_oidc.py`); this build reports neither",
+    },
+    PatternDivergence {
+        scenario: "vibe.onboarding_sign_in.*",
+        pointer: "/eventPayloads/propertyKeys",
+        count: 2,
+        row: "27",
+        class: Class::Gap,
+        reason: "as above: an event this build does not publish carries no key set",
+    },
+    PatternDivergence {
+        scenario: "vibe.tool_call.detected",
+        pointer: "/eventVocabulary/published",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 reports the malformed tool calls a model answer carried through \
+                 `TelemetryClient.send_tool_call_detected` (`vibe/core/telemetry/send.py`); \
+                 this build has no such event",
+    },
+    PatternDivergence {
+        scenario: "vibe.tool_call.detected",
+        pointer: "/eventPayloads/*",
+        count: 3,
+        row: "27",
+        class: Class::Gap,
+        reason: "as above: the driven event's key set, value types and correlation have no \
+                 counterpart here",
+    },
+    PatternDivergence {
+        scenario: "vibe.tool_classification",
+        pointer: "/eventVocabulary/published",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 reports how the unified backend classified a tool call \
+                 (`vibe/app_server/_unified_harness_backend_adapter.py`); this build does not",
+    },
+    PatternDivergence {
+        scenario: "vibe.tool_classification",
+        pointer: "/eventPayloads/propertyKeys",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "as above: an event this build does not publish carries no key set",
+    },
+    PatternDivergence {
+        scenario: "vibe.worktree.created",
+        pointer: "/eventVocabulary/published",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 reports a managed worktree the unified backend created \
+                 (`vibe/app_server/_unified_harness_backend_adapter.py`); this build does not",
+    },
+    PatternDivergence {
+        scenario: "vibe.worktree.created",
+        pointer: "/eventPayloads/propertyKeys",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "as above: an event this build does not publish carries no key set",
+    },
+    PatternDivergence {
+        scenario: "vibe.new_session",
+        pointer: "/eventPayloads/*",
+        count: 2,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 adds three keys to the new-session payload, whether an outside-workdir \
+                 deny rule is set and the two counts of post-agent hooks by scope \
+                 (`TelemetryClient.send_new_session`, `vibe/core/telemetry/send.py`); this \
+                 build sends neither, so the key set and the type map both differ",
+    },
+    PatternDivergence {
+        scenario: "vibe.session_branched",
+        pointer: "/eventPayloads/propertyKeys",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 names the root of the branched session's lineage beside its source and \
+                 its new identifier (`vibe/app_server/_unified_harness_backend_adapter.py`); \
+                 this build sends the two identifiers only",
+    },
+    PatternDivergence {
+        scenario: "vibe.tool_call_finished",
+        pointer: "/eventPayloads/*",
+        count: 2,
+        row: "27",
+        class: Class::Gap,
+        reason: "the unified finished event of v3.0.0 \
+                 (`send_unified_tool_call_finished`, `vibe/core/telemetry/send.py`) no longer \
+                 carries the background-shell flag the v2 sender added; this build still sends \
+                 it, so the key set and the type map both differ",
+    },
+    PatternDivergence {
+        scenario: "model-call-span-raising-a-backend-error*",
+        pointer: "/spans/statusDescription",
+        count: 2,
+        row: "27",
+        class: Class::Gap,
+        reason: "v3.0.0 dropped the backend-error branch of the model-call span's status \
+                 (`_exception_status`, `vibe/core/tracing.py`), which now names the exception \
+                 class for every failure; this build still words a backend failure from its \
+                 provider and HTTP status",
+    },
+    PatternDivergence {
+        scenario: "model-call-span-wrapping-a-backend-error",
+        pointer: "/spans/statusDescription",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: "as above, for a backend failure found down the cause chain, which the \
+                 reference no longer walks",
+    },
+];
+
+/// Events this build publishes whose reference emitter left the Python
+/// package at v3.0.0 for the Rust terminal client
+/// (`vibe/cli-rust/src/telemetry.rs`), which this oracle does not drive, so
+/// the corpus no longer records them. Each fails as stale when the corpus
+/// records the event again or this build stops publishing it.
+const UNMEASURED_EVENTS: &[(&str, &str)] = &[
+    (
+        "vibe.startup",
+        "raised by the Rust terminal client at launch",
+    ),
+    (
+        "vibe.at_mention_inserted",
+        "raised by the Rust terminal client's prompt input",
+    ),
+    (
+        "vibe.user_copied_text",
+        "raised by the Rust terminal client's copy action",
+    ),
+    (
+        "vibe.voice_mode_toggled",
+        "raised by the Rust terminal client's voice toggle",
     ),
 ];
 
@@ -530,8 +704,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -620,6 +794,19 @@ fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>
 /// whose divergence no longer reproduces, then reports the family's count.
 fn settle(report: &Report, family: &str) -> usize {
     let (unrecorded, stale) = audit(report, family, DIVERGENCES);
+    let mut gapped = 0;
+    let unrecorded = unrecorded
+        .into_iter()
+        .filter(|line| {
+            let key = line.split(':').next().unwrap_or_default();
+            let Some(index) = gap_covering(key) else {
+                return true;
+            };
+            GAP_COUNTS.with(|counts| counts.borrow_mut()[index] += 1);
+            gapped += 1;
+            false
+        })
+        .collect::<Vec<_>>();
     assert!(
         unrecorded.is_empty(),
         "{family} diverges from the reference and is unrecorded:\n{}",
@@ -631,17 +818,47 @@ fn settle(report: &Report, family: &str) -> usize {
     );
     let ledgered = report.total.saturating_sub(report.conformant);
     println!(
-        "telemetry: {family} {}/{} conform ({ledgered} ledgered)",
+        "telemetry: {family} {}/{} conform ({ledgered} ledgered, {gapped} of them gaps)",
         report.conformant, report.total
     );
     CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
+    GAPPED.with(|total| total.set(total.get() + gapped));
     report.total
+}
+
+/// The [`GAPS`] entry that covers the divergence `family/field/case`, read as
+/// the case and the pointer `/family/field`.
+fn gap_covering(key: &str) -> Option<usize> {
+    let (family, rest) = key.split_once('/')?;
+    let (field, case) = rest.split_once('/')?;
+    let pointer = format!("/{family}/{field}");
+    GAPS.iter().position(|gap| gap.covers(case, &pointer))
+}
+
+/// Fails on a [`GAPS`] entry whose count moved, once every family settled.
+fn conclude_gaps() {
+    let counted = GAP_COUNTS.with(|counts| counts.borrow().clone());
+    let moved = GAPS
+        .iter()
+        .zip(&counted)
+        .filter(|(gap, counted)| gap.count != **counted)
+        .map(|(gap, counted)| format!("{}: declared {}, counted {counted}", gap.label(), gap.count))
+        .collect::<Vec<_>>();
+    assert!(
+        moved.is_empty(),
+        "these telemetry gaps cover another number of comparisons than they declare:\n{}",
+        moved.join("\n")
+    );
 }
 
 std::thread_local! {
     /// The conformant comparisons every family [`settle`]d on this thread
     /// has counted, which the replay's figures read.
     static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The comparisons [`GAPS`] covered on this thread, in all and per entry.
+    static GAPPED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    static GAP_COUNTS: std::cell::RefCell<Vec<usize>> =
+        std::cell::RefCell::new(vec![0; GAPS.len()]);
 }
 
 // --------------------------------------------------------------------------
@@ -3211,12 +3428,31 @@ fn every_event_this_build_publishes_has_a_corpus_entry() {
         .iter()
         .map(|entry| entry.event.as_str())
         .collect::<Vec<_>>();
+    let unmeasured = UNMEASURED_EVENTS
+        .iter()
+        .map(|(event, _)| *event)
+        .collect::<Vec<_>>();
+    for event in &unmeasured {
+        assert!(
+            !declared.contains(event),
+            "the corpus records `{event}` again, so its entry in UNMEASURED_EVENTS is stale"
+        );
+        assert!(
+            published_events()
+                .into_iter()
+                .any(|published| published.event_name() == *event),
+            "this build no longer publishes `{event}`, so its entry in UNMEASURED_EVENTS is stale"
+        );
+    }
     for event in published_events() {
         assert_eq!(
             declared_name(event),
             event.event_name(),
             "`{event:?}` is measured under one name and published under another"
         );
+        if unmeasured.contains(&event.event_name()) {
+            continue;
+        }
         assert!(
             declared.contains(&event.event_name()),
             "this build publishes `{}`, which the corpus does not record; regenerate it with \
@@ -3290,7 +3526,10 @@ fn the_committed_corpus_replays_against_this_port() {
     for (case, reason) in DIVERGENCES {
         println!("  {case}: {reason}");
     }
+    assert_ledger(CORPUS_RELATIVE, &BTreeMap::new(), entries(GAPS));
     CONFORMANT.with(|conformant| conformant.set(0));
+    GAPPED.with(|total| total.set(0));
+    GAP_COUNTS.with(|counts| *counts.borrow_mut() = vec![0; GAPS.len()]);
     let mut comparisons = 0;
 
     let mut report = Report::default();
@@ -3355,13 +3594,23 @@ fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
-    // Every comparison that departs passed `settle`, so `DIVERGENCES`, whose
-    // entries are all accepted divergences, records it.
+    conclude_gaps();
+    // Every comparison that departs passed `settle`, so either `DIVERGENCES`,
+    // whose entries are all accepted divergences, or `GAPS` records it.
     let conformant = CONFORMANT.with(std::cell::Cell::get);
+    let gapped = GAPPED.with(std::cell::Cell::get);
     assert_figures(
         "telemetry parity:",
         "crates/vibe-core/tests/telemetry/corpus.json",
-        Figures::decided(conformant, comparisons, comparisons - conformant),
+        Figures {
+            total: comparisons,
+            gap_differences: gapped,
+            ..Figures::decided(
+                conformant,
+                comparisons - gapped,
+                comparisons - conformant - gapped,
+            )
+        },
         serde_json::json!({}),
     );
 }

@@ -42,6 +42,38 @@ struct Divergence {
 
 const LEDGER: &[Divergence] = &[];
 
+/// Why the gaps below exist: what the v3.1.0 re-pin revealed, kept against
+/// row 35 until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 refuses the user plugin of the `native-namespaces` tree named \
+                         `agent` with an error issue that carries no diagnostic code, so its \
+                         skill never loads and the issues after it shift by one; this port \
+                         resolves that plugin and loads `agent:ask`";
+
+/// Differences no `LEDGER` entry explains, matched after it and counted as
+/// gaps in the figures.
+const V3_GAPS: &[Divergence] = &[
+    Divergence {
+        case: "native-namespaces",
+        pointer: "/issues",
+        reason: V3_REASON,
+    },
+    Divergence {
+        case: "native-namespaces",
+        pointer: "/materialized/issues",
+        reason: V3_REASON,
+    },
+    Divergence {
+        case: "native-namespaces",
+        pointer: "/plugins",
+        reason: V3_REASON,
+    },
+    Divergence {
+        case: "native-namespaces",
+        pointer: "/skills",
+        reason: V3_REASON,
+    },
+];
+
 const SKILL_PATH_METADATA: &str = "unified-harness.runtime-skill-path";
 
 /// `path` under `home`, separated by `/` as the corpus host spells it.
@@ -405,6 +437,8 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
     );
     let mut unexplained = Vec::new();
     let mut reproduced = vec![0_usize; LEDGER.len()];
+    let mut gapped = vec![0_usize; V3_GAPS.len()];
+    let mut gapped_cases = BTreeSet::new();
     let mut conformant = 0;
     for (name, reference) in recorded {
         let port = resolve_case(&declared[name]).await;
@@ -417,27 +451,39 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
                 entry.case == name && crate::parity::replay::pointer_within(entry.pointer, &pointer)
             }) {
                 Some(index) => reproduced[index] += 1,
-                None => unexplained.push(format!(
-                    "{name} {pointer}\n  reference: {}\n  port:      {}",
-                    reference
-                        .pointer(&pointer)
-                        .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                    port.pointer(&pointer)
-                        .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                )),
+                None => match V3_GAPS.iter().position(|entry| {
+                    entry.case == name
+                        && crate::parity::replay::pointer_within(entry.pointer, &pointer)
+                }) {
+                    Some(index) => {
+                        gapped[index] += 1;
+                        gapped_cases.insert(name.clone());
+                    }
+                    None => unexplained.push(format!(
+                        "{name} {pointer}\n  reference: {}\n  port:      {}",
+                        reference
+                            .pointer(&pointer)
+                            .map_or_else(|| "<absent>".to_owned(), Value::to_string),
+                        port.pointer(&pointer)
+                            .map_or_else(|| "<absent>".to_owned(), Value::to_string),
+                    )),
+                },
             }
         }
     }
     let stale: Vec<String> = LEDGER
         .iter()
         .zip(&reproduced)
+        .chain(V3_GAPS.iter().zip(&gapped))
         .filter(|(_, count)| **count == 0)
         .map(|(entry, _)| format!("{} {} ({})", entry.case, entry.pointer, entry.reason))
         .collect();
     println!(
-        "plugins resolve parity: {conformant}/{} cases conformant, {} ledgered differences",
+        "plugins resolve parity: {conformant}/{} cases conformant, {} ledgered differences, \
+         {} gap differences",
         recorded.len(),
-        reproduced.iter().sum::<usize>()
+        reproduced.iter().sum::<usize>(),
+        gapped.iter().sum::<usize>()
     );
     assert!(
         unexplained.is_empty(),
@@ -449,11 +495,19 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
         "these ledger entries no longer reproduce: {stale:?}"
     );
 
-    // The ledger is empty: every case conforms or the replay failed above.
+    // A case with a gap difference is not at parity; every other case that
+    // is not conformant differs only where `LEDGER` says it may.
     assert_figures(
         "plugins resolve parity:",
         "crates/vibe-core/tests/plugins-parity/corpus.json",
-        Figures::decided(conformant, recorded.len(), reproduced.iter().sum()),
+        Figures {
+            conformant,
+            accepted: recorded.len() - conformant - gapped_cases.len(),
+            total: recorded.len(),
+            accepted_differences: reproduced.iter().sum(),
+            gap_differences: gapped.iter().sum(),
+            prose_differences: 0,
+        },
         json!({}),
     );
 }

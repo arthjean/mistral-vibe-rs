@@ -1,44 +1,33 @@
 #!/usr/bin/env python3
-"""Capture what the pinned reference's LLM backends put on the wire and read back.
+"""Capture what the pinned reference's model layer decides around a call.
 
-Row 10 of ``docs/parity.md`` is the model backend layer: the Mistral SDK backend,
-the generic backend and its five API adapters, the retry and pacing machinery,
-the error taxonomy a failed call is classified into, and the utility model a
-background nicety runs on. This capture drives the reference's own objects
-in-process against a scripted HTTP stand-in on the loopback interface, so every
-request is the one the reference really sends and every answer is read back by
-the reference's own parsers.
+Row 10 of ``docs/parity.md`` is the model backend layer. Through v2.26.0 this
+capture drove the reference's in-process backends against a scripted HTTP
+stand-in; v3.0.0 removed them (``vibe/core/llm/backend/``, the format handler
+and the agent loop that bound them) when every session moved to the Unified
+Harness, whose model requests the agent-loop and unified-harness oracles record
+through their own stand-in backend. What stays in ``vibe/core/llm/`` is
+measured here, in-process, against the same loopback stand-in:
 
-A scenario is a provider entry, a model entry, the API budgets and a list of
-calls. Each call is made through the agent loop's own ``_chat_streaming`` or
-``_chat`` bound to a minimal stand-in for the loop, so what a failure turns
-into is the loop's classification and ``public_error``'s code, not a copy of
-either. What the capture records per call:
+``retryDelays``          the backoff arithmetic of ``vibe/core/utils/retry.py``
+``utilitySelections``    the utility model choice over the availability
+                         verdicts a probe would have left
+``availabilityKeys``     the key a verdict is cached under
+``availabilityProbes``   the fast-model probe a session runs before its first
+                         title (``ensure_utility_models_probed``), round after
+                         round on a hand-moved clock: the requests it sent, the
+                         selection it left and the cache file byte for byte
+``utilityCompletions``   one background completion (``run_utility_completion``)
+                         per case: the request it sent, with the label and
+                         attribution its metadata carries, the
+                         ``vibe.request_sent`` payload it reported and the
+                         content it answered
 
-``requests``   every request the stand-in received: method, path, the headers a
-               client chose (transport defaults removed) and the parsed body
-``result``     the assistant message the call produced, aggregated the way the
-               loop aggregates it, with usage, stop and correlation identifier
-``deltas``     the non-empty text and reasoning pieces a streaming call yielded
-``error``      the exception class, the turn error code, its details and a
-               digest of the message
-``appended``   the messages the loop appended to its history, which is what the
-               next request replays
-``retries``    each retry reason the backend reported, and ``sleeps`` each wait
-               it asked for, on a fake clock so a budget is deterministic
-
-Three further families record pure decisions: ``retryDelays`` for the backoff
-arithmetic, ``utilitySelections`` for the utility model choice over the
-availability verdicts a probe would have left, and ``vertexEndpoints`` for the
-regional Vertex addresses. ``availabilityKeys`` records the key a verdict is
-cached under, and ``availabilityProbes`` drives the fast-model probe a session
-runs before its first title (``ensure_utility_models_probed``) against the
-stand-in, round after round, on a hand-moved clock: the requests it sent, the
-selection it left and the cache file byte for byte. ``utilityCompletions``
-runs one background completion (``run_utility_completion``) per case against
-the stand-in: the request it sent, with the label and attribution its metadata
-carries, the ``vibe.request_sent`` payload it reported and the content it
-answered.
+Since 3.0.0 those calls run on the harness provider adapters
+(``vibe/core/llm/completion.py``), which ask for a streamed answer; the
+stand-in serves each scripted completion in the dialect the request asked for
+(``wants_stream``), and the configuration namespace carries the transport
+settings the adapters read.
 
 The committed corpus carries only values the scenarios supplied, names, codes,
 counts and digests: every message the reference authors is reduced to its
@@ -86,20 +75,27 @@ from llm_backends_scenarios import (  # noqa: E402
     OPENAI,
     PROBE_NOW,
     PUBLIC,
-    SESSION_ID,
     UTILITY_SYSTEM,
     UTILITY_USER,
-    all_scenarios,
     completion_cases,
     probe_cases,
     provider_entry,
 )
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/llm-backends/corpus.json")
 
 #: Headers a transport adds on its own, which say nothing about the backend.
 TRANSPORT_HEADERS = {"host", "content-length", "accept-encoding", "connection"}
+
+#: The configuration a utility completion's transport reads, left at the
+#: schema's defaults.
+TRANSPORT_SETTINGS = (
+    "api_timeout",
+    "api_retry_max_elapsed_time",
+    "api_stream_idle_timeout",
+    "enable_system_trust_store",
+)
 
 
 def digest(text: str) -> dict[str, Any]:
@@ -134,6 +130,51 @@ def sse_body(events: list[dict[str, Any]], crlf: bool = False) -> bytes:
         payload = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
         out.append(f"data: {payload}{newline}{newline}")
     return "".join(out).encode()
+
+
+def as_stream(completion: dict[str, Any]) -> list[dict[str, Any]]:
+    """The server-sent events a chat completion API answers a streaming request
+    with, for the same completion: one chunk carrying the whole message as its
+    delta, the finish reason and the usage, then the terminator.
+    """
+
+    chunks = []
+    for choice in completion.get("choices", []):
+        chunks.append({
+            "data": {
+                "id": completion.get("id"),
+                "object": "chat.completion.chunk",
+                "created": completion.get("created"),
+                "model": completion.get("model"),
+                "choices": [{
+                    "index": choice.get("index", 0),
+                    "delta": choice.get("message", {}),
+                    "finish_reason": choice.get("finish_reason"),
+                }],
+                **({"usage": completion["usage"]} if "usage" in completion else {}),
+            }
+        })
+    return [*chunks, {"data": "[DONE]"}]
+
+
+def wants_stream(body: Any, response: dict[str, Any]) -> bool:
+    """Whether a scripted chat completion is answered as a stream.
+
+    Since 3.0.0 the reference's utility calls and probes ask for a stream
+    (``"stream": true``), and a chat completion API answers such a request with
+    server-sent events whatever else it would have said. The scenarios script
+    each answer once, as the completion object; the stand-in serves it in the
+    dialect the request asked for, so a capture measures the client rather than
+    a stand-in that ignored the request's own flag.
+    """
+
+    return (
+        isinstance(body, dict)
+        and body.get("stream") is True
+        and int(response.get("status", 200)) == 200
+        and isinstance(response.get("json"), dict)
+        and response["json"].get("object") == "chat.completion"
+    )
 
 
 class StandIn(Loopback):
@@ -187,7 +228,10 @@ class StandIn(Loopback):
                     return
                 status = int(response.get("status", 200))
                 extra = dict(response.get("headers", {}))
-                if "sse" in response:
+                if wants_stream(body, response):
+                    payload = sse_body(as_stream(response["json"]))
+                    content_type = "text/event-stream"
+                elif "sse" in response:
                     payload = sse_body(response["sse"], response.get("crlf", False))
                     content_type = "text/event-stream"
                 elif "json" in response:
@@ -295,236 +339,6 @@ def normalize_text(value: Any, base: str, version: str) -> Any:
     return value
 
 
-def message_record(message: Any) -> dict[str, Any]:
-    record: dict[str, Any] = {"role": str(message.role.value if hasattr(message.role, "value") else message.role)}
-    if message.content:
-        record["content"] = message.content
-    if message.reasoning_content:
-        record["reasoningContent"] = message.reasoning_content
-    if message.reasoning_payloads:
-        record["reasoningPayloads"] = message.reasoning_payloads
-    if message.tool_calls:
-        record["toolCalls"] = [
-            {"id": tc.id, "index": tc.index, "name": tc.function.name,
-             "arguments": tc.function.arguments}
-            for tc in message.tool_calls
-        ]
-    if message.tool_call_id:
-        record["toolCallId"] = message.tool_call_id
-    return record
-
-
-def scenario_text(value: str | None, stand_in: StandIn) -> Any:
-    """A string the scenario supplied, verbatim; one the reference wrote, digested."""
-
-    if value is None:
-        return None
-    served = json.dumps(stand_in.served, ensure_ascii=False)
-    if value in served or json.dumps(value, ensure_ascii=False)[1:-1] in served:
-        return value
-    return digest(value)
-
-
-def chunk_record(chunk: Any) -> dict[str, Any]:
-    record: dict[str, Any] = {"message": message_record(chunk.message)}
-    if chunk.usage is not None:
-        record["usage"] = {
-            "prompt": chunk.usage.prompt_tokens,
-            "completion": chunk.usage.completion_tokens,
-            "cached": chunk.usage.cached_tokens,
-        }
-    if chunk.stop is not None:
-        record["stop"] = {key: value for key, value in chunk.stop.model_dump().items()
-                          if value is not None}
-    if chunk.correlation_id:
-        record["correlationId"] = chunk.correlation_id
-    return record
-
-
-def fake_loop(backend: Any, provider: Any, model_config: Any, call_entry: dict[str, Any],
-              messages: list[Any], stats: list[Any]) -> Any:
-    from vibe.core.agent_loop._loop import AgentLoop
-    from vibe.core.llm.format import APIToolFormatHandler
-    from vibe.core.types import AvailableTool
-
-    handler = APIToolFormatHandler()
-    tools = [AvailableTool.model_validate(item) for item in call_entry["tools"]] or None
-    choice = call_entry["toolChoice"]
-    if isinstance(choice, dict):
-        choice = AvailableTool.model_validate({
-            "type": "function",
-            "function": {"name": choice["function"]["name"], "description": "", "parameters": {}},
-        })
-    fake = SimpleNamespace()
-    fake.config = SimpleNamespace(
-        get_active_model=lambda: model_config,
-        get_active_provider=lambda: provider,
-        get_provider_for_model=lambda _model: provider,
-    )
-    metadata = call_entry["metadata"]
-    fake._build_backend_metadata = lambda call_type=None: SimpleNamespace(
-        model_dump=lambda exclude_none=True: metadata,
-        call_type="main_call",
-        message_id=None,
-    )
-    fake.format_handler = SimpleNamespace(
-        get_available_tools=lambda _manager: tools,
-        get_tool_choice=lambda: choice,
-        process_api_response_message=handler.process_api_response_message,
-    )
-    fake.tool_manager = None
-    fake.session_id = SESSION_ID
-    fake.config_provider = provider
-    fake._messages_for_backend = lambda msgs, active: AgentLoop._messages_for_backend(fake, msgs, active)
-    fake._last_user_message_from = AgentLoop._last_user_message_from
-    fake.telemetry_client = SimpleNamespace(send_request_sent=lambda **_: None, last_correlation_id=None)
-    fake.backend = backend
-    fake._get_extra_headers = lambda provider_override=None: AgentLoop._get_extra_headers(
-        fake, provider_override
-    )
-    fake._max_tokens = call_entry["maxTokens"]
-    fake._update_stats = lambda usage, time_seconds: stats.append({
-        "prompt": usage.prompt_tokens, "completion": usage.completion_tokens,
-        "cached": usage.cached_tokens})
-    fake.messages = messages
-    fake._record_interrupted_assistant = lambda chunk: AgentLoop._record_interrupted_assistant(fake, chunk)
-    fake._complete = lambda **kwargs: AgentLoop._complete(fake, **kwargs)
-    # Since v2.26.0 a completion renames a tool call id the session already
-    # holds (`AgentLoop._unique_tool_call_ids`).
-    fake._seen_tool_call_ids = set()
-    fake._unique_tool_call_ids = lambda message, renamed: AgentLoop._unique_tool_call_ids(
-        fake, message, renamed
-    )
-    return fake
-
-
-async def run_call(backend: Any, provider: Any, model_config: Any, call_entry: dict[str, Any],
-                   stand_in: StandIn, closed: str, clock: FakeClock,
-                   retries: list[Any]) -> dict[str, Any]:
-    from vibe import __version__
-    from vibe.app_server._utils import public_error
-    from vibe.core.agent_loop._loop import AgentLoop
-    from vibe.core.types import LLMMessage
-
-    history = [LLMMessage.model_validate(copy.deepcopy(m)) for m in call_entry["messages"]]
-    stats: list[Any] = []
-    fake = fake_loop(backend, provider, model_config, call_entry, history, stats)
-    before_requests = len(stand_in.requests)
-    before_sleeps = len(clock.sleeps)
-    before_retries = len(retries)
-    before_messages = len(history)
-    record: dict[str, Any] = {}
-    chunks: list[Any] = []
-    try:
-        if call_entry["streaming"]:
-            async for chunk in AgentLoop._chat_streaming(fake):
-                chunks.append(chunk)
-        else:
-            chunks.append(await AgentLoop._chat(fake))
-    except Exception as error:  # noqa: BLE001 - every failure is an observation
-        public = public_error(error)
-        record["error"] = {
-            "type": type(error).__name__,
-            "cause": type(error.__cause__).__name__ if error.__cause__ is not None else None,
-            "code": public.code,
-            "details": public.details,
-            # The message names the stand-in's port, which changes every run.
-            "message": digest(
-                public.message.replace(stand_in.base, "$BASE")
-                .replace(closed, "$CLOSED")
-                .replace(__version__, "<version>")
-            ),
-        }
-        backend_error = error if hasattr(error, "status") and hasattr(error, "payload_summary") else (
-            error.__cause__ if error.__cause__ is not None and hasattr(error.__cause__, "payload_summary")
-            else None)
-        if backend_error is not None:
-            origin = backend_error.api_key_origin
-            record["error"]["backend"] = {
-                "status": backend_error.status,
-                "parsedError": scenario_text(backend_error.parsed_error, stand_in),
-                "contextTooLong": backend_error.is_context_too_long,
-                "responseTooLong": backend_error.is_response_too_long,
-                "invalidModel": backend_error.is_invalid_model,
-                "requestId": backend_error.headers.get("x-request-id")
-                or backend_error.headers.get("request-id"),
-                "keyOrigin": {"source": str(origin.source), "variable": origin.env_var}
-                if origin else None,
-            }
-    if chunks:
-        total = chunks[0]
-        for chunk in chunks[1:]:
-            total = total + chunk
-        record["result"] = chunk_record(total)
-        record["deltas"] = {
-            "text": [c.message.content for c in chunks if c.message.content],
-            "reasoning": [c.message.reasoning_content for c in chunks if c.message.reasoning_content],
-        }
-    record["appended"] = [message_record(m) for m in history[before_messages:]]
-    record["stats"] = stats
-    record["requests"] = stand_in.requests[before_requests:]
-    record["sleeps"] = clock.sleeps[before_sleeps:]
-    record["retries"] = retries[before_retries:]
-    return record
-
-
-async def run_scenario(entry: dict[str, Any]) -> dict[str, Any]:
-    from vibe import __version__
-    from vibe.core.config import ModelConfig, ProviderConfig
-    from vibe.core.llm.backend import vertex
-    from vibe.core.llm.backend.factory import create_backend
-    from vibe.core.utils import AdaptivePacer
-
-    stand_in = StandIn(entry["responses"])
-    closed = f"http://127.0.0.1:{closed_port()}"
-    clock = FakeClock()
-    install_clock(clock)
-    for variable in (KEY_VARIABLE, CLIENT_KEY_VARIABLE):
-        os.environ.pop(variable, None)
-    os.environ.update(entry["env"])
-    retries: list[dict[str, Any]] = []
-
-    async def on_retry(reason: Any) -> None:
-        retries.append({"category": reason.category.value, "detail": reason.detail})
-
-    original_base = vertex.build_vertex_base_url
-    vertex.build_vertex_base_url = lambda region: stand_in.base
-    vertex._CREDENTIALS = SimpleNamespace(access_token="vertex-token")
-    try:
-        provider = ProviderConfig.model_validate(substitute(entry["provider"], stand_in.base, closed))
-        model_config = ModelConfig.model_validate(entry["model"])
-        api = entry["api"]
-        backend = create_backend(
-            provider=provider,
-            timeout=api["timeout"],
-            retry_max_elapsed_time=api["retryMaxElapsedTime"],
-            connect_timeout=api["connectTimeout"],
-            write_timeout=api["writeTimeout"],
-            pool_timeout=api["poolTimeout"],
-            on_retry=on_retry,
-        )
-        if hasattr(backend, "_pacer"):
-            backend._pacer = AdaptivePacer(clock=clock.monotonic, sleep=clock.pacer_sleep)
-        calls = []
-        async with backend:
-            for call_entry in entry["calls"]:
-                calls.append(await run_call(backend, provider, model_config, call_entry,
-                                            stand_in, closed, clock, retries))
-        # Let reports scheduled from a worker thread land before reading them.
-        await asyncio.sleep(0)
-    finally:
-        vertex.build_vertex_base_url = original_base
-        stand_in.close()
-    observed = {"calls": calls, "pendingRetries": retries[sum(len(c["retries"]) for c in calls):]}
-    observed = json.loads(json.dumps(observed).replace(closed, "$CLOSED"))
-    return normalize_text(observed, stand_in.base, __version__)
-
-
-# --------------------------------------------------------------------------
-# Pure decisions
-# --------------------------------------------------------------------------
-
-
 def retry_delays() -> list[dict[str, Any]]:
     """``_next_delay`` over attempts, factors and caps, without a server."""
 
@@ -595,6 +409,11 @@ def utility_config(providers: list[Any], active: Any, allowed: list[str],
     are the reference's own methods bound to this namespace, over the active
     model and ``models`` keyed by alias, and the ``[utility_models]`` table
     ``utility``; the allowlist is never an administrator's.
+
+    Since 3.0.0 a utility completion also reads the session's transport limits
+    (``CompletionTransport.from_config`` in ``vibe/core/llm/completion.py``)
+    before it overrides the timeout and the retry budget with its own, so the
+    namespace carries those settings at their schema defaults too.
     """
 
     import types
@@ -622,6 +441,10 @@ def utility_config(providers: list[Any], active: Any, allowed: list[str],
         get_active_model=get_active_model,
         get_provider_for_model=get_provider_for_model,
         get_active_provider=lambda: get_provider_for_model(get_active_model()),
+        **{
+            setting: VibeConfigSchema.model_fields[setting].get_default(call_default_factory=True)
+            for setting in TRANSPORT_SETTINGS
+        },
     )
     for method in ("get_mistral_provider", "available_models", "get_utility_model"):
         setattr(config, method, types.MethodType(getattr(VibeConfigSchema, method), config))
@@ -993,36 +816,12 @@ async def capture_completions(home: Path) -> list[dict[str, Any]]:
     return out
 
 
-def vertex_endpoints() -> list[dict[str, Any]]:
-    from vibe.core.llm.backend.vertex import build_vertex_base_url, build_vertex_endpoint
-
-    out = []
-    for region in ("global", "europe-west1", "us-east5"):
-        for streaming in (True, False):
-            out.append({
-                "region": region,
-                "streaming": streaming,
-                "url": build_vertex_base_url(region)
-                + build_vertex_endpoint(region, "proj", "claude-x@1", streaming=streaming),
-            })
-    return out
-
-
-async def capture_scenarios(scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    out = []
-    for entry in scenarios:
-        observed = await run_scenario(entry)
-        out.append({**entry, "observed": observed})
-    return out
-
-
 def capture(reference: dict[str, str]) -> dict[str, Any]:
     import logging
 
     logging.disable(logging.CRITICAL)
     import tempfile
 
-    scenarios = asyncio.run(capture_scenarios(all_scenarios()))
     with tempfile.TemporaryDirectory(prefix="llm-backends-") as scratch:
         home = Path(scratch)
         selections = utility_selections(home)
@@ -1032,14 +831,16 @@ def capture(reference: dict[str, str]) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "reference": {"commit": reference["commit"]},
-        "scenarios": scenarios,
         "retryDelays": retry_delays(),
         "utilitySelections": selections,
         "availabilityKeys": keys,
         "availabilityProbes": probes,
         "utilityCompletions": completions,
-        "vertexEndpoints": vertex_endpoints(),
     }
+
+
+def count(corpus: dict[str, Any]) -> int:
+    return sum(len(value) for value in corpus.values() if isinstance(value, list))
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -1051,7 +852,6 @@ def parse_arguments() -> argparse.Namespace:
                         help="write the capture here instead of the committed corpus")
     parser.add_argument("--check", action="store_true",
                         help="recapture and fail when the committed corpus differs")
-    parser.add_argument("--only", default=None, help="capture only scenarios whose name starts so")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     return parser.parse_args()
@@ -1067,10 +867,6 @@ def main() -> int:
             override=arguments.python,
         )
         reference = {"commit": commit, "path": str(arguments.reference)}
-        if arguments.only:
-            global all_scenarios  # noqa: PLW0603
-            everything = all_scenarios
-            all_scenarios = lambda: [s for s in everything() if s["name"].startswith(arguments.only)]  # noqa: E731
         corpus = capture(reference)
     except OracleError as error:
         print(f"llm backend capture failed: {error}", file=sys.stderr)
@@ -1081,7 +877,7 @@ def main() -> int:
         if committed != rendered:
             print("the committed corpus differs from a fresh capture", file=sys.stderr)
             return 1
-        print(f"corpus matches a fresh capture of {len(corpus['scenarios'])} scenarios")
+        print(f"corpus matches a fresh capture of {count(corpus)} records")
         return 0
     target = arguments.output or arguments.corpus
     if target is None:
@@ -1089,7 +885,7 @@ def main() -> int:
         return 0
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rendered, encoding="utf-8", newline="")
-    print(f"captured {len(corpus['scenarios'])} scenarios from {reference['commit'][:12]} into {target}")
+    print(f"captured {count(corpus)} records from {reference['commit'][:12]} into {target}")
     print(f"python {platform.python_version()}")
     return 0
 

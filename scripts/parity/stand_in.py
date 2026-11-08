@@ -3,7 +3,8 @@
 A capture points the program it measures at a server of its own on the
 loopback interface. This module holds what those servers share: the quiet
 handler every stand-in answers with (:class:`Handler`), a server on a free port
-running on a thread of its own (:class:`Loopback`), the chat-completions
+running on a thread of its own (:class:`Loopback`), a port that refuses every
+connection (:class:`ClosedPort`), the chat-completions
 stand-in most captures put behind a session (:class:`Backend`), and the
 completion and the stream of chunks a scripted response is served as
 (:func:`completion`, :func:`chunks`). Nothing here imports the reference.
@@ -14,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import http.server
 import json
+import socket
 import sys
 import threading
 import time
@@ -118,6 +120,27 @@ class Loopback:
     def close(self) -> None:
         self.server.shutdown()
         self.server.server_close()
+
+
+class ClosedPort:
+    """A loopback port held bound and never listening, so a connection to it is
+    refused at once on every host for as long as the holder keeps it.
+
+    A well-known port nothing listens on is not that everywhere: WSL's mirrored
+    networking drops a connection to ``127.0.0.1:9`` instead of refusing it,
+    and the client then waits out its own timeout.
+    """
+
+    def __init__(self) -> None:
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind(("127.0.0.1", 0))
+
+    @property
+    def base(self) -> str:
+        return f"http://127.0.0.1:{self.socket.getsockname()[1]}"
+
+    def close(self) -> None:
+        self.socket.close()
 
 
 # --------------------------------------------------------------------------

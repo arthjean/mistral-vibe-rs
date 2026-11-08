@@ -36,12 +36,12 @@ use serde_json::Value;
 
 use vibe_app_server::client::ApprovalDecisionType;
 use vibe_core::parity::replay::pinned_reference;
-use vibe_core::parity::{REFERENCE_COMMIT, pinned_interpreter};
+use vibe_core::parity::{is_pin_commit, pinned_interpreter};
 use vibe_core::policy::{PathGrantScope, PermissionRequirement};
 
 /// The Python reference lives in a checkout outside this repository, so the
 /// live oracle probe can only run on a workstation that holds it at
-/// [`REFERENCE_COMMIT`]. Returns the checkout root and the interpreter that can
+/// [`vibe_core::parity::REFERENCE_COMMIT`]. Returns the checkout root and the interpreter that can
 /// drive it, and `None` when either is missing or the checkout has moved: every
 /// corpus replay still runs against the reference captured in the checked-in
 /// fixtures.
@@ -50,6 +50,11 @@ use vibe_core::policy::{PathGrantScope, PermissionRequirement};
 /// the one this guard admitted. Probing for `VIBE_PARITY_PYTHON` or a Windows
 /// virtual environment and then hardcoding the POSIX path would turn a skip into
 /// a panic on exactly the machines the override exists for.
+///
+/// The submodules call this for their own corpora, so it passes its caller to
+/// the live gate, which picks the environment by the commit the calling
+/// file's corpora record.
+#[track_caller]
 fn pinned_python_oracle() -> Option<(PathBuf, PathBuf)> {
     let root = pinned_reference("Python oracle")?;
     let interpreter = pinned_interpreter(&root)?;
@@ -766,7 +771,7 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
         serde_json::from_str(include_str!("../../tests/runtime-parity/active-turn.json"))
             .expect("strict active-turn corpus");
     assert_eq!(corpus.schema_version, 2);
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 5);
     // US-027 replays the merged queue the reference moved to at v2.25.0, as
@@ -844,7 +849,7 @@ fn session_management_corpus_replays_rewind_and_delete_state_machines() {
     ))
     .expect("strict session-management corpus");
     assert_eq!(corpus.schema_version, 2);
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 4);
     assert_eq!(

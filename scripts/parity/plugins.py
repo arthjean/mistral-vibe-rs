@@ -20,9 +20,9 @@ component and file. Diagnostic messages are left out: the port writes its own
 prose for them. ``crates/vibe-core/tests/plugins_parity_tests.rs`` replays it.
 
 ``server`` serves the reference's own ``vibe-app-server`` over stdio in a fresh
-home per scenario, with ``--experimental-harness``, ``--legacy-harness``, or
-neither, which since v2.26.0 starts the Unified Harness whatever the rollout in
-the eval cache says, and records what the plugin methods answer around a
+home per scenario, which from v3.0.0 always starts the Unified Harness, the one
+backend the reference ships, whatever the rollout in the eval cache says, and
+records what the plugin methods answer around a
 session start, a reload and the MCP mutations a plugin server refuses. One
 scenario declares MCP servers a plugin ships: one found on ``PATH``, which is
 the ``vibe-mcp-stdio-fixture`` binary this repository builds, one script the
@@ -74,7 +74,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reexecute_pinned, reference_command, require_pin  # noqa: E402
 import host_env  # noqa: E402
@@ -418,7 +418,7 @@ def server_scenarios() -> list[dict[str, Any]]:
     return [
         {
             "name": "unified/user-and-project",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": DEMO,
             "workspace": {".vibe/" + path: text for path, text in PROJECT.items()},
             "trusted": True,
@@ -426,7 +426,7 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "unified/untrusted-project",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": DEMO,
             "workspace": {".vibe/" + path: text for path, text in PROJECT.items()},
             "trusted": False,
@@ -434,13 +434,13 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "unified/only-builtin",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": {},
             "steps": SESSION_READS,
         },
         {
             "name": "unified/dropped",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": BROKEN,
             "steps": [
                 request("plugin_catalog/read", sessionId="$S"),
@@ -449,7 +449,7 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "unified/mcp-servers",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": SERVERS,
             "executable": ["plugins/servers/bin/serve"],
             "steps": [
@@ -461,7 +461,7 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "unified/reload",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": DEMO,
             "steps": [
                 request("plugin/reload", sessionId="$S"),
@@ -484,7 +484,7 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "unified/other-session",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": DEMO,
             "steps": [
                 request("plugin_catalog/read", sessionId="not-this-session"),
@@ -494,7 +494,7 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "unified/no-session",
-            "flags": ["--experimental-harness"],
+            "flags": [],
             "home": DEMO,
             "start": False,
             "steps": [
@@ -512,24 +512,7 @@ def server_scenarios() -> list[dict[str, Any]]:
                 request("config/read", sessionId="$S"),
             ],
         },
-        {
-            "name": "rollout/legacy-flag-wins",
-            "flags": ["--legacy-harness"],
-            "home": {**DEMO, **ROLLOUT_CACHE},
-            "steps": [request("plugin_catalog/read", sessionId="$S")],
-        },
-        {
-            "name": "legacy/declines",
-            "flags": list(HARNESS_FLAGS),
-            "home": DEMO,
-            "steps": [
-                request("plugin_catalog/read", sessionId="$S"),
-                request("plugins/read", sessionId="$S"),
-                request("plugin/info", sessionId="$S"),
-                request("plugin/reload", sessionId="$S"),
-                request("runtime/read", sessionId="$S"),
-            ],
-        },
+        # v3.0.0 removed the legacy backend and its flag, so no scenario selects it.
     ]
 
 

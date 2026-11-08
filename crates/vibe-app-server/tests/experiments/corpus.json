@@ -1,15 +1,14 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
-  "note": "Experiments startup corpus: what a session the pinned reference's app server builds configures before and after its rollout lookup, for each gate document, each eval cache seed and a new or a resumed session. The cache seed is recorded by its age against the scenario's clock, the lookup is answered one call before the connection, and the only key derivative the capture reads is the 32-character API-key digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
+  "note": "Experiments startup corpus: what a session the pinned reference's app server builds configures before and after its rollout lookup, for each gate document and each eval cache seed. The cache seed is recorded by its age against the scenario's clock, the lookup is answered one call before the connection, and the only key derivative the capture reads is the 32-character API-key digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
   "startup": [
     {
-      "id": "mistral-active/nothing-cached/new",
+      "id": "mistral-active/nothing-cached",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": null,
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -31,14 +30,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -46,16 +37,13 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
+      "awaitingExperimentModel": false,
       "afterLookup": {
         "system_prompt_id": "tests",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": true,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
@@ -84,113 +72,12 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
           }
         }
       }
     },
     {
-      "id": "mistral-active/nothing-cached/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": null,
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": false,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "mistral-active/cached/new",
+      "id": "mistral-active/cached",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -224,7 +111,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -246,14 +132,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -261,324 +139,13 @@
         "system_prompt_id": "lean",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": true,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      },
-      "afterLookup": {
-        "system_prompt_id": "lean",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": true,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "mistral-active/cached/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "lean",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": true,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": false,
-      "hydrated": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      },
-      "afterLookup": {
-        "system_prompt_id": "lean",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": true,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "mistral-active/cached-past-the-bound/new",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 604800,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "new",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "tests",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": true,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
@@ -607,21 +174,12 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
           }
         }
       }
     },
     {
-      "id": "mistral-active/cached-past-the-bound/resumed",
+      "id": "mistral-active/cached-past-the-bound",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -655,7 +213,6 @@
           }
         }
       },
-      "session": "resumed",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -677,14 +234,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -692,375 +241,13 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "mistral-active/cached-at-the-baseline/new",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "cli",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": []
-            }
-          }
-        }
-      },
-      "session": "new",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": false,
-      "hydrated": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": []
-          }
-        }
-      },
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "mistral-active/cached-at-the-baseline/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "cli",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": []
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": false,
-      "hydrated": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": []
-          }
-        }
-      },
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "value": null,
-                      "inExperiment": true,
-                      "hashAttribute": null,
-                      "hashValue": null,
-                      "featureId": null
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "id": "mistral-active/cached-for-another-key/new",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "other",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "new",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "tests",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": true,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
@@ -1089,13 +276,90 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
+          }
+        }
+      }
+    },
+    {
+      "id": "mistral-active/cached-at-the-baseline",
+      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
+      "cached": {
+        "owner": "oracle",
+        "ageSeconds": 60,
+        "payload": {
+          "features": {
+            "vibe_cli_system_prompt": {
+              "defaultValue": "cli",
+              "rules": []
+            },
+            "vibe_cli_smart_approve": {
+              "defaultValue": false,
+              "rules": []
+            }
+          }
+        }
+      },
+      "live": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
             "rules": [
               {
-                "force": true,
-                "tracks": []
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "startConfig": {
+        "system_prompt_id": "cli",
+        "managed_shell_tools_enabled": false,
+        "smart_approve_available": false,
+        "experimental_enable_registry_skills": false
+      },
+      "awaitingExperimentModel": false,
+      "afterLookup": {
+        "system_prompt_id": "tests",
+        "managed_shell_tools_enabled": false,
+        "smart_approve_available": false,
+        "experimental_enable_registry_skills": false
+      },
+      "awaitingAfterLookup": false,
+      "cachedAfterLookup": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": null,
+                      "inExperiment": true,
+                      "hashAttribute": null,
+                      "hashValue": null,
+                      "featureId": null
+                    }
+                  }
+                ]
               }
             ]
           }
@@ -1103,7 +367,7 @@
       }
     },
     {
-      "id": "mistral-active/cached-for-another-key/resumed",
+      "id": "mistral-active/cached-for-another-key",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "other",
@@ -1137,7 +401,6 @@
           }
         }
       },
-      "session": "resumed",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -1159,14 +422,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -1174,16 +429,13 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
-        "system_prompt_id": "cli",
+        "system_prompt_id": "tests",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
@@ -1212,24 +464,14 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": []
-              }
-            ]
           }
         }
       }
     },
     {
-      "id": "telemetry-disabled/nothing-cached/new",
+      "id": "telemetry-disabled/nothing-cached",
       "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": null,
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -1251,14 +493,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -1266,79 +500,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "telemetry-disabled/nothing-cached/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": null,
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "telemetry-disabled/cached/new",
+      "id": "telemetry-disabled/cached",
       "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -1372,7 +547,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -1394,14 +568,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -1409,110 +575,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "telemetry-disabled/cached/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "telemetry-disabled/cached-past-the-bound/new",
+      "id": "telemetry-disabled/cached-past-the-bound",
       "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -1546,7 +622,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -1568,14 +643,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -1583,110 +650,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "telemetry-disabled/cached-past-the-bound/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 604800,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "telemetry-disabled/cached-at-the-baseline/new",
+      "id": "telemetry-disabled/cached-at-the-baseline",
       "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -1704,7 +681,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -1726,14 +702,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -1741,94 +709,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "telemetry-disabled/cached-at-the-baseline/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "cli",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": []
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "telemetry-disabled/cached-for-another-key/new",
+      "id": "telemetry-disabled/cached-for-another-key",
       "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "other",
@@ -1862,7 +756,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -1884,14 +777,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -1899,113 +784,22 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "telemetry-disabled/cached-for-another-key/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = false\nactive_model = \"oracle\"\n\n[experiments]\nenable = true\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "other",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "experiments-disabled/nothing-cached/new",
+      "id": "experiments-disabled/nothing-cached",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": null,
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -2027,14 +821,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -2042,79 +828,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "experiments-disabled/nothing-cached/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": null,
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "experiments-disabled/cached/new",
+      "id": "experiments-disabled/cached",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -2148,7 +875,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -2170,14 +896,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -2185,110 +903,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "experiments-disabled/cached/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "experiments-disabled/cached-past-the-bound/new",
+      "id": "experiments-disabled/cached-past-the-bound",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -2322,7 +950,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -2344,14 +971,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -2359,110 +978,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "experiments-disabled/cached-past-the-bound/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 604800,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "experiments-disabled/cached-at-the-baseline/new",
+      "id": "experiments-disabled/cached-at-the-baseline",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "oracle",
@@ -2480,7 +1009,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -2502,14 +1030,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -2517,94 +1037,20 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "experiments-disabled/cached-at-the-baseline/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "oracle",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "cli",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": []
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
       "cachedAfterLookup": null
     },
     {
-      "id": "experiments-disabled/cached-for-another-key/new",
+      "id": "experiments-disabled/cached-for-another-key",
       "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
       "cached": {
         "owner": "other",
@@ -2638,7 +1084,6 @@
           }
         }
       },
-      "session": "new",
       "live": {
         "features": {
           "vibe_cli_system_prompt": {
@@ -2660,14 +1105,6 @@
                 ]
               }
             ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
           }
         }
       },
@@ -2675,103 +1112,13 @@
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingExperimentModel": true,
-      "hydrated": null,
-      "afterLookup": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
-        "experimental_enable_registry_skills": false
-      },
-      "awaitingAfterLookup": false,
-      "cachedAfterLookup": null
-    },
-    {
-      "id": "experiments-disabled/cached-for-another-key/resumed",
-      "document": "enable_connectors = false\n\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[experiments]\nenable = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n",
-      "cached": {
-        "owner": "other",
-        "ageSeconds": 60,
-        "payload": {
-          "features": {
-            "vibe_cli_system_prompt": {
-              "defaultValue": "lean",
-              "rules": []
-            },
-            "vibe_cli_smart_approve": {
-              "defaultValue": false,
-              "rules": [
-                {
-                  "force": true,
-                  "tracks": [
-                    {
-                      "experiment": {
-                        "key": "vibe_cli_smart_approve"
-                      },
-                      "result": {
-                        "key": "1",
-                        "variationId": 1,
-                        "inExperiment": true
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "session": "resumed",
-      "live": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": [
-              {
-                "force": "tests",
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_system_prompt"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          },
-          "vibe_cli_smart_approve_default": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true
-              }
-            ]
-          }
-        }
-      },
-      "startConfig": {
-        "system_prompt_id": "cli",
-        "managed_shell_tools_enabled": false,
-        "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingExperimentModel": false,
-      "hydrated": null,
       "afterLookup": {
         "system_prompt_id": "cli",
         "managed_shell_tools_enabled": false,
         "smart_approve_available": false,
-        "smart_approve_default": false,
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,

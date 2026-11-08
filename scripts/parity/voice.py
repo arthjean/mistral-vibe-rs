@@ -9,10 +9,12 @@ the two views a client renders, and the per-direction client reads five values
 off those views before it ever connects. This script drives all three over
 documents it authors itself.
 
-Four resolution families come out of this script, and nine behavior families
+Four resolution families come out of this script, and eight behavior families
 out of `voice_behavior.py`, which drives the same reference past resolution
-with every device, socket and endpoint scripted. All thirteen are what the
-Rust replays compare:
+with every device, socket and endpoint scripted. All twelve are what the
+Rust replays compare (schema 4 dropped the ``audioMetadata`` behavior family,
+whose builder left the Python package at v3; `voice_behavior.py` says where it
+went):
 
 ``constants``                the audio defaults, the per-entry field defaults
                              and the closed vocabularies
@@ -28,6 +30,16 @@ the speech request is the one it hands its HTTP sender; both are intercepted
 and neither is sent, which is why the socket guard below stays silent for a
 successful run. Reading the URL rather than reconstructing it is what makes the
 corpus an oracle for the endpoint this port builds itself.
+
+From v3 on, each client resolves its credential per request before it reaches
+that seam (``resolve_snapshot`` in ``vibe/core/platform_auth/_mistral.py``,
+called from ``vibe/cli/transcribe/mistral_transcribe_client.py`` and
+``vibe/cli/tts/mistral_tts_client.py``). A provider whose credential resolves
+to nothing is refused there: the realtime stream ends on an error event and the
+speech call raises, and neither reaches the wire. Such a frame, new in schema
+4, records a ``refusal`` naming the class of that event or exception in place
+of the endpoint, the headers and the body, and its credential records the
+reason the provider gave.
 
 Two artifacts come out of a run::
 
@@ -72,7 +84,7 @@ from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 from inprocess import SocketGuard
 from voice_cases import CREDENTIAL_VARIABLES, DOCUMENTS
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path(".parity/voice-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-voice/tests/voice/corpus.json")
 #: What every credential variable is set to before the capture. A resolved
@@ -285,20 +297,32 @@ def _speech_resolution(config: Any) -> dict[str, Any]:
     }
 
 
-def _credential(client: Any, env_var: str) -> dict[str, Any]:
-    """Where the credential came from, never what it is."""
+async def _credential(client: Any, env_var: str) -> dict[str, Any]:
+    """Where the credential came from, never what it is.
 
-    resolved = getattr(client, "_api_key", "")
-    if resolved == CREDENTIAL_SENTINEL:
-        source = "environment"
-    elif resolved == "":
-        source = "unset"
-    else:
-        raise OracleError(
-            f"the credential for {env_var!r} came from neither the environment nor an "
-            "empty variable, so the capture cannot record its origin without reading it"
-        )
-    return {"envVar": env_var, "source": source}
+    At v3 neither audio client holds a key: each keeps a credential provider
+    and resolves it per request (``resolve_snapshot`` in
+    ``vibe/core/platform_auth/_mistral.py``), so the provenance is read the
+    same way, through the client's own provider and server URL. A snapshot
+    whose authorization carries the sentinel came from the environment, and a
+    provider that resolves nothing is recorded as unset with the reason it
+    gives.
+    """
+
+    from vibe.core.platform_auth import PlatformCredentialRequired
+    from vibe.core.platform_auth._mistral import resolve_snapshot
+
+    snapshot = await resolve_snapshot(
+        getattr(client, "_credentials"), getattr(client, "_server_url")
+    )
+    if isinstance(snapshot, PlatformCredentialRequired):
+        return {"envVar": env_var, "source": "unset", "reason": snapshot.reason}
+    if snapshot.headers.get("Authorization") == f"Bearer {CREDENTIAL_SENTINEL}":
+        return {"envVar": env_var, "source": "environment"}
+    raise OracleError(
+        f"the credential for {env_var!r} came from neither the environment nor an "
+        "unset variable, so the capture cannot record its origin without reading it"
+    )
 
 
 async def _transcription_frame(config: Any) -> dict[str, Any]:
@@ -334,10 +358,21 @@ async def _transcription_frame(config: Any) -> dict[str, Any]:
         return
         yield b""  # pragma: no cover - the stream is never drawn from
 
+    from vibe.cli.transcribe.transcribe_client_port import TranscribeError
+
     realtime_transcription.connect = intercept  # type: ignore[assignment]
+    refusal: dict[str, Any] | None = None
     try:
-        async for _event in client.transcribe(empty()):
+        credential = await _credential(client, provider_view.api_key_env_var)
+        async for event in client.transcribe(empty()):
+            # At v3 the stream resolves its credential before it opens, and
+            # one that resolves nothing ends the stream on an error event
+            # without reaching the opener.
+            if not captured and isinstance(event, TranscribeError):
+                refusal = {"type": type(event).__name__}
             break
+    except OracleError:
+        raise
     except Exception:
         # The opener sits inside the SDK's own error handling, so the abort
         # arrives wrapped. What was captured before it is the observation.
@@ -345,14 +380,11 @@ async def _transcription_frame(config: Any) -> dict[str, Any]:
     finally:
         realtime_transcription.connect = original  # type: ignore[assignment]
         await client.close()
-    if not captured:
+    if not captured and refusal is None:
         raise OracleError("the transcription stream never reached its opener")
-    frame = captured
 
     audio_format = getattr(client, "_audio_format")
-    return {
-        "endpointUrl": frame["url"],
-        "headerNames": frame["headerNames"],
+    frame: dict[str, Any] = {
         "serverUrl": getattr(client, "_server_url"),
         "model": getattr(client, "_model_name"),
         "audioFormat": {
@@ -360,7 +392,14 @@ async def _transcription_frame(config: Any) -> dict[str, Any]:
             "sampleRate": audio_format.sample_rate,
         },
         "targetStreamingDelayMs": getattr(client, "_target_streaming_delay_ms"),
-        "credential": _credential(client, provider_view.api_key_env_var),
+        "credential": credential,
+    }
+    if refusal is not None:
+        return {**frame, "refusal": refusal}
+    return {
+        **frame,
+        "endpointUrl": captured["url"],
+        "headerNames": captured["headerNames"],
     }
 
 
@@ -395,9 +434,20 @@ async def _speech_frame(config: Any) -> dict[str, Any]:
         })
         raise _Intercepted(captured)
 
+    from vibe.core.platform_auth import PlatformCredentialUnavailable
+
     BaseSDK.do_request_async = intercept  # type: ignore[assignment]
+    refusal: dict[str, Any] | None = None
     try:
+        credential = await _credential(client, provider_view.api_key_env_var)
         await client.speak(SPEECH_INPUT)
+    except OracleError:
+        raise
+    except PlatformCredentialUnavailable as error:
+        # At v3 ``speak`` resolves its credential before it builds a request,
+        # and one that resolves nothing raises without reaching the sender.
+        if not captured:
+            refusal = {"type": type(error).__name__}
     except Exception:
         # The sender sits inside the SDK's own error handling, so the abort may
         # arrive wrapped. What was captured before it is the observation.
@@ -405,19 +455,23 @@ async def _speech_frame(config: Any) -> dict[str, Any]:
     finally:
         BaseSDK.do_request_async = original  # type: ignore[assignment]
         await client.close()
-    if not captured:
+    if not captured and refusal is None:
         raise OracleError("the speech call never reached its sender")
-    frame = captured
 
-    return {
-        "method": frame["method"],
-        "endpointUrl": frame["url"],
-        "body": frame["body"],
+    frame: dict[str, Any] = {
         "serverUrl": getattr(client, "_server_url"),
         "model": getattr(client, "_model_name"),
         "voice": getattr(client, "_voice"),
         "responseFormat": getattr(client, "_response_format"),
-        "credential": _credential(client, provider_view.api_key_env_var),
+        "credential": credential,
+    }
+    if refusal is not None:
+        return {**frame, "refusal": refusal}
+    return {
+        **frame,
+        "method": captured["method"],
+        "endpointUrl": captured["url"],
+        "body": captured["body"],
     }
 
 

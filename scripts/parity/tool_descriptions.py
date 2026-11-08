@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
-"""Capture how the pinned Python reference resolves tool description overrides.
+"""Capture what the pinned Python reference does with a tool directory's files.
 
-The reference checkout is a read-only behavioral oracle. This script asks it two
-questions over a scratch tree this file authors:
+The reference checkout is a read-only behavioral oracle. Up to the v2 line this
+script measured how ``ToolManager`` walked the builtin directory, the
+``tool_paths`` entries and the project and user tool directories, and which
+``<tools-dir>/prompts/<name>.md`` file then described a tool. The v3 line
+deleted that machinery: custom Python tools and the ``tool_paths`` setting are
+gone (``vibe/core/config/_migration.py`` drops the key at startup), and
+``vibe/core/tools/manager.py`` no longer computes search paths, reads override
+files or publishes tool specs. A builtin's description is its packaged prompt
+(``BaseTool.get_full_description`` in ``vibe/core/tools/base.py``).
 
-``ToolManager._compute_search_paths`` — in which order are the builtin
-directory, the ``tool_paths`` entries, the project tool directories and the user
-tool directory walked, and how are duplicates folded away?
+What remains, and what schema version 2 records, is the successor the session
+runtime wires in ``vibe/app_server/_runtime.py``: the project and user tool
+directories the harness files manager lists, deduplicated once resolved, and
+the files ``vibe/app_server/_ignored_tool_settings.py`` reports there as
+having no effect (a custom tool module, and the one description override it
+names). The warning sentences are reference-authored, so only the branch that
+produced each one is recorded. Each scenario also records whether every
+builtin tool the tree redescribes still publishes its packaged description,
+which is the observable trace of the removed overrides.
 
-``ToolManager._iter_tool_descriptions`` and ``available_tool_specs`` — which
-``<tools-dir>/prompts/<name>.md`` file ends up describing a tool, and which ones
-are skipped for being blank, unreadable or named after nothing?
+``toolPaths`` stays a scenario input although the reference no longer reads
+it: this port still honors it, and the replay holds that difference as a gap.
 
-Every description file the capture reads is authored here, so the committed
-corpus carries this repository's own prose and never the reference's, which is
-what ``NOTICE`` asks for. The one reference-authored quantity the corpus holds
-is a *count*: how many builtin tools the reference describes from its package
-directory, which is the position this port has no counterpart for because it
-compiles its builtin descriptions in.
+Every file the capture writes is authored here, so the committed corpus
+carries this repository's own text and never the reference's, which is what
+``NOTICE`` asks for.
 
 Usage::
 
@@ -47,13 +56,9 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 from inprocess import SocketGuard
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/tool-descriptions-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/tool-descriptions/corpus.json")
-#: The label standing in for the reference's builtin tool directory, which is a
-#: path inside the pinned tree and therefore machine-dependent.
-BUILTIN_LABEL = "<builtin>"
-
 #: Where the scratch vibe home lives inside the tree, and therefore where the
 #: user tool directory hangs off.
 VIBE_HOME_LABEL = "home/.vibe"
@@ -79,6 +84,10 @@ TREE_FILES: dict[str, str] = {
     "extra/prompts/read_file.md": "read a file, from a tool_paths entry\n",
     "extra/prompts/bash.md": "run a command, from a tool_paths entry\n",
     "module/custom.py": "# A tool module that declares no tool class.\n",
+    ".vibe/tools/weather.py": "# A custom tool module, listed and never imported.\n",
+    ".vibe/tools/_helpers.py": "# A private module, which the listing skips.\n",
+    "home/.vibe/tools/forecast.py": "# A custom tool module in the user directory.\n",
+    "home/.vibe/tools/prompts/task.md": "delegate work, overriding the former task tool\n",
     "module/prompts/todo_write.md": "track a plan, from a module sibling\n",
     ".vibe/tools/prompts/read_file.md": "read a file, per project\n",
     ".vibe/tools/prompts/grep.md": "search, per project\n",
@@ -156,12 +165,10 @@ def materialize(root: Path) -> None:
         (root / label).mkdir(parents=True, exist_ok=True)
 
 
-def label_of(root: Path, path: Path, builtin: Path) -> str:
-    """``path`` as a tree-relative label, or the builtin placeholder."""
+def label_of(root: Path, path: Path) -> str:
+    """``path`` as a tree-relative label."""
 
-    resolved = Path(path)
-    if resolved == builtin or resolved.is_relative_to(builtin):
-        return BUILTIN_LABEL
+    resolved = Path(path).resolve()
     try:
         return resolved.relative_to(root).as_posix()
     except ValueError:
@@ -183,116 +190,136 @@ class AlwaysTrusted:
         return True if self._trusted else None
 
 
-def capture(root: Path) -> list[dict[str, Any]]:
+def ignored_kind(file: Path, message: str) -> str:
+    """The branch of ``ignored_tool_settings`` that reported ``file``.
+
+    The sentence is reference-authored, so it is matched against the
+    reference's own builders and never recorded.
+    """
+
+    from vibe.app_server._ignored_tool_settings import (
+        SPAWN_DESCRIPTION_OVERRIDE_IGNORED,
+        custom_tool_unsupported,
+    )
+
+    if message == custom_tool_unsupported(Path(file).stem):
+        return "customTool"
+    if message == SPAWN_DESCRIPTION_OVERRIDE_IGNORED:
+        return "descriptionOverride"
+    raise OracleError(f"unknown ignored-tool-settings branch for {file}")
+
+
+def redescribable_tools() -> dict[str, Any]:
+    """The builtin tool classes a tree file is named after, by tool name."""
+
+    from vibe.core.tools.manager import builtin_tool_classes
+
+    stems = {Path(label).stem for label in TREE_FILES if label.endswith(".md")}
+    classes: dict[str, Any] = {}
+    for cls in builtin_tool_classes():
+        name = cls.get_name()
+        if name in stems:
+            classes.setdefault(name, cls)
+    if not classes:
+        raise OracleError("no tree file is named after a builtin tool")
+    return classes
+
+
+def capture(root: Path) -> tuple[list[str], list[dict[str, Any]]]:
     """What the reference answers for every case, over the scratch tree."""
 
-    from vibe.core.config import VibeConfigSchema
+    from vibe.app_server._ignored_tool_settings import ignored_tool_settings
     from vibe.core.config.harness_files import init_harness_files_manager
     from vibe.core.config.harness_files._harness_manager import HarnessFilesManager
-    from vibe.core.paths import DEFAULT_TOOL_DIR
-    from vibe.core.tools.manager import ToolManager  # noqa: F401
 
     init_harness_files_manager("user", "project")
-    builtin = DEFAULT_TOOL_DIR.path.resolve()
-    #: The authored text of every file in the tree, which is how a resolved
-    #: description is traced back to the file that won without re-walking the
-    #: search paths in this script.
-    authored = {text: label for label, text in TREE_FILES.items() if text.strip()}
-    if len(authored) != len({t for t in TREE_FILES.values() if t.strip()}):
-        raise OracleError("two description files share their text")
+    authored = {text for text in TREE_FILES.values() if text.strip()}
+    redescribable = redescribable_tools()
 
     records: list[dict[str, Any]] = []
     for case in CASES:
-        workdir = root
         harness = HarnessFilesManager(
             sources=tuple(case["sources"]),
-            cwd=workdir,
+            cwd=root,
             trust_store=AlwaysTrusted(case["trusted"]),
         )
-        with contextlib.chdir(workdir):
-            # `tool_paths` is expanded by the schema against the process
-            # directory, so the capture stands in the session's directory for
-            # exactly as long as the configuration is built and read.
-            config = VibeConfigSchema(tool_paths=list(case["toolPaths"]))
-            manager = ToolManager(
-                lambda config=config: config,
-                defer_mcp=True,
-                cwd=workdir,
-                harness_files=harness,
+        with contextlib.chdir(root):
+            # The same directories, in the same order and deduplicated the
+            # same way, as the session runtime hands the listing.
+            tool_dirs = list(
+                dict.fromkeys(
+                    directory.resolve()
+                    for directory in (
+                        *harness.project_tools_dirs,
+                        *harness.user_tools_dirs,
+                    )
+                )
             )
-            search_paths = list(manager._search_paths)
-            resolved = dict(manager._tool_descriptions)
-            specs = {
-                spec.name: spec.description for spec in manager.available_tool_specs()
-            }
-
-        overrides: dict[str, str] = {}
-        builtin_described = 0
-        for stem, text in sorted(resolved.items()):
-            label = authored.get(text)
-            if label is None:
-                builtin_described += 1
-                continue
-            overrides[stem] = label
-        stems_in_tree = sorted(
-            {Path(label).stem for label in TREE_FILES if label.endswith(".md")}
-            | {Path(label).stem for label in TREE_OBSTRUCTIONS}
-        )
+            issues = ignored_tool_settings(tool_dirs)
+            unchanged = all(
+                cls.get_full_description() not in authored
+                for cls in redescribable.values()
+            )
         records.append(
             {
                 "name": case["name"],
-                "sources": sorted(case["sources"]),
-                "trusted": case["trusted"],
-                "toolPaths": list(case["toolPaths"]),
-                "searchPaths": [label_of(root, path, builtin) for path in search_paths],
-                "overrides": overrides,
-                # A stem whose file the search paths reached and which still
-                # describes nothing: blank, unreadable, or in a directory this
-                # case does not walk.
-                "withheldStems": [
-                    stem for stem in stems_in_tree if stem not in overrides
-                ],
-                # A stem that describes something no tool answers to, which the
-                # reference carries in its map and drops at publication.
-                "unmatchedStems": sorted(
-                    stem for stem in overrides if stem not in specs
-                ),
-                # What the model is shown, restricted to the tools this tree
-                # redescribes, so no reference-authored description is recorded.
-                "publishedDescriptions": {
-                    name: specs[name] for name in sorted(overrides) if name in specs
+                "scenario": {
+                    "sources": sorted(case["sources"]),
+                    "trusted": case["trusted"],
+                    "toolPaths": list(case["toolPaths"]),
                 },
-                "builtinDescribedCount": builtin_described,
+                "observed": {
+                    "toolDirs": [label_of(root, path) for path in tool_dirs],
+                    "ignored": sorted(
+                        (
+                            {
+                                "file": label_of(root, Path(issue.file)),
+                                "kind": ignored_kind(Path(issue.file), issue.message),
+                            }
+                            for issue in issues
+                        ),
+                        key=lambda entry: (entry["file"], entry["kind"]),
+                    ),
+                    "descriptionsUnchanged": unchanged,
+                },
             }
         )
-    return records
+    return sorted(redescribable), records
 
 
-def build_corpus(records: list[dict[str, Any]], reference: dict[str, str]) -> dict[str, Any]:
+def build_corpus(
+    redescribable: list[str], records: list[dict[str, Any]], reference: dict[str, str]
+) -> dict[str, Any]:
     return {
         "schemaVersion": SCHEMA_VERSION,
         "reference": {"commit": reference["commit"]},
         "note": (
             "Captured from the pinned reference by scripts/parity/tool_descriptions.py. "
-            "Every description file and every path label is authored by this repository; "
-            "the reference contributes the resolution order, the winning file and the "
-            "count of builtin tools it describes from its own package directory."
+            "Every file and every path label is authored by this repository; the "
+            "reference contributes the tool directories it lists, the branch that "
+            "reported each ignored file and whether its builtin descriptions stayed "
+            "its own."
         ),
-        "builtinLabel": BUILTIN_LABEL,
         "vibeHome": VIBE_HOME_LABEL,
         "tree": {
             "files": dict(sorted(TREE_FILES.items())),
             "obstructions": sorted(TREE_OBSTRUCTIONS),
             "directories": sorted(TREE_DIRECTORIES),
         },
-        "cases": records,
+        "redescribable": redescribable,
+        "scenarios": records,
     }
 
 
-def rendered_corpus(records: list[dict[str, Any]], reference: dict[str, str]) -> str:
+def rendered_corpus(
+    redescribable: list[str], records: list[dict[str, Any]], reference: dict[str, str]
+) -> str:
     return (
         json.dumps(
-            build_corpus(records, reference), indent=2, sort_keys=True, ensure_ascii=False
+            build_corpus(redescribable, records, reference),
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
         )
         + "\n"
     )
@@ -346,7 +373,7 @@ def main() -> int:
             root = Path(scratch).resolve()
             materialize(root)
             os.environ["VIBE_HOME"] = str(root / VIBE_HOME_LABEL)
-            records = capture(root)
+            redescribable, records = capture(root)
         if GUARD.attempts:
             raise OracleError(
                 "the capture attempted network access: "
@@ -356,14 +383,15 @@ def main() -> int:
             target = arguments.corpus or DEFAULT_CORPUS
             if not target.is_file():
                 raise OracleError(f"no committed corpus at {target} to check against")
-            if target.read_text(encoding="utf-8") != rendered_corpus(records, reference):
+            fresh = rendered_corpus(redescribable, records, reference)
+            if target.read_text(encoding="utf-8") != fresh:
                 raise OracleError(
                     f"a fresh capture differs from the committed corpus at {target}"
                 )
             print(f"{target} matches a fresh capture of {len(records)} cases")
             return 0
         full = {
-            **build_corpus(records, reference),
+            **build_corpus(redescribable, records, reference),
             "platform": platform.system().lower(),
             "python": platform.python_version(),
         }
@@ -378,7 +406,9 @@ def main() -> int:
         if arguments.corpus is not None:
             arguments.corpus.parent.mkdir(parents=True, exist_ok=True)
             arguments.corpus.write_text(
-                rendered_corpus(records, reference), encoding="utf-8", newline=""
+                rendered_corpus(redescribable, records, reference),
+                encoding="utf-8",
+                newline="",
             )
     except OracleError as error:
         print(f"tool-descriptions capture failed: {error}", file=sys.stderr)

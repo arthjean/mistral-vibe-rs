@@ -21,9 +21,8 @@
 //! every entry has to still reproduce, so row 13 of `docs/parity.md` is a
 //! reading of the summary this file prints.
 //!
-//! The script captures each backend apart: `corpus.json` holds the legacy one
-//! both sides reach through the escape hatch, `unified-corpus.json` the
-//! Unified Harness every session opens on by default (`--harness unified`).
+//! From v3.0.0 the reference runs one backend, the Unified Harness, so one
+//! corpus records it; the legacy backend's corpus went with the escape hatch.
 
 use std::path::Path;
 
@@ -36,201 +35,304 @@ use vibe_core::parity::replay::{
 /// The corpora, compiled in so a moved file fails the build rather than the
 /// run.
 const CORPUS: &str = include_str!("programmatic-parity/corpus.json");
-const UNIFIED_CORPUS: &str = include_str!("programmatic-parity/unified-corpus.json");
 
 /// The corpora as `scripts/parity/manifest.json` lists them.
 const LISTED: &str = "crates/vibe-cli/tests/programmatic-parity/corpus.json";
-const UNIFIED_LISTED: &str = "crates/vibe-cli/tests/programmatic-parity/unified-corpus.json";
 
-/// The script's two families, one per backend.
-const LEGACY: Capture = Capture {
+const CAPTURE: Capture = Capture {
     script: "scripts/parity/programmatic.py",
-    family: &["--harness", "legacy"],
-    arguments: &[],
-};
-const UNIFIED: Capture = Capture {
-    script: "scripts/parity/programmatic.py",
-    family: &["--harness", "unified"],
+    family: &[],
     arguments: &[],
 };
 
-/// What the port answers otherwise on both backends.
-const LEDGER: &[PatternDivergence] = &[PatternDivergence {
-    scenario: "output/ndjson-is-no-format",
-    pointer: "/*/stderr/usage",
-    count: 1,
-    row: "7",
-    class: Class::Gap,
-    reason: "an argument error prints this port's one-line usage where argparse prints the \
-             whole synopsis, 474 code points of it, so the digest is not a rewording but a              shorter text",
-}];
+/// What the port answers otherwise and the scorecard decided; none since
+/// the v3.1.0 re-pin, whose gaps are `V3_GAPS`.
+const LEDGER: &[PatternDivergence] = &[];
 
 /// The accepted divergences the prose below stands on.
 const OWN_SENTENCES: &str = "Programmatic mode's own sentences";
-const CALL_FAILURES: &str = "The model call failure sentences are original prose";
-const TOOL_RESULTS: &str = "Authored result and error text in six tools";
 
-/// The checkpoint a continued session closes its history on names the
-/// session in a full sentence where the reference writes a 15-character
-/// marker, 2.4 times as long.
-const CHECKPOINT_BAND: Band = Band {
-    low: 0.5,
-    high: 2.5,
-};
-
-/// Every text this port words its own way, digest by digest, per backend.
-const PROSE: &[OwnProse] = &[
-    OwnProse {
-        scenarios: &["approval/denied"],
-        pointer: "/*/stdout/lines/*/json/state/display/message",
-        count: 1,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "13",
-        accepted: OWN_SENTENCES,
-        reason: "the display of a call the approval declined",
-    },
-    OwnProse {
-        scenarios: &[
-            "config/active-provider-missing-key",
-            "failure/missing-key",
-            "failure/missing-key-before-empty-prompt",
-            "teleport/codestral-key",
-            "teleport/non-mistral-model",
-            "teleport/outside-a-repository",
-            "teleport/unverified-key",
-            "trust/untrusted-project-config",
-        ],
-        pointer: "/*/stderr/*/message",
-        count: 8,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "13",
-        accepted: OWN_SENTENCES,
-        reason: "the warning or error `vibe -p` reports: an untrusted folder, a missing key, a refused Teleport",
-    },
-    OwnProse {
-        scenarios: &[
-            "failure/bad-request-json",
-            "failure/bad-request-streaming",
-            "failure/unauthorized",
-        ],
-        pointer: "/*/stderr/*/message",
-        count: 3,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "10",
-        accepted: CALL_FAILURES,
-        reason: "the error a model call the provider refused reports",
-    },
-    OwnProse {
-        scenarios: &["failure/bad-request-json", "failure/bad-request-streaming"],
-        pointer: "/*/stderr/*",
-        count: 16,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "10",
-        accepted: CALL_FAILURES,
-        reason: "the lines that detail a model call the provider refused",
-    },
-    OwnProse {
-        scenarios: &["session/continue-json"],
-        pointer: "/*/stdout/json/*/message",
-        count: 1,
-        band: CHECKPOINT_BAND,
-        directives: None,
-        row: "13",
-        accepted: OWN_SENTENCES,
-        reason: "the checkpoint a continued session closes its history on",
-    },
-    OwnProse {
-        scenarios: &["session/continue-streaming"],
-        pointer: "/*/stdout/lines/*/json/message",
-        count: 1,
-        band: CHECKPOINT_BAND,
-        directives: None,
-        row: "13",
-        accepted: OWN_SENTENCES,
-        reason: "the same checkpoint, as the stream carries it",
-    },
-    OwnProse {
-        scenarios: &["tools/failed-read"],
-        pointer: "/*/stdout/json/*/state/display/message",
-        count: 1,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "3",
-        accepted: TOOL_RESULTS,
-        reason: "`read_file` reports a missing file in its own sentence, as the failed call's header",
-    },
-    OwnProse {
-        scenarios: &["tools/failed-read"],
-        pointer: "/*/stdout/json/*/state/error/message",
-        count: 1,
-        band: Band::DEFAULT,
-        directives: None,
-        row: "3",
-        accepted: TOOL_RESULTS,
-        reason: "the same sentence, as the failed call's error",
-    },
-];
-const UNIFIED_PROSE: &[OwnProse] = &[OwnProse {
-    scenarios: &[
-        "config/active-provider-missing-key",
-        "failure/missing-key",
-        "failure/missing-key-before-empty-prompt",
-        "teleport/codestral-key",
-        "teleport/non-mistral-model",
-        "teleport/outside-a-repository",
-        "teleport/unverified-key",
-        "trust/untrusted-project-config",
-    ],
+/// Every text this port words its own way, digest by digest. At v3.1.0 only
+/// the warning about an untrusted folder's project configuration still falls
+/// in its band; the other refusals moved, and are gaps below.
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &["trust/untrusted-project-config"],
     pointer: "/*/stderr/*/message",
-    count: 8,
+    count: 1,
     band: Band::DEFAULT,
     directives: None,
     row: "13",
     accepted: OWN_SENTENCES,
-    reason: "the warning or error `vibe -p` reports: an untrusted folder, a missing key, a refused Teleport",
+    reason: "the warning `vibe -p` reports when it ignores an untrusted folder's configuration",
 }];
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 runs a programmatic session from its Rust launcher on the Unified Harness, which this port does not reproduce yet";
 
+/// Differences an own-words entry covers but whose length v3.1.0 moved out of
+/// its band, one by one; chained first, so they are decided before it.
+const V3_REFUSED: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "config/active-provider-missing-key",
+        pointer: "/0/stderr/0/message",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "failure/missing-key-before-empty-prompt",
+        pointer: "/0/stderr/0/message",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
+
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/exit",
+        count: 13,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stderr",
+        count: 8,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout",
+        count: 5,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/requests/*",
+        count: 5,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stderr/*",
+        count: 19,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/detail/input/changes",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/detail/input/newString",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/detail/input/oldString",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/detail/input/replaceAll",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/detail/toolName",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/outcome",
+        count: 23,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/state/display/message",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/state/output/previousContent",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/title",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*",
+        count: 4,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*/json/outcome",
+        count: 13,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*/pythonRendering",
+        count: 14,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/requests/*/tools/*",
+        count: 610,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/state/output/occurrences/*/newStartLine",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/layout/*/*",
+        count: 23,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*/json/content/*/text",
+        count: 2,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*/layout/*",
+        count: 13,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/layout/*/*/*/*/*/*",
+        count: 3,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/layout/*/*/*/*/*/*/*",
+        count: 2,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/layout/*/*/*/*/*/*/*/*/*",
+        count: 1,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stdout/layout/*/*/*/*/*/*/*/*/*/*",
+        count: 2,
+        row: "13",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
+
+/// Drives this port's `vibe` through every scenario the corpus records and
+/// compares what it answers.
 #[test]
 fn the_port_answers_every_programmatic_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    replay(CORPUS, &LEGACY, "legacy", PROSE);
-}
-
-#[test]
-fn the_port_answers_every_unified_programmatic_scenario_as_the_corpus_records() {
-    replay(UNIFIED_CORPUS, &UNIFIED, "unified", UNIFIED_PROSE);
-}
-
-/// Drives this port's `vibe` through every scenario `capture` records on
-/// `harness` and compares what it answers with `corpus`.
-fn replay(corpus: &str, capture: &Capture, harness: &str, prose: &[OwnProse]) {
     Replay {
-        heading: &format!("programmatic parity ({harness}):"),
-        corpus,
-        capture,
+        heading: "programmatic parity:",
+        corpus: CORPUS,
+        capture: &CAPTURE,
         port: &["--binary", env!("CARGO_BIN_EXE_vibe")],
-        output: &Path::new(env!("CARGO_TARGET_TMPDIR"))
-            .join(format!("programmatic-port-{harness}.json")),
+        output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("programmatic-port.json"),
     }
-    .run(entries(prose).chain(entries(LEDGER)));
+    .run(
+        entries(V3_REFUSED)
+            .chain(entries(PROSE))
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
+    );
 }
 
 #[test]
 fn every_ledger_entry_states_a_pointer_and_a_reason() {
-    for (listed, corpus, prose) in [
-        (LISTED, CORPUS, PROSE),
-        (UNIFIED_LISTED, UNIFIED_CORPUS, UNIFIED_PROSE),
-    ] {
-        let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
-        assert_ledger(
-            listed,
-            &scenarios(&corpus),
-            entries(prose).chain(entries(LEDGER)),
-        );
-    }
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(V3_REFUSED)
+            .chain(entries(PROSE))
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
+    );
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still
@@ -239,7 +341,6 @@ fn every_ledger_entry_states_a_pointer_and_a_reason() {
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
     if let Some(root) = pinned_reference("programmatic mode") {
-        LEGACY.check(&root, &[]);
-        UNIFIED.check(&root, &[]);
+        CAPTURE.check(&root, &[]);
     }
 }

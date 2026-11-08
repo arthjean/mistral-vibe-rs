@@ -1,7 +1,7 @@
 {
   "note": "Captured by scripts/parity/workspace_trust.py from the pinned reference's vibe-app-server. Scenario inputs, paths as placeholders and the trust file as written; every other string the server authored is a length and a SHA-256.",
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {

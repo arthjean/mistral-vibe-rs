@@ -27,6 +27,8 @@ mod processes;
 mod questions;
 mod search;
 mod session;
+#[cfg(test)]
+mod tool_projection_parity_tests;
 
 /// How a projected call's result settles.
 type SettleResult = Box<dyn Fn(&Value) -> Option<Value>>;

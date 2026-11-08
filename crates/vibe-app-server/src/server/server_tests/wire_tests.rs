@@ -56,10 +56,12 @@ fn the_handshake_accepts_the_reference_capability_set() {
         "the handshake answers the server's identity and nothing else"
     );
 
-    // A capability the reference does not declare still fails, which is
-    // what keeps `deny_unknown_fields` discriminating the envelope.
+    // A capability the reference does not declare is ignored since v3.0.0,
+    // whose `ClientCapabilities` takes `extra="ignore"`
+    // (`vibe/app_server/_connection_protocol.py:44-47`), so a newer client
+    // still reaches the rest of the handshake.
     let mut fresh = server.connect(TransportKind::InProcess);
-    let rejected = fresh.dispatch(&request(
+    let accepted = fresh.dispatch(&request(
         1,
         "initialize",
         json!({
@@ -67,16 +69,18 @@ fn the_handshake_accepts_the_reference_capability_set() {
             "capabilities": {"invented": true}
         }),
     ));
-    assert!(matches!(
-        decode_frame(&rejected.outbound[0]).expect("rejection"),
-        Envelope::Error(ErrorResponse {
-            error: ProtocolError {
-                code: ProtocolErrorCode::InvalidParams,
-                ..
-            },
-            ..
-        })
-    ));
+    assert!(
+        !matches!(
+            decode_frame(&accepted.outbound[0]).expect("an answer"),
+            Envelope::Error(_)
+        ),
+        "an undeclared capability is ignored, not refused"
+    );
+    assert_eq!(
+        fresh.state(),
+        ConnectionState::AwaitingInitialized,
+        "the accepted `initialize` waits for the client's `initialized`"
+    );
 }
 
 /// The mute list silences a notification the client does not want, and stops

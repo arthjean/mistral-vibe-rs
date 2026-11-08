@@ -2402,31 +2402,80 @@
       "source": "driven"
     },
     {
-      "correlated": false,
-      "event": "vibe.at_mention_inserted",
-      "properties": {
-        "context_types": {
-          "file": 2
-        },
-        "file_extensions": {
-          ".rs": 2
-        },
-        "message_id": "oracle-message",
-        "nb_mentions": 2
-      },
+      "correlated": null,
+      "event": "vibe.artifact_created",
+      "properties": null,
       "propertyKeys": [
-        "context_types",
-        "file_extensions",
+        "has_title",
+        "host_type",
+        "is_draft",
         "message_id",
-        "nb_mentions"
+        "provider",
+        "repo_id_resolved",
+        "source"
       ],
-      "propertyTypes": {
-        "context_types": "object",
-        "file_extensions": "object",
-        "message_id": "string",
-        "nb_mentions": "int"
-      },
-      "source": "driven"
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.artifact_detected",
+      "properties": null,
+      "propertyKeys": [
+        "cli_source",
+        "command_matched",
+        "message_id",
+        "provider"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.artifact_detection_failed",
+      "properties": null,
+      "propertyKeys": [
+        "error_type",
+        "provider",
+        "stage"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.artifact_mark_viewed",
+      "properties": null,
+      "propertyKeys": [
+        "nb_already_viewed",
+        "nb_artifacts"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.artifact_sync_failed",
+      "properties": null,
+      "propertyKeys": [
+        "error_type",
+        "provider",
+        "trigger"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.artifact_synced",
+      "properties": null,
+      "propertyKeys": [
+        "changed",
+        "provider",
+        "trigger"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
     },
     {
       "correlated": false,
@@ -2545,25 +2594,34 @@
       "properties": {
         "entrypoint": "cli",
         "has_agents_md": true,
+        "has_outside_workdir_deny": true,
         "host_kind": "local",
         "nb_mcp_servers": 2,
         "nb_models": 4,
+        "nb_post_agent_main_hooks": 2,
+        "nb_post_agent_scoped_hooks": 1,
         "nb_skills": 3
       },
       "propertyKeys": [
         "entrypoint",
         "has_agents_md",
+        "has_outside_workdir_deny",
         "host_kind",
         "nb_mcp_servers",
         "nb_models",
+        "nb_post_agent_main_hooks",
+        "nb_post_agent_scoped_hooks",
         "nb_skills"
       ],
       "propertyTypes": {
         "entrypoint": "string",
         "has_agents_md": "bool",
+        "has_outside_workdir_deny": "bool",
         "host_kind": "string",
         "nb_mcp_servers": "int",
         "nb_models": "int",
+        "nb_post_agent_main_hooks": "int",
+        "nb_post_agent_scoped_hooks": "int",
         "nb_skills": "int"
       },
       "source": "driven"
@@ -2581,6 +2639,22 @@
         "custom_domain": "bool"
       },
       "source": "driven"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.onboarding_sign_in.done",
+      "properties": null,
+      "propertyKeys": [],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
+      "event": "vibe.onboarding_sign_in.started",
+      "properties": null,
+      "propertyKeys": [],
+      "propertyTypes": null,
+      "source": "callSite"
     },
     {
       "correlated": false,
@@ -2720,6 +2794,7 @@
       "properties": null,
       "propertyKeys": [
         "new_session_id",
+        "root_session_id",
         "source_session_id"
       ],
       "propertyTypes": null,
@@ -2734,37 +2809,12 @@
       "source": "driven"
     },
     {
-      "correlated": false,
+      "correlated": null,
       "event": "vibe.slash_command_used",
-      "properties": {
-        "command": "oracle",
-        "command_type": "builtin"
-      },
+      "properties": null,
       "propertyKeys": [
         "command",
         "command_type"
-      ],
-      "propertyTypes": {
-        "command": "string",
-        "command_type": "string"
-      },
-      "source": "driven"
-    },
-    {
-      "correlated": null,
-      "event": "vibe.startup",
-      "properties": null,
-      "propertyKeys": [
-        "agent_ready_duration_ms",
-        "first_frame_duration_ms",
-        "harness_selection_source",
-        "has_initial_prompt",
-        "is_cold_start",
-        "is_resuming_session",
-        "prompt_for_workspace_trust",
-        "session_init_duration_ms",
-        "show_resume_picker",
-        "teleport_on_start"
       ],
       "propertyTypes": null,
       "source": "callSite"
@@ -2850,13 +2900,55 @@
     },
     {
       "correlated": false,
+      "event": "vibe.tool_call.detected",
+      "properties": {
+        "api_style": "chat_completions",
+        "backend": "mistral",
+        "call_source": "vibe_code",
+        "call_type": "main_call",
+        "message_id": "oracle-message",
+        "model": "oracle-model",
+        "nb_dropped_tool_calls": 2,
+        "nb_unusable_attempts": 1,
+        "reasons": [
+          "invalid_json"
+        ],
+        "status": "success"
+      },
+      "propertyKeys": [
+        "api_style",
+        "backend",
+        "call_source",
+        "call_type",
+        "message_id",
+        "model",
+        "nb_dropped_tool_calls",
+        "nb_unusable_attempts",
+        "reasons",
+        "status"
+      ],
+      "propertyTypes": {
+        "api_style": "string",
+        "backend": "string",
+        "call_source": "string",
+        "call_type": "string",
+        "message_id": "string",
+        "model": "string",
+        "nb_dropped_tool_calls": "int",
+        "nb_unusable_attempts": "int",
+        "reasons": "array",
+        "status": "string"
+      },
+      "source": "driven"
+    },
+    {
+      "correlated": false,
       "event": "vibe.tool_call_finished",
       "properties": {
         "agent_profile_name": "oracle-profile",
         "approval_source": "user",
-        "approval_type": "session",
-        "bash_background": false,
-        "decision": "approved",
+        "approval_type": "ask",
+        "decision": "execute",
         "file_extension": ".rs",
         "message_id": "oracle-message",
         "model": "oracle-model",
@@ -2869,7 +2961,6 @@
         "agent_profile_name",
         "approval_source",
         "approval_type",
-        "bash_background",
         "decision",
         "file_extension",
         "message_id",
@@ -2883,7 +2974,6 @@
         "agent_profile_name": "string",
         "approval_source": "string",
         "approval_type": "string",
-        "bash_background": "bool",
         "decision": "string",
         "file_extension": "string",
         "message_id": "string",
@@ -2896,32 +2986,22 @@
       "source": "driven"
     },
     {
-      "correlated": false,
+      "correlated": null,
+      "event": "vibe.tool_classification",
+      "properties": null,
+      "propertyKeys": [],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
+      "correlated": null,
       "event": "vibe.user_cancelled_action",
-      "properties": {
-        "action": "interrupt_agent"
-      },
+      "properties": null,
       "propertyKeys": [
         "action"
       ],
-      "propertyTypes": {
-        "action": "string"
-      },
-      "source": "driven"
-    },
-    {
-      "correlated": false,
-      "event": "vibe.user_copied_text",
-      "properties": {
-        "text_length": 11
-      },
-      "propertyKeys": [
-        "text_length"
-      ],
-      "propertyTypes": {
-        "text_length": "int"
-      },
-      "source": "driven"
+      "propertyTypes": null,
+      "source": "callSite"
     },
     {
       "correlated": true,
@@ -2942,10 +3022,11 @@
     },
     {
       "correlated": null,
-      "event": "vibe.voice_mode_toggled",
+      "event": "vibe.worktree.created",
       "properties": null,
       "propertyKeys": [
-        "enabled"
+        "checkout_ms",
+        "copy_on_write"
       ],
       "propertyTypes": null,
       "source": "callSite"
@@ -2961,13 +3042,52 @@
       "source": "driven"
     },
     {
-      "event": "vibe.at_mention_inserted",
-      "sender": "send_at_mention_inserted",
+      "event": "vibe.artifact_created",
+      "sender": null,
       "sites": [
-        "vibe/cli/textual_ui/app.py",
-        "vibe/core/telemetry/send.py"
+        "vibe/core/telemetry/session.py"
       ],
-      "source": "driven"
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.artifact_detected",
+      "sender": null,
+      "sites": [
+        "vibe/core/telemetry/session.py"
+      ],
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.artifact_detection_failed",
+      "sender": null,
+      "sites": [
+        "vibe/core/telemetry/session.py"
+      ],
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.artifact_mark_viewed",
+      "sender": null,
+      "sites": [
+        "vibe/core/telemetry/session.py"
+      ],
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.artifact_sync_failed",
+      "sender": null,
+      "sites": [
+        "vibe/core/telemetry/session.py"
+      ],
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.artifact_synced",
+      "sender": null,
+      "sites": [
+        "vibe/core/telemetry/session.py"
+      ],
+      "source": "callSite"
     },
     {
       "event": "vibe.audio.transcription.cancel_recording",
@@ -3034,6 +3154,22 @@
       "source": "driven"
     },
     {
+      "event": "vibe.onboarding_sign_in.done",
+      "sender": null,
+      "sites": [
+        "vibe/app_server/_setup_oidc.py"
+      ],
+      "source": "callSite"
+    },
+    {
+      "event": "vibe.onboarding_sign_in.started",
+      "sender": null,
+      "sites": [
+        "vibe/app_server/_setup_oidc.py"
+      ],
+      "source": "callSite"
+    },
+    {
       "event": "vibe.read_aloud.ended",
       "sender": "driven",
       "sites": [
@@ -3085,7 +3221,7 @@
       "event": "vibe.session_branched",
       "sender": null,
       "sites": [
-        "vibe/cli/textual_ui/app.py"
+        "vibe/app_server/_unified_harness_backend_adapter.py"
       ],
       "source": "callSite"
     },
@@ -3099,20 +3235,10 @@
     },
     {
       "event": "vibe.slash_command_used",
-      "sender": "send_slash_command_used",
-      "sites": [
-        "vibe/acp/agent.py",
-        "vibe/acp/commands/controller.py",
-        "vibe/cli/textual_ui/app.py",
-        "vibe/core/telemetry/send.py"
-      ],
-      "source": "driven"
-    },
-    {
-      "event": "vibe.startup",
       "sender": null,
       "sites": [
-        "vibe/cli/textual_ui/app.py"
+        "vibe/acp/agent.py",
+        "vibe/acp/commands/controller.py"
       ],
       "source": "callSite"
     },
@@ -3133,46 +3259,50 @@
       "source": "driven"
     },
     {
-      "event": "vibe.tool_call_finished",
-      "sender": "send_tool_call_finished",
+      "event": "vibe.tool_call.detected",
+      "sender": "send_tool_call_detected",
       "sites": [
         "vibe/core/telemetry/send.py"
       ],
       "source": "driven"
+    },
+    {
+      "event": "vibe.tool_call_finished",
+      "sender": "send_unified_tool_call_finished",
+      "sites": [
+        "vibe/core/telemetry/send.py"
+      ],
+      "source": "driven"
+    },
+    {
+      "event": "vibe.tool_classification",
+      "sender": null,
+      "sites": [
+        "vibe/app_server/_unified_harness_backend_adapter.py"
+      ],
+      "source": "callSite"
     },
     {
       "event": "vibe.user_cancelled_action",
-      "sender": "send_user_cancelled_action",
+      "sender": null,
       "sites": [
-        "vibe/acp/agent.py",
-        "vibe/cli/textual_ui/app.py",
-        "vibe/core/telemetry/send.py"
+        "vibe/acp/agent.py"
       ],
-      "source": "driven"
-    },
-    {
-      "event": "vibe.user_copied_text",
-      "sender": "send_user_copied_text",
-      "sites": [
-        "vibe/cli/textual_ui/app.py",
-        "vibe/core/telemetry/send.py"
-      ],
-      "source": "driven"
+      "source": "callSite"
     },
     {
       "event": "vibe.user_rating_feedback",
       "sender": "send_user_rating_feedback",
       "sites": [
-        "vibe/cli/textual_ui/app.py",
         "vibe/core/telemetry/send.py"
       ],
       "source": "driven"
     },
     {
-      "event": "vibe.voice_mode_toggled",
+      "event": "vibe.worktree.created",
       "sender": null,
       "sites": [
-        "vibe/cli/textual_ui/app.py"
+        "vibe/app_server/_unified_harness_backend_adapter.py"
       ],
       "source": "callSite"
     }
@@ -4475,7 +4605,7 @@
     }
   ],
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "schemaVersion": 1,
   "spans": [
@@ -4826,8 +4956,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "c41b61334e5c9b9c747a81b8aba3d516ea2a9dd647ec9672b16ee9bf62074091",
-        "length": 42
+        "digest": "db723e5d8656166d94beba756ca429b03044feff88a9a513fb4f328c7246c774",
+        "length": 38
       }
     },
     {
@@ -4856,8 +4986,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "8b0f72ae2129322a8601a78921563e806ed2d82a87d9f2e66284c0075e7edf2e",
-        "length": 42
+        "digest": "db723e5d8656166d94beba756ca429b03044feff88a9a513fb4f328c7246c774",
+        "length": 38
       }
     },
     {
@@ -4886,8 +5016,8 @@
       "recording": true,
       "statusCode": "ERROR",
       "statusDescription": {
-        "digest": "3210c7f78c57ec5083463e9712e9392c5f51dddb711ffee895ed0f35a1bbf782",
-        "length": 42
+        "digest": "f5a3e3a1615b137dba42d2489af83972faba66a65d5addcf9f5c9c466a8fd61f",
+        "length": 38
       }
     },
     {

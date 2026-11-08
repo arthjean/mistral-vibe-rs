@@ -538,30 +538,3 @@ WINDOWS_TOKEN_CASES: tuple[str, ...] = (
     "'C:\\quoted'",
     "-",
 )
-
-#: Session commands the `*_stdin` permission is resolved against, per shell
-#: family: input to a session that may be a pager asks, anything else defers.
-#: `None` stands for a session the family does not know.
-STDIN_PERMISSION_CASES: tuple[tuple[str, str | None], ...] = (
-    ("posix", "git log"),
-    ("posix", "less notes.txt"),
-    ("posix", "more notes.txt"),
-    ("posix", "cat notes.txt"),
-    ("posix", "sleep 30; git log"),
-    ("posix", "eval git log"),
-    ("posix", "exec less notes.txt"),
-    ("posix", "/usr/bin/GIT.exe log"),
-    ("posix", "echo git"),
-    ("posix", "gitk"),
-    ("posix", "(git log)"),
-    ("posix", "cat $(which less)"),
-    ("posix", None),
-    ("git_bash", "git log"),
-    ("git_bash", "cat notes.txt"),
-    ("powershell", "git log"),
-    ("powershell", "& 'C:\\tools\\git.exe' log"),
-    ("powershell", "type a | more"),
-    ("powershell", "Get-Content a"),
-    ("powershell", "less.exe x"),
-    ("powershell", None),
-)

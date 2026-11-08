@@ -45,8 +45,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-use crate::parity::REFERENCE_COMMIT;
 use crate::parity::figures::{Figures, assert_figures};
+use crate::parity::is_pin_commit;
 use crate::parity::replay::{self, ValuedDifference, pinned_reference, valued_differences};
 
 use super::paths::{
@@ -233,8 +233,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate with `{CAPTURE_SCRIPT} --corpus`"
     );
-    assert_eq!(
-        corpus.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference_commit),
         "the corpus was captured from another commit than this build asserts"
     );
     corpus

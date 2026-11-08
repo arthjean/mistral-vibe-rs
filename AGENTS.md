@@ -29,15 +29,19 @@ vendored, linked, or shipped. This binds every change:
   reference, against the digests `python3 scripts/parity/repin.py shingles
   <sha>` writes under `crates/vibe-core/tests/licensing/`. Its baseline lists
   the runs known when it landed and only shrinks: fix a new run by rewriting
-  it, never by adding a line.
+  it, never by adding a line. During a rolling re-pin the baseline stays cut
+  at `PREVIOUS_COMMIT`, and a run the target finds passes only when it re-cuts
+  a listed run, covering some of the same words of the same file and fewer
+  than eight words outside them.
 
 ## The behavioral oracle
 
 The Python reference is a separate checkout, pinned in exactly two places:
 `vibe_core::parity::REFERENCE_COMMIT` (`crates/vibe-core/src/parity.rs`) and
-`EXPECTED_COMMIT` in `scripts/parity/pin.py`.
-`crates/vibe-core/src/parity/parity_tests.rs` fails when a third copy appears or
-the two disagree. The checkout defaults to `/home/arthur/dev/mistral-vibe`;
+`EXPECTED_COMMIT` in `scripts/parity/pin.py`, each beside the
+`PREVIOUS_COMMIT` a rolling re-pin leaves (empty outside one).
+`crates/vibe-core/src/parity/parity_tests.rs` fails when a third copy of either
+commit appears or the two sources disagree. The checkout defaults to `/home/arthur/dev/mistral-vibe`;
 `VIBE_REFERENCE` relocates it (on Windows it lives at `C:\dev\mistral-vibe`), and
 a capture script's `--reference` wins over both. Reference paths in comments and
 documentation use the Linux form; read them relative to the local checkout.
@@ -91,7 +95,9 @@ documentation use the Linux form; read them relative to the local checkout.
   differences it covers, matches pointers on segment boundaries, names a
   scorecard row and what it stands on (`Class::Accepted` with the name of an
   "Accepted divergences" row, or `Class::Gap`), and fails the replay when its
-  count moves; an entry over a whole top-level observation lists the
+  count moves. A gap of the row its corpus measures is one to close, except
+  for a corpus recaptured at the target of an open re-pin, where the figures
+  count it against the row; an entry over a whole top-level observation lists the
   sub-pointers it may cover. Each replay, `Tally` or hand-rolled, ends with
   `vibe_core::parity::figures::assert_figures` against its line of the
   "Measured figures" table in `docs/parity.md`; a run appends what it counted
@@ -106,10 +112,18 @@ documentation use the Linux form; read them relative to the local checkout.
   `--agent`, `--binary`, `--live-binary`, `--vibe`, `--vibe-acp`) needs an
   `--output` outside the manifest paths, and an off-pin capture runs only
   through `repin.py capture --commit <sha>`.
-- A re-pin edits both pin sources and recaptures every corpus in the same
-  change. A replay that drifts outside a re-pin is a regression or an
-  environment leak (see Quality gates); fix the cause and leave the corpus as
-  captured.
+- A corpus changes only through `repin.py capture`. A re-pin is rolling: it
+  moves both pin sources to the target, names the commit it leaves as
+  `PREVIOUS_COMMIT` in both, and lists in the manifest's `transition` every
+  corpus not yet recaptured, which may keep that commit while the list names
+  it. A capture at the target drops its corpus from the list, a live probe
+  gates on the commit its test file's corpora record, and the transition
+  closes by clearing `PREVIOUS_COMMIT` once the list is empty
+  (`manifest_tests` fails on an open, stale or inconsistent transition).
+  `repin.py plan <sha>` prints the recapture order with the story owning each
+  driver (`scripts/parity/repin_plan.json`). A replay that drifts outside a
+  recapture is a regression or an environment leak (see Quality gates); fix
+  the cause and leave the corpus as captured.
 - State a parity claim only from a measurement against the reference, run wide
   enough to cover what changed: filtering `cargo test` to the edited module
   hides assertions elsewhere that read the same fixture. A run that printed

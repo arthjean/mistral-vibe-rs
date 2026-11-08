@@ -253,3 +253,139 @@ fn a_corpus_edited_outside_the_tool_is_refused_before_the_driver_runs() {
     );
     assert!(world.corpus().contains("s99"), "the driver never ran");
 }
+
+/// A commit a rolling re-pin left behind, for the transition tests.
+const LEFT: &str = "fedcba9876543210fedcba9876543210fedcba98";
+
+impl World {
+    /// The world in the middle of a rolling re-pin: its `pin.py` names
+    /// [`LEFT`] as the previous commit, the corpus records it, and the
+    /// transition list names the corpus.
+    fn in_transition() -> Self {
+        let world = Self::new();
+        let pin = world.root.join("scripts/parity/pin.py");
+        let source = std::fs::read_to_string(&pin).expect("the pin is readable");
+        let rewritten = source
+            .lines()
+            .map(|line| {
+                if line.starts_with("PREVIOUS_COMMIT =") {
+                    format!("PREVIOUS_COMMIT = \"{LEFT}\"")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(&pin, rewritten + "\n").expect("the pin is rewritten");
+        let corpus = world.corpus().replace(REFERENCE_COMMIT, LEFT);
+        std::fs::write(world.root.join(CORPUS), &corpus).expect("the corpus is rewritten");
+        let path = world.root.join("scripts/parity/manifest.json");
+        let mut manifest: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect("the manifest"))
+                .expect("the manifest parses");
+        manifest["transition"] = json!([CORPUS]);
+        manifest["entries"][0]["commit"] = json!(LEFT);
+        manifest["entries"][0]["sha256"] = json!(crate::text::sha256_hex(corpus.as_bytes()));
+        std::fs::write(&path, format!("{manifest:#}\n")).expect("the manifest is rewritten");
+        world
+    }
+
+    fn manifest(&self) -> Value {
+        serde_json::from_str(
+            &std::fs::read_to_string(self.root.join("scripts/parity/manifest.json"))
+                .expect("the manifest is readable"),
+        )
+        .expect("the manifest parses")
+    }
+
+    fn repin(&self, arguments: &[&str]) -> Output {
+        Command::new("python3")
+            .arg(self.root.join("scripts/parity/repin.py"))
+            .args(arguments)
+            .current_dir(&self.root)
+            .env_remove("VIBE_PARITY_REPIN_COMMIT")
+            .output()
+            .expect("python3 runs repin.py")
+    }
+}
+
+#[test]
+fn a_capture_at_the_target_drops_its_corpus_from_the_transition_list() {
+    let world = World::in_transition();
+    let output = world.capture(&[], &[]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let manifest = world.manifest();
+    assert_eq!(manifest["entries"][0]["commit"], REFERENCE_COMMIT);
+    assert_eq!(
+        manifest["transition"],
+        json!([]),
+        "the corpus left the list it no longer belongs in"
+    );
+}
+
+#[test]
+fn the_python_verifier_holds_the_transition_rules() {
+    let world = World::in_transition();
+    // `verify` lists what git tracks, so the world becomes a repository.
+    for arguments in [&["init", "-q"][..], &["add", "-A"][..]] {
+        let status = Command::new("git")
+            .args(arguments)
+            .current_dir(&world.root)
+            .status()
+            .expect("git runs");
+        assert!(status.success(), "git {arguments:?} failed");
+    }
+    let verified = world.repin(&["verify"]);
+    assert!(
+        !stderr(&verified).contains("transition"),
+        "a corpus at the previous commit is accepted while the list names it: {}",
+        stderr(&verified)
+    );
+
+    let path = world.root.join("scripts/parity/manifest.json");
+    let mut manifest = world.manifest();
+    manifest["transition"] = json!([]);
+    std::fs::write(&path, format!("{manifest:#}\n")).expect("the manifest is rewritten");
+    let closed = world.repin(&["verify"]);
+    assert!(!closed.status.success());
+    let message = stderr(&closed);
+    assert!(
+        message.contains("clear `PREVIOUS_COMMIT`")
+            && message.contains(&format!("captured from {LEFT}")),
+        "an empty list with a previous commit asks for it to be cleared, and the corpus off the \
+         list is refused: {message}"
+    );
+}
+
+#[test]
+fn the_plan_lists_every_entry_with_its_commit_driver_and_story() {
+    let world = World::in_transition();
+    std::fs::write(
+        world.root.join("scripts/parity/repin_plan.json"),
+        serde_json::to_string(&json!({
+            "schemaVersion": 1,
+            "stages": [{"story": "US-900", "title": "sample", "drivers": ["stand_in.py"]}],
+        }))
+        .expect("the plan serializes"),
+    )
+    .expect("the plan");
+    let output = world.repin(&["plan", REFERENCE_COMMIT]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let printed = String::from_utf8_lossy(&output.stdout);
+    let line = printed.lines().next().expect("one line per entry");
+    for part in [
+        "US-900",
+        CORPUS,
+        &LEFT[..12],
+        "(transition)",
+        "python3 scripts/parity/stand_in.py",
+        &format!("capture {CORPUS}"),
+    ] {
+        assert!(line.contains(part), "`{part}` is missing from `{line}`");
+    }
+    let refused = world.repin(&["plan", "c96a6db"]);
+    assert!(
+        !refused.status.success(),
+        "an abbreviated commit is refused"
+    );
+}

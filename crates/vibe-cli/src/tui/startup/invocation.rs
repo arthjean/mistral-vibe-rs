@@ -151,7 +151,7 @@ mod tests {
 
     use super::*;
 
-    use vibe_core::parity::REFERENCE_COMMIT;
+    use vibe_core::parity::is_pin_commit;
 
     #[derive(Debug, Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -214,7 +214,7 @@ mod tests {
         let text = fs::read_to_string(&path).expect("startup corpus");
         let corpus: StartupCorpus = serde_json::from_str(&text).expect("strict startup corpus");
         assert_eq!(corpus.schema_version, 1);
-        assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+        assert!(is_pin_commit(&corpus.reference.commit));
         assert_eq!(corpus.reference.commit.len(), 40);
         assert!(!corpus.reference.version.is_empty());
         assert!(!corpus.reference.source_files.is_empty());

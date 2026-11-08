@@ -56,7 +56,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
@@ -641,7 +641,7 @@ def main() -> int:
             _, vibe_acp = reference_command(arguments.reference, "vibe-acp", arguments.expected_commit)
             reference = {"commit": commit}
             commands = {"programmatic": vibe, "acp": vibe_acp, "tui": vibe}
-        commands = {name: [*command, *HARNESS_FLAGS] if command else [] for name, command in commands.items()}
+        commands = {name: [*command] if command else [] for name, command in commands.items()}
         surfaces = arguments.surface or [name for name, command in commands.items() if command]
         selected = [
             scenario

@@ -65,8 +65,18 @@ struct Divergence {
 ///
 /// The v2.26.0 re-pin opened four, the requirement's `pathScopeRoot` and the
 /// three fields of the exact-path grant of a file outside the working
-/// directory; the path grant pass closed them.
-const DIVERGENCES: &[Divergence] = &[];
+/// directory; the path grant pass closed them. The v3.1.0 re-pin opened one,
+/// a gap of row 4 until a follow-on declares the field.
+const DIVERGENCES: &[Divergence] = &[Divergence {
+    pointer: "/requirement/fields/5",
+    port: "undeclared",
+    reason: "v3.1.0 (`c96a6dbb34d3`) declares `supplied_pattern` on `PermissionRequirement`, \
+             excluded from serialization (`vibe/permissions.py:69`): the pattern a shell or \
+             file tool was handed, which the unified permission bridge prefers over the \
+             invocation pattern (`vibe/app_server/_unified_permissions.py:397`); this port's \
+             requirement does not declare it yet, so a payload carrying the key is refused \
+             naming it",
+}];
 
 /// Whether the port's `answer` at `pointer` is the reference `expected` one or
 /// the divergence [`DIVERGENCES`] records there, failing on anything else and
@@ -332,9 +342,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; update this runner with the capture script"
     );
-    assert_eq!(
-        corpus.reference.commit,
-        crate::parity::REFERENCE_COMMIT,
+    assert!(
+        crate::parity::is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from another commit than the pin"
     );
     corpus
@@ -356,9 +365,8 @@ fn every_divergence_names_a_corpus_pointer_and_its_evidence() {
             // The short form every corpus prints: the full hash may only be written in
             // the two pin sources, which `the_reference_commit_is_written_in_exactly_two_places`
             // enforces.
-            entry
-                .reason
-                .contains(&crate::parity::REFERENCE_COMMIT[..12]),
+            crate::parity::manifest::recorded_commit(&corpus)
+                .is_some_and(|commit| entry.reason.contains(&commit[..12])),
             "`{}` does not cite the pin it was measured at",
             entry.pointer
         );

@@ -82,6 +82,12 @@ def isolated(
         "NO_COLOR": "1",
         "CI": "true",
         "DBUS_SESSION_BUS_ADDRESS": "unix:path=/nonexistent",
+        # A fixed string hash. Since v3.0.0 the reference builds state patches
+        # by walking changed keys as a set (`make_json_patch` in
+        # `vibe/app_server/_patch.py`), so with Python's per-process hash
+        # seed the order, and for nested changes the operations themselves,
+        # moved from one capture to the next. A Rust child ignores it.
+        "PYTHONHASHSEED": "0",
     }
 
 

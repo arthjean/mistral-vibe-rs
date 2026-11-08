@@ -35,7 +35,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::Value;
 
-use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::is_pin_commit;
 use vibe_core::parity::replay::pinned_reference;
 
 use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
@@ -468,8 +468,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus

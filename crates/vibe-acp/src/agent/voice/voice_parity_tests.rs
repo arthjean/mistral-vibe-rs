@@ -22,7 +22,7 @@ use serde::Deserialize;
 use serde_json::Map;
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
-use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::is_pin_commit;
 use vibe_voice::capture::{AudioStream, RecorderError};
 use vibe_voice::playback::{AudioOutput, DecodedAudio, Playback, PlaybackError};
 use vibe_voice::speech::{SpeechClient, SpeechFuture};
@@ -421,8 +421,8 @@ fn the_voice_corpus_bridge_replays_against_this_port() {
     let raw = std::fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("{} is readable: {error}", path.display()));
     let corpus: Corpus = serde_json::from_str(&raw).expect("the voice corpus parses");
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     assert!(

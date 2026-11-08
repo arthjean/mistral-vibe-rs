@@ -40,13 +40,14 @@ Usage::
     python3 scripts/parity/connectors.py --check          # recapture and compare
     python3 scripts/parity/connectors.py --server target/debug/vibe-app-server-stdio-fixture \\
         --output /tmp/port.json
-    python3 scripts/parity/connectors.py --harness unified   # the Unified Harness family
+    python3 scripts/parity/connectors.py --family programs   # the run_typescript family
 
-The legacy family runs every session with ``--legacy-harness``, which is what
-row 21 measures. ``--harness unified`` runs its own scenarios on the default
-backend, where a connector is a ``connector_<alias>`` group a
+Both families run on the Unified Harness, the one backend the reference ships
+from v3.0.0. The ``sessions`` family drives connectors through the session
+methods, which is what row 21 measures. ``--family programs`` runs its own
+scenarios, where a connector is a ``connector_<alias>`` group a
 ``run_typescript`` program reaches, into ``unified-corpus.json`` beside the
-legacy corpus: that is row 36's measure of the connector path.
+first corpus: that is row 36's measure of the connector path.
 """
 
 from __future__ import annotations
@@ -71,7 +72,7 @@ import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 from connectors_scenarios import API_KEY, scenarios, unified_scenarios  # noqa: E402
 import loop_capture  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
@@ -80,7 +81,7 @@ import subagent_client  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/connectors-parity/corpus.json"
-#: Where ``--harness unified`` writes its family.
+#: Where ``--family programs`` writes its family.
 UNIFIED_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/connectors-parity/unified-corpus.json"
 SCHEMA_VERSION = 1
 
@@ -482,6 +483,12 @@ def reduce_result(method: str, result: Any, pick: list[str] | None) -> Any:
 
 
 def reduce_notification(message: dict[str, Any]) -> dict[str, Any] | None:
+    # A clock-only operation comes and goes with timing, and since v3.0.0 the
+    # order of commuting operations follows interpreter hashing; both are
+    # dropped or fixed as `app_server_client` explains.
+    message = app_server_client.without_clock(message)
+    if message is None:
+        return None
     method = message.get("method")
     params = {k: v for k, v in (message.get("params") or {}).items() if k not in DROPPED}
     if method == "runtime/updated":
@@ -499,7 +506,7 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any] | None:
             {**operation, "value": "<time>"}
             if str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS
             else operation
-            for operation in params.get("patch") or []
+            for operation in app_server_client.commuted(params.get("patch") or [])
             if isinstance(operation, dict)
         ]
         view = {"method": method}
@@ -562,12 +569,39 @@ def cache_view(cache: Any, keys: dict[str, str]) -> Any:
     if not isinstance(cache, dict):
         return cache
     view: dict[str, Any] = {}
+    unknown: list[tuple[str, Any]] = []
     for key, entry in cache.items():
         if isinstance(entry, dict):
             entry = {k: ("<time>" if k in {"stored_at", "stored_at_timestamp"} and isinstance(v, int) else v)
                      for k, v in entry.items()}
-        view[keys.get(key, key)] = entry
+        if key in keys or not CACHE_DIGEST.fullmatch(key):
+            view[keys.get(key, key)] = entry
+        else:
+            unknown.append((key, entry))
+    # Since v3.0.0 the reference files its catalog under a key that also
+    # covers the credential's principal and the built-in connectors
+    # (`connector_cache_fingerprint` in `vibe/app_server/connector_catalog.py`),
+    # which the two keys above do not reproduce. Such a key still derives from
+    # the random port, so each is numbered by what its entry holds, with the
+    # minted identifiers left out, rather than by its own spelling.
+    unknown.sort(key=lambda item: json.dumps(without_ids(item[1]), sort_keys=True))
+    for index, (_, entry) in enumerate(unknown, start=1):
+        view[f"<cache-key-{index}>"] = entry
     return dict(sorted(view.items()))
+
+
+#: A cache key the reference derives with SHA-256.
+CACHE_DIGEST = re.compile(r"[0-9a-f]{64}")
+
+
+def without_ids(value: Any) -> Any:
+    """``value`` with every ``id`` field dropped, for ordering entries whose
+    identifiers a run mints."""
+    if isinstance(value, dict):
+        return {k: without_ids(v) for k, v in value.items() if k != "id"}
+    if isinstance(value, list):
+        return [without_ids(v) for v in value]
+    return value
 
 
 def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, Any]:
@@ -594,6 +628,17 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> dict[str, An
                 "response": response,
                 "notifications": [n for n in (reduce_notification(m) for m in step["notifications"]) if n],
             })
+    if scenario.get("asyncNotifications"):
+        # A sign-in request is answered at once and its status notifications
+        # follow while the server reaches the backend, so which request a
+        # notification lands after depends on timing. The scenario keeps them
+        # all, sorted, as one pool rather than per request.
+        pooled: list[Any] = []
+        for step in steps:
+            if "notifications" in step and step.get("method") != "session/start":
+                pooled.extend(step["notifications"])
+                step["notifications"] = "<pooled>"
+        steps.append({"pooledNotifications": sorted(pooled, key=lambda item: json.dumps(item, sort_keys=True))})
     requests = [
         request_view(body) for body in run["requests"]
         if isinstance(body, dict) and "messages" in body
@@ -640,8 +685,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--server", type=Path, default=None, help="drive this binary instead")
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--harness", choices=("legacy", "unified"), default="legacy",
-                        help="the backend the sessions run on, each with its own scenarios")
+    parser.add_argument("--family", choices=("sessions", "programs"), default="sessions",
+                        help="the scenarios to run: session methods, or run_typescript programs")
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw answers")
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
@@ -653,19 +698,18 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
-    unified = arguments.harness == "unified"
+    unified = arguments.family == "programs"
     arguments.output = provenance.port_output(arguments.output, UNIFIED_OUTPUT if unified else DEFAULT_OUTPUT, server=arguments.server)
-    flags = () if unified else HARNESS_FLAGS
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *flags]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *flags]
+            command = [*binary]
         selected = [
             scenario
             for scenario in (unified_scenarios() if unified else scenarios())

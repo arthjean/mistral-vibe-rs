@@ -59,11 +59,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
-from reference import OracleError, reference_command  # noqa: E402
+from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
+
+# Turns name their user message, which a v3 rewind or fork resolves an entry
+# by (`Session.client_ids` in app_server_client.py).
+app_server_client.Session.client_ids = True
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/session-parity/corpus.json"
@@ -73,6 +77,8 @@ SCHEMA_VERSION = 1
 CURSOR_KEYS = {"cursor", "nextCursor", "previousCursor", "historyBeforeCursor"}
 #: The directory name a session is saved under: prefix, timestamp, short id.
 SESSION_DIRECTORY = re.compile(r"^(?P<prefix>[A-Za-z0-9-]+)_\d{8}_\d{6}_(?P<short>[A-Za-z0-9_-]+)$")
+#: The SHA-256 a unified session names each stored chunk of its log by.
+CHUNK_NAME = re.compile(r"\b[0-9a-f]{64}\b")
 #: `meta.json` keys whose values are wall-clock readings.
 META_TIME_KEYS = {"start_time", "end_time", "bumped_at", "pinned_at", "acquired_at", "created_at"}
 #: `meta.json` keys whose values are identities.
@@ -279,7 +285,7 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": app_server_client.render_turn(dialect, target, step["turn"])})
+                         "params": session.turn_params(dialect, target, step["turn"])})
             for message in server.wait_for(app_server_client.settles({})):
                 session.learn(message)
             for message in server.collect(None, quiet):
@@ -406,6 +412,17 @@ class Normalizer(app_server_client.Normalizer):
             stem, dot, suffix = parts[1].partition(".")
             if stem:
                 parts[1] = f"{self.identity(stem)}{dot}{suffix}"
+        elif parts[0] == "unified" and len(parts) > 1:
+            # A unified session lives under its own id (v3.0.0 and later),
+            # and stores its log as content-addressed chunks whose digest
+            # covers the timestamps a run writes, so the name is masked.
+            parts[1] = self.identity(parts[1])
+            if len(parts) > 3 and parts[2] == "chunks":
+                parts[3] = CHUNK_NAME.sub("<chunk>", parts[3])
+        elif parts[:2] == ["plugins", "data"] and len(parts) > 2:
+            # The data directory v3.0.0 gives each plugin is named by a
+            # random UUID per run.
+            parts[2] = "<plugin-data>"
         elif parts[0] == ".last_session" and len(parts) > 1:
             parts[1] = "<tty>"
         return "/".join(parts) + trailing
@@ -703,7 +720,9 @@ def scenarios() -> list[dict[str, Any]]:
                 send("session/history/get", sessionId="5eed0000-0000-4000-8000-00000000abcd"),
                 send("session/history/list", sessionId="5eed0000-0000-4000-8000-00000000abcd", page={"limit": 1}),
                 send("session/resume", sessionId="5eed0000-0000-4000-8000-00000000abcd"),
-                turn("A new question", "5eed0000-0000-4000-8000-00000000abcd"),
+                # The session the resume answers with: from v3.0.0 a saved
+                # legacy session resumes as an imported one under a new id.
+                turn("A new question", "$S1"),
                 send("session/list"),
                 STORE,
             ],
@@ -910,7 +929,7 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
             dialect = arguments.dialect or "port"
         else:
@@ -918,7 +937,7 @@ def main() -> int:
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
             dialect = arguments.dialect or "reference"
         selected = [
             scenario
@@ -944,7 +963,7 @@ def main() -> int:
             return entry
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
-            captured = list(pool.map(capture, selected))
+            captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

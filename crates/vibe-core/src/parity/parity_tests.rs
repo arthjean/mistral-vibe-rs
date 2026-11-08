@@ -3,12 +3,14 @@
 //! US-099 consolidated eleven copies of the reference commit into two: the Rust
 //! constant and its Python mirror. These tests fail when a third appears, or
 //! when the two that remain disagree, which is the drift the constants used to
-//! accumulate silently.
+//! accumulate silently. A rolling re-pin adds the commit it leaves,
+//! `PREVIOUS_COMMIT`, to both sources under the same guard: four values, two
+//! by two equal, and no third copy of either commit.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{REFERENCE_COMMIT, REFERENCE_VERSION, RESTORE_COMMAND};
+use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT, REFERENCE_VERSION, RESTORE_COMMAND, pin_commits};
 
 /// The two files allowed to spell the commit out, relative to the repository
 /// root. Every other oracle cites one of them.
@@ -76,34 +78,51 @@ fn the_reference_commit_is_written_in_exactly_two_places() {
         .map(|entry| root.join(entry))
         .collect::<Vec<_>>();
 
-    let mut copies = Vec::new();
-    for path in scanned_sources(&root) {
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-        if !contents.contains(REFERENCE_COMMIT) || allowed.contains(&path) {
-            continue;
+    // Every commit of the pin: the target, and the previous commit during a
+    // transition.
+    for commit in pin_commits() {
+        let mut copies = Vec::new();
+        for path in scanned_sources(&root) {
+            let Ok(contents) = fs::read_to_string(&path) else {
+                continue;
+            };
+            if !contents.contains(commit) || allowed.contains(&path) {
+                continue;
+            }
+            copies.push(slash_relative(&root, &path));
         }
-        copies.push(slash_relative(&root, &path));
-    }
-    copies.sort();
+        copies.sort();
 
-    assert!(
-        copies.is_empty(),
-        "the reference commit is spelled out outside {PIN_SOURCES:?}: {}. Cite \
-         `vibe_core::parity::REFERENCE_COMMIT` or `scripts/parity/pin.EXPECTED_COMMIT` instead, so \
-         a re-pin stays one edit per language",
-        copies.join(", ")
-    );
-
-    for source in allowed {
-        let contents = fs::read_to_string(&source).expect("a pin source is readable");
         assert!(
-            contents.contains(REFERENCE_COMMIT),
-            "{} no longer carries the pin",
-            source.display()
+            copies.is_empty(),
+            "the pin's commit {commit} is spelled out outside {PIN_SOURCES:?}: {}. Cite \
+             `vibe_core::parity::REFERENCE_COMMIT` or `PREVIOUS_COMMIT` (in Python, \
+             `scripts/parity/pin.EXPECTED_COMMIT` or `PREVIOUS_COMMIT`) instead, so a re-pin \
+             stays one edit per language",
+            copies.join(", ")
         );
+
+        for source in &allowed {
+            let contents = fs::read_to_string(source).expect("a pin source is readable");
+            assert!(
+                contents.contains(commit),
+                "{} no longer carries the pin's commit {commit}",
+                source.display()
+            );
+        }
     }
+}
+
+#[test]
+fn the_previous_commit_is_empty_or_a_full_commit_other_than_the_target() {
+    assert!(
+        PREVIOUS_COMMIT.is_empty()
+            || (PREVIOUS_COMMIT.len() == 40
+                && PREVIOUS_COMMIT.bytes().all(|byte| byte.is_ascii_hexdigit())
+                && PREVIOUS_COMMIT != REFERENCE_COMMIT),
+        "`PREVIOUS_COMMIT` is `{PREVIOUS_COMMIT}`: empty outside a transition, otherwise the full \
+         commit the re-pin left"
+    );
 }
 
 #[test]
@@ -112,29 +131,31 @@ fn no_rust_module_redeclares_its_own_reference_commit() {
     // Composed rather than written whole so this test does not match its own
     // source. The declaration form is what matters: a module that merely
     // *names* the constant, through an import or a message, is not a copy.
-    let declaration = format!("const {}: &str", "REFERENCE_COMMIT");
+    for name in ["REFERENCE_COMMIT", "PREVIOUS_COMMIT"] {
+        let declaration = format!("const {name}: &str");
 
-    let mut declarations = Vec::new();
-    for path in scanned_sources(&root) {
-        if path.extension().and_then(|value| value.to_str()) != Some("rs") {
-            continue;
+        let mut declarations = Vec::new();
+        for path in scanned_sources(&root) {
+            if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(contents) = fs::read_to_string(&path) else {
+                continue;
+            };
+            if !contents.contains(&declaration) {
+                continue;
+            }
+            declarations.push(slash_relative(&root, &path));
         }
-        let Ok(contents) = fs::read_to_string(&path) else {
-            continue;
-        };
-        if !contents.contains(&declaration) {
-            continue;
-        }
-        declarations.push(slash_relative(&root, &path));
+        declarations.sort();
+
+        assert_eq!(
+            declarations,
+            vec!["crates/vibe-core/src/parity.rs".to_owned()],
+            "`grep -rn '{name}: &str' crates` must return the single definition every other \
+             oracle cites"
+        );
     }
-    declarations.sort();
-
-    assert_eq!(
-        declarations,
-        vec!["crates/vibe-core/src/parity.rs".to_owned()],
-        "`grep -rn 'REFERENCE_COMMIT: &str' crates` must return the single definition every other \
-         oracle cites"
-    );
 }
 
 #[test]
@@ -159,6 +180,11 @@ fn the_python_mirror_agrees_with_the_rust_pin() {
         REFERENCE_COMMIT,
         "the capture scripts would measure a different commit than the replays assert"
     );
+    assert_eq!(
+        quoted("PREVIOUS_COMMIT ="),
+        PREVIOUS_COMMIT,
+        "the capture scripts and the replays would accept a different previous commit"
+    );
     assert_eq!(quoted("EXPECTED_VERSION ="), REFERENCE_VERSION);
 }
 
@@ -173,9 +199,10 @@ fn no_capture_script_redeclares_the_pin() {
         let Ok(contents) = fs::read_to_string(&path) else {
             continue;
         };
-        let declares = contents
-            .lines()
-            .any(|line| line.starts_with("EXPECTED_COMMIT =") && line.contains('"'));
+        let declares = contents.lines().any(|line| {
+            (line.starts_with("EXPECTED_COMMIT =") || line.starts_with("PREVIOUS_COMMIT ="))
+                && line.contains('"')
+        });
         if !declares {
             continue;
         }

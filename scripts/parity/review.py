@@ -55,9 +55,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import host_env  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
-from reference import OracleError, reference_command  # noqa: E402
+from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
+
+# Turns name their user message, which a v3 rewind or fork resolves an entry
+# by (`Session.client_ids` in app_server_client.py).
+app_server_client.Session.client_ids = True
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/review-parity/corpus.json"
@@ -255,15 +259,19 @@ COMPACTING_CONFIG = (
     'name = "mistral-vibe-cli-latest"\n'
     'provider = "mistral"\n'
     'alias = "mistral-medium-3.5"\n'
-    "auto_compact_threshold = 16\n"
+    "auto_compact_threshold = 50000\n"
 )
-#: Turn one edits and reports enough context that a compaction runs before turn
-#: two, which edits again after the boundary.
+#: Turn one edits and reports more context than the threshold, so a compaction
+#: runs before the turn goes on, and turn two edits again after the boundary.
+#: From v3.0.0 the threshold has to fall within the model's window (at least
+#: 50000 tokens for this one), and the reference refuses this compaction as
+#: one whose replacement cannot fit the threshold
+#: (`compaction_replacement_too_large`), which the corpus records.
 COMPACTING_BACKEND = [
     {"toolCalls": [
         write("created.txt", "made in turn one\n", "call_w1"),
         edit("notes.txt", "alpha", "ALPHA", "call_e1"),
-    ], "promptTokens": 12, "completionTokens": 8},
+    ], "promptTokens": 60000, "completionTokens": 8},
     {"text": "<summary>The user edited the notes.</summary>", "promptTokens": 1, "completionTokens": 1},
     {"text": "Turn one done.", "promptTokens": 2, "completionTokens": 1},
     {"toolCalls": [
@@ -722,7 +730,7 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
             dialect = arguments.dialect or "port"
         else:
@@ -730,7 +738,7 @@ def main() -> int:
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
             dialect = arguments.dialect or "reference"
         selected = [
             scenario
@@ -761,7 +769,7 @@ def main() -> int:
             return entry
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
-            captured = list(pool.map(capture, selected))
+            captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

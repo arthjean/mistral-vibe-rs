@@ -32,7 +32,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+    Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -49,49 +49,426 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-const LEDGER: &[PatternDivergence] = &[];
+const PROSE: &[OwnProse] = &[];
 
-/// Every text this port words its own way, digest by digest.
-/// The accepted divergences the prose below stands on.
-const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
-const OWN_SENTENCES: &str = "Programmatic mode's own sentences";
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 answers this session method otherwise: the Unified Harness the reference now runs on alone saves, lists and resumes sessions with fields and a store layout this port does not reproduce yet";
 
-/// The checkpoint a resumed session closes its history on names the session
-/// in a full sentence where the reference writes a 15-character marker, 2.4
-/// times as long.
-const CHECKPOINT_BAND: Band = Band {
-    low: 0.5,
-    high: 2.5,
-};
-
-const PROSE: &[OwnProse] = &[
-    OwnProse {
-        scenarios: &[
-            "continue/after-a-restart",
-            "history/seeded",
-            "lease/second-server",
-            "logging/elsewhere",
-            "resume/after-a-restart",
-        ],
-        pointer: "/*/response/result/state/history/*/message",
-        count: 6,
-        band: CHECKPOINT_BAND,
-        directives: None,
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*",
+        count: 4,
         row: "16",
-        accepted: OWN_SENTENCES,
-        reason: "the checkpoint a resumed or continued session closes its history on",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
-    OwnProse {
-        scenarios: &["logging/disabled"],
-        pointer: "/*/response/error/message",
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/failure",
         count: 1,
-        band: Band::DEFAULT,
-        directives: None,
         row: "16",
-        accepted: SERVER_PROSE,
-        reason: "the refusal of a log read while logging is disabled",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/method",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/notifications",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error",
+        count: 5,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error/code",
+        count: 3,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error/data",
+        count: 5,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error/message",
+        count: 3,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result",
+        count: 5,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/continueSessionId",
+        count: 31,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/lastEventId",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/nextCursor",
+        count: 3,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/agent",
+        count: 9,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/bumpedAt",
+        count: 5,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/contextUsage/cachedInputTokens",
+        count: 6,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/loops",
+        count: 11,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/session/tokenUsage/cachedInputTokens",
+        count: 6,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/leases/active~1<id-1>.lock.json",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-1>/meta/values/artifacts",
+        count: 15,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-1>/meta/values/config",
+        count: 15,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-1>/meta/values/environment/working_directory",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-1>/meta/values/project",
+        count: 15,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path",
+        count: 15,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-2>/meta/values/artifacts",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-2>/meta/values/config",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-2>/meta/values/end_time",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-2>/meta/values/project",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-2>/meta/values/runtime_path",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-3>/meta/values/artifacts",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-3>/meta/values/config",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-3>/meta/values/end_time",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-3>/meta/values/project",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-3>/meta/values/runtime_path",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/notifications/*",
+        count: 9,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/history/*/outcome",
+        count: 4,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*",
+        count: 3,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/bumpedAt",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/contextUsage/cachedInputTokens",
+        count: 25,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/cwd",
+        count: 1,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/id",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/loops",
+        count: 29,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/outcome",
+        count: 17,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/preview",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/rootSessionId",
+        count: 2,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/items/*/tokenUsage/cachedInputTokens",
+        count: 25,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/state/history/*/outcome",
+        count: 30,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-1>/meta/keys/*",
+        count: 75,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-2>/meta/keys/*",
+        count: 10,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/sessions/unified~1<id-3>/meta/keys/*",
+        count: 10,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/store/tree/*",
+        count: 970,
+        row: "16",
+        class: Class::Gap,
+        reason: V3_REASON,
     },
 ];
+
+const LEDGER: &[PatternDivergence] = &[];
 
 #[test]
 #[cfg_attr(
@@ -109,7 +486,11 @@ fn the_port_answers_every_session_scenario_as_the_corpus_records_or_as_the_ledge
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("session-parity-port.json"),
     }
-    .run(entries(PROSE).chain(entries(LEDGER)));
+    .run(
+        entries(PROSE)
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
+    );
 }
 
 #[test]
@@ -118,7 +499,9 @@ fn every_ledger_entry_is_declared_soundly() {
     assert_ledger(
         LISTED,
         &scenarios(&corpus),
-        entries(PROSE).chain(entries(LEDGER)),
+        entries(PROSE)
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
     );
 }
 

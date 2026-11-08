@@ -277,6 +277,7 @@ pub fn digest(text: &str) -> Value {
 /// which is what keeps a missing environment from failing `cargo test` unless
 /// `VIBE_PARITY_REQUIRE_LIVE=1` asks for live measurement.
 #[must_use]
+#[track_caller]
 pub fn pinned_reference(probe: &str) -> Option<PathBuf> {
     super::live::gate(probe)
 }
@@ -284,6 +285,7 @@ pub fn pinned_reference(probe: &str) -> Option<PathBuf> {
 /// [`pinned_reference`] for a probe whose oracle is the host's own platform
 /// ([`super::live::gate_native`]).
 #[must_use]
+#[track_caller]
 pub fn pinned_reference_native(probe: &str) -> Option<PathBuf> {
     super::live::gate_native(probe)
 }
@@ -411,6 +413,7 @@ impl Capture {
 
     /// The live probe named `probe`: recaptures the pinned reference when
     /// this machine has it, as [`Capture::check`] does.
+    #[track_caller]
     pub fn probe(&self, probe: &str) {
         if let Some(root) = pinned_reference(probe) {
             self.check(&root, &[]);
@@ -822,13 +825,23 @@ impl Entry for OwnProse {
 /// `parity_tests` allows in two places only.
 pub const AUDIT_ABBREVIATION: usize = 12;
 
+/// Whether a ledger may keep a gap of the row its corpus measures: only for a
+/// corpus at the target, `commit`, while a rolling re-pin that left
+/// `previous` is open. That gap is what the new pin revealed, and the figures
+/// count it against the row. Outside a transition, and for a corpus still at
+/// `previous`, it is a gap to close.
+#[must_use]
+pub fn own_row_gap_admitted(previous: &str, commit: &str) -> bool {
+    !previous.is_empty() && commit == super::REFERENCE_COMMIT
+}
+
 /// Asserts every entry of a ledger over the corpus `listed` (a
 /// workspace-relative path the manifest lists, as [`manifest::assert_replayed`]
 /// returns it), whose scenarios are `recorded`, is declared soundly: its own
 /// shape, a row `docs/parity.md` carries, a decided divergence the scorecard
 /// accepts when its class names one, recorded scenarios, an audit commit that
 /// is the corpus's, and no gap of the row the corpus measures, which the
-/// replay has to close rather than ledger.
+/// replay has to close rather than ledger, unless [`own_row_gap_admitted`].
 ///
 /// [`Tally::conclude`] runs this; a test may also run it on its own, which
 /// checks a ledger on a host where its replay is ignored.
@@ -862,11 +875,16 @@ pub fn assert_ledger<'l>(
                 "the ledger entry for {label} stands on `{name}`, which docs/parity.md \
                  \"Accepted divergences\" does not carry"
             )),
-            Class::Gap if entry.row() == listing.row => problems.push(format!(
-                "row {} is what this corpus measures, so a difference it keeps is a gap to close, \
-                 not a ledger entry: {label}",
-                listing.row
-            )),
+            Class::Gap
+                if entry.row() == listing.row
+                    && !own_row_gap_admitted(super::PREVIOUS_COMMIT, commit) =>
+            {
+                problems.push(format!(
+                    "row {} is what this corpus measures, so a difference it keeps is a gap to \
+                     close, not a ledger entry: {label}",
+                    listing.row
+                ));
+            }
             _ => {}
         }
         if let Some(missing) = entry

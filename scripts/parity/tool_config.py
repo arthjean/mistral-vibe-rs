@@ -2,8 +2,8 @@
 """Capture the per-tool configuration the pinned Python reference declares.
 
 The reference checkout is a read-only behavioral oracle. This script asks it
-what every tool class exposes as configuration: ``ToolManager`` enumerates the
-builtin directory and each class answers with its own config model, whose
+what every tool class exposes as configuration: the tool manager module
+enumerates the builtin directory and each class answers with its own config model, whose
 defaults are what an operator overrides through ``tools.<name>``. The Rust
 differential runner replays that corpus against the declaration table in
 ``vibe_core::tools::config``.
@@ -56,12 +56,16 @@ SHELL_LIST_KEYS = ("allowlist", "denylist", "denylist_standalone")
 
 
 def capture_declarations() -> dict[str, dict[str, Any]]:
-    """What ``discover_tool_defaults`` answers for the builtin directory."""
+    """What ``discover_tool_defaults`` answers for the builtin directory.
+
+    The enumeration is a module-level function of ``vibe/core/tools/manager.py``
+    since the v3 line; it was a static method of ``ToolManager`` before.
+    """
     from vibe.core.config.harness_files import init_harness_files_manager
-    from vibe.core.tools.manager import ToolManager
+    from vibe.core.tools.manager import discover_tool_defaults
 
     init_harness_files_manager()
-    declarations = ToolManager.discover_tool_defaults()
+    declarations = discover_tool_defaults()
     if not declarations:
         raise OracleError("the reference enumerated no tool configuration")
     return {name: declarations[name] for name in sorted(declarations)}

@@ -1,20 +1,35 @@
 {
   "builtins": {
-    "count": 2,
+    "count": 4,
     "skills": [
+      {
+        "description": {
+          "digest": "b73a11a8b3438f60bc88c5e6013960469814c3305e071ce1a027b6be611b0765",
+          "length": 249
+        },
+        "hasPath": true,
+        "name": "vibe:create-plugin",
+        "prompt": {
+          "digest": "119b3ad57feb7affa8d58443c104e4a1fab1904f4e750c6d2a3444301cae2ec3",
+          "length": 12783
+        },
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+      },
       {
         "description": {
           "digest": "c6e85bed9c5d1c1fc9d3320bd3e06a6685563dfd363539cbd5b8aebf9cab49f3",
           "length": 245
         },
-        "hasPath": false,
-        "name": "skill-creator",
+        "hasPath": true,
+        "name": "vibe:skill-creator",
         "prompt": {
-          "digest": "1afef6b624de5c05f356e0b94b64406e55dc06d9e7e1c02dc25adcca75377ac7",
-          "length": 4678
+          "digest": "95df7bf48dccb36eec406db29ac19f033043a48d7691a6b1a3afafe6b726f3ee",
+          "length": 4564
         },
-        "scope": "global",
-        "source": "builtin",
+        "scope": "builtin",
+        "source": "plugin",
         "userInvocable": true
       },
       {
@@ -22,147 +37,30 @@
           "digest": "050ebe851d36b47c8fe6d0ab3539436916ab5bed7d86678cf13dc3b45312146a",
           "length": 842
         },
-        "hasPath": false,
-        "name": "vibe",
+        "hasPath": true,
+        "name": "vibe:vibe",
         "prompt": {
-          "digest": "9afcc3acaf039b91a84f6623699249f9b55a05754655d114b64d2fc1f679032a",
-          "length": 64427
+          "digest": "424dac44a67ebf3fecbe5d04188c487f1d31c4c9177d83256df33aa9a2a65f81",
+          "length": 77603
         },
-        "scope": "global",
-        "source": "builtin",
+        "scope": "builtin",
+        "source": "plugin",
         "userInvocable": false
-      }
-    ]
-  },
-  "command": {
-    "cases": [
-      {
-        "case": "plain-text",
-        "prompt": "hello world",
-        "result": null
       },
       {
-        "case": "slash-only",
-        "prompt": "/",
-        "result": null
-      },
-      {
-        "case": "unknown-skill",
-        "prompt": "/nonexistent",
-        "result": null
-      },
-      {
-        "case": "simple",
-        "prompt": "/probe",
-        "result": {
-          "content": {
-            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
-            "length": 24
-          },
-          "extraInstructions": null,
-          "name": "probe"
-        }
-      },
-      {
-        "case": "with-args",
-        "prompt": "/probe fix the bug",
-        "result": {
-          "content": {
-            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
-            "length": 24
-          },
-          "extraInstructions": "fix the bug",
-          "name": "probe"
-        }
-      },
-      {
-        "case": "multiple-spaces-kept-in-args",
-        "prompt": "/probe   spaced   args",
-        "result": {
-          "content": {
-            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
-            "length": 24
-          },
-          "extraInstructions": "spaced   args",
-          "name": "probe"
-        }
-      },
-      {
-        "case": "uppercase-name",
-        "prompt": "/PROBE",
-        "result": {
-          "content": {
-            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
-            "length": 24
-          },
-          "extraInstructions": null,
-          "name": "probe"
-        }
-      },
-      {
-        "case": "leading-and-trailing-whitespace",
-        "prompt": "   /probe trailing   ",
-        "result": {
-          "content": {
-            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
-            "length": 24
-          },
-          "extraInstructions": "trailing",
-          "name": "probe"
-        }
-      },
-      {
-        "case": "newline-separated-args",
-        "prompt": "/probe\nsecond line",
-        "result": {
-          "content": {
-            "digest": "da0da4e29b71d59d55ece8c75e8e2aca71dc8eed1a2e557672d1235c641e7225",
-            "length": 24
-          },
-          "extraInstructions": "second line",
-          "name": "probe"
-        }
-      },
-      {
-        "case": "not-user-invocable",
-        "prompt": "/hidden",
-        "result": null
-      },
-      {
-        "case": "builtin-skill-creator",
-        "prompt": "/skill-creator",
-        "result": {
-          "content": {
-            "digest": "1afef6b624de5c05f356e0b94b64406e55dc06d9e7e1c02dc25adcca75377ac7",
-            "length": 4678
-          },
-          "extraInstructions": null,
-          "name": "skill-creator"
-        }
-      },
-      {
-        "case": "builtin-vibe-not-invocable",
-        "prompt": "/vibe",
-        "result": null
-      },
-      {
-        "case": "slash-inside-text",
-        "prompt": "run /probe later",
-        "result": null
-      }
-    ],
-    "skills": [
-      {
-        "body": "Run the probe checklist.",
-        "description": "A probe",
-        "invocable": true,
-        "name": "probe"
-      },
-      {
-        "body": "Hidden body.",
-        "description": "Model only",
-        "invocable": false,
-        "name": "hidden"
+        "description": {
+          "digest": "d3a87b3d126d454b39eadf54f0ddf0417f8b880679e477fcaecfe91528eb503d",
+          "length": 195
+        },
+        "hasPath": true,
+        "name": "vibe:worktree",
+        "prompt": {
+          "digest": "9c15ef3ad58ebe29f2216ddb7c8f17e5eee743dee0b245548a0200e232f9332e",
+          "length": 4412
+        },
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
       }
     ]
   },
@@ -174,26 +72,7 @@
       "enabledSkills": [],
       "issues": [],
       "projectTrusted": true,
-      "published": [
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "published": [],
       "searchPaths": [],
       "skillPaths": [],
       "symlinks": [],
@@ -215,24 +94,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -265,24 +126,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -324,24 +167,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -379,24 +204,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -434,24 +241,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -484,24 +273,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -534,24 +305,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -580,26 +333,7 @@
       "enabledSkills": [],
       "issues": [],
       "projectTrusted": true,
-      "published": [
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "published": [],
       "searchPaths": [],
       "skillPaths": [],
       "symlinks": [],
@@ -625,24 +359,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -677,24 +393,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -743,24 +441,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -800,24 +480,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         },
         {
           "description": "Only in second path",
@@ -870,24 +532,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -922,24 +566,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -977,24 +603,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1022,15 +630,6 @@
       "projectTrusted": true,
       "published": [
         {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
           "description": "From tilde path",
           "name": "theta",
           "relPath": "tilde-skills/theta/SKILL.md",
@@ -1038,15 +637,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1081,24 +671,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1132,15 +704,6 @@
       "projectTrusted": true,
       "published": [
         {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
           "description": "Same either way",
           "name": "twin",
           "relPath": null,
@@ -1148,15 +711,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1190,24 +744,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1247,24 +783,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1294,26 +812,7 @@
         }
       ],
       "projectTrusted": true,
-      "published": [
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "published": [],
       "searchPaths": [
         [
           "project",
@@ -1348,26 +847,7 @@
         }
       ],
       "projectTrusted": true,
-      "published": [
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "published": [],
       "searchPaths": [
         [
           "project",
@@ -1386,29 +866,20 @@
     },
     {
       "case": "builtin-name-reserved",
-      "customSkillsCount": 0,
+      "customSkillsCount": 1,
       "disabledSkills": [],
       "enabledSkills": [],
       "issues": [],
       "projectTrusted": true,
       "published": [
         {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
+          "description": "Impostor",
           "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
+          "relPath": ".vibe/skills/vibe/SKILL.md",
+          "root": "project",
+          "scope": "project",
+          "source": "local",
+          "userInvocable": true
         }
       ],
       "searchPaths": [
@@ -1441,24 +912,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1492,24 +945,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1542,24 +977,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1594,24 +1011,6 @@
           "scope": "global",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "skill-creator",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "name": "vibe",
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "searchPaths": [
@@ -1640,9 +1039,7 @@
       "enabledSkills": [],
       "kept": [
         "alpha",
-        "beta",
-        "skill-creator",
-        "vibe"
+        "beta"
       ],
       "skills": [
         "alpha",
@@ -1678,9 +1075,7 @@
       "enabledSkills": [],
       "kept": [
         "alpha",
-        "gamma",
-        "skill-creator",
-        "vibe"
+        "gamma"
       ],
       "skills": [
         "alpha",
@@ -1798,9 +1193,7 @@
       "enabledSkills": [],
       "kept": [
         "alpha",
-        "beta",
-        "skill-creator",
-        "vibe"
+        "beta"
       ],
       "skills": [
         "alpha",
@@ -1815,9 +1208,7 @@
       "enabledSkills": [
         "vibe"
       ],
-      "kept": [
-        "vibe"
-      ],
+      "kept": [],
       "skills": [
         "alpha"
       ],
@@ -1849,9 +1240,7 @@
       "enabledSkills": [],
       "kept": [
         "alpha",
-        "beta",
-        "skill-creator",
-        "vibe"
+        "beta"
       ],
       "skills": [
         "alpha",
@@ -2609,30 +1998,7 @@
   ],
   "lifecycle": [
     {
-      "available": [
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "available": [],
       "case": "experiment-off-loads-no-pin",
       "disabledSkills": [],
       "installed": [],
@@ -2679,28 +2045,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "frozen-pin-loads",
@@ -2790,28 +2134,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "latest-pin-loads-newest-on-disk",
@@ -2901,28 +2223,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "custom-alias-loads-recorded-version",
@@ -3018,28 +2318,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "custom-alias-recorded-but-missing-falls-back",
@@ -3126,28 +2404,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "custom-alias-unrecorded-falls-back",
@@ -3213,30 +2469,7 @@
       "trusted": true
     },
     {
-      "available": [
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "available": [],
       "case": "frozen-pin-not-materialized-skipped",
       "disabledSkills": [],
       "installed": [],
@@ -3268,30 +2501,7 @@
       "trusted": true
     },
     {
-      "available": [
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "available": [],
       "case": "latest-pin-nothing-on-disk-skipped",
       "disabledSkills": [],
       "installed": [],
@@ -3328,28 +2538,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "unsafe-id-skipped",
@@ -3431,28 +2619,6 @@
           "scope": "project",
           "source": "local",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "local-skill-wins-over-pin",
@@ -3535,26 +2701,19 @@
     {
       "available": [
         {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
+          "description": "vibe v1",
           "modelInvocable": true,
           "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-v",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-v/1/SKILL.md",
+          "root": "home",
           "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
+          "source": "registry",
+          "userInvocable": true
         }
       ],
       "case": "builtin-name-wins-over-pin",
@@ -3635,28 +2794,6 @@
           "scope": "project",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "project-pin-wins-over-global",
@@ -3783,28 +2920,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "untrusted-project-manifest-unread",
@@ -3886,30 +3001,7 @@
       "trusted": false
     },
     {
-      "available": [
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
-        }
-      ],
+      "available": [],
       "case": "disabled-pin-hidden-but-installed",
       "disabledSkills": [
         "remote"
@@ -3990,28 +3082,6 @@
           "scope": "global",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "pin-keeps-disabled-invocation",
@@ -4090,17 +3160,6 @@
           "userInvocable": true
         },
         {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
           "description": "Only here",
           "modelInvocable": true,
           "name": "solo",
@@ -4112,15 +3171,15 @@
           "userInvocable": true
         },
         {
-          "description": null,
+          "description": "Reserved name",
           "modelInvocable": true,
           "name": "vibe",
           "registry": null,
-          "relPath": null,
-          "root": null,
+          "relPath": ".vibe/skills/vibe/SKILL.md",
+          "root": "home",
           "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
+          "source": "local",
+          "userInvocable": true
         }
       ],
       "case": "installed-keeps-shadowed-rows",
@@ -4184,6 +3243,17 @@
           "name": "solo",
           "registry": null,
           "relPath": ".vibe/skills/solo/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": "Reserved name",
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": ".vibe/skills/vibe/SKILL.md",
           "root": "home",
           "scope": "global",
           "source": "local",
@@ -4281,28 +3351,6 @@
           "scope": "project",
           "source": "registry",
           "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "skill-creator",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": true
-        },
-        {
-          "description": null,
-          "modelInvocable": true,
-          "name": "vibe",
-          "registry": null,
-          "relPath": null,
-          "root": null,
-          "scope": "global",
-          "source": "builtin",
-          "userInvocable": false
         }
       ],
       "case": "same-pin-in-both-scopes",
@@ -4819,7 +3867,15 @@
         }
       ],
       "links": [],
-      "published": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "vibe",
+          "relPath": "vibe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
       "tree": {
         "configured": {
           "vibe/SKILL.md": "---\nname: vibe\ndescription: Policy probe vibe\n---\n\nPolicy body.\n",
@@ -5593,8 +4649,18 @@
       }
     },
     {
-      "accepted": false,
+      "accepted": true,
       "case": "compatibility-501-chars",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "description": "d",
+        "disable_model_invocation": false,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
       "frontmatter": {
         "compatibility": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "description": "d",
@@ -5765,7 +4831,7 @@
       }
     }
   ],
-  "note": "Captured from the pinned reference by scripts/parity/skills.py. Scenario-supplied values, field names, verdicts, counts and digests are observations; no reference-authored prose is recorded. Builtin bodies and descriptions appear as length plus SHA-256 only, and the registry store's fallback description is masked as {fallbackDescription}. Normalizations: published skill lists are sorted by name because the reference walks directories in filesystem order; the winner of a duplicate name within a single root is filesystem-order dependent, so its path is recorded null; symlinked roots are mapped to the label of the directory they resolve to.",
+  "note": "Captured from the pinned reference by scripts/parity/skills.py. Scenario-supplied values, field names, verdicts, counts and digests are observations; no reference-authored prose is recorded. Builtin (packaged plugin) bodies and descriptions appear as length plus SHA-256 only, and the registry store's fallback description is masked as {fallbackDescription}. Normalizations: published skill lists are sorted by name because the reference walks directories in filesystem order; the winner of a duplicate name within a single root is filesystem-order dependent, so its path is recorded null; symlinked roots are mapped to the label of the directory they resolve to.",
   "projection": [
     {
       "case": "local-defaults",
@@ -6031,9 +5097,9 @@
     }
   ],
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "service": [
     {
       "args": {

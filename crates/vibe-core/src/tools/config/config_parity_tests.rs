@@ -2,7 +2,8 @@
 //!
 //! The Python reference is the authority on what an operator may write under
 //! `tools.<name>`. `scripts/parity/tool_config.py` asks it through
-//! `ToolManager.discover_tool_defaults`, which enumerates every builtin class
+//! `discover_tool_defaults` (a function of `vibe/core/tools/manager.py` since
+//! v3, a `ToolManager` static method before), which enumerates every builtin class
 //! and returns the configuration model each one declares, and records the same
 //! table as it reaches an operator through `create_default_config`. This module
 //! replays that corpus against [`DECLARATIONS`] and against the document
@@ -14,10 +15,11 @@
 //! unconditionally; only the live probe that recaptures from the pinned
 //! checkout skips when it is absent.
 //!
-//! A default the replay finds different is admitted only through
-//! [`DIVERGENCES`], one entry per corpus pointer carrying the value this port
-//! declares instead. An entry whose divergence stopped reproducing fails the
-//! replay until it is removed.
+//! The replay compares one unit per `(tool, key)` pair either side declares,
+//! through a [`Tally`]: a pair this port declares differently, or declares
+//! where the reference does not, is admitted only by a typed entry of
+//! [`LEDGER`] that counts it exactly. An entry whose difference stopped
+//! reproducing fails the replay until it is removed.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -29,7 +31,8 @@ use serde_json::{Map, Value as JsonValue};
 
 use super::*;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::{REFERENCE_COMMIT, pinned_interpreter};
+use crate::parity::replay::{Class, PatternDivergence, Tally, differences, entries};
+use crate::parity::{is_pin_commit, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_config.py";
 const CORPUS_RELATIVE: &str = "tests/tool-config/defaults.json";
@@ -37,21 +40,82 @@ const CORPUS_RELATIVE: &str = "tests/tool-config/defaults.json";
 /// capture script.
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 
-/// One observed difference from the reference, scoped to the corpus pointer
-/// of the `(tool, key)` default it contradicts.
-struct Divergence {
-    /// The JSON pointer into the corpus whose reference default this port does
-    /// not declare.
-    pointer: &'static str,
-    /// The default this port declares instead, as compact JSON.
-    port: &'static str,
-    /// The reference change and its evidence, and what this port does instead.
-    reason: &'static str,
-}
+/// Why the shell tools still declare their own timeout keys.
+const SHELL_TIMEOUTS_KEPT: &str = "v3 leaves `default_timeout` and `max_timeout_seconds` \
+     unset by default on each shell tool, so its enumeration omits them \
+     (vibe/core/tools/builtins/bash.py and vibe/core/config/shell_timeouts.py at c96a6dbb34d3), \
+     and this port still publishes a default for each";
 
-/// Every difference the replay admits, measured at the pin in
-/// `crate::parity::REFERENCE_COMMIT`.
-const DIVERGENCES: &[Divergence] = &[];
+/// The differences this port keeps from the reference, each a gap of row 4,
+/// one unit per `(tool, key)` pair named `<tool>/<key>`.
+const LEDGER: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "exit_plan_mode/*",
+        pointer: "/declaration/default",
+        count: 4,
+        row: "4",
+        class: Class::Gap,
+        reason: "v3 removed the `exit_plan_mode` tool (vibe/core/tools/builtins/exit_plan_mode.py \
+                 is gone at c96a6dbb34d3), and this port still declares its configuration",
+    },
+    PatternDivergence {
+        scenario: "bash/default_timeout",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: SHELL_TIMEOUTS_KEPT,
+    },
+    PatternDivergence {
+        scenario: "bash/max_timeout_seconds",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: SHELL_TIMEOUTS_KEPT,
+    },
+    PatternDivergence {
+        scenario: "git_bash/default_timeout",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: SHELL_TIMEOUTS_KEPT,
+    },
+    PatternDivergence {
+        scenario: "git_bash/max_timeout_seconds",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: SHELL_TIMEOUTS_KEPT,
+    },
+    PatternDivergence {
+        scenario: "powershell/default_timeout",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: SHELL_TIMEOUTS_KEPT,
+    },
+    PatternDivergence {
+        scenario: "powershell/max_timeout_seconds",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: SHELL_TIMEOUTS_KEPT,
+    },
+    PatternDivergence {
+        scenario: "read_file/max_read_bytes",
+        pointer: "/declaration/default",
+        count: 1,
+        row: "4",
+        class: Class::Gap,
+        reason: "v3 raised the `read_file` default byte budget (vibe/core/tools/builtins/\
+                 read_file.py at c96a6dbb34d3), and this port still declares the v2 value",
+    },
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -104,8 +168,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus was captured by another version of {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -124,72 +188,54 @@ fn as_json(table: &Table) -> Map<String, JsonValue> {
     object
 }
 
+/// One `(tool, key)` pair as one side declares it: its default, or nothing.
+fn declaration(value: Option<&JsonValue>) -> JsonValue {
+    let mut declared = Map::new();
+    if let Some(value) = value {
+        declared.insert("default".to_owned(), value.clone());
+    }
+    serde_json::json!({ "declaration": declared })
+}
+
 /// US-104: every tool class the reference declares configuration for is
-/// declared here, with the same keys and the same defaults.
+/// declared here, with the same keys and the same defaults, and nothing more
+/// beyond what [`LEDGER`] names.
 #[test]
 fn the_declared_tool_configuration_matches_the_reference_enumeration() {
-    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/tool-config/defaults.json");
+    let text = fs::read_to_string(corpus_path()).expect("committed corpus reads");
     let corpus = corpus();
     let resolver = captured_resolver(&corpus);
     let published = resolver.published_defaults();
 
-    let expected_names = corpus.tools.keys().cloned().collect::<BTreeSet<_>>();
     let declared_names = DECLARATIONS
         .iter()
         .map(|declaration| declaration.tool.to_owned())
         .collect::<BTreeSet<_>>();
-    assert_eq!(
-        declared_names, expected_names,
-        "the declared tool classes diverge from the reference enumeration"
-    );
-
-    let mut divergences = Vec::new();
-    let mut pairs = 0;
-    for (tool, expected) in &corpus.tools {
+    let mut port: BTreeMap<String, Map<String, JsonValue>> = BTreeMap::new();
+    for tool in &declared_names {
         let document = published
             .get(tool.as_str())
             .and_then(Value::as_table)
             .unwrap_or_else(|| panic!("tool `{tool}` publishes no configuration document"));
-        let actual = as_json(document);
-        for (key, value) in expected {
-            pairs += 1;
-            let pointer = format!("/tools/{tool}/{key}");
-            let entry = DIVERGENCES.iter().find(|entry| entry.pointer == pointer);
-            match (actual.get(key), entry) {
-                (None, _) => divergences.push(format!("{tool}.{key} has no declaration")),
-                (Some(found), Some(entry)) if found != value => {
-                    let ledgered: JsonValue =
-                        serde_json::from_str(entry.port).expect("a ledgered default is JSON");
-                    if *found != ledgered {
-                        divergences.push(format!(
-                            "{tool}.{key} is {found}, and its ledger entry says {}",
-                            entry.port
-                        ));
-                    }
-                }
-                (Some(found), None) if found != value => {
-                    divergences.push(format!(
-                        "{tool}.{key} is {found}, the reference says {value}"
-                    ));
-                }
-                (Some(_), Some(_)) => divergences.push(format!(
-                    "{tool}.{key} converged on the reference; remove its DIVERGENCES entry"
-                )),
-                (Some(_), None) => {}
-            }
-        }
-        for key in actual.keys() {
-            if !expected.contains_key(key) {
-                divergences.push(format!(
-                    "{tool}.{key} is declared here and nowhere upstream"
-                ));
-            }
+        port.insert(tool.clone(), as_json(document));
+    }
+
+    let empty = Map::new();
+    let mut tally = Tally::new(&text, entries(LEDGER));
+    let mut pairs = 0;
+    let tools: BTreeSet<&String> = corpus.tools.keys().chain(port.keys()).collect();
+    for tool in tools {
+        let expected = corpus.tools.get(tool).unwrap_or(&empty);
+        let actual = port.get(tool).unwrap_or(&empty);
+        let keys: BTreeSet<&String> = expected.keys().chain(actual.keys()).collect();
+        for key in keys {
+            pairs += usize::from(expected.contains_key(key));
+            let reference = declaration(expected.get(key));
+            let answered = declaration(actual.get(key));
+            let found = differences(&reference, &answered);
+            tally.record(&format!("{tool}/{key}"), &reference, &answered, found);
         }
     }
-    assert!(
-        divergences.is_empty(),
-        "the declared tool configuration diverges from the reference: {divergences:#?}"
-    );
 
     let keys = corpus
         .tools
@@ -200,61 +246,7 @@ fn the_declared_tool_configuration_matches_the_reference_enumeration() {
     assert_eq!(corpus.counts.tools, corpus.tools.len());
     assert_eq!(corpus.counts.keys, keys.len());
     assert_eq!(corpus.counts.pairs, pairs);
-    println!(
-        "tool configuration: {}/{} (tool, key) pairs declared as the reference does, {} admitted divergences, across {} classes and {} keys, at {}",
-        pairs - DIVERGENCES.len(),
-        corpus.counts.pairs,
-        DIVERGENCES.len(),
-        corpus.counts.tools,
-        corpus.counts.keys,
-        &corpus.reference.commit[..12]
-    );
-    // An admitted divergence is a default this port declares otherwise on
-    // purpose, as its reason records.
-    assert_figures(
-        "tool configuration parity:",
-        "crates/vibe-core/tests/tool-config/defaults.json",
-        Figures::decided(pairs - DIVERGENCES.len(), pairs, DIVERGENCES.len()),
-        serde_json::json!({}),
-    );
-}
-
-/// Every ledger entry points at a corpus value that exists and cites the pin
-/// it was measured at, so an entry cannot outlive the case it admits.
-#[test]
-fn every_divergence_names_a_corpus_pointer_and_its_evidence() {
-    let raw = fs::read_to_string(corpus_path()).expect("committed corpus reads");
-    let corpus: JsonValue = serde_json::from_str(&raw).expect("corpus parses");
-    for entry in DIVERGENCES {
-        assert!(
-            corpus.pointer(entry.pointer).is_some(),
-            "`{}` names nothing in the corpus",
-            entry.pointer
-        );
-        assert!(
-            // The short form every corpus prints: the full hash may only be written in
-            // the two pin sources, which `the_reference_commit_is_written_in_exactly_two_places`
-            // enforces.
-            entry.reason.contains(&REFERENCE_COMMIT[..12]),
-            "`{}` does not cite the pin it was measured at",
-            entry.pointer
-        );
-    }
-    let mut pointers = DIVERGENCES
-        .iter()
-        .map(|entry| entry.pointer)
-        .collect::<Vec<_>>();
-    pointers.sort_unstable();
-    pointers.dedup();
-    assert_eq!(
-        pointers.len(),
-        DIVERGENCES.len(),
-        "a pointer is ledgered twice"
-    );
-    eprintln!(
-        "tool configuration: {} admitted divergences",
-        DIVERGENCES.len()
-    );
+    tally.conclude("tool configuration parity:");
 }
 
 /// The three host-composed shell lists are declared for both branches, so a

@@ -62,6 +62,7 @@ from typing import Any
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, EXPECTED_VERSION
+import materialize
 from reference import DEFAULT_CACHE, INTERPRETER_VARIABLE, OracleError, reexecute_pinned
 from inprocess import SocketGuard, digest
 from commands_scenarios import (
@@ -1206,15 +1207,29 @@ NOTE = (
 )
 
 
+def expected_version(commit: str, tree: Path) -> str:
+    """The package version the tree of ``commit`` must publish: the pin's, or,
+    for the commit a rolling re-pin left, the one its environment attested."""
+
+    if commit == EXPECTED_COMMIT:
+        return EXPECTED_VERSION
+    attestation = tree.parent / materialize.ATTESTATION
+    try:
+        return json.loads(attestation.read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError) as error:
+        raise OracleError(f"{attestation} names no version for {commit}: {error}") from None
+
+
 def build_corpus(commit: str, tree: Path) -> dict[str, Any]:
-    pin = {"commit": commit, "version": EXPECTED_VERSION}
+    version = expected_version(commit, tree)
+    pin = {"commit": commit, "version": version}
     sys.path.insert(0, str(tree))
     import vibe
 
-    if vibe.__version__ != EXPECTED_VERSION:
+    if vibe.__version__ != version:
         raise OracleError(
-            f"the extracted tree publishes {vibe.__version__}, not the pinned "
-            f"{EXPECTED_VERSION}"
+            f"the extracted tree publishes {vibe.__version__}, not the {version} its commit "
+            f"{commit[:12]} carries"
         )
     import vibe.cli.commands as module
 

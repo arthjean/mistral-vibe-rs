@@ -23,17 +23,13 @@ const PARITY_FILTER: &str =
 /// The files outside a parity-named path that run a live probe, each with the
 /// test name term of [`PARITY_FILTER`] or the override that keeps it from
 /// being retried.
-const PROBES_OUTSIDE_PARITY_PATHS: [(&str, &str); 4] = [
+const PROBES_OUTSIDE_PARITY_PATHS: [(&str, &str); 3] = [
     // Every e2e trial is exempt through its own `binary(e2e)` override.
     ("crates/vibe-cli/tests/e2e/reference.rs", "binary(e2e)"),
     // A helper both `telemetry_session_parity_tests` binaries include.
     (
         "crates/vibe-cli/tests/support/telemetry_session.rs",
         "binary(/parity/)",
-    ),
-    (
-        "crates/vibe-core/src/tools/builtins/web_fetch/markdown/markdown_tests.rs",
-        "pinned_reference",
     ),
     (
         "crates/vibe-core/src/auth/keyring/win_vault/win_vault_tests.rs",

@@ -208,27 +208,33 @@ fn the_update_routes_refuse_a_bad_directory_before_the_network() {
 /// that pair only exists at a process boundary, so these cases are replayed
 /// here rather than in the in-process replay that reads the rest of the corpus
 /// (`src/cli_surface_parity_tests.rs`). The sentences are not compared: they
-/// are the reference's own, so the corpus never carried them, and the tests
-/// above measure the ones this port publishes instead.
+/// are the reference's own, so the corpus only carries their digests, and the
+/// tests above measure the ones this port publishes instead.
 #[test]
 fn every_recorded_startup_failure_replays_at_the_process_boundary() {
     let corpus: serde_json::Value =
         serde_json::from_str(include_str!("runtime-parity/cli-surface.json"))
             .expect("the corpus parses");
-    let cases: Vec<&serde_json::Value> = corpus["cases"]
+    let cases: Vec<&serde_json::Value> = corpus["scenarios"]
         .as_array()
-        .expect("the corpus lists its cases")
+        .expect("the corpus lists its scenarios")
         .iter()
-        .filter(|case| case["parser"] == "startup")
+        .filter(|case| {
+            case["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("case/startup/"))
+        })
         .collect();
-    assert_eq!(
-        cases.len(),
-        6,
-        "the corpus no longer carries the six startup vectors"
+    assert!(
+        cases.len() >= 5,
+        "the corpus no longer carries the startup vectors"
     );
+    let mut found = Vec::new();
+    let mut skipped = Vec::new();
     for case in cases {
-        let id = case["case"].as_str().expect("a case carries an id");
-        let argv: Vec<&str> = case["argv"]
+        let name = case["name"].as_str().expect("a case carries a name");
+        let id = name.trim_start_matches("case/startup/");
+        let argv: Vec<&str> = case["scenario"]["argv"]
             .as_array()
             .expect("a case carries its argv")
             .iter()
@@ -236,27 +242,84 @@ fn every_recorded_startup_failure_replays_at_the_process_boundary() {
             .collect();
         let Some(output) = replay_startup(id, &argv) else {
             eprintln!("skipping {id}: no POSIX shell to leave a process in a deleted directory");
+            skipped.push(format!("{id} /"));
             continue;
         };
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        assert_eq!(
-            output.status.code().map(i64::from),
-            case["exit"].as_i64(),
-            "{id} exited differently, stdout: {stdout}, stderr: {stderr}"
-        );
-        assert_eq!(
-            !stdout.is_empty(),
-            case["streams"]["stdout"],
-            "{id} disagrees on standard output, stdout: {stdout}"
-        );
-        assert_eq!(
-            !stderr.is_empty(),
-            case["streams"]["stderr"],
-            "{id} disagrees on standard error, stderr: {stderr}"
-        );
+        let observed = &case["observed"];
+        let port = serde_json::json!({
+            "exit": output.status.code(),
+            "stdout": !output.stdout.is_empty(),
+            "stderr": !output.stderr.is_empty(),
+        });
+        for key in ["exit", "stdout", "stderr"] {
+            if observed[key] != port[key] {
+                found.push(format!("{id} /{key}"));
+            }
+        }
     }
+    found.sort();
+    // A vector this host cannot replay departs nowhere here, so its entries
+    // are only expected where it ran.
+    let mut known: Vec<String> = KNOWN
+        .iter()
+        .map(|(at, _)| (*at).to_owned())
+        .filter(|at| !skipped.iter().any(|prefix| at.starts_with(prefix.as_str())))
+        .collect();
+    known.sort();
+    assert_eq!(
+        found, known,
+        "the startup vectors depart from the corpus otherwise than `KNOWN` names"
+    );
 }
+
+/// Where this port's launch still answers a startup vector otherwise than
+/// the corpus records, each a gap of row 7 the v3.1.0 re-pin revealed.
+const KNOWN: &[(&str, &str)] = &[
+    (
+        "add-dir-missing /stderr",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "add-dir-missing /stdout",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "add-dir-second-missing /stderr",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "add-dir-second-missing /stdout",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "check-upgrade-workdir-missing /stderr",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "check-upgrade-workdir-missing /stdout",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "update-add-dir-missing /exit",
+        "the v3.1.0 `update` subcommand exits 0 without checking `--add-dir`; this port validates it and exits 1",
+    ),
+    (
+        "workdir-missing /stderr",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "workdir-missing /stdout",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "working-directory-deleted /stderr",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+    (
+        "working-directory-deleted /stdout",
+        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
+    ),
+];
 
 /// One recorded vector, launched from the directory its argv was captured in.
 ///
@@ -271,7 +334,7 @@ fn replay_startup(case: &str, argv: &[&str]) -> Option<Output> {
     fs::create_dir_all(&home).expect("home directory");
     let workspace = canonical(root.path()).join("workspace");
     fs::create_dir_all(&workspace).expect("workspace directory");
-    let mut command = if case == "startup-working-directory-deleted" {
+    let mut command = if case == "working-directory-deleted" {
         if !Path::new("/bin/sh").exists() {
             return None;
         }

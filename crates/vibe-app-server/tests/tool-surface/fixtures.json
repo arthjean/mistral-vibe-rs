@@ -10,9 +10,9 @@
         "arguments": [
           "questions"
         ],
-        "digest": "sha256:2b3f17085e905b9c60524e6ff08f629cee2fc46d1501375a8d194b894eaf4276",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.questions"
         ]
@@ -40,9 +40,9 @@
         "arguments": [
           "questions"
         ],
-        "digest": "sha256:e98dc1cc5f0caed4839c6697d178a92a06380c2f6536e5268a031928bc1b9eb4",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.questions[0].question"
         ]
@@ -72,9 +72,9 @@
         "arguments": [
           "footerNote"
         ],
-        "digest": "sha256:02cb5f2ea90d87a4a45eddc05cc18c4f278371f31b5ad79abacbd7136bf4d09c",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.footerNote"
         ]
@@ -93,9 +93,9 @@
         "arguments": [
           "questions"
         ],
-        "digest": "sha256:72e88ca6d4c8a120089cf6db5304c0714a8a1ad859615977c8da028989b23608",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.questions"
         ]
@@ -110,9 +110,9 @@
         "arguments": [
           "questions"
         ],
-        "digest": "sha256:df32c548f7994f9a27b2a529290bfd3cb8332f115f45db629ceb27e228426f8f",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.questions"
         ]
@@ -150,9 +150,9 @@
         "arguments": [
           "questions"
         ],
-        "digest": "sha256:2764b2afcedc7683fd9bf8935168c1b44e52588efce09ec1bb65fdf7a5b6bb00",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.questions"
         ]
@@ -202,9 +202,9 @@
         "arguments": [
           "__unexpected__"
         ],
-        "digest": "sha256:d084958418143e18ce0602e240bd3fd586b83b4f1f2c943a6e3fd926dccfd5ba",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.__unexpected__"
         ]
@@ -221,9 +221,9 @@
         "arguments": [
           "command"
         ],
-        "digest": "sha256:124e561d6273b12bf88f626c84c63718715b7fe521362344574979091e106ea2",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:18ccbbc65f57e5908db2253319db0ac42a37c364b1c780a58c566764167c20f8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.command"
         ]
@@ -241,9 +241,9 @@
         "arguments": [
           "timeout"
         ],
-        "digest": "sha256:1e26c11f8017f917ad6195480776e7a5483e46c09ce85e9aac31022ede1c9982",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:18ccbbc65f57e5908db2253319db0ac42a37c364b1c780a58c566764167c20f8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.timeout"
         ]
@@ -258,9 +258,9 @@
         "arguments": [
           "command"
         ],
-        "digest": "sha256:f2a8ceeb15a4f808065e88cc36a28084ce1d028b76e31d3e33ba0a0c8bee2327",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:18ccbbc65f57e5908db2253319db0ac42a37c364b1c780a58c566764167c20f8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.command"
         ]
@@ -277,9 +277,9 @@
         "arguments": [
           "command"
         ],
-        "digest": "sha256:fc598cd9776ae4b7bcf6125213c5f74e2fae4c1af01a1594232120196982120c",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:18ccbbc65f57e5908db2253319db0ac42a37c364b1c780a58c566764167c20f8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.command"
         ]
@@ -324,9 +324,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:1a92112e28a161a5769cf4b644a1c4d1f9e77e4f0fa9d561074f66c97eec507c",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -345,9 +345,9 @@
         "arguments": [
           "new_string"
         ],
-        "digest": "sha256:1d8f851e71d68c275b6c25e339e44155f2ef8484d324443922963a2bef2d1b17",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.new_string"
         ]
@@ -366,9 +366,9 @@
         "arguments": [
           "old_string"
         ],
-        "digest": "sha256:a2c2255de1b636b6af9892cb0177a7d0263f77b0566dec39d85943f8c40fa579",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.old_string"
         ]
@@ -397,9 +397,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:341dcba52cf2cd1184b0dde9b989e5318c7e161f9acfea80a9dc80a841bddc38",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -417,9 +417,9 @@
         "arguments": [
           "new_string"
         ],
-        "digest": "sha256:fdaf8d2a36104e376e70d883c88b2edbc26920fb31d0b3808087af2500619177",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.new_string"
         ]
@@ -437,9 +437,9 @@
         "arguments": [
           "old_string"
         ],
-        "digest": "sha256:4094f86524fa18fc84b7c390f74ca5e9b608aa64d1719fe8264b4d2a87e71089",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.old_string"
         ]
@@ -458,9 +458,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:879bf4b891901ed7cead21a5df8b471517977afd6f5ccac00220c8ca00691f5f",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -479,9 +479,9 @@
         "arguments": [
           "new_string"
         ],
-        "digest": "sha256:73e4f0a8fe66a10cb9f9679aad9dd756770b1390d530860fe1238d50f7ab0cf3",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.new_string"
         ]
@@ -500,9 +500,9 @@
         "arguments": [
           "old_string"
         ],
-        "digest": "sha256:c095eb7706869bcfd4314d19a6a2cfbb3fe6d778aa9be1e947b571d9b9397b9a",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.old_string"
         ]
@@ -522,9 +522,9 @@
         "arguments": [
           "replace_all"
         ],
-        "digest": "sha256:8c15a9350dd45a8ffe9e370230035c58db6614937f9f170c8a9b2d827c575281",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.replace_all"
         ]
@@ -553,20 +553,6 @@
       "tool": "edit"
     },
     {
-      "accepted": true,
-      "arguments": {},
-      "case": "required-only",
-      "tool": "exit_plan_mode"
-    },
-    {
-      "accepted": true,
-      "arguments": {
-        "__unexpected__": 1
-      },
-      "case": "unexpected-key",
-      "tool": "exit_plan_mode"
-    },
-    {
       "accepted": false,
       "arguments": {
         "max_matches": "seventeen",
@@ -577,9 +563,9 @@
         "arguments": [
           "max_matches"
         ],
-        "digest": "sha256:48ba871b2b1321a779462e461aefa03eaffbe84a3765feb788bbf22419fbcdcd",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.max_matches"
         ]
@@ -597,9 +583,9 @@
         "arguments": [
           "path"
         ],
-        "digest": "sha256:2341f5b68933d7ef128b664dc7a4be432a52b6985145e3cb71cabd46b18cd62c",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.path"
         ]
@@ -616,9 +602,9 @@
         "arguments": [
           "pattern"
         ],
-        "digest": "sha256:8fb67ec38b9933ac4ec72a3fc80f91877c5511ddd7df7e0869bd95a973e7a1a5",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.pattern"
         ]
@@ -642,9 +628,9 @@
         "arguments": [
           "pattern"
         ],
-        "digest": "sha256:84dbd2b09fc1a871c6866e6b6af408abf5012833be4dd26cbd9dd0d831ddcf7b",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.pattern"
         ]
@@ -671,9 +657,9 @@
         "arguments": [
           "path"
         ],
-        "digest": "sha256:5628a1de3572e7dab6c871dd36653429b44e146e544e343c5500f34d2274cdd4",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.path"
         ]
@@ -690,9 +676,9 @@
         "arguments": [
           "pattern"
         ],
-        "digest": "sha256:a846531329e22ee5326a4d6cd56a13f50b6020e9df29d8b35e918802c1044ba8",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.pattern"
         ]
@@ -710,9 +696,9 @@
         "arguments": [
           "use_default_ignore"
         ],
-        "digest": "sha256:51d88b8ecfed36ce72cc13ace50ea07cbc30c6afb098b0a192804200a074dd32",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.use_default_ignore"
         ]
@@ -746,9 +732,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:eda6fe7a10efae34f2ba0cc608fcf886c85b084494e471ce78184132a42f9c90",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -766,9 +752,9 @@
         "arguments": [
           "limit"
         ],
-        "digest": "sha256:5396aa2da21790e6fb2ba5f7da012da36120ada3a21190cc2d22987b408533a4",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.limit"
         ]
@@ -786,9 +772,9 @@
         "arguments": [
           "offset"
         ],
-        "digest": "sha256:f9706ebdee39e3690ea7ddc946b3728f02a5079b9b697d6ad43b884019f5a4c5",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.offset"
         ]
@@ -803,9 +789,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:66c5faa6c118f241dcbb48c7994dcdb1ec0dd95befc8d3bd1eb1786f3093d440",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -822,9 +808,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:6220c7d54cb9d0ebd9f91b79192bed202c64e879c730e255cd29de6a497319a5",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -842,9 +828,9 @@
         "arguments": [
           "limit"
         ],
-        "digest": "sha256:5f776ce8589f22b44be7dd434a42f8706b790b30a4d160695c9be5b733afadef",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.limit"
         ]
@@ -887,9 +873,9 @@
         "arguments": [
           "name"
         ],
-        "digest": "sha256:1de0c8b1eb4006e556122b52f1af8885ed0e0b71669e3f9572ccf0a77768a04e",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c1a33cb58a331281fea53ab74270d6dd3b26e5d0863f2de76731e4317e96696e",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.name"
         ]
@@ -904,9 +890,9 @@
         "arguments": [
           "name"
         ],
-        "digest": "sha256:1f4e955d4e742a22379a60406bbbc9aa33c400c5f4ea59a2dce14f2f3af332cf",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c1a33cb58a331281fea53ab74270d6dd3b26e5d0863f2de76731e4317e96696e",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.name"
         ]
@@ -923,9 +909,9 @@
         "arguments": [
           "name"
         ],
-        "digest": "sha256:6660e653796434404c95566772b42115b0e33399635d73781cdfd2ac48d2bf36",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c1a33cb58a331281fea53ab74270d6dd3b26e5d0863f2de76731e4317e96696e",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.name"
         ]
@@ -960,9 +946,9 @@
         "arguments": [
           "agent"
         ],
-        "digest": "sha256:fa321f805d36bf94ed6fb796db3f58326d5ee340a3c946eb8af31c1bfe8adf80",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.agent"
         ]
@@ -979,9 +965,9 @@
         "arguments": [
           "task"
         ],
-        "digest": "sha256:4b784f9867cbb85f8b3f96ddab5a0eb5db5b1bc97a1ba4da1ebfea0d81726087",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.task"
         ]
@@ -996,9 +982,9 @@
         "arguments": [
           "task"
         ],
-        "digest": "sha256:99b1eafb03ad3c3cee0e2ddc7d8a21e12ee462dc8dd88a965c555990ee110896",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.task"
         ]
@@ -1016,9 +1002,9 @@
         "arguments": [
           "agent"
         ],
-        "digest": "sha256:caeeb0e45afac4cd3d96aee671bcd294b29515106a46a3eec1a3730a958a6d8c",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.agent"
         ]
@@ -1035,9 +1021,9 @@
         "arguments": [
           "task"
         ],
-        "digest": "sha256:a1cacebca33be1fd7ebc80339b18859071421111be028a51af34d25aa4fe0cc0",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.task"
         ]
@@ -1063,9 +1049,9 @@
         "arguments": [
           "__unexpected__"
         ],
-        "digest": "sha256:26a1db4851d299d93a73f85748483f2f47bfb12dcb3a35358447c2907c46181f",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.__unexpected__"
         ]
@@ -1096,9 +1082,9 @@
         "arguments": [
           "todos"
         ],
-        "digest": "sha256:8f4dfd6609409bac0e04daa3a3925116fafe93cfbcf85d54fe8852dcde2e8cbf",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.todos[0].id"
         ]
@@ -1115,9 +1101,9 @@
         "arguments": [
           "action"
         ],
-        "digest": "sha256:c9986aa7f7f97952a6172487e976dbaef88c8c61d99d1aaa7534399bd484e846",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.action"
         ]
@@ -1137,9 +1123,9 @@
         "arguments": [
           "todos"
         ],
-        "digest": "sha256:2e2b6357a0e797a7bfcbc298af518ba4f412b800eb71f0e2ef72923183d669c5",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.todos"
         ]
@@ -1154,9 +1140,9 @@
         "arguments": [
           "action"
         ],
-        "digest": "sha256:c8a1d0992256ae10e4ef78427f11179b72261cb2ff051cb62e26e096e03aa923",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.action"
         ]
@@ -1173,9 +1159,9 @@
         "arguments": [
           "action"
         ],
-        "digest": "sha256:e02ba2caf892b76838a2b40ef3b9e6a84ac06a0787aa7f5812ca1ba5c15f563d",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.action"
         ]
@@ -1218,9 +1204,9 @@
         "arguments": [
           "action"
         ],
-        "digest": "sha256:b57f4d8daa7259abd6a92864828190627b2d98c119b0e19712373f971a69140d",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.action"
         ]
@@ -1238,9 +1224,9 @@
         "arguments": [
           "timeout"
         ],
-        "digest": "sha256:8ce0189f4773dd857ee2e028f31910e8c51782b19c058a69d911db1ef72bb168",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:9dfc288282efaf72eb4bec8d7f138b4a1fa59357437cd8f90d54202ba79d52c8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.timeout"
         ]
@@ -1257,9 +1243,9 @@
         "arguments": [
           "url"
         ],
-        "digest": "sha256:0ab9e680ec9d607f108e667086aabc6141939c2fcaf62034512ad4511a650cd1",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:9dfc288282efaf72eb4bec8d7f138b4a1fa59357437cd8f90d54202ba79d52c8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.url"
         ]
@@ -1274,9 +1260,9 @@
         "arguments": [
           "url"
         ],
-        "digest": "sha256:fd14ed33ef4e319a4ba9576127df81ce195675c97b3de18e5c0ad4daa760071a",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:9dfc288282efaf72eb4bec8d7f138b4a1fa59357437cd8f90d54202ba79d52c8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.url"
         ]
@@ -1302,9 +1288,9 @@
         "arguments": [
           "url"
         ],
-        "digest": "sha256:c0bed6d0b53cbbab32451129fd30cc06a315feb1cf82cc09e2bc1d2a4a2ad670",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:9dfc288282efaf72eb4bec8d7f138b4a1fa59357437cd8f90d54202ba79d52c8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.url"
         ]
@@ -1331,78 +1317,6 @@
     {
       "accepted": false,
       "arguments": {
-        "query": 17
-      },
-      "case": "mismatched-query",
-      "rejection": {
-        "arguments": [
-          "query"
-        ],
-        "digest": "sha256:6b426d20101274e47d5e10e07fecd730083256825abe7dcaecb46757846f8d20",
-        "error": "ToolError",
-        "namesTool": true,
-        "pointers": [
-          "$.query"
-        ]
-      },
-      "tool": "web_search"
-    },
-    {
-      "accepted": false,
-      "arguments": {},
-      "case": "missing-query",
-      "rejection": {
-        "arguments": [
-          "query"
-        ],
-        "digest": "sha256:409cef0ed5673aea6fa6339c39a126b1f41b6e48d1cbe1d458a85a0518c2e907",
-        "error": "ToolError",
-        "namesTool": true,
-        "pointers": [
-          "$.query"
-        ]
-      },
-      "tool": "web_search"
-    },
-    {
-      "accepted": false,
-      "arguments": {
-        "query": null
-      },
-      "case": "null-query",
-      "rejection": {
-        "arguments": [
-          "query"
-        ],
-        "digest": "sha256:5466ca7829e5faa4914c215185416ab1fa343d20b72f336a53ce60de1a20e8d6",
-        "error": "ToolError",
-        "namesTool": true,
-        "pointers": [
-          "$.query"
-        ]
-      },
-      "tool": "web_search"
-    },
-    {
-      "accepted": true,
-      "arguments": {
-        "query": "sample"
-      },
-      "case": "required-only",
-      "tool": "web_search"
-    },
-    {
-      "accepted": true,
-      "arguments": {
-        "__unexpected__": 1,
-        "query": "sample"
-      },
-      "case": "unexpected-key",
-      "tool": "web_search"
-    },
-    {
-      "accepted": false,
-      "arguments": {
         "content": 17,
         "file_path": "sample"
       },
@@ -1411,9 +1325,9 @@
         "arguments": [
           "content"
         ],
-        "digest": "sha256:aedcfe1eb915e0110d4cbac5dde2ea2da7d4219562a4b3b00918160b414c18fc",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.content"
         ]
@@ -1431,9 +1345,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:c76537b2592410789fdc433589c6fd42cd5a6b95e38656901689873cfca61283",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -1450,9 +1364,9 @@
         "arguments": [
           "content"
         ],
-        "digest": "sha256:56fa3f3cc73f2788c0d1a54bd7a37e6ef79fe9247d15f179a39fa19dce5b3aeb",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.content"
         ]
@@ -1469,9 +1383,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:c7d5accf712f568bc8b5d8b993437d662379c2e9b1ca05d5c5f0726ba10e6635",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -1489,9 +1403,9 @@
         "arguments": [
           "content"
         ],
-        "digest": "sha256:5e41e405f5b5a2437246c95ea011de20f839851438de60f8957a975a317cbfb5",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.content"
         ]
@@ -1509,9 +1423,9 @@
         "arguments": [
           "file_path"
         ],
-        "digest": "sha256:62744cb8514b8fb67be37fc9ceb65b077042ba6a55cf8fe0bb9c0ac01c314458",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path"
         ]
@@ -1552,9 +1466,9 @@
           "footerNote",
           "questions"
         ],
-        "digest": "sha256:4bb59b23d2639103d3bbbccfe7b34a1f71e25ba5bb97a3837fb2be136e055478",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:86b53b5394a5cc0bfc46ea6816eb39ebb0d668c2de226bc7e518f8d546c322bc",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.footerNote",
           "$.questions"
@@ -1573,9 +1487,9 @@
           "command",
           "timeout"
         ],
-        "digest": "sha256:352d46b444ed15ac530d786fe48d0789baf03e9404568991e9240289f250dc6d",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:18ccbbc65f57e5908db2253319db0ac42a37c364b1c780a58c566764167c20f8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.command",
           "$.timeout"
@@ -1597,9 +1511,9 @@
           "new_string",
           "old_string"
         ],
-        "digest": "sha256:726977c5f4d8b11805cccd45cb26c0b8efee11969a641ad6f47de6e0fd4a1083",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:bbab21520082d930b88014b510197259fd753aa57c6138de86b7f1d4219b077d",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path",
           "$.new_string",
@@ -1622,9 +1536,9 @@
           "path",
           "pattern"
         ],
-        "digest": "sha256:2db890f524c8856038fdd50e845cd94fcd6f7e910383b0dd9d70c1d9685448d9",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:d7ad3be7672810528024ec09b5cb2c604b5709c20533a93e9aac1f06f20ea6e2",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.max_matches",
           "$.path",
@@ -1646,9 +1560,9 @@
           "limit",
           "offset"
         ],
-        "digest": "sha256:55ccef022ceadefa568de3fa2ae541318cf4513d712de94774196b504701c35a",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:62f8574ca9159c0e9a4cba8c62a9b4479e526eb9dbdca32bbe6d89676b894b26",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.file_path",
           "$.limit",
@@ -1668,9 +1582,9 @@
           "agent",
           "task"
         ],
-        "digest": "sha256:cc61c4b9034f3ead332383e13f1d00dbd1f030659c767ab4e964af4e7433a395",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:df7b8e0284563ddb948f71af64a7a6bdaed90391d3455cb628f7a560e6627ff0",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.agent",
           "$.task"
@@ -1691,9 +1605,9 @@
           "action",
           "todos"
         ],
-        "digest": "sha256:45ef68a84c0e24e6bbfd52b515b7a8cabbe768224cf13eb68dab31087abb0e54",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:3eab4436e751e509b1550457075acabb9270c2cbe11f70a0801d8a7354d21fa5",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.action",
           "$.todos"
@@ -1712,9 +1626,9 @@
           "timeout",
           "url"
         ],
-        "digest": "sha256:125107c274512b502ac0c6241e80aaee69e66679f7dfe6a3a27e0651b38f5d19",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:9dfc288282efaf72eb4bec8d7f138b4a1fa59357437cd8f90d54202ba79d52c8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.timeout",
           "$.url"
@@ -1733,9 +1647,9 @@
           "content",
           "file_path"
         ],
-        "digest": "sha256:4fea01bc37acca526fe9baec0e38772a4319cb87b5de9b256ab7f9cdf8608b13",
-        "error": "ToolError",
-        "namesTool": true,
+        "digest": "sha256:c7878b83988cadc243c98392435a7372786efaa4fb9e01284ded082ba76148b8",
+        "error": "AttributeError",
+        "namesTool": false,
         "pointers": [
           "$.content",
           "$.file_path"
@@ -1746,6 +1660,6 @@
   ],
   "note": "Argument fixtures with the verdict the reference Pydantic gave them. Payloads and case names are authored by scripts/parity/tool_surface.py; the captured values are the accepted flag and, for a rejection, the shape of the error the model reads: its type, whether it names the tool, which arguments it objected to, and a digest of the text. multiArgument holds the same measurement for payloads breaking more than one argument at once, which is what says whether a rejection names every argument or only the first. Schemas come from digest.json. Regenerate with scripts/parity/tool_surface.py --fixtures when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+  "referenceCommit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
   "schemaVersion": 2
 }

@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.6,
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {
@@ -366,7 +366,7 @@
             }
           }
         ],
-        "tables": "\n[[providers]]\nname = \"other\"\napi_base = \"http://127.0.0.1:9/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"other\"\nalias = \"other\"\n"
+        "tables": "\n[[providers]]\nname = \"other\"\napi_base = \"$DEAD/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"other\"\nalias = \"other\"\n"
       }
     },
     {
@@ -663,7 +663,7 @@
             }
           }
         ],
-        "tables": "\n[[providers]]\nname = \"other\"\napi_base = \"http://127.0.0.1:9/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"other\"\nalias = \"other\"\n"
+        "tables": "\n[[providers]]\nname = \"other\"\napi_base = \"$DEAD/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"other\"\nalias = \"other\"\n"
       }
     },
     {
@@ -777,7 +777,7 @@
             }
           }
         ],
-        "tables": "\n[[providers]]\nname = \"other\"\napi_base = \"http://127.0.0.1:9/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"other\"\nalias = \"other\"\n"
+        "tables": "\n[[providers]]\nname = \"other\"\napi_base = \"$DEAD/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"other\"\nalias = \"other\"\n"
       }
     },
     {
@@ -850,7 +850,7 @@
             }
           }
         ],
-        "tables": "\n[[providers]]\nname = \"untyped-provider\"\napi_base = \"http://127.0.0.1:9/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"untyped-provider\"\nalias = \"untyped\"\n"
+        "tables": "\n[[providers]]\nname = \"untyped-provider\"\napi_base = \"$DEAD/v1\"\napi_key_env_var = \"OTHER_KEY\"\napi_style = \"openai\"\n\n[[models]]\nname = \"other-model\"\nprovider = \"untyped-provider\"\nalias = \"untyped\"\n"
       }
     },
     {
@@ -10011,7 +10011,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],
@@ -10351,7 +10351,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],
@@ -10690,7 +10690,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],
@@ -10993,7 +10993,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],
@@ -11291,7 +11291,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],
@@ -11624,7 +11624,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],
@@ -15883,10 +15883,12 @@
             "response": {
               "error": {
                 "code": "conflict",
-                "data": null,
+                "data": {
+                  "teleportId": "op-1"
+                },
                 "message": {
-                  "prose": 40,
-                  "sha256": "204499f041f60787d019955acd423cb056ea36861cc95c8561d2f34cfc18ded1"
+                  "prose": 35,
+                  "sha256": "6eb6ae80d8789c4f53c3cd23b320fcbf4a40ea53b610fc28bb88739380229f7c"
                 }
               }
             }
@@ -15897,10 +15899,12 @@
             "response": {
               "error": {
                 "code": "conflict",
-                "data": null,
+                "data": {
+                  "teleportId": "op-1"
+                },
                 "message": {
-                  "prose": 37,
-                  "sha256": "986bc82a71a51a853ee86400f8d6294df68668e831b717050e20090a77a4d014"
+                  "prose": 35,
+                  "sha256": "6eb6ae80d8789c4f53c3cd23b320fcbf4a40ea53b610fc28bb88739380229f7c"
                 }
               }
             }
@@ -16253,10 +16257,12 @@
                 "response": {
                   "error": {
                     "code": "conflict",
-                    "data": null,
+                    "data": {
+                      "teleportId": "op-1"
+                    },
                     "message": {
-                      "prose": 40,
-                      "sha256": "204499f041f60787d019955acd423cb056ea36861cc95c8561d2f34cfc18ded1"
+                      "prose": 35,
+                      "sha256": "6eb6ae80d8789c4f53c3cd23b320fcbf4a40ea53b610fc28bb88739380229f7c"
                     }
                   }
                 }
@@ -17935,6 +17941,17 @@
                 "100"
               ]
             ]
+          },
+          {
+            "authorized": true,
+            "method": "GET",
+            "path": "/api/v1/code/projects",
+            "query": [
+              [
+                "limit",
+                "100"
+              ]
+            ]
           }
         ],
         "requests": [],
@@ -18053,12 +18070,47 @@
             "events": [],
             "method": "vibeCode/projects/open",
             "response": {
-              "error": {
-                "code": "conflict",
-                "data": null,
-                "message": {
-                  "prose": 35,
-                  "sha256": "140b795c5b328ce0455880a5a8b18a60ab2e768e1cc536b61bbaa2e9849618a1"
+              "result": {
+                "pickerId": "<id-3>",
+                "resolvedProjectId": null,
+                "view": {
+                  "context": {
+                    "repoName": "repo",
+                    "repoRoot": "<ws>",
+                    "repoUrl": "https://github.com/oracle/repo.git",
+                    "savedLink": {
+                      "projectId": "proj-1",
+                      "projectName": "Repo",
+                      "repoRoot": "<ws>",
+                      "repoUrl": "https://github.com/oracle/repo.git"
+                    }
+                  },
+                  "git": {
+                    "branch": "main",
+                    "defaultBranch": "main",
+                    "remoteName": "origin",
+                    "remoteUrl": "https://github.com/oracle/repo.git",
+                    "repo": "repo"
+                  },
+                  "projectRepoRemoteChanged": false,
+                  "savedProjectLinkCleared": false,
+                  "state": {
+                    "nextCursor": null,
+                    "projects": [
+                      {
+                        "isReadOnly": false,
+                        "name": "Repo",
+                        "projectId": "proj-1",
+                        "repositories": [
+                          {
+                            "defaultBranch": "main",
+                            "repoUrl": "https://github.com/oracle/repo.git"
+                          }
+                        ]
+                      }
+                    ],
+                    "repoUrl": "https://github.com/oracle/repo.git"
+                  }
                 }
               }
             }
@@ -21853,7 +21905,7 @@
                 "role": "user"
               }
             ],
-            "stream": false,
+            "stream": true,
             "tools": 0
           }
         ],

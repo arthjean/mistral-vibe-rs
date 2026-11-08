@@ -12,12 +12,12 @@ use std::process::Command;
 
 use serde_json::json;
 
-use super::REFERENCE_COMMIT;
 use super::manifest::{
-    Kind, Manifest, ManifestEntry, REPIN, content_problems, families, is_corpus_location, load,
-    minimum_floor, names_reference, recorded_commit,
+    Kind, Manifest, ManifestEntry, REPIN, accepted_commits, content_problems, families,
+    is_corpus_location, load, minimum_floor, names_reference, recorded_commit, transition_problems,
 };
 use super::replay::{repository, scorecard_rows};
+use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT};
 
 /// Every JSON file git tracks under a crate's `tests/` directory, where a
 /// corpus has to be listed.
@@ -181,7 +181,6 @@ fn every_committed_corpus_is_listed_at_an_accepted_commit_and_unchanged_since_it
         std::fs::read_to_string(root.join("docs/parity.md")).expect("the scorecard is readable");
     let rows = scorecard_rows(&scorecard);
     let tracked = tracked_files();
-    let accepted = manifest.accepted();
 
     let mut problems = unlisted(&manifest, &tracked_json(&tracked), |path| {
         std::fs::read_to_string(root.join(path)).ok()
@@ -209,15 +208,13 @@ fn every_committed_corpus_is_listed_at_an_accepted_commit_and_unchanged_since_it
         problems.extend(entry_problems(entry, &rows));
         let text =
             std::fs::read_to_string(root.join(&entry.corpus)).expect("a listed corpus is readable");
-        problems.extend(content_problems(entry, &text, &accepted));
+        problems.extend(content_problems(
+            entry,
+            &text,
+            &manifest.accepted_for(&entry.corpus),
+        ));
     }
-    for commit in &manifest.transition {
-        if commit == REFERENCE_COMMIT || commit.len() != 40 {
-            problems.push(format!(
-                "the transition list names {commit}, which is the pin or not a full commit"
-            ));
-        }
-    }
+    problems.extend(transition_problems(&manifest, PREVIOUS_COMMIT));
     assert!(
         problems.is_empty(),
         "the parity manifest and the corpora disagree:\n{}",
@@ -297,11 +294,130 @@ fn a_corpus_off_every_accepted_commit_names_both_commits() {
     );
 }
 
+/// A commit a re-pin left behind, for the transition tests.
+const LEFT: &str = "0123456789abcdef0123456789abcdef01234567";
+
+/// A manifest listing one corpus at each commit of `entries`, and `transition`.
+fn manifest_of(entries: &[(&str, &str)], transition: &[&str]) -> Manifest {
+    Manifest {
+        schema_version: 1,
+        note: None,
+        transition: transition.iter().map(|&corpus| corpus.to_owned()).collect(),
+        entries: entries
+            .iter()
+            .map(|&(corpus, commit)| {
+                let mut listed = entry(&sample(commit, 3));
+                corpus.clone_into(&mut listed.corpus);
+                listed
+            })
+            .collect(),
+    }
+}
+
 #[test]
-fn a_transition_commit_is_accepted_while_the_list_names_it() {
-    let previous = "0123456789abcdef0123456789abcdef01234567";
-    let text = sample(previous, 3);
-    assert!(content_problems(&entry(&text), &text, &[REFERENCE_COMMIT, previous]).is_empty());
+fn a_corpus_at_the_previous_commit_is_accepted_only_while_the_transition_list_names_it() {
+    let text = sample(LEFT, 3);
+    let listed = entry(&text);
+    let named = vec![listed.corpus.clone()];
+    let accepted = accepted_commits(&named, LEFT, &listed.corpus);
+    assert_eq!(accepted, [REFERENCE_COMMIT, LEFT]);
+    assert!(content_problems(&listed, &text, &accepted).is_empty());
+
+    let unnamed = accepted_commits(&[], LEFT, &listed.corpus);
+    assert_eq!(unnamed, [REFERENCE_COMMIT]);
+    let problems = content_problems(&listed, &text, &unnamed);
+    assert!(
+        problems
+            .iter()
+            .any(|problem| problem.contains(LEFT) && problem.contains("accepted")),
+        "{problems:?}"
+    );
+    let other = accepted_commits(
+        &["crates/other/tests/x.json".to_owned()],
+        LEFT,
+        &listed.corpus,
+    );
+    assert_eq!(
+        other,
+        [REFERENCE_COMMIT],
+        "the list accepts only the corpora it names"
+    );
+    assert_eq!(
+        accepted_commits(&named, "", &listed.corpus),
+        [REFERENCE_COMMIT],
+        "no previous commit, nothing but the target"
+    );
+}
+
+#[test]
+fn the_transition_list_may_not_name_a_corpus_already_at_the_target() {
+    let manifest = manifest_of(
+        &[
+            ("crates/a/tests/a.json", LEFT),
+            ("crates/b/tests/b.json", REFERENCE_COMMIT),
+        ],
+        &["crates/a/tests/a.json", "crates/b/tests/b.json"],
+    );
+    let problems = transition_problems(&manifest, LEFT);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(
+        problems[0].contains("crates/b/tests/b.json")
+            && problems[0].contains("already at the target")
+            && problems[0].contains("drop it"),
+        "{}",
+        problems[0]
+    );
+}
+
+#[test]
+fn an_empty_transition_list_with_a_previous_commit_asks_for_it_to_be_cleared() {
+    let manifest = manifest_of(&[("crates/a/tests/a.json", REFERENCE_COMMIT)], &[]);
+    let problems = transition_problems(&manifest, LEFT);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(
+        problems[0].contains("clear `PREVIOUS_COMMIT`") && problems[0].contains(LEFT),
+        "{}",
+        problems[0]
+    );
+    assert!(
+        transition_problems(&manifest, "").is_empty(),
+        "outside a transition"
+    );
+}
+
+#[test]
+fn a_transition_list_without_a_previous_commit_or_naming_an_unknown_corpus_is_refused() {
+    let manifest = manifest_of(
+        &[("crates/a/tests/a.json", LEFT)],
+        &[
+            "crates/a/tests/a.json",
+            "crates/gone/tests/gone.json",
+            "crates/a/tests/a.json",
+        ],
+    );
+    let problems = transition_problems(&manifest, "");
+    assert!(
+        problems
+            .iter()
+            .any(|problem| problem.contains("`PREVIOUS_COMMIT` is empty")),
+        "{problems:?}"
+    );
+    assert!(
+        problems
+            .iter()
+            .any(|problem| problem.contains("crates/gone/tests/gone.json")
+                && problem.contains("not a manifest entry")),
+        "{problems:?}"
+    );
+    assert!(
+        problems.iter().any(|problem| problem.contains("twice")),
+        "{problems:?}"
+    );
+    let same = transition_problems(&manifest_of(&[], &[]), REFERENCE_COMMIT);
+    assert!(
+        same.iter().any(|problem| problem.contains("is the target")),
+        "{same:?}"
+    );
 }
 
 #[test]

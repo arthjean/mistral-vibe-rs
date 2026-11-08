@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.4,
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {
@@ -885,8 +885,8 @@
                   }
                 },
                 "savedLink": null,
-                "staleLinkClearFailed": true,
-                "staleLinkCleared": false
+                "staleLinkClearFailed": false,
+                "staleLinkCleared": true
               }
             }
           },
@@ -896,13 +896,7 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
-                "",
-                "[[projects]]",
-                "kind = \"remote\"",
-                "repo_root = \"<root>/repo\"",
-                "repo_url = \"https://github.com/someone/else.git\"",
-                "project_id = \"proj-1\"",
-                "project_name = \"Repo\"",
+                "projects = []",
                 ""
               ]
             }
@@ -910,12 +904,11 @@
           {
             "method": "projectLinks/save",
             "response": {
-              "error": {
-                "code": "internal_error",
-                "data": null,
-                "message": {
-                  "prose": 57,
-                  "sha256": "cb2bd21ff1f1fe6fe5c76124c79a4961a5580a828e6afaadc7ef2e133ef1a62a"
+              "result": {
+                "link": {
+                  "directoryPath": "<root>/plain",
+                  "projectId": "proj-1",
+                  "projectName": "Saved"
                 }
               }
             }
@@ -928,11 +921,10 @@
                 "version = 1",
                 "",
                 "[[projects]]",
-                "kind = \"remote\"",
-                "repo_root = \"<root>/repo\"",
-                "repo_url = \"https://github.com/someone/else.git\"",
+                "kind = \"local\"",
+                "directory_path = \"<root>/plain\"",
                 "project_id = \"proj-1\"",
-                "project_name = \"Repo\"",
+                "project_name = \"Saved\"",
                 ""
               ]
             }
@@ -4081,8 +4073,8 @@
                   }
                 },
                 "savedLink": null,
-                "staleLinkClearFailed": true,
-                "staleLinkCleared": false
+                "staleLinkClearFailed": false,
+                "staleLinkCleared": true
               }
             }
           },
@@ -4092,13 +4084,7 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
-                "",
-                "[[projects]]",
-                "kind = \"remote\"",
-                "repo_root = \"<root>/repo\"",
-                "repo_url = \"https://github.com/someone/else.git\"",
-                "project_id = \"proj-1\"",
-                "project_name = \"Repo\"",
+                "projects = []",
                 ""
               ]
             }
@@ -7333,13 +7319,39 @@
           {
             "method": "projectLinks/picker/load",
             "response": {
-              "error": {
-                "code": "internal_error",
-                "data": null,
-                "message": {
-                  "prose": 57,
-                  "sha256": "cb2bd21ff1f1fe6fe5c76124c79a4961a5580a828e6afaadc7ef2e133ef1a62a"
-                }
+              "result": {
+                "candidates": {
+                  "items": [
+                    {
+                      "name": "Alpha",
+                      "projectId": "proj-a",
+                      "recommended": true
+                    },
+                    {
+                      "name": "beta",
+                      "projectId": "proj-b",
+                      "recommended": false
+                    },
+                    {
+                      "name": "Alpha multi",
+                      "projectId": "proj-multi",
+                      "recommended": false
+                    }
+                  ],
+                  "nextCursor": "c2"
+                },
+                "root": {
+                  "directoryName": "repo",
+                  "directoryPath": "<root>/repo",
+                  "git": {
+                    "currentBranch": "main",
+                    "defaultBranch": "main",
+                    "githubRepoUrl": "https://github.com/oracle/repo.git",
+                    "hasCommits": true
+                  }
+                },
+                "savedLink": null,
+                "staleLinkCleared": true
               }
             }
           },
@@ -7349,13 +7361,7 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
-                "",
-                "[[projects]]",
-                "kind = \"remote\"",
-                "repo_root = \"<root>/repo\"",
-                "repo_url = \"https://github.com/someone/else.git\"",
-                "project_id = \"proj-b\"",
-                "project_name = \"beta\"",
+                "projects = []",
                 ""
               ]
             }
@@ -8674,12 +8680,11 @@
           {
             "method": "projectLinks/create",
             "response": {
-              "error": {
-                "code": "internal_error",
-                "data": null,
-                "message": {
-                  "prose": 57,
-                  "sha256": "cb2bd21ff1f1fe6fe5c76124c79a4961a5580a828e6afaadc7ef2e133ef1a62a"
+              "result": {
+                "link": {
+                  "directoryPath": "<root>/repo",
+                  "projectId": "proj-new",
+                  "projectName": "Fresh"
                 }
               }
             }
@@ -8690,6 +8695,13 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
+                "",
+                "[[projects]]",
+                "kind = \"remote\"",
+                "repo_root = \"<root>/repo\"",
+                "repo_url = \"https://github.com/oracle/repo.git\"",
+                "project_id = \"proj-new\"",
+                "project_name = \"Fresh\"",
                 ""
               ]
             }
@@ -9781,12 +9793,11 @@
           {
             "method": "projectLinks/link",
             "response": {
-              "error": {
-                "code": "internal_error",
-                "data": null,
-                "message": {
-                  "prose": 57,
-                  "sha256": "cb2bd21ff1f1fe6fe5c76124c79a4961a5580a828e6afaadc7ef2e133ef1a62a"
+              "result": {
+                "link": {
+                  "directoryPath": "<root>/repo",
+                  "projectId": "proj-1",
+                  "projectName": "Repo"
                 }
               }
             }
@@ -9797,6 +9808,13 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
+                "",
+                "[[projects]]",
+                "kind = \"remote\"",
+                "repo_root = \"<root>/repo\"",
+                "repo_url = \"https://github.com/oracle/repo.git\"",
+                "project_id = \"proj-1\"",
+                "project_name = \"Repo\"",
                 ""
               ]
             }
@@ -10567,12 +10585,11 @@
           {
             "method": "projectLinks/save",
             "response": {
-              "error": {
-                "code": "internal_error",
-                "data": null,
-                "message": {
-                  "prose": 57,
-                  "sha256": "cb2bd21ff1f1fe6fe5c76124c79a4961a5580a828e6afaadc7ef2e133ef1a62a"
+              "result": {
+                "link": {
+                  "directoryPath": "<root>/plain",
+                  "projectId": "proj-1",
+                  "projectName": "Saved"
                 }
               }
             }
@@ -10989,12 +11006,7 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
-                "",
-                "[[projects]]",
-                "kind = \"local\"",
-                "directory_path = \"<root>/plain\"",
-                "project_id = \"proj-1\"",
-                "project_name = \"Local\"",
+                "projects = []",
                 ""
               ]
             }
@@ -11042,12 +11054,7 @@
               "mode": "0o444",
               "text": [
                 "version = 1",
-                "",
-                "[[projects]]",
-                "kind = \"local\"",
-                "directory_path = \"<root>/gone\"",
-                "project_id = \"proj-1\"",
-                "project_name = \"Local\"",
+                "projects = []",
                 ""
               ]
             }

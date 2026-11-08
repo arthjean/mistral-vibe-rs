@@ -1274,7 +1274,7 @@
     }
   ],
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "requirement": {
     "fields": [
@@ -1306,6 +1306,12 @@
         "alias": "literal",
         "excluded": true,
         "name": "literal",
+        "required": false
+      },
+      {
+        "alias": "suppliedPattern",
+        "excluded": true,
+        "name": "supplied_pattern",
         "required": false
       },
       {

@@ -250,8 +250,7 @@ fn every_row_states_the_parity_and_conformance_its_figures_derive() {
         "no row of `{TABLE_SECTION}` states a Parity and a Conformance, or this parser moved"
     );
     let lines = figures::lines(&document);
-    let accepted = super::manifest::load()
-        .accepted()
+    let accepted = super::pin_commits()
         .into_iter()
         .map(|commit| figures::abbreviate(commit).to_owned())
         .collect::<Vec<_>>();

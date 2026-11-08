@@ -1,6 +1,6 @@
 {
  "reference": {
-  "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+  "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
  },
  "scenarios": [
   {
@@ -78,7 +78,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -165,7 +165,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -248,12 +248,13 @@
     },
     {
      "answer": {
-      "experimentalHarness": true,
+      "experimentalHarness": null,
       "issues": [],
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": []
       },
       "skills": [
@@ -338,9 +339,10 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": []
       }
      },
@@ -350,9 +352,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
@@ -452,7 +452,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -469,9 +469,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
@@ -527,7 +525,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -574,7 +572,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -637,12 +635,13 @@
     },
     {
      "answer": {
-      "experimentalHarness": true,
+      "experimentalHarness": null,
       "issues": [],
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": []
       },
       "skills": [
@@ -699,9 +698,10 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": []
       }
      },
@@ -711,9 +711,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {},
     "name": "unified/only-builtin",
     "steps": [
@@ -799,7 +797,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -816,7 +814,7 @@
     },
     {
      "answer": {
-      "experimentalHarness": true,
+      "experimentalHarness": null,
       "issues": [
        {
         "file": "<vibe-home>/plugins/broken/plugin.json",
@@ -824,9 +822,10 @@
        }
       ],
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": []
       },
       "skills": [
@@ -882,9 +881,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/broken/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"broken\", \"flavor\": \"unknown\"}\n",
      "plugins/skillless/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"skillless\"}\n"
@@ -981,7 +978,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1068,7 +1065,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1180,7 +1177,7 @@
     },
     {
      "answer": {
-      "experimentalHarness": true,
+      "experimentalHarness": null,
       "issues": [
        {
         "file": "<vibe-home>/plugins/servers/mcp.json",
@@ -1188,11 +1185,12 @@
        }
       ],
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {
         "missing": "mcp_transport_failed"
        },
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": [
         {
          "displayName": "fixture",
@@ -1302,11 +1300,12 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {
         "missing": "mcp_transport_failed"
        },
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": [
         {
          "displayName": "fixture",
@@ -1414,9 +1413,7 @@
     "executable": [
      "plugins/servers/bin/serve"
     ],
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/servers/bin/serve": "#!/bin/sh\nexec vibe-mcp-stdio-fixture\n",
      "plugins/servers/mcp.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\", \"mcpServers\": {\"fixture\": {\"type\": \"stdio\", \"command\": \"vibe-mcp-stdio-fixture\", \"env\": {\"LOG_LEVEL\": \"info\"}}, \"script\": {\"type\": \"stdio\", \"command\": \"./bin/serve\"}, \"missing\": {\"type\": \"stdio\", \"command\": \"./bin/missing\"}}}\n",
@@ -1572,7 +1569,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1589,23 +1586,38 @@
     },
     {
      "answer": {
-      "experimentalHarness": true,
+      "experimentalHarness": null,
       "issues": [],
       "mcp": {
-       "connectorError": "Failed to load connectors: ConnectError",
+       "connectorError": null,
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
+       "privateConnectorsHidden": false,
        "sources": []
       },
       "skills": [
        {
-        "description": "Says hello for the probe",
+        "description": "A new skill",
+        "enabled": true,
+        "locked": false,
+        "name": "added:new",
+        "prompt": {
+         "len": 4,
+         "sha256": "d6924223112656a3d41d35b5e3cbc889578ed5138d2febacfa09644147ace73e"
+        },
+        "registry": null,
+        "scope": "global",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "Says hello again",
         "enabled": true,
         "locked": false,
         "name": "demo:hello",
         "prompt": {
-         "len": 10,
-         "sha256": "c8e2c1437abb87b67330d0dddbd1de9a179ca6be207497f14873894c26e7d742"
+         "len": 16,
+         "sha256": "e08e3d69e309d1f8cfc29e2877d9f0c19ac94682c2400d115d113d3209696c36"
         },
         "registry": null,
         "scope": "global",
@@ -1725,7 +1737,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1742,9 +1754,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
@@ -1837,9 +1847,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
@@ -1902,9 +1910,7 @@
     }
    ],
    "scenario": {
-    "flags": [
-     "--experimental-harness"
-    ],
+    "flags": [],
     "home": {
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
@@ -1988,7 +1994,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "<builtin-root>",
+         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -2029,143 +2035,6 @@
      },
      {
       "call": "config/read",
-      "params": {
-       "sessionId": "$S"
-      }
-     }
-    ]
-   }
-  },
-  {
-   "name": "rollout/legacy-flag-wins",
-   "observed": [
-    {
-     "answer": {
-      "code": "not_implemented",
-      "data": null,
-      "message": "The selected session backend resolves no plugins"
-     },
-     "call": "plugin_catalog/read",
-     "ok": false,
-     "warnings": []
-    }
-   ],
-   "scenario": {
-    "flags": [
-     "--legacy-harness"
-    ],
-    "home": {
-     "experiment_eval_cache.json": "{\"oracle\": {\"stored_at_timestamp\": <now>, \"payload\": {\"features\": {\"vibe_cli_unified_harness_rollout\": {\"defaultValue\": \"unified\"}}}}}",
-     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
-     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
-    },
-    "name": "rollout/legacy-flag-wins",
-    "steps": [
-     {
-      "call": "plugin_catalog/read",
-      "params": {
-       "sessionId": "$S"
-      }
-     }
-    ]
-   }
-  },
-  {
-   "name": "legacy/declines",
-   "observed": [
-    {
-     "answer": {
-      "code": "not_implemented",
-      "data": null,
-      "message": "The selected session backend resolves no plugins"
-     },
-     "call": "plugin_catalog/read",
-     "ok": false,
-     "warnings": []
-    },
-    {
-     "answer": {
-      "code": "not_implemented",
-      "data": null,
-      "message": "The selected session backend resolves no plugins"
-     },
-     "call": "plugins/read",
-     "ok": false,
-     "warnings": []
-    },
-    {
-     "answer": {
-      "code": "not_implemented",
-      "data": null,
-      "message": "Plugins are not supported: plugin/info"
-     },
-     "call": "plugin/info",
-     "ok": false,
-     "warnings": []
-    },
-    {
-     "answer": {
-      "code": "not_implemented",
-      "data": null,
-      "message": "Plugins are not supported: plugin/reload"
-     },
-     "call": "plugin/reload",
-     "ok": false,
-     "warnings": []
-    },
-    {
-     "answer": {
-      "experimentalHarness": false,
-      "issues": [],
-      "mcp": {
-       "connectorError": null,
-       "discoveryErrors": {},
-       "manageConnectorsUrl": null,
-       "sources": []
-      },
-      "skills": []
-     },
-     "call": "runtime/read",
-     "ok": true,
-     "warnings": []
-    }
-   ],
-   "scenario": {
-    "flags": [
-     "--legacy-harness"
-    ],
-    "home": {
-     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
-     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
-    },
-    "name": "legacy/declines",
-    "steps": [
-     {
-      "call": "plugin_catalog/read",
-      "params": {
-       "sessionId": "$S"
-      }
-     },
-     {
-      "call": "plugins/read",
-      "params": {
-       "sessionId": "$S"
-      }
-     },
-     {
-      "call": "plugin/info",
-      "params": {
-       "sessionId": "$S"
-      }
-     },
-     {
-      "call": "plugin/reload",
-      "params": {
-       "sessionId": "$S"
-      }
-     },
-     {
-      "call": "runtime/read",
       "params": {
        "sessionId": "$S"
       }

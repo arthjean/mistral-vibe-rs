@@ -1,7 +1,7 @@
 {
  "note": "Captured by scripts/parity/mcp_oauth.py from the pinned reference against vibe-oauth-script-fixture. Scenario inputs, requests, names and digests only: the reference's callback pages are a length and a SHA-256.",
  "reference": {
-  "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+  "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
  },
  "scenarios": [
   {
@@ -30,6 +30,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -41,6 +42,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -67,7 +69,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -117,6 +119,7 @@
       "do": "resolve",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -128,6 +131,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -154,7 +158,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -182,13 +186,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -197,7 +201,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -206,7 +210,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -214,6 +218,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -280,14 +285,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -420,6 +425,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -431,6 +437,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__/tenant",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -511,13 +518,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -526,7 +533,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -535,7 +542,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource",
@@ -544,7 +551,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server/tenant",
@@ -553,7 +560,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/openid-configuration/tenant",
@@ -561,6 +568,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -626,14 +634,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -785,6 +793,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -796,6 +805,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -872,13 +882,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -887,7 +897,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -896,7 +906,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource",
@@ -905,7 +915,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -913,6 +923,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -974,14 +985,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -1113,6 +1124,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -1124,6 +1136,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": null,
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -1200,13 +1213,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -1215,7 +1228,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -1224,7 +1237,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource",
@@ -1233,7 +1246,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -1241,6 +1254,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -1302,14 +1316,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -1387,102 +1401,16 @@
   {
    "name": "login/metadata-server-error",
    "observed": {
-    "pkce": [
-     "valid"
-    ],
+    "pkce": [],
     "steps": [
      {
-      "browser": [
-       {
-        "headers": {
-         "cache-control": "no-store",
-         "connection": "close",
-         "content-type": "text/html; charset=utf-8"
-        },
-        "page": {
-         "length": 2372,
-         "sha256": "c21798e7c4d6f139f40de6ec463f21b578d05645b9c2b320742916f261f33c67"
-        },
-        "status": 200
-       }
-      ],
-      "descriptor": 1,
+      "browser": [],
       "do": "login",
-      "keyring": {
-       "ai.mistral.vibe|mcp-oauth:demo:client_info": {
-        "client_id": "client-1",
-        "client_id_issued_at": null,
-        "client_name": null,
-        "client_secret": null,
-        "client_secret_expires_at": null,
-        "client_uri": null,
-        "contacts": null,
-        "grant_types": [
-         "authorization_code",
-         "refresh_token"
-        ],
-        "jwks": null,
-        "jwks_uri": null,
-        "logo_uri": null,
-        "policy_uri": null,
-        "redirect_uris": [
-         "http://127.0.0.1:__REDIRECT__/callback"
-        ],
-        "response_types": [
-         "code"
-        ],
-        "scope": null,
-        "software_id": null,
-        "software_version": null,
-        "token_endpoint_auth_method": null,
-        "tos_uri": null
-       },
-       "ai.mistral.vibe|mcp-oauth:demo:fingerprint": {
-        "client_marker": "<dcr>",
-        "scopes_sorted": [],
-        "url": "http://__BASE__/mcp"
-       },
-       "ai.mistral.vibe|mcp-oauth:demo:tokens": {
-        "access_token": "at-1",
-        "expires_at": "__TIME__",
-        "expires_in": 3600,
-        "refresh_token": "rt-1",
-        "scope": null,
-        "token_type": "Bearer"
-       }
+      "keyring": {},
+      "outcome": {
+       "error": "login_failed"
       },
-      "outcome": "ok",
-      "urls": [
-       {
-        "endpoint": "http://__BASE__/authorize",
-        "parameters": [
-         [
-          "response_type",
-          "code"
-         ],
-         [
-          "client_id",
-          "client-1"
-         ],
-         [
-          "redirect_uri",
-          "http://127.0.0.1:__REDIRECT__/callback"
-         ],
-         [
-          "state",
-          "__STATE__"
-         ],
-         [
-          "code_challenge",
-          "__CHALLENGE__"
-         ],
-         [
-          "code_challenge_method",
-          "S256"
-         ]
-        ]
-       }
-      ]
+      "urls": []
      }
     ],
     "wire": [
@@ -1497,13 +1425,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -1512,7 +1440,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -1521,95 +1449,10 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource",
-      "query": []
-     },
-     {
-      "body": null,
-      "headers": {
-       "mcp-protocol-version": "2025-11-25"
-      },
-      "method": "GET",
-      "path": "/.well-known/oauth-authorization-server",
-      "query": []
-     },
-     {
-      "body": {
-       "client_name": "Mistral Vibe",
-       "grant_types": [
-        "authorization_code",
-        "refresh_token"
-       ],
-       "redirect_uris": [
-        "http://127.0.0.1:__REDIRECT__/callback"
-       ],
-       "response_types": [
-        "code"
-       ],
-       "token_endpoint_auth_method": "none"
-      },
-      "headers": {
-       "content-type": "application/json"
-      },
-      "method": "POST",
-      "path": "/register",
-      "query": []
-     },
-     {
-      "body": [
-       [
-        "grant_type",
-        "authorization_code"
-       ],
-       [
-        "code",
-        "code-1"
-       ],
-       [
-        "redirect_uri",
-        "http://127.0.0.1:__REDIRECT__/callback"
-       ],
-       [
-        "client_id",
-        "client-1"
-       ],
-       [
-        "code_verifier",
-        "__VERIFIER__"
-       ]
-      ],
-      "headers": {
-       "content-type": "application/x-www-form-urlencoded"
-      },
-      "method": "POST",
-      "path": "/token",
-      "query": []
-     },
-     {
-      "body": {
-       "id": 1,
-       "jsonrpc": "2.0",
-       "method": "initialize",
-       "params": {
-        "capabilities": {},
-        "clientInfo": {
-         "name": "Mistral Vibe",
-         "version": "__VERSION__"
-        },
-        "protocolVersion": "2025-11-25"
-       }
-      },
-      "headers": {
-       "accept": "application/json, text/event-stream",
-       "authorization": "Bearer at-1",
-       "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
-      },
-      "method": "POST",
-      "path": "/mcp",
       "query": []
      }
     ]
@@ -1719,6 +1562,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -1730,6 +1574,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -1806,13 +1651,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -1821,7 +1666,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -1830,7 +1675,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -1839,7 +1684,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource",
@@ -1848,7 +1693,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -1856,6 +1701,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -1917,14 +1763,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -2065,7 +1911,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -2126,7 +1972,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -2154,13 +2000,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -2169,7 +2015,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -2178,7 +2024,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -2229,14 +2075,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -2372,6 +2218,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "https://client.example/vibe.json",
         "client_id_issued_at": null,
         "client_name": null,
@@ -2383,6 +2230,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -2409,7 +2257,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -2467,13 +2315,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -2482,7 +2330,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -2491,7 +2339,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -2542,14 +2390,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -2681,6 +2529,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -2692,6 +2541,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -2718,7 +2568,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -2776,13 +2626,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -2791,7 +2641,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -2800,7 +2650,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -2808,6 +2658,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -2874,14 +2725,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3012,6 +2863,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -3023,6 +2875,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -3049,7 +2902,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "alpha beta",
         "token_type": "Bearer"
        }
       },
@@ -3107,13 +2960,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3122,7 +2975,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -3131,7 +2984,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -3139,6 +2992,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -3205,14 +3059,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3342,6 +3196,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -3353,6 +3208,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -3435,13 +3291,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3450,7 +3306,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -3459,7 +3315,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -3467,6 +3323,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -3532,14 +3389,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3667,6 +3524,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -3678,6 +3536,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -3704,7 +3563,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "",
         "token_type": "Bearer"
        }
       },
@@ -3758,13 +3617,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3773,7 +3632,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -3782,7 +3641,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -3790,6 +3649,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -3856,14 +3716,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -3990,6 +3850,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -4001,6 +3862,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -4027,7 +3889,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "as-scope",
         "token_type": "Bearer"
        }
       },
@@ -4085,13 +3947,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -4100,7 +3962,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -4109,7 +3971,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -4117,6 +3979,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -4183,14 +4046,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -4320,13 +4183,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -4335,7 +4198,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -4462,13 +4325,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -4538,6 +4401,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -4549,6 +4413,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -4622,13 +4487,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -4637,7 +4502,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -4646,7 +4511,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -4654,6 +4519,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -4796,6 +4662,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -4807,6 +4674,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -4880,13 +4748,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -4895,7 +4763,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -4904,7 +4772,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -4912,6 +4780,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -5054,6 +4923,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -5065,6 +4935,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -5138,13 +5009,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -5153,7 +5024,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -5162,7 +5033,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -5170,6 +5041,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -5299,6 +5171,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -5310,6 +5183,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -5383,13 +5257,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -5398,7 +5272,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -5407,7 +5281,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -5415,6 +5289,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -5559,6 +5434,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -5570,6 +5446,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -5643,13 +5520,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -5658,7 +5535,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -5667,7 +5544,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -5675,6 +5552,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -5850,6 +5728,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -5861,6 +5740,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -5934,13 +5814,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -5949,7 +5829,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -5958,7 +5838,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -5966,6 +5846,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -6145,6 +6026,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -6156,6 +6038,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -6182,7 +6065,7 @@
         "expires_at": null,
         "expires_in": null,
         "refresh_token": null,
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -6232,6 +6115,7 @@
       "do": "resolve",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -6243,6 +6127,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -6269,7 +6154,7 @@
         "expires_at": null,
         "expires_in": null,
         "refresh_token": null,
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -6297,13 +6182,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -6312,7 +6197,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -6321,7 +6206,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -6329,6 +6214,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -6395,14 +6281,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-9",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -6533,13 +6419,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -6548,7 +6434,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -6557,7 +6443,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -6565,6 +6451,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -6707,6 +6594,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -6718,6 +6606,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -6744,7 +6633,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -6802,13 +6691,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -6817,7 +6706,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -6826,7 +6715,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -6834,6 +6723,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -6901,14 +6791,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -7040,6 +6930,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -7051,6 +6942,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -7077,7 +6969,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -7135,13 +7027,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -7150,7 +7042,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -7159,7 +7051,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -7167,6 +7059,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -7237,14 +7130,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -7431,14 +7324,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-0",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -7609,14 +7502,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-2",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -7718,6 +7611,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -7729,6 +7623,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -7755,7 +7650,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -7835,13 +7730,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -7850,7 +7745,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -7859,7 +7754,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -7867,6 +7762,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -7933,14 +7829,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -8101,6 +7997,7 @@
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -8112,6 +8009,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -8138,7 +8036,7 @@
         "expires_at": "__TIME__",
         "expires_in": 3600,
         "refresh_token": "rt-1",
-        "scope": null,
+        "scope": "read write",
         "token_type": "Bearer"
        }
       },
@@ -8218,13 +8116,13 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -8233,7 +8131,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -8242,7 +8140,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -8250,6 +8148,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -8316,14 +8215,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-1",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -8471,6 +8370,7 @@
         "status": 200
        }
       ],
+      "descriptor": 1,
       "do": "login",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
@@ -8486,19 +8386,18 @@
         "url": "http://__BASE__/mcp"
        },
        "ai.mistral.vibe|mcp-oauth:demo:tokens": {
-        "access_token": "at-0",
+        "access_token": "at-1",
         "expires_at": "__TIME__",
         "expires_in": 3600,
-        "refresh_token": "rt-0",
+        "refresh_token": "rt-1",
+        "scope": "more",
         "token_type": "Bearer"
        }
       },
-      "outcome": {
-       "error": "login_failed"
-      },
+      "outcome": "ok",
       "urls": [
        {
-        "endpoint": "http://__BASE__/authorize",
+        "endpoint": "http://__BASE__/oauth/authorize",
         "parameters": [
          [
           "response_type",
@@ -8525,6 +8424,10 @@
           "S256"
          ],
          [
+          "resource",
+          "http://__BASE__/mcp"
+         ],
+         [
           "scope",
           "more"
          ]
@@ -8545,17 +8448,35 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-0",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
       "query": []
      },
      {
@@ -8579,13 +8500,41 @@
        [
         "code_verifier",
         "__VERIFIER__"
+       ],
+       [
+        "resource",
+        "http://__BASE__/mcp"
        ]
       ],
       "headers": {
        "content-type": "application/x-www-form-urlencoded"
       },
       "method": "POST",
-      "path": "/token",
+      "path": "/oauth/token",
+      "query": []
+     },
+     {
+      "body": {
+       "id": 1,
+       "jsonrpc": "2.0",
+       "method": "initialize",
+       "params": {
+        "capabilities": {},
+        "clientInfo": {
+         "name": "Mistral Vibe",
+         "version": "__VERSION__"
+        },
+        "protocolVersion": "2026-07-28"
+       }
+      },
+      "headers": {
+       "accept": "application/json, text/event-stream",
+       "authorization": "Bearer at-1",
+       "content-type": "application/json",
+       "user-agent": "python-httpx2/2.16.0"
+      },
+      "method": "POST",
+      "path": "/mcp",
       "query": []
      }
     ]
@@ -8748,38 +8697,14 @@
          "name": "Mistral Vibe",
          "version": "__VERSION__"
         },
-        "protocolVersion": "2025-11-25"
+        "protocolVersion": "2026-07-28"
        }
       },
       "headers": {
        "accept": "application/json, text/event-stream",
        "authorization": "Bearer at-0",
        "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
-      },
-      "method": "POST",
-      "path": "/mcp",
-      "query": []
-     },
-     {
-      "body": {
-       "id": 1,
-       "jsonrpc": "2.0",
-       "method": "initialize",
-       "params": {
-        "capabilities": {},
-        "clientInfo": {
-         "name": "Mistral Vibe",
-         "version": "__VERSION__"
-        },
-        "protocolVersion": "2025-11-25"
-       }
-      },
-      "headers": {
-       "accept": "application/json, text/event-stream",
-       "authorization": "Bearer at-0",
-       "content-type": "application/json",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "POST",
       "path": "/mcp",
@@ -9347,6 +9272,33 @@
     ],
     "wire": [
      {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
+     {
       "body": [
        [
         "grant_type",
@@ -9373,7 +9325,7 @@
       "headers": {
        "accept": "*/*",
        "authorization": "Bearer at-2",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "GET",
       "path": "/mcp",
@@ -9479,6 +9431,33 @@
      }
     ],
     "wire": [
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
      {
       "body": [
        [
@@ -9598,6 +9577,33 @@
     ],
     "wire": [
      {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
+     {
       "body": [
        [
         "grant_type",
@@ -9708,6 +9714,33 @@
     ],
     "wire": [
      {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
+     {
       "body": [
        [
         "grant_type",
@@ -9733,7 +9766,7 @@
       "body": null,
       "headers": {
        "accept": "*/*",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "GET",
       "path": "/mcp",
@@ -9812,10 +9845,10 @@
         "url": "http://__BASE__/mcp"
        },
        "ai.mistral.vibe|mcp-oauth:demo:tokens": {
-        "access_token": "at-3",
+        "access_token": "at-1",
         "expires_at": "__TIME__",
-        "expires_in": 60,
-        "refresh_token": "rt-0",
+        "expires_in": 3600,
+        "refresh_token": "rt-1",
         "scope": null,
         "token_type": "Bearer"
        }
@@ -9846,10 +9879,10 @@
         "url": "http://__BASE__/mcp"
        },
        "ai.mistral.vibe|mcp-oauth:demo:tokens": {
-        "access_token": "at-3",
+        "access_token": "at-1",
         "expires_at": "__TIME__",
-        "expires_in": 60,
-        "refresh_token": "rt-0",
+        "expires_in": 3600,
+        "refresh_token": "rt-1",
         "scope": null,
         "token_type": "Bearer"
        }
@@ -9859,7 +9892,7 @@
         "connection": 1,
         "descriptor": 0,
         "headers": {
-         "Authorization": "Bearer at-3"
+         "Authorization": "Bearer at-1"
         }
        }
       },
@@ -9867,6 +9900,24 @@
      }
     ],
     "wire": [
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
      {
       "body": [
        [
@@ -9880,21 +9931,25 @@
        [
         "client_id",
         "client-0"
+       ],
+       [
+        "resource",
+        "http://__BASE__/mcp"
        ]
       ],
       "headers": {
        "content-type": "application/x-www-form-urlencoded"
       },
       "method": "POST",
-      "path": "/token",
+      "path": "/oauth/token",
       "query": []
      },
      {
       "body": null,
       "headers": {
        "accept": "*/*",
-       "authorization": "Bearer at-3",
-       "user-agent": "python-httpx/0.28.1"
+       "authorization": "Bearer at-1",
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "GET",
       "path": "/mcp",
@@ -9903,7 +9958,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -9912,7 +9967,7 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -10062,6 +10117,7 @@
       "do": "resolve",
       "keyring": {
        "ai.mistral.vibe|mcp-oauth:demo:client_info": {
+        "application_type": null,
         "client_id": "client-1",
         "client_id_issued_at": null,
         "client_name": null,
@@ -10073,6 +10129,7 @@
          "authorization_code",
          "refresh_token"
         ],
+        "issuer": "http://__BASE__",
         "jwks": null,
         "jwks_uri": null,
         "logo_uri": null,
@@ -10116,17 +10173,7 @@
      {
       "body": null,
       "headers": {
-       "accept": "*/*",
-       "user-agent": "python-httpx/0.28.1"
-      },
-      "method": "GET",
-      "path": "/mcp",
-      "query": []
-     },
-     {
-      "body": null,
-      "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-protected-resource/mcp",
@@ -10135,7 +10182,35 @@
      {
       "body": null,
       "headers": {
-       "mcp-protocol-version": "2025-11-25"
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "accept": "*/*",
+       "user-agent": "python-httpx2/2.16.0"
+      },
+      "method": "GET",
+      "path": "/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
       },
       "method": "GET",
       "path": "/.well-known/oauth-authorization-server",
@@ -10143,6 +10218,7 @@
      },
      {
       "body": {
+       "application_type": "native",
        "client_name": "Mistral Vibe",
        "grant_types": [
         "authorization_code",
@@ -10323,6 +10399,33 @@
     ],
     "wire": [
      {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource/mcp",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-protected-resource",
+      "query": []
+     },
+     {
+      "body": null,
+      "headers": {
+       "mcp-protocol-version": "2026-07-28"
+      },
+      "method": "GET",
+      "path": "/.well-known/oauth-authorization-server",
+      "query": []
+     },
+     {
       "body": [
        [
         "grant_type",
@@ -10349,7 +10452,7 @@
       "headers": {
        "accept": "*/*",
        "authorization": "Bearer at-4",
-       "user-agent": "python-httpx/0.28.1"
+       "user-agent": "python-httpx2/2.16.0"
       },
       "method": "GET",
       "path": "/mcp",

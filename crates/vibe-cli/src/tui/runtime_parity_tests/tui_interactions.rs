@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use unicode_segmentation::UnicodeSegmentation;
 
-use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
+use super::{Reference, is_pin_commit, pinned_python_oracle};
 use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
 use crate::tui::clipboard_images::ClipboardImageManager;
 use crate::tui::controls::ControlState;
@@ -121,7 +121,7 @@ fn the_corpus_names_the_pinned_reference() {
     let corpus = corpus();
     assert_eq!(corpus.schema_version, 1);
     assert_eq!(corpus.oracle, "tui-interactions-oracle.py");
-    assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
+    assert!(is_pin_commit(&corpus.reference.commit));
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 8);
 }

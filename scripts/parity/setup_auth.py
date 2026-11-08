@@ -11,7 +11,8 @@ primitives. ``BrowserSignInService`` takes its gateway, its browser opener, its
 sleep function and its clock as constructor arguments, so a stub gateway and a
 fake clock observe the whole state machine. ``HttpBrowserSignInGateway``
 accepts its HTTP client, so a recording stub captures every request it would
-have issued and feeds it scripted ``httpx.Response`` objects.
+have issued and feeds it scripted ``httpx2.Response`` objects (the HTTP
+client package the reference adopted at v3, in place of ``httpx``).
 
 Eleven families come out, and are what the Rust replay compares:
 
@@ -811,25 +812,25 @@ class _StubHTTPClient:
         self.requests: list[dict[str, Any]] = []
 
     def _next(self, method: str, url: str, payload: Any) -> Any:
-        import httpx
+        import httpx2
 
         self.requests.append({"method": method, "url": url, "json": payload})
         if not self.responses:
             raise OracleError("the gateway issued more requests than scripted")
         step = self.responses.pop(0)
         if step.get("transportError"):
-            raise httpx.ConnectError("scripted transport failure")
+            raise httpx2.ConnectError("scripted transport failure")
         body = step.get("body")
         if step.get("rawBody") is not None:
-            return httpx.Response(
+            return httpx2.Response(
                 step.get("status", 200),
                 text=step["rawBody"],
-                request=httpx.Request(method, url),
+                request=httpx2.Request(method, url),
             )
-        return httpx.Response(
+        return httpx2.Response(
             step.get("status", 200),
             json=body,
-            request=httpx.Request(method, url),
+            request=httpx2.Request(method, url),
         )
 
     async def post(self, url: str, *, json: Any = None) -> Any:
@@ -981,10 +982,16 @@ def capture_tenant_domains() -> list[dict[str, Any]]:
     """``_sanitize_tenant_url`` over hostile and benign values, then the
     reference's own ``resolve_tenant_domains`` against a scripted console: only
     the HTTP transport is replaced, so the gateway's status handling, the
-    strict answer model and the adoption are all the reference's."""
+    strict answer model and the adoption are all the reference's.
 
-    import httpx
+    At v3 the console read no longer builds its client in the ``whoami``
+    module: it goes through ``credential_request`` in
+    ``vibe/core/platform_auth/_mistral.py``, which owns the client it opens, so
+    the transport is swapped on that module's client class."""
 
+    import httpx2
+
+    import vibe.core.platform_auth._mistral as platform_module
     import vibe.setup.auth.whoami as whoami_module
     from vibe.core.config import DEFAULT_PROVIDERS
 
@@ -999,12 +1006,12 @@ def capture_tenant_domains() -> list[dict[str, Any]]:
         )
 
     mistral = next(p for p in DEFAULT_PROVIDERS if p.name == "mistral")
-    original_client = whoami_module.VibeAsyncHTTPClient
+    original_client = platform_module.VibeAsyncHTTPClient
     for answer in TENANT_ANSWERS:
         for console in ("https://console.internal.example", "https://connector.internal.example:8443/"):
             requests: list[dict[str, Any]] = []
 
-            def handler(request: httpx.Request, answer: dict[str, Any] = answer) -> httpx.Response:
+            def handler(request: httpx2.Request, answer: dict[str, Any] = answer) -> httpx2.Response:
                 requests.append(
                     {
                         "method": request.method,
@@ -1013,13 +1020,13 @@ def capture_tenant_domains() -> list[dict[str, Any]]:
                     }
                 )
                 if "rawBody" in answer:
-                    return httpx.Response(answer["status"], text=answer["rawBody"])
-                return httpx.Response(answer["status"], json=answer["body"])
+                    return httpx2.Response(answer["status"], text=answer["rawBody"])
+                return httpx2.Response(answer["status"], json=answer["body"])
 
             def client(**keywords: Any) -> Any:
-                return original_client(transport=httpx.MockTransport(handler), **keywords)
+                return original_client(transport=httpx2.MockTransport(handler), **keywords)
 
-            with patched(whoami_module, "VibeAsyncHTTPClient", client):
+            with patched(platform_module, "VibeAsyncHTTPClient", client):
                 provider, vibe_base_url = asyncio.run(
                     whoami_module.resolve_tenant_domains(
                         mistral, console, "oracle-key", "https://chat.mistral.ai"
@@ -1084,10 +1091,15 @@ def capture_provider_credentials() -> list[dict[str, Any]]:
                 os.chdir(previous)
                 os.environ.clear()
                 os.environ.update(saved)
+            # Configuration files only, as ``tenantReconcile`` records them.
+            # At v3 a config write also leaves its advisory lock under
+            # ``locks/config/`` in the home (``_lock_path`` in
+            # ``vibe/core/config/layers/_base.py``), named by a digest of the
+            # scratch path, so its name differs on every run and is not an
+            # observation of the persisted state.
             files = {
                 str(path.relative_to(home)): path.read_text(encoding="utf-8")
-                for path in sorted(home.rglob("*"))
-                if path.is_file()
+                for path in sorted(home.rglob("config.toml"))
             }
         records.append(
             {
@@ -1197,8 +1209,9 @@ def capture_acp_sign_in() -> list[dict[str, Any]]:
     from vibe.acp.exceptions import InternalError, InvalidRequestError
     from vibe.core.config import DEFAULT_PROVIDERS, ProviderConfig
     from vibe.setup.auth.api_key_persistence import ProviderCredentialsPersistResult
+    from vibe.setup.auth.onboarding_context import OnboardingContext
     from vibe.setup.auth.whoami import WhoAmIResult
-    from vibe.setup.onboarding.context import OnboardingContext
+    from vibe.utils import keyring as keyring_module
 
     mistral = next(p for p in DEFAULT_PROVIDERS if p.name == "mistral")
     records = []
@@ -1291,10 +1304,28 @@ def capture_acp_sign_in() -> list[dict[str, Any]]:
             tenant_domain_resolver=tenant_resolver,
             environ_before_dotenv_load={},
         )
+        # At v3 ``authenticate`` first asks the controller's own ``status()``
+        # whether the requested tenant already holds a usable key
+        # (``_is_same_tenant`` in ``vibe/acp/auth.py``). Every case here
+        # signs in with no stored credential: a scratch home, the provider's
+        # key variable unset and an empty scripted keyring, so that read
+        # answers from the scenario and never from the host.
+        def no_stored_key(service: str, username: str) -> str | None:
+            return None
+
+        env_key = provider.api_key_env_var
+        keyring_module.clear_api_key_keyring_cache()
         try:
-            response = asyncio.run(
-                controller.authenticate("browser-auth", spec["arguments"])
-            )
+            with (
+                scratch_vibe_home(),
+                patched_environ({env_key: None} if env_key else {}),
+                patched(keyring_module, "_get_password", no_stored_key),
+                patched(keyring_module, "_set_password", _refuse_keyring_write),
+                patched(keyring_module, "_delete_password", _refuse_keyring_write),
+            ):
+                response = asyncio.run(
+                    controller.authenticate("browser-auth", spec["arguments"])
+                )
             outcome: dict[str, Any] = {
                 "meta": response.field_meta["browser-auth"],
             }

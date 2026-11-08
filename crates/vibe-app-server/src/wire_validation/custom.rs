@@ -15,6 +15,26 @@ pub(super) fn run(function: &str, value: Value) -> Result<Value, String> {
             }
             _ => Ok(value),
         },
+        // Reference `AgentConfig._reject_blank_system_prompt`, from v3.0.0.
+        "AgentConfig._reject_blank_system_prompt" => match &value {
+            Value::String(text) if text.trim().is_empty() => {
+                Err("a session system prompt cannot be blank".to_owned())
+            }
+            _ => Ok(value),
+        },
+        // Reference `ImportJobStartParams.validate_unique_harnesses`, from
+        // v3.0.0: the harnesses an import names are distinct.
+        "ImportJobStartParams.validate_unique_harnesses" => match &value {
+            Value::Array(items)
+                if items
+                    .iter()
+                    .enumerate()
+                    .any(|(index, item)| items[..index].contains(item)) =>
+            {
+                Err("an import names each harness once".to_owned())
+            }
+            _ => Ok(value),
+        },
         // Reference `UserDisplayContent.strip_nonempty`.
         "UserDisplayContent.strip_nonempty" => match value {
             Value::String(text) => {
@@ -137,7 +157,9 @@ pub(super) fn before(function: &str, input: &Value) -> Value {
 /// stay within.
 #[cfg(test)]
 pub(super) const KNOWN: &[&str] = &[
+    "AgentConfig._reject_blank_system_prompt",
     "AgentConfig._reject_empty_cwd",
+    "ImportJobStartParams.validate_unique_harnesses",
     "SessionEmbeddedResourceContentBlock.validate_content",
     "SessionSettingsUpdateParams.require_update",
     "SessionShellCommandParams.validate_action",

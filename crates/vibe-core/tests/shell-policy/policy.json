@@ -695,7 +695,6 @@
     "pathGrantMatchCases": 32,
     "repositoryCases": 40,
     "resolutionCases": 132,
-    "stdinPermissionCases": 21,
     "windowsGrammarCases": 33
   },
   "extraction": [
@@ -1621,7 +1620,7 @@
     }
   ],
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "repositoryResolutions": [
     {
@@ -2859,16 +2858,6 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "/dev/null",
-          "label": {
-            "described": "sha256:ca2f16ba5ac31d77430c03705ef6da8e",
-            "length": 27
-          },
-          "pathScopeRoot": null,
-          "scope": "outside_directory",
-          "sessionPattern": "vibe-path:exact:/dev/null"
-        },
-        {
           "invocationPattern": "/etc/passwd",
           "label": {
             "described": "sha256:4c3c8efba9982bcb5d0ac3e8117620b6",
@@ -3936,285 +3925,7 @@
       ]
     }
   ],
-  "schemaVersion": 4,
-  "stdinPermissions": [
-    {
-      "command": "git log",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "less notes.txt",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "more notes.txt",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "cat notes.txt",
-      "family": "posix",
-      "known": true,
-      "permission": null
-    },
-    {
-      "command": "sleep 30; git log",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "eval git log",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "exec less notes.txt",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "/usr/bin/GIT.exe log",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "echo git",
-      "family": "posix",
-      "known": true,
-      "permission": null
-    },
-    {
-      "command": "gitk",
-      "family": "posix",
-      "known": true,
-      "permission": null
-    },
-    {
-      "command": "(git log)",
-      "family": "posix",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "cat $(which less)",
-      "family": "posix",
-      "known": true,
-      "permission": null
-    },
-    {
-      "command": "",
-      "family": "posix",
-      "hasReason": false,
-      "known": false,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "git log",
-      "family": "git_bash",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "cat notes.txt",
-      "family": "git_bash",
-      "known": true,
-      "permission": null
-    },
-    {
-      "command": "git log",
-      "family": "powershell",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "& 'C:\\tools\\git.exe' log",
-      "family": "powershell",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "type a | more",
-      "family": "powershell",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "Get-Content a",
-      "family": "powershell",
-      "known": true,
-      "permission": null
-    },
-    {
-      "command": "less.exe x",
-      "family": "powershell",
-      "hasReason": false,
-      "known": true,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    },
-    {
-      "command": "",
-      "family": "powershell",
-      "hasReason": false,
-      "known": false,
-      "permission": "ask",
-      "requirements": [
-        {
-          "invocationPattern": "input to pager session session_1",
-          "label": "input to pager session session_1",
-          "pathScopeRoot": null,
-          "scope": "command_pattern",
-          "sessionPattern": "input to pager session session_1"
-        }
-      ]
-    }
-  ],
+  "schemaVersion": 5,
   "windowsGrammar": {
     "commands": [
       {
@@ -4376,15 +4087,14 @@
             "commandName": "cmd",
             "fileRedirections": [],
             "forms": [
-              "cmd 2>&1"
+              "cmd"
             ],
             "formsWithoutBasename": [
-              "cmd 2>&1"
+              "cmd"
             ],
             "part": "cmd 2>&1",
             "tokens": [
-              "cmd",
-              "2>&1"
+              "cmd"
             ]
           },
           {
@@ -4410,16 +4120,15 @@
             "commandName": "get-content",
             "fileRedirections": [],
             "forms": [
-              "get-content x *>&1"
+              "get-content x"
             ],
             "formsWithoutBasename": [
-              "get-content x *>&1"
+              "get-content x"
             ],
             "part": "Get-Content x *>&1",
             "tokens": [
               "Get-Content",
-              "x",
-              "*>&1"
+              "x"
             ]
           }
         ]
@@ -4521,11 +4230,7 @@
             "part": "Invoke-Command { Remove-Item x; ls }",
             "tokens": [
               "Invoke-Command",
-              "{",
-              "Remove-Item",
-              "x;",
-              "ls",
-              "}"
+              "{ Remove-Item x; ls }"
             ]
           },
           {
@@ -4565,18 +4270,18 @@
         "command": "(Get-Item a).Name",
         "parts": [
           {
-            "commandName": "(get-item",
+            "commandName": "(get-item a)",
             "fileRedirections": [],
             "forms": [
-              "(get-item a).name"
+              "(get-item a) .name"
             ],
             "formsWithoutBasename": [
-              "(get-item a).name"
+              "(get-item a) .name"
             ],
             "part": "(Get-Item a).Name",
             "tokens": [
-              "(Get-Item",
-              "a).Name"
+              "(Get-Item a)",
+              ".Name"
             ]
           },
           {
@@ -4623,15 +4328,15 @@
             "commandName": "echo",
             "fileRedirections": [],
             "forms": [
-              "echo `& not a separator"
+              "echo & not a separator"
             ],
             "formsWithoutBasename": [
-              "echo `& not a separator"
+              "echo & not a separator"
             ],
             "part": "echo `& not a separator",
             "tokens": [
               "echo",
-              "`&",
+              "&",
               "not",
               "a",
               "separator"
@@ -4646,16 +4351,29 @@
             "commandName": "echo",
             "fileRedirections": [],
             "forms": [
-              "echo a ^& b"
+              "echo a ^"
             ],
             "formsWithoutBasename": [
-              "echo a ^& b"
+              "echo a ^"
             ],
-            "part": "echo a ^& b",
+            "part": "echo a ^",
             "tokens": [
               "echo",
               "a",
-              "^&",
+              "^"
+            ]
+          },
+          {
+            "commandName": "b",
+            "fileRedirections": [],
+            "forms": [
+              "b"
+            ],
+            "formsWithoutBasename": [
+              "b"
+            ],
+            "part": "b",
+            "tokens": [
               "b"
             ]
           }
@@ -4801,18 +4519,16 @@
               "out.txt"
             ],
             "forms": [
-              "type > out.txt",
-              "get-content > out.txt"
+              "type",
+              "get-content"
             ],
             "formsWithoutBasename": [
-              "type > out.txt",
-              "get-content > out.txt"
+              "type",
+              "get-content"
             ],
             "part": "type > out.txt",
             "tokens": [
-              "type",
-              ">",
-              "out.txt"
+              "type"
             ]
           }
         ]
@@ -4824,17 +4540,15 @@
             "commandName": "echo",
             "fileRedirections": [],
             "forms": [
-              "echo a > $null"
+              "echo a"
             ],
             "formsWithoutBasename": [
-              "echo a > $null"
+              "echo a"
             ],
             "part": "echo a > $null",
             "tokens": [
               "echo",
-              "a",
-              ">",
-              "$null"
+              "a"
             ]
           }
         ]
@@ -4846,17 +4560,15 @@
             "commandName": "echo",
             "fileRedirections": [],
             "forms": [
-              "echo a > nul"
+              "echo a"
             ],
             "formsWithoutBasename": [
-              "echo a > nul"
+              "echo a"
             ],
             "part": "echo a > NUL",
             "tokens": [
               "echo",
-              "a",
-              ">",
-              "NUL"
+              "a"
             ]
           }
         ]
@@ -4870,17 +4582,15 @@
               "err log.txt"
             ],
             "forms": [
-              "echo a 2> err log.txt"
+              "echo a"
             ],
             "formsWithoutBasename": [
-              "echo a 2> err log.txt"
+              "echo a"
             ],
             "part": "echo a 2> 'err log.txt'",
             "tokens": [
               "echo",
-              "a",
-              "2>",
-              "err log.txt"
+              "a"
             ]
           }
         ]
@@ -4894,17 +4604,15 @@
               "C:\\logs\\x.txt"
             ],
             "forms": [
-              "echo a >> c:\\logs\\x.txt"
+              "echo a"
             ],
             "formsWithoutBasename": [
-              "echo a >> c:\\logs\\x.txt"
+              "echo a"
             ],
             "part": "echo a >> C:\\logs\\x.txt",
             "tokens": [
               "echo",
-              "a",
-              ">>",
-              "C:\\logs\\x.txt"
+              "a"
             ]
           }
         ]
@@ -4916,16 +4624,15 @@
             "commandName": "echo",
             "fileRedirections": [],
             "forms": [
-              "echo a >&2"
+              "echo a"
             ],
             "formsWithoutBasename": [
-              "echo a >&2"
+              "echo a"
             ],
             "part": "echo a >&2",
             "tokens": [
               "echo",
-              "a",
-              ">&2"
+              "a"
             ]
           }
         ]
@@ -4959,16 +4666,15 @@
               "\"q\""
             ],
             "forms": [
-              "echo a >`q` x"
+              "echo a x"
             ],
             "formsWithoutBasename": [
-              "echo a >`q` x"
+              "echo a x"
             ],
             "part": "echo a >`\"q`\" x",
             "tokens": [
               "echo",
               "a",
-              ">`q`",
               "x"
             ]
           }
@@ -5077,6 +4783,20 @@
             "part": "${x}",
             "tokens": [
               "${x}"
+            ]
+          },
+          {
+            "commandName": "a=1",
+            "fileRedirections": [],
+            "forms": [
+              "a=1"
+            ],
+            "formsWithoutBasename": [
+              "a=1"
+            ],
+            "part": "a=1",
+            "tokens": [
+              "a=1"
             ]
           }
         ]

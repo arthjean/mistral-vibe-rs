@@ -1,23 +1,24 @@
-//! Replays the description-resolution corpus captured from the pinned
-//! reference.
+//! Replays the tool-directory corpus captured from the pinned reference.
 //!
-//! `scripts/parity/tool_descriptions.py` builds a scratch tree of tool
-//! directories, drives the reference's `ToolManager` over seven configurations,
-//! and records three things per case: the search path order
-//! `_compute_search_paths` produced, which `prompts/<name>.md` file won each
-//! stem, and what `available_tool_specs` then published. This module rebuilds
-//! the same tree, resolves it through [`search_paths`] and [`read_overrides`],
-//! and compares.
+//! Up to the v2 line the reference read `<tools-dir>/prompts/<name>.md`
+//! overrides from the `tool_paths` entries and the project and user tool
+//! directories, and the corpus recorded which file won. The v3 line deleted
+//! custom tools, `tool_paths` and those overrides with them, so
+//! `scripts/parity/tool_descriptions.py` now records the successor over the
+//! same kind of scratch tree: the tool directories the session lists, the
+//! files the reference reports there as having no effect (by the branch that
+//! reported each, never its sentence), and whether every builtin tool the tree
+//! is named after still publishes its packaged description.
 //!
-//! Every description file in the corpus is this repository's own prose, and
-//! every path is a label relative to the scratch tree, so nothing the reference
-//! authored is committed here. The single exception is a count: how many tools
-//! the reference described out of its own package directory, which is the one
-//! position this port has no counterpart for and which
-//! [`the_reference_reads_its_builtin_descriptions_from_disk`] pins as a
-//! deliberate divergence rather than leaving unmeasured.
+//! This module rebuilds the tree, answers the same three observations from
+//! the port, and replays them through a [`Tally`]. The port still resolves
+//! `tool_paths` and the override files and reports no ignored file, so those
+//! two observations differ in every scenario; the ledger holds them as gaps
+//! of row 4 until the port follows the reference.
 //!
-//! The replay runs unconditionally. Only
+//! Every file in the corpus is this repository's own text, and every path is a
+//! label relative to the scratch tree, so nothing the reference authored is
+//! committed here. The replay runs unconditionally. Only
 //! [`the_committed_corpus_still_matches_the_pinned_reference`] needs the
 //! checkout, and it skips when the checkout is absent or off-pin.
 
@@ -27,11 +28,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::config::{ConfigPaths, ConfigSource, HarnessFiles};
-use crate::parity::REFERENCE_COMMIT;
-use crate::parity::figures::{Figures, assert_figures};
+use crate::parity::is_pin_commit;
+use crate::parity::replay::{Class, PatternDivergence, Tally, differences, entries};
 
 use super::{SearchInputs, read_overrides, search_paths};
 
@@ -39,35 +40,66 @@ const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/tool-descriptions/corpus.j
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_descriptions.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
-/// The case floor this epic commits to, so a corpus regenerated against a
-/// broken capture cannot pass as a green run by recording almost nothing.
-const MINIMUM_CASES: usize = 7;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
+/// The scenario floor, so a corpus regenerated against a broken capture cannot
+/// pass as a green run by recording almost nothing.
+const MINIMUM_SCENARIOS: usize = 7;
+
+/// Why the port departs from the reference here: it still reads what v3
+/// stopped reading.
+const OVERRIDES_KEPT: &str = "the port still honors `tool_paths` and the \
+     `<tools-dir>/prompts/<name>.md` description overrides that v3 removed together with custom \
+     tools (scripts/parity/tool_descriptions.py), so a tree file still redescribes a builtin here";
+const IGNORED_UNREPORTED: &str = "the port still honors `tool_paths` and the tool-directory \
+     overrides that v3 removed, so it reports none of the custom tool modules or the former \
+     `task` description override that v3 lists as having no effect";
+
+/// The differences this port keeps, each a gap of row 4.
+const LEDGER: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/descriptionsUnchanged",
+        count: 7,
+        row: "4",
+        class: Class::Gap,
+        reason: OVERRIDES_KEPT,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/ignored/*",
+        count: 18,
+        row: "4",
+        class: Class::Gap,
+        reason: IGNORED_UNREPORTED,
+    },
+];
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Corpus {
     schema_version: u32,
     reference: Reference,
-    /// What stands in for the reference's builtin tool directory, which is a
-    /// path inside the pinned tree and therefore machine-dependent.
-    builtin_label: String,
+    #[expect(dead_code, reason = "the note documents the file for its readers")]
+    note: String,
     /// Where the scratch vibe home sits, and therefore where the user tool
     /// directory hangs off.
     vibe_home: String,
     tree: Tree,
-    cases: Vec<Case>,
+    /// The tree's description stems that name a builtin tool of the reference.
+    redescribable: Vec<String>,
+    scenarios: Vec<Scenario>,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Reference {
     commit: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Tree {
-    /// Every description file the capture authored, keyed by its tree-relative
-    /// label.
+    /// Every file the capture authored, keyed by its tree-relative label.
     files: BTreeMap<String, String>,
     /// Paths where a directory stands in for a file, which is the one spelling
     /// of "cannot be read" every host and every privilege level agrees on.
@@ -77,30 +109,22 @@ struct Tree {
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Case {
+#[serde(deny_unknown_fields)]
+struct Scenario {
     name: String,
+    scenario: Inputs,
+    /// The tool directories, the ignored files and the description verdict,
+    /// compared as one observation.
+    observed: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Inputs {
     sources: Vec<String>,
     trusted: bool,
+    /// Read by this port only: the reference dropped the setting at v3.
     tool_paths: Vec<String>,
-    /// The resolved search path order, as tree-relative labels, starting with
-    /// the builtin placeholder.
-    search_paths: Vec<String>,
-    /// Stem to the label of the file that described it.
-    overrides: BTreeMap<String, String>,
-    /// A stem the tree carries which still described nothing: blank,
-    /// unreadable, or under a directory this case does not walk.
-    withheld_stems: Vec<String>,
-    /// A stem that described a tool the reference does not publish. Tool
-    /// availability is not this epic's contract, so the replay reads this to
-    /// know which published names to expect rather than asserting on it.
-    unmatched_stems: Vec<String>,
-    /// What the reference published, restricted to the names this tree
-    /// redescribes.
-    published_descriptions: BTreeMap<String, String>,
-    /// How many tools the reference described out of its own package
-    /// directory.
-    builtin_described_count: u32,
 }
 
 fn repo_root() -> PathBuf {
@@ -111,16 +135,18 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn corpus_text() -> String {
+    fs::read_to_string(repo_root().join(CORPUS_RELATIVE)).expect("the corpus is committed")
+}
+
 fn corpus() -> Corpus {
-    let raw =
-        fs::read_to_string(repo_root().join(CORPUS_RELATIVE)).expect("the corpus is committed");
-    let corpus: Corpus = serde_json::from_str(&raw).expect("the corpus parses");
+    let corpus: Corpus = serde_json::from_str(&corpus_text()).expect("the corpus parses");
     assert_eq!(
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate with `{CAPTURE_SCRIPT} --corpus`"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from another commit than this build asserts"
     );
     corpus
@@ -149,7 +175,7 @@ impl Scratch {
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent).expect("scratch directory");
             }
-            fs::write(&target, text).expect("scratch description file");
+            fs::write(&target, text).expect("scratch file");
         }
         for label in &tree.obstructions {
             fs::create_dir_all(root.join(label)).expect("scratch obstruction");
@@ -171,8 +197,9 @@ impl Scratch {
     }
 }
 
-fn sources_of(case: &Case) -> BTreeSet<ConfigSource> {
-    case.sources
+fn sources_of(inputs: &Inputs) -> BTreeSet<ConfigSource> {
+    inputs
+        .sources
         .iter()
         .map(|source| match source.as_str() {
             "project" => ConfigSource::Project,
@@ -182,222 +209,116 @@ fn sources_of(case: &Case) -> BTreeSet<ConfigSource> {
         .collect()
 }
 
-/// The search paths this port resolves for `case`, over `scratch`.
-fn resolved(scratch: &Scratch, corpus: &Corpus, case: &Case) -> Vec<PathBuf> {
+/// What this port answers for one scenario, in the corpus's observation shape.
+fn port_observation(scratch: &Scratch, corpus: &Corpus, inputs: &Inputs) -> Value {
     let harness = HarnessFiles::new(
         ConfigPaths {
             vibe_home: scratch.root.join(&corpus.vibe_home),
             working_directory: scratch.root.clone(),
         },
-        sources_of(case),
+        sources_of(inputs),
         Vec::new(),
-        case.trusted,
+        inputs.trusted,
     );
     let projects = harness.project_tools_dirs();
     let user = harness.user_tools_dirs();
-    search_paths(&SearchInputs {
-        configured: &case.tool_paths,
+    // The project directories, then the user ones, deduplicated once resolved,
+    // as the reference's session runtime lists them.
+    let mut tool_dirs: Vec<PathBuf> = Vec::new();
+    for directory in projects.iter().chain(&user) {
+        let resolved =
+            crate::platform::canonicalize(directory).unwrap_or_else(|_| directory.clone());
+        if !tool_dirs.contains(&resolved) {
+            tool_dirs.push(resolved);
+        }
+    }
+    let overrides = read_overrides(&search_paths(&SearchInputs {
+        configured: &inputs.tool_paths,
         projects: &projects,
         user: &user,
         user_home: Some(&scratch.root),
         working_directory: &scratch.root,
+    }));
+    let unchanged = !corpus
+        .redescribable
+        .iter()
+        .any(|name| overrides.contains_key(name));
+    json!({
+        "toolDirs": tool_dirs.iter().map(|path| scratch.label(path)).collect::<Vec<_>>(),
+        // The port lists no tool-directory file as ignored: it reads them all.
+        "ignored": [],
+        "descriptionsUnchanged": unchanged,
     })
 }
 
-/// The reference's search path labels with the builtin placeholder removed,
-/// which is the list this port can answer for.
-fn expected_labels<'a>(corpus: &'a Corpus, case: &'a Case) -> Vec<&'a str> {
-    assert_eq!(
-        case.search_paths.first().map(String::as_str),
-        Some(corpus.builtin_label.as_str()),
-        "the reference always walks its builtin directory first, and case {} does not record it",
-        case.name
+#[test]
+fn the_corpus_covers_every_rule_the_replay_claims() {
+    let corpus = corpus();
+    assert!(
+        corpus.scenarios.len() >= MINIMUM_SCENARIOS,
+        "the corpus records {} scenarios and this replay covers {MINIMUM_SCENARIOS}; regenerate \
+         with `{CAPTURE_SCRIPT} --corpus`",
+        corpus.scenarios.len()
     );
-    case.search_paths[1..]
+    let names: BTreeSet<&str> = corpus
+        .scenarios
         .iter()
-        .map(String::as_str)
-        .collect::<Vec<_>>()
-}
-
-#[test]
-fn the_corpus_covers_every_resolution_rule_the_epic_claims() {
-    let corpus = corpus();
-    assert!(
-        corpus.cases.len() >= MINIMUM_CASES,
-        "the corpus records {} cases and this epic covers {MINIMUM_CASES}; regenerate with \
-         `{CAPTURE_SCRIPT} --corpus`",
-        corpus.cases.len()
-    );
-    let names: BTreeSet<&str> = corpus.cases.iter().map(|case| case.name.as_str()).collect();
-    assert_eq!(names.len(), corpus.cases.len(), "two cases share a name");
-    assert!(
-        corpus.cases.iter().any(|case| case.tool_paths.is_empty()),
-        "no case resolves without configured tool paths"
-    );
-    assert!(
-        corpus
-            .cases
-            .iter()
-            .any(|case| case.tool_paths.iter().any(|entry| entry.ends_with(".py"))),
-        "no case names a module file as a tool path"
-    );
-    assert!(
-        corpus.cases.iter().any(|case| !case.trusted),
-        "no case resolves an untrusted workspace"
-    );
-    assert!(
-        corpus
-            .cases
-            .iter()
-            .any(|case| !case.sources.iter().any(|source| source == "user")),
-        "no case disables the user source"
-    );
-    assert!(
-        !corpus.tree.obstructions.is_empty(),
-        "no file in the tree is unreadable, so the fallback is unmeasured"
-    );
-    assert!(
-        corpus
-            .tree
-            .files
-            .values()
-            .any(|text| text.trim().is_empty()),
-        "no file in the tree is blank, so the fallback is unmeasured"
-    );
-}
-
-#[test]
-fn the_search_path_order_matches_the_reference() {
-    let corpus = corpus();
-    let scratch = Scratch::build(&corpus.tree);
-    for case in &corpus.cases {
-        let resolved: Vec<String> = resolved(&scratch, &corpus, case)
-            .iter()
-            .map(|path| scratch.label(path))
-            .collect();
-        assert_eq!(
-            resolved,
-            expected_labels(&corpus, case),
-            "case {} resolves a different search path order than the reference",
-            case.name
-        );
-    }
-}
-
-#[test]
-fn the_winning_description_file_matches_the_reference() {
-    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/tool-descriptions/corpus.json");
-    let corpus = corpus();
-    let scratch = Scratch::build(&corpus.tree);
-    // The reference records which file won by its text, so the replay maps back
-    // the same way rather than trusting its own walk to name the winner.
-    let authored: BTreeMap<&str, &str> = corpus
-        .tree
-        .files
-        .iter()
-        .filter(|(_, text)| !text.trim().is_empty())
-        .map(|(label, text)| (text.as_str(), label.as_str()))
+        .map(|scenario| scenario.name.as_str())
         .collect();
-    for case in &corpus.cases {
-        let overrides = read_overrides(&resolved(&scratch, &corpus, case));
-        let winners: BTreeMap<String, String> = overrides
+    assert_eq!(
+        names.len(),
+        corpus.scenarios.len(),
+        "two scenarios share a name"
+    );
+    assert!(
+        !corpus.redescribable.is_empty(),
+        "no tree file is named after a builtin tool, so the description verdict is vacuous"
+    );
+    assert!(
+        corpus
+            .scenarios
             .iter()
-            .map(|(stem, text)| {
-                let label = authored.get(text.as_str()).unwrap_or_else(|| {
-                    panic!(
-                        "case {} described {stem} with text no tree file holds",
-                        case.name
-                    )
-                });
-                (stem.clone(), (*label).to_owned())
-            })
-            .collect();
-        assert_eq!(
-            winners, case.overrides,
-            "case {} lets a different file describe the surface than the reference does",
-            case.name
-        );
-    }
-    // Every case is asserted equal above: no ledger.
-    assert_figures(
-        "tool descriptions parity:",
-        CORPUS_RELATIVE,
-        Figures::decided(corpus.cases.len(), corpus.cases.len(), 0),
-        serde_json::json!({}),
+            .any(|scenario| !scenario.scenario.trusted),
+        "no scenario resolves an untrusted workspace"
+    );
+    assert!(
+        corpus.scenarios.iter().any(|scenario| !scenario
+            .scenario
+            .sources
+            .iter()
+            .any(|source| source == "user")),
+        "no scenario disables the user source"
+    );
+    let kinds: BTreeSet<&str> = corpus
+        .scenarios
+        .iter()
+        .flat_map(|scenario| {
+            scenario.observed["ignored"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|entry| entry["kind"].as_str())
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        BTreeSet::from(["customTool", "descriptionOverride"]),
+        "the corpus does not record both branches of the ignored-file listing"
     );
 }
 
 #[test]
-fn a_withheld_stem_describes_nothing_on_either_side() {
+fn the_tool_directories_and_ignored_files_match_the_reference() {
+    let text = corpus_text();
     let corpus = corpus();
     let scratch = Scratch::build(&corpus.tree);
-    for case in &corpus.cases {
-        let overrides = read_overrides(&resolved(&scratch, &corpus, case));
-        for stem in &case.withheld_stems {
-            assert!(
-                !overrides.contains_key(stem),
-                "case {} describes {stem} where the reference leaves the tool its own \
-                 description",
-                case.name
-            );
-        }
+    let mut tally = Tally::new(&text, entries(LEDGER));
+    for scenario in &corpus.scenarios {
+        let port = port_observation(&scratch, &corpus, &scenario.scenario);
+        let found = differences(&scenario.observed, &port);
+        tally.record(&scenario.name, &scenario.observed, &port, found);
     }
-}
-
-#[test]
-fn the_published_text_matches_what_the_reference_published() {
-    let corpus = corpus();
-    let scratch = Scratch::build(&corpus.tree);
-    for case in &corpus.cases {
-        let overrides = read_overrides(&resolved(&scratch, &corpus, case));
-        assert!(
-            !case.published_descriptions.is_empty(),
-            "case {} publishes none of the descriptions its tree writes",
-            case.name
-        );
-        for (name, description) in &case.published_descriptions {
-            assert_eq!(
-                overrides.get(name),
-                Some(description),
-                "case {} publishes a different description for {name} than the reference",
-                case.name
-            );
-            assert!(
-                !case.unmatched_stems.contains(name),
-                "the corpus both published and withheld {name} in case {}",
-                case.name
-            );
-        }
-    }
-}
-
-/// Pins the one position this port answers differently, so the divergence stays
-/// measured instead of aging into an unnoticed gap.
-///
-/// The reference's first search path is the package directory holding its
-/// builtin implementations and their prompt files, and the corpus records how
-/// many tools it described from there. This port compiles those descriptions
-/// in, so it has no such directory: the compiled text is what a search path
-/// overrides. Everything after that first entry is compared position by
-/// position in [`the_search_path_order_matches_the_reference`].
-#[test]
-fn the_reference_reads_its_builtin_descriptions_from_disk() {
-    let corpus = corpus();
-    let scratch = Scratch::build(&corpus.tree);
-    for case in &corpus.cases {
-        assert!(
-            case.builtin_described_count > 0,
-            "case {} records no builtin description, so the capture read no builtin directory \
-             and the divergence below is unmeasured",
-            case.name
-        );
-        assert!(
-            !resolved(&scratch, &corpus, case)
-                .iter()
-                .any(|path| scratch.label(path) == corpus.builtin_label),
-            "this port resolved a builtin tools directory, which it does not have"
-        );
-    }
+    tally.conclude("tool descriptions parity:");
 }
 
 /// Recaptures against the local checkout and asserts the committed corpus is
@@ -433,10 +354,7 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         &fs::read_to_string(&recaptured).expect("the recaptured corpus is readable"),
     )
     .expect("the recaptured corpus parses");
-    let committed: Value = serde_json::from_str(
-        &fs::read_to_string(repository.join(CORPUS_RELATIVE)).expect("the corpus is readable"),
-    )
-    .expect("the corpus parses");
+    let committed: Value = serde_json::from_str(&corpus_text()).expect("the corpus parses");
     assert_eq!(
         fresh, committed,
         "the pinned reference no longer answers what the committed corpus records; regenerate it \

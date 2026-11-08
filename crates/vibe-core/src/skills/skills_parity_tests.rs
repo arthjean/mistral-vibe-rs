@@ -10,9 +10,12 @@
 //! reference-authored sentence, which is what `NOTICE` allows. Only the live
 //! recapture probe skips, and it names the pin and the way back when it does.
 //!
-//! The oracle preceded the implementation, and the ledger below holds decided
-//! divergences only: the stale check retires any entry the moment its case
-//! conforms. `frontmatter`, `metadata` and `projection` compare the parser,
+//! Every comparison is one unit of a [`Tally`], named `<family>/<case>` with
+//! the compared field as its pointer, and a comparison that departs is
+//! admitted only by a typed entry of [`LEDGER`] that counts it exactly: a
+//! decided divergence naming its "Accepted divergences" row, or a gap of row
+//! 28 the port still owes. An entry that stops reproducing fails the replay.
+//! `frontmatter`, `metadata` and `projection` compare the parser,
 //! the schema and the wire summary. `discovery` and `filtering` compare the
 //! roots, the scope each one publishes and the two filter keys: the wiring
 //! reproduced here is `WorkspaceService::skill_discovery`, which resolves the
@@ -25,7 +28,9 @@
 //! prose, masked in the trees the way the capture masks the reference's and
 //! held permanently unequal by digest. The six families that measure what a
 //! session loads and the registry lifecycle behind it are replayed by
-//! `skills_registry_parity_tests`.
+//! `skills_registry_parity_tests`. The former `command` family is gone since
+//! schema version 2: the reference deleted the parser it measured, and the
+//! capture script's docstring names where a slash invocation resolves now.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -36,9 +41,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
-use crate::parity::REFERENCE_COMMIT;
-use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Capture, pinned_reference};
+use crate::parity::is_pin_commit;
+use crate::parity::replay::{Capture, Class, PatternDivergence, Tally, entries, pinned_reference};
 use crate::skills::builtins::builtin_skills;
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
 use crate::skills::registry::manifest::{ManifestEntry, ManifestVersion, SkillManifest};
@@ -54,70 +58,96 @@ const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/skills/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/skills.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The scenario floor the skills-parity PRD commits to, so a regeneration that
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 120;
 
-/// Cases where this port answers something other than the reference, each with
-/// the reason. A case that conforms while listed here fails the replay as a
-/// stale entry, and a case that diverges without an entry fails naming the
-/// family, the case and the observed and expected values.
+/// Why most families depart at v3: the port seeds two builtins the reference
+/// no longer has.
+const BUILTINS_SEEDED: &str = "v3 ships its builtin skills as the packaged `vibe` plugin, \
+     named `vibe:<skill>` (vibe/plugins/builtins/vibe/, resolved by vibe/app_server/_plugins.py), \
+     and `SkillManager` seeds and reserves none, while this port still seeds `vibe` and \
+     `skill-creator` under bare names into every catalog it discovers";
+
+/// Every comparison this port answers otherwise, typed and counted across the
+/// replay. A scenario is named `<family>/<case>`, a pointer `/<field>`.
 ///
-/// A `family/*` entry covers every case of its family and goes stale only
-/// when the whole family conforms; none is used. Every entry is a decided
-/// divergence: the deprecated legacy root and the prose digests `NOTICE`
-/// holds permanently unequal.
-const DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "discovery/legacy-extensions-root-unread",
-        "ACCEPTED: US-165 keeps `{vibe_home}/extensions/skills` readable as a deprecated root \
-         this port published before the documented ones existed, so a skill sitting there is \
-         published here and unread upstream",
-    ),
-    (
-        "builtins/builtinProse-vibe",
-        "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the `vibe` body \
-         is written originally in `crates/vibe-core/src/skills/assets/vibe.md`; this entry \
-         keeps the digest divergence permanent, and the replay fails the moment the body \
-         conforms to the reference digest, so it can never be closed by copying. The body \
-         covers the directives the reference prompt (`vibe/core/skills/builtins/vibe.py`) \
-         carries at 4a96003186b1, OpenTelemetry tracing, session titles, plugins, project \
-         instructions, the exit, update and resume lifecycle and the input queue included, \
-         each stated for what this build does",
-    ),
-    (
-        "builtins/builtinProse-vibe-description",
-        "ACCEPTED: the `vibe` description is reference-authored prose, rewritten originally in \
-         `vibe_core::skills::builtins` for the same routing intent",
-    ),
-    (
-        "builtins/builtinProse-skill-creator",
-        "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the \
-         `skill-creator` body is written originally in \
-         `crates/vibe-core/src/skills/assets/skill_creator.md`, and conforming to the reference \
-         digest fails the replay. The body covers the directives the reference prompt \
-         (`vibe/core/skills/builtins/skill_creator.py`) carries at 4a96003186b1, the \
-         `disable-model-invocation` key and the routing-visibility qualification included",
-    ),
-    (
-        "builtins/builtinProse-skill-creator-description",
-        "ACCEPTED: the `skill-creator` description is reference-authored prose, rewritten \
-         originally in `vibe_core::skills::builtins` for the same routing intent",
-    ),
-    (
-        "command/builtin-skill-creator",
-        "ACCEPTED: the case invokes the `skill-creator` builtin, whose body is this port's own \
-         prose (`NOTICE`), so the delivered content digest can never match the reference's",
-    ),
-    (
-        "store/fallbackDescription",
-        "ACCEPTED: the store's fallback description is reference-authored prose, so \
-         `vibe_core::skills::registry::store::fallback_description` is this port's own sentence \
-         for the same purpose; the recorded trees mask it as `{fallbackDescription}` on both \
-         sides, and this entry holds the two digests permanently unequal, failing the replay \
-         the moment the sentence conforms",
-    ),
+/// `discovery/legacy-extensions-root-unread` also differs by the deprecated
+/// root "A deprecated user skills root" decides; the builtin gap covers the
+/// whole catalog comparison until it closes, and the decided entry returns
+/// with it.
+const LEDGER: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "store/fallbackDescription",
+        pointer: "/digest",
+        count: 1,
+        row: "28",
+        class: Class::Accepted("The registry store's fallback description"),
+        reason: "the store's fallback description is reference-authored prose, so \
+                 `vibe_core::skills::registry::store::fallback_description` is this port's own \
+                 sentence for the same purpose; the recorded trees mask it as \
+                 `{fallbackDescription}` on both sides, and the two digests stay unequal",
+    },
+    PatternDivergence {
+        scenario: "metadata/compatibility-501-chars",
+        pointer: "/verdict",
+        count: 1,
+        row: "28",
+        class: Class::Gap,
+        reason: "v3 dropped the 500-character bound on `compatibility` \
+                 (vibe/core/skills/models.py), and this port still refuses a longer value",
+    },
+    PatternDivergence {
+        scenario: "discovery/*",
+        pointer: "/catalog",
+        count: 28,
+        row: "28",
+        class: Class::Gap,
+        reason: BUILTINS_SEEDED,
+    },
+    PatternDivergence {
+        scenario: "filtering/*",
+        pointer: "/kept",
+        count: 5,
+        row: "28",
+        class: Class::Gap,
+        reason: BUILTINS_SEEDED,
+    },
+    PatternDivergence {
+        scenario: "loading/invalid-policy-on-reserved-name",
+        pointer: "/published",
+        count: 1,
+        row: "28",
+        class: Class::Gap,
+        reason: "v3 reserves no builtin name, so a configured skill named `vibe` loads \
+                 (vibe/core/skills/manager.py), and this port still withholds it behind its \
+                 seeded builtin",
+    },
+    PatternDivergence {
+        scenario: "lifecycle/*",
+        pointer: "/session",
+        count: 17,
+        row: "28",
+        class: Class::Gap,
+        reason: BUILTINS_SEEDED,
+    },
+    PatternDivergence {
+        scenario: "builtins/count",
+        pointer: "/count",
+        count: 1,
+        row: "28",
+        class: Class::Gap,
+        reason: BUILTINS_SEEDED,
+    },
+    PatternDivergence {
+        scenario: "builtins/vibe:*",
+        pointer: "/present",
+        count: 4,
+        row: "28",
+        class: Class::Gap,
+        reason: BUILTINS_SEEDED,
+    },
 ];
 
 // --------------------------------------------------------------------------
@@ -138,7 +168,6 @@ struct Corpus {
     metadata: Vec<MetadataCase>,
     discovery: Vec<DiscoveryScenario>,
     filtering: Vec<FilteringCase>,
-    command: CommandFamily,
     projection: Vec<ProjectionCase>,
     store: StoreFamily,
     manifest: Vec<ManifestCase>,
@@ -279,38 +308,6 @@ struct FilteringCase {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CommandFamily {
-    skills: Vec<CommandFixture>,
-    cases: Vec<CommandCase>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CommandFixture {
-    name: String,
-    description: String,
-    invocable: bool,
-    body: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CommandCase {
-    case: String,
-    prompt: String,
-    result: Option<CommandResult>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct CommandResult {
-    name: String,
-    extra_instructions: Option<String>,
-    content: Digested,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProjectionCase {
     case: String,
     skill: Value,
@@ -418,8 +415,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -429,22 +426,21 @@ fn corpus() -> Corpus {
 // The ledger
 // --------------------------------------------------------------------------
 
-/// The divergence ledger as a lookup, keyed `family/case` or `family/*`.
-fn ledger() -> BTreeMap<String, String> {
-    DIVERGENCES
-        .iter()
-        .map(|(case, reason)| ((*case).to_owned(), (*reason).to_owned()))
-        .collect()
-}
-
-/// Records one comparison, so a family reports a count and a divergence names
-/// itself instead of stopping at the first one.
+/// Records every comparison of one family, so a family reports a count and
+/// the replay's [`Tally`] later accounts for each one.
 #[derive(Default)]
 pub(super) struct Report {
-    conformant: usize,
-    total: usize,
-    divergences: Vec<String>,
-    observed: Vec<String>,
+    comparisons: Vec<Comparison>,
+}
+
+/// One comparison: the scenario `<family>/<case>`, the compared field, both
+/// sides as they print, and whether they agreed.
+struct Comparison {
+    scenario: String,
+    field: String,
+    expected: String,
+    actual: String,
+    equal: bool,
 }
 
 impl Report {
@@ -456,65 +452,35 @@ impl Report {
         expected: &T,
         actual: &T,
     ) {
-        self.total += 1;
-        if expected == actual {
-            self.conformant += 1;
-            return;
-        }
-        self.observed.push(format!("{family}/{case}"));
-        self.divergences.push(format!(
-            "{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"
-        ));
+        self.comparisons.push(Comparison {
+            scenario: format!("{family}/{case}"),
+            field: field.to_owned(),
+            expected: format!("{expected:?}"),
+            actual: format!("{actual:?}"),
+            equal: expected == actual,
+        });
     }
 }
 
-/// Fails on any divergence the ledger does not name, and on any ledger entry
-/// whose divergence no longer reproduces. A `family/*` entry is stale once its
-/// family diverges nowhere.
-pub(super) fn settle(report: &Report, family: &str) -> usize {
-    let recorded = ledger();
-    let wildcard = format!("{family}/*");
-    let unrecorded = report
-        .divergences
+/// Prints how much of `family` conforms, hands its comparisons to the replay's
+/// tally, and returns how many it compared.
+pub(super) fn settle(report: Report, family: &str) -> usize {
+    let total = report.comparisons.len();
+    let conformant = report
+        .comparisons
         .iter()
-        .filter(|line| {
-            let key = line.split(':').next().unwrap_or_default();
-            !recorded.contains_key(key) && !recorded.contains_key(&wildcard)
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    assert!(
-        unrecorded.is_empty(),
-        "{family} diverges from the reference and is unrecorded:\n{}",
-        unrecorded.join("\n")
-    );
-    let stale = recorded
-        .keys()
-        .filter(|key| {
-            if **key == wildcard {
-                report.total > 0 && report.divergences.is_empty()
-            } else {
-                key.starts_with(&format!("{family}/")) && !report.observed.contains(key)
-            }
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    assert!(
-        stale.is_empty(),
-        "these {family} entries conform now and their ledger entry is stale: {stale:?}"
-    );
-    println!(
-        "skills: {family} {}/{} conform",
-        report.conformant, report.total
-    );
-    CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
-    report.total
+        .filter(|comparison| comparison.equal)
+        .count();
+    println!("skills: {family} {conformant}/{total} conform");
+    COMPARISONS.with(|comparisons| comparisons.borrow_mut().extend(report.comparisons));
+    total
 }
 
 std::thread_local! {
-    /// The conformant comparisons every family [`settle`]d on this thread
-    /// has counted, which the replay's figures read.
-    static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The comparisons every family [`settle`]d on this thread, which the
+    /// replay's tally accounts for once every family ran.
+    static COMPARISONS: std::cell::RefCell<Vec<Comparison>> =
+        const { std::cell::RefCell::new(Vec::new()) };
 }
 
 // --------------------------------------------------------------------------
@@ -1482,9 +1448,10 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
 
 #[test]
 fn the_committed_corpus_replays_every_family_the_reference_answered() {
-    crate::parity::manifest::assert_corpus("crates/vibe-core/tests/skills/corpus.json");
+    let text = fs::read_to_string(repo_root().join(CORPUS_RELATIVE))
+        .expect("the skills corpus is readable");
     let corpus = corpus();
-    CONFORMANT.with(|conformant| conformant.set(0));
+    COMPARISONS.with(|comparisons| comparisons.borrow_mut().clear());
     let mut scenarios = 0;
 
     let mut report = Report::default();
@@ -1500,7 +1467,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
         };
         report.check("frontmatter", &case.case, "parse", &expected, &observed);
     }
-    scenarios += settle(&report, "frontmatter");
+    scenarios += settle(report, "frontmatter");
 
     let mut report = Report::default();
     for case in &corpus.metadata {
@@ -1520,7 +1487,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
             &observed,
         );
     }
-    scenarios += settle(&report, "metadata");
+    scenarios += settle(report, "metadata");
 
     let mut report = Report::default();
     for scenario in &corpus.discovery {
@@ -1535,7 +1502,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
             &observed,
         );
     }
-    scenarios += settle(&report, "discovery");
+    scenarios += settle(report, "discovery");
 
     let mut report = Report::default();
     for case in &corpus.filtering {
@@ -1575,45 +1542,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
             &custom_skills_count(&skills),
         );
     }
-    scenarios += settle(&report, "filtering");
-
-    let mut report = Report::default();
-    let mut command_catalog = crate::skills::builtins::builtin_skills();
-    command_catalog.extend(corpus.command.skills.iter().map(|fixture| {
-        let mut definition = named_definition(&fixture.name);
-        definition.description.clone_from(&fixture.description);
-        definition.user_invocable = fixture.invocable;
-        definition.body.clone_from(&fixture.body);
-        (fixture.name.clone(), definition)
-    }));
-    for case in &corpus.command.cases {
-        let parsed = crate::skills::parse_skill_command(&command_catalog, &case.prompt);
-        report.check(
-            "command",
-            &case.case,
-            "invokes",
-            &case.result.is_some(),
-            &parsed.is_some(),
-        );
-        if let (Some(expected), Some(actual)) = (&case.result, &parsed) {
-            report.check("command", &case.case, "name", &expected.name, &actual.name);
-            report.check(
-                "command",
-                &case.case,
-                "extraInstructions",
-                &expected.extra_instructions,
-                &actual.extra_instructions,
-            );
-            report.check(
-                "command",
-                &case.case,
-                "content",
-                &expected.content,
-                &digest_of(&actual.content),
-            );
-        }
-    }
-    scenarios += settle(&report, "command");
+    scenarios += settle(report, "filtering");
 
     let mut report = Report::default();
     for case in &corpus.projection {
@@ -1625,7 +1554,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
             &skill_summary(&projection_definition(&case.skill)),
         );
     }
-    scenarios += settle(&report, "projection");
+    scenarios += settle(report, "projection");
 
     let mut report = Report::default();
     let mut fallback = None;
@@ -1650,14 +1579,14 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
         &corpus.store.fallback_description,
         &digest_of(&fallback),
     );
-    scenarios += settle(&report, "store");
+    scenarios += settle(report, "store");
 
     let mut report = Report::default();
     for case in &corpus.manifest {
         let (expected, observed) = manifest_answer(case);
         report.check("manifest", &case.case, "answer", &expected, &observed);
     }
-    scenarios += settle(&report, "manifest");
+    scenarios += settle(report, "manifest");
 
     scenarios += super::skills_registry_parity_tests::replay(
         &corpus.loading,
@@ -1728,10 +1657,10 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
             &digest_of(&skill.description),
         );
     }
-    scenarios += settle(&report, "builtins");
+    scenarios += settle(report, "builtins");
 
     println!(
-        "skills: {scenarios} scenarios across 14 families plus the builtin catalog replayed at {}",
+        "skills: {scenarios} scenarios across 13 families plus the builtin catalog replayed at {}",
         &corpus.reference.commit[..12],
     );
     assert!(
@@ -1740,15 +1669,18 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
          commits to; regenerate it with {CAPTURE_SCRIPT}"
     );
 
-    // Every comparison that departs passed `settle`, so the ledger, whose
-    // entries are all accepted divergences, records it.
-    let conformant = CONFORMANT.with(std::cell::Cell::get);
-    assert_figures(
-        "skills parity:",
-        "crates/vibe-core/tests/skills/corpus.json",
-        Figures::decided(conformant, scenarios, scenarios - conformant),
-        serde_json::json!({}),
-    );
+    let mut tally = Tally::new(&text, entries(LEDGER));
+    for comparison in COMPARISONS.with(std::cell::RefCell::take) {
+        let reference = json!({ comparison.field.as_str(): comparison.expected });
+        let port = json!({ comparison.field.as_str(): comparison.actual });
+        let found = if comparison.equal {
+            Vec::new()
+        } else {
+            vec![format!("/{}", comparison.field)]
+        };
+        tally.record(&comparison.scenario, &reference, &port, found);
+    }
+    tally.conclude("skills parity:");
 }
 
 /// The corpus is only an oracle for as long as it still describes the pinned

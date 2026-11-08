@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.5,
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {
@@ -181,27 +181,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -217,7 +196,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -228,16 +207,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -250,9 +229,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -261,11 +240,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -287,7 +261,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -300,7 +274,7 @@
           "response": {
             "id": 7,
             "result": {
-              "content": ""
+              "content": "alpha\nbeta\ngamma\n"
             }
           }
         },
@@ -317,6 +291,20 @@
                     {
                       "ordinal": 0,
                       "versionIndex": 2
+                    },
+                    {
+                      "ordinal": 0,
+                      "versionIndex": 4
+                    }
+                  ],
+                  "side": "additions"
+                },
+                {
+                  "line": 2,
+                  "regions": [
+                    {
+                      "ordinal": 1,
+                      "versionIndex": 4
                     }
                   ],
                   "side": "additions"
@@ -352,7 +340,28 @@
           "response": {
             "id": 10,
             "result": {
-              "hunks": []
+              "hunks": [
+                {
+                  "line": 0,
+                  "regions": [
+                    {
+                      "ordinal": 0,
+                      "versionIndex": 4
+                    }
+                  ],
+                  "side": "additions"
+                },
+                {
+                  "line": 2,
+                  "regions": [
+                    {
+                      "ordinal": 1,
+                      "versionIndex": 4
+                    }
+                  ],
+                  "side": "additions"
+                }
+              ]
             }
           }
         },
@@ -361,127 +370,6 @@
           "notifications": [],
           "response": {
             "id": 11,
-            "result": {
-              "baseline": "",
-              "current": "made in turn one\n",
-              "status": "created"
-            }
-          }
-        },
-        {
-          "method": "review/turnDiff",
-          "notifications": [],
-          "response": {
-            "id": 12,
-            "result": {
-              "baseline": "",
-              "current": "",
-              "status": "modified"
-            }
-          }
-        },
-        {
-          "method": "review/baseline",
-          "notifications": [],
-          "response": {
-            "id": 13,
-            "result": {
-              "content": "alpha\nbeta\ngamma\n"
-            }
-          }
-        },
-        {
-          "method": "review/hunks",
-          "notifications": [],
-          "response": {
-            "id": 14,
-            "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 3
-                    },
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                },
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 1,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/hunks",
-          "notifications": [],
-          "response": {
-            "id": 15,
-            "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 3
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/hunks",
-          "notifications": [],
-          "response": {
-            "id": 16,
-            "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                },
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 1,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/turnDiff",
-          "notifications": [],
-          "response": {
-            "id": 17,
             "result": {
               "baseline": "alpha\nbeta\ngamma\n",
               "current": "ALPHA\nbeta\ngamma\n",
@@ -493,10 +381,74 @@
           "method": "review/turnDiff",
           "notifications": [],
           "response": {
-            "id": 18,
+            "id": 12,
             "result": {
               "baseline": "ALPHA\nbeta\ngamma\n",
               "current": "Alpha\nbeta\nGAMMA\n",
+              "status": "modified"
+            }
+          }
+        },
+        {
+          "method": "review/baseline",
+          "notifications": [],
+          "response": {
+            "id": 13,
+            "result": {
+              "content": ""
+            }
+          }
+        },
+        {
+          "method": "review/hunks",
+          "notifications": [],
+          "response": {
+            "id": 14,
+            "result": {
+              "hunks": []
+            }
+          }
+        },
+        {
+          "method": "review/hunks",
+          "notifications": [],
+          "response": {
+            "id": 15,
+            "result": {
+              "hunks": []
+            }
+          }
+        },
+        {
+          "method": "review/hunks",
+          "notifications": [],
+          "response": {
+            "id": 16,
+            "result": {
+              "hunks": []
+            }
+          }
+        },
+        {
+          "method": "review/turnDiff",
+          "notifications": [],
+          "response": {
+            "id": 17,
+            "result": {
+              "baseline": "",
+              "current": "",
+              "status": "modified"
+            }
+          }
+        },
+        {
+          "method": "review/turnDiff",
+          "notifications": [],
+          "response": {
+            "id": 18,
+            "result": {
+              "baseline": "",
+              "current": "",
               "status": "modified"
             }
           }
@@ -712,27 +664,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -748,7 +679,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -759,16 +690,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -781,9 +712,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -792,11 +723,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -818,7 +744,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -867,7 +793,7 @@
                   "regions": [
                     {
                       "ordinal": 0,
-                      "versionIndex": 7
+                      "versionIndex": 6
                     }
                   ],
                   "side": "additions"
@@ -1051,27 +977,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -1087,7 +992,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -1098,16 +1003,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -1120,9 +1025,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -1131,11 +1036,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -1157,7 +1057,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -1187,7 +1087,7 @@
                       "baselineStart": 0,
                       "currentLineCount": 1,
                       "currentStart": 0,
-                      "decision": "pending",
+                      "decision": "keep",
                       "dependsOn": [],
                       "kind": "text",
                       "ordinal": 0,
@@ -1195,7 +1095,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -1206,16 +1106,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -1228,118 +1128,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
-                    }
-                  ],
-                  "status": "modified"
-                }
-              ],
-              "scopes": [
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/notes.txt",
-                      "regionCount": 1,
-                      "status": "modified"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 1
-                  }
-                },
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/notes.txt",
-                      "regionCount": 2,
-                      "status": "modified"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 6
-                  }
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/revert",
-          "notifications": [],
-          "response": {
-            "id": 9,
-            "result": {}
-          }
-        },
-        {
-          "files": {
-            "created.txt": "made in turn one\n",
-            "notes.txt": "alpha\nbeta\nGAMMA\n"
-          }
-        },
-        {
-          "method": "review/state",
-          "notifications": [],
-          "response": {
-            "id": 11,
-            "result": {
-              "files": [
-                {
-                  "path": "<ws>/notes.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "revert",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 3
-                    },
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "revert",
-                      "dependsOn": [
-                        {
-                          "ordinal": 0,
-                          "versionIndex": 3
-                        }
-                      ],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 6
-                      },
-                      "versionIndex": 5
-                    },
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 2,
-                      "currentLineCount": 1,
-                      "currentStart": 2,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 1,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 6
-                      },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -1357,13 +1148,123 @@
                   "files": [
                     {
                       "path": "<ws>/notes.txt",
-                      "regionCount": 1,
+                      "regionCount": 2,
                       "status": "modified"
                     }
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "method": "review/revert",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "internal_error",
+              "data": null,
+              "message": {
+                "prose": 60,
+                "sha256": "837afacf55b2575e8bebb46de015c73f0b685bd82e417e3e71403fe829f429a7"
+              }
+            },
+            "id": 9
+          }
+        },
+        {
+          "files": {
+            "created.txt": null,
+            "notes.txt": "Alpha\nbeta\nGAMMA\n"
+          }
+        },
+        {
+          "method": "review/state",
+          "notifications": [],
+          "response": {
+            "id": 11,
+            "result": {
+              "files": [
+                {
+                  "path": "<ws>/notes.txt",
+                  "regions": [
+                    {
+                      "baselineLineCount": 1,
+                      "baselineStart": 0,
+                      "currentLineCount": 1,
+                      "currentStart": 0,
+                      "decision": "keep",
+                      "dependsOn": [],
+                      "kind": "text",
+                      "ordinal": 0,
+                      "owner": {
+                        "kind": "agent",
+                        "turnId": 1
+                      },
+                      "versionIndex": 2
+                    },
+                    {
+                      "baselineLineCount": 1,
+                      "baselineStart": 0,
+                      "currentLineCount": 1,
+                      "currentStart": 0,
+                      "decision": "pending",
+                      "dependsOn": [
+                        {
+                          "ordinal": 0,
+                          "versionIndex": 2
+                        }
+                      ],
+                      "kind": "text",
+                      "ordinal": 0,
+                      "owner": {
+                        "kind": "agent",
+                        "turnId": 2
+                      },
+                      "versionIndex": 4
+                    },
+                    {
+                      "baselineLineCount": 1,
+                      "baselineStart": 2,
+                      "currentLineCount": 1,
+                      "currentStart": 2,
+                      "decision": "pending",
+                      "dependsOn": [],
+                      "kind": "text",
+                      "ordinal": 1,
+                      "owner": {
+                        "kind": "agent",
+                        "turnId": 2
+                      },
+                      "versionIndex": 4
+                    }
+                  ],
+                  "status": "modified"
+                }
+              ],
+              "scopes": [
+                {
+                  "files": [],
+                  "owner": {
+                    "kind": "agent",
+                    "turnId": 1
+                  }
+                },
+                {
+                  "files": [
+                    {
+                      "path": "<ws>/notes.txt",
+                      "regionCount": 2,
+                      "status": "modified"
+                    }
+                  ],
+                  "owner": {
+                    "kind": "agent",
+                    "turnId": 2
                   }
                 }
               ]
@@ -1515,27 +1416,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -1551,7 +1431,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -1562,16 +1442,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -1584,9 +1464,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -1595,11 +1475,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -1621,7 +1496,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -1632,14 +1507,21 @@
           "method": "review/revert",
           "notifications": [],
           "response": {
-            "id": 7,
-            "result": {}
+            "error": {
+              "code": "internal_error",
+              "data": null,
+              "message": {
+                "prose": 60,
+                "sha256": "837afacf55b2575e8bebb46de015c73f0b685bd82e417e3e71403fe829f429a7"
+              }
+            },
+            "id": 7
           }
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
-            "notes.txt": "alpha\nbeta\nGAMMA\n"
+            "created.txt": null,
+            "notes.txt": "Alpha\nbeta\nGAMMA\n"
           }
         },
         {
@@ -1650,10 +1532,10 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
+                  "path": "<ws>/notes.txt",
                   "regions": [
                     {
-                      "baselineLineCount": 0,
+                      "baselineLineCount": 1,
                       "baselineStart": 0,
                       "currentLineCount": 1,
                       "currentStart": 0,
@@ -1666,47 +1548,26 @@
                         "turnId": 1
                       },
                       "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
-                  "path": "<ws>/notes.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "revert",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 3
                     },
                     {
                       "baselineLineCount": 1,
                       "baselineStart": 0,
                       "currentLineCount": 1,
                       "currentStart": 0,
-                      "decision": "revert",
+                      "decision": "pending",
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -1719,9 +1580,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -1731,9 +1592,9 @@
                 {
                   "files": [
                     {
-                      "path": "<ws>/created.txt",
+                      "path": "<ws>/notes.txt",
                       "regionCount": 1,
-                      "status": "created"
+                      "status": "modified"
                     }
                   ],
                   "owner": {
@@ -1745,13 +1606,13 @@
                   "files": [
                     {
                       "path": "<ws>/notes.txt",
-                      "regionCount": 1,
+                      "regionCount": 2,
                       "status": "modified"
                     }
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -1889,27 +1750,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -1925,7 +1765,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -1936,16 +1776,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -1958,9 +1798,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -1969,11 +1809,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -1995,7 +1830,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -2012,7 +1847,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "ALPHA\nbeta\ngamma\n"
           }
         },
@@ -2023,27 +1858,6 @@
             "id": 9,
             "result": {
               "files": [
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
                 {
                   "path": "<ws>/notes.txt",
                   "regions": [
@@ -2060,7 +1874,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -2071,16 +1885,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -2093,9 +1907,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -2104,11 +1918,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -2124,7 +1933,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -2141,7 +1950,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "ALPHA\nbeta\ngamma\n"
           }
         },
@@ -2164,7 +1973,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -2318,27 +2127,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -2354,7 +2142,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -2365,16 +2153,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -2387,9 +2175,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -2398,11 +2186,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -2424,7 +2207,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -2441,8 +2224,8 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
-            "notes.txt": "alpha\nbeta\nGAMMA\n"
+            "created.txt": null,
+            "notes.txt": "Alpha\nbeta\nGAMMA\n"
           }
         },
         {
@@ -2453,10 +2236,10 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
+                  "path": "<ws>/notes.txt",
                   "regions": [
                     {
-                      "baselineLineCount": 0,
+                      "baselineLineCount": 1,
                       "baselineStart": 0,
                       "currentLineCount": 1,
                       "currentStart": 0,
@@ -2469,47 +2252,26 @@
                         "turnId": 1
                       },
                       "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
-                  "path": "<ws>/notes.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "revert",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 3
                     },
                     {
                       "baselineLineCount": 1,
                       "baselineStart": 0,
                       "currentLineCount": 1,
                       "currentStart": 0,
-                      "decision": "revert",
+                      "decision": "pending",
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -2522,9 +2284,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -2534,9 +2296,9 @@
                 {
                   "files": [
                     {
-                      "path": "<ws>/created.txt",
+                      "path": "<ws>/notes.txt",
                       "regionCount": 1,
-                      "status": "created"
+                      "status": "modified"
                     }
                   ],
                   "owner": {
@@ -2548,13 +2310,13 @@
                   "files": [
                     {
                       "path": "<ws>/notes.txt",
-                      "regionCount": 1,
+                      "regionCount": 2,
                       "status": "modified"
                     }
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -2567,7 +2329,7 @@
           "response": {
             "id": 10,
             "result": {
-              "content": "alpha\nbeta\ngamma\n"
+              "content": ""
             }
           }
         },
@@ -2577,18 +2339,7 @@
           "response": {
             "id": 11,
             "result": {
-              "hunks": [
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 1,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
+              "hunks": []
             }
           }
         },
@@ -2608,18 +2359,7 @@
           "response": {
             "id": 13,
             "result": {
-              "hunks": [
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 1,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
+              "hunks": []
             }
           }
         },
@@ -2641,8 +2381,8 @@
           "response": {
             "id": 15,
             "result": {
-              "baseline": "alpha\nbeta\ngamma\n",
-              "current": "alpha\nbeta\nGAMMA\n",
+              "baseline": "",
+              "current": "",
               "status": "modified"
             }
           }
@@ -2827,27 +2567,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -2863,7 +2582,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -2874,16 +2593,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -2896,9 +2615,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -2907,11 +2626,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -2933,7 +2647,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -2958,8 +2672,8 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
-            "notes.txt": "alpha\nbeta\ngamma\n"
+            "created.txt": null,
+            "notes.txt": "Alpha\nbeta\nGAMMA\n"
           }
         },
         {
@@ -2981,7 +2695,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3121,27 +2835,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -3157,7 +2850,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -3168,16 +2861,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -3190,9 +2883,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -3201,11 +2894,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -3227,7 +2915,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3267,7 +2955,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3394,27 +3082,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -3430,7 +3097,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -3441,16 +3108,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -3463,9 +3130,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -3474,11 +3141,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -3500,7 +3162,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3517,7 +3179,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "Alpha\nbeta\nGAMMA\n"
           }
         },
@@ -3540,7 +3202,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3686,27 +3348,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -3722,7 +3363,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -3733,16 +3374,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -3755,9 +3396,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -3766,11 +3407,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -3792,7 +3428,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3831,27 +3467,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -3867,7 +3482,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -3878,16 +3493,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -3900,9 +3515,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -3911,11 +3526,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -3937,7 +3547,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -3977,7 +3587,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -4149,27 +3759,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -4185,7 +3774,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -4196,16 +3785,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -4218,9 +3807,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -4229,11 +3818,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -4255,7 +3839,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -4272,7 +3856,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": null
           }
         },
@@ -4286,7 +3870,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "alpha\nbeta\ngamma\n"
           }
         },
@@ -4296,38 +3880,10 @@
           "response": {
             "id": 11,
             "result": {
-              "files": [
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                }
-              ],
+              "files": [],
               "scopes": [
                 {
-                  "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    }
-                  ],
+                  "files": [],
                   "owner": {
                     "kind": "agent",
                     "turnId": 1
@@ -4337,7 +3893,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 },
                 {
@@ -4608,7 +4164,7 @@
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 5
+                        "turnId": 2
                       },
                       "versionIndex": 5
                     }
@@ -4653,7 +4209,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 5
+                    "turnId": 2
                   }
                 }
               ]
@@ -4829,7 +4385,7 @@
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 5
+                        "turnId": 2
                       },
                       "versionIndex": 5
                     }
@@ -4868,7 +4424,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 5
+                    "turnId": 2
                   }
                 }
               ]
@@ -5177,7 +4733,7 @@
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 5
+                        "turnId": 2
                       },
                       "reason": "missing",
                       "versionIndex": 4
@@ -5210,7 +4766,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 5
+                    "turnId": 2
                   }
                 }
               ]
@@ -5342,7 +4898,7 @@
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 5
+                        "turnId": 2
                       },
                       "reason": "missing",
                       "versionIndex": 4
@@ -5369,7 +4925,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 5
+                    "turnId": 2
                   }
                 }
               ]
@@ -5527,74 +5083,8 @@
           "response": {
             "id": 5,
             "result": {
-              "files": [
-                {
-                  "path": "<ws>/dir/sub.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    },
-                    {
-                      "decision": "pending",
-                      "dependsOn": [
-                        {
-                          "ordinal": 0,
-                          "versionIndex": 2
-                        }
-                      ],
-                      "kind": "opaque",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 5
-                      },
-                      "reason": "missing",
-                      "versionIndex": 4
-                    }
-                  ],
-                  "status": "deleted"
-                }
-              ],
-              "scopes": [
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/dir/sub.txt",
-                      "regionCount": 1,
-                      "status": "deleted"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 1
-                  }
-                },
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/dir/sub.txt",
-                      "regionCount": 1,
-                      "status": "deleted"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 5
-                  }
-                }
-              ]
+              "files": [],
+              "scopes": []
             }
           }
         },
@@ -5602,13 +5092,35 @@
           "method": "review/revert",
           "notifications": [],
           "response": {
-            "id": 6,
-            "result": {}
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "target",
+                      "scope",
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 6
           }
         },
         {
           "files": {
-            "dir/sub.txt": "nested\n"
+            "dir/sub.txt": null
           }
         },
         {
@@ -5617,68 +5129,8 @@
           "response": {
             "id": 8,
             "result": {
-              "files": [
-                {
-                  "path": "<ws>/dir/sub.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    },
-                    {
-                      "decision": "revert",
-                      "dependsOn": [
-                        {
-                          "ordinal": 0,
-                          "versionIndex": 2
-                        }
-                      ],
-                      "kind": "opaque",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 5
-                      },
-                      "reason": "missing",
-                      "versionIndex": 4
-                    }
-                  ],
-                  "status": "created"
-                }
-              ],
-              "scopes": [
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/dir/sub.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 1
-                  }
-                },
-                {
-                  "files": [],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 5
-                  }
-                }
-              ]
+              "files": [],
+              "scopes": []
             }
           }
         }
@@ -6477,44 +5929,8 @@
           "response": {
             "id": 4,
             "result": {
-              "files": [
-                {
-                  "path": "<root>/outside/far.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                }
-              ],
-              "scopes": [
-                {
-                  "files": [
-                    {
-                      "path": "<root>/outside/far.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 1
-                  }
-                }
-              ]
+              "files": [],
+              "scopes": []
             }
           }
         },
@@ -6534,18 +5950,7 @@
           "response": {
             "id": 6,
             "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 2
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
+              "hunks": []
             }
           }
         },
@@ -6553,21 +5958,28 @@
           "method": "review/hunks",
           "notifications": [],
           "response": {
-            "id": 7,
-            "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 2
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 7
           }
         },
         {
@@ -6602,12 +6014,28 @@
           "method": "review/turnDiff",
           "notifications": [],
           "response": {
-            "id": 9,
-            "result": {
-              "baseline": "",
-              "current": "far away\n",
-              "status": "created"
-            }
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 9
           }
         },
         {
@@ -6653,15 +6081,7 @@
             "id": 12,
             "result": {
               "files": [],
-              "scopes": [
-                {
-                  "files": [],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 1
-                  }
-                }
-              ]
+              "scopes": []
             }
           }
         }
@@ -8252,33 +7672,12 @@
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 5
+                        "turnId": 2
                       },
                       "versionIndex": 4
                     }
                   ],
                   "status": "modified"
-                },
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 5
-                      },
-                      "versionIndex": 5
-                    }
-                  ],
-                  "status": "created"
                 }
               ],
               "scopes": [
@@ -8423,8 +7822,8 @@
             "id": 14,
             "result": {
               "baseline": "",
-              "current": "made mid-turn\n",
-              "status": "created"
+              "current": "",
+              "status": "modified"
             }
           }
         },
@@ -8434,10 +7833,12 @@
           "response": {
             "error": {
               "code": "conflict",
-              "data": null,
+              "data": {
+                "activeTurnId": "<id-2>"
+              },
               "message": {
-                "prose": 35,
-                "sha256": "758406cfdf038571e3c43a05b77c43b71efafb2e94fe32331b41f4e7f3f8b7ca"
+                "prose": 33,
+                "sha256": "9df84fcbd96418fc411fed65c364ac715a59b41af0b79fb99f9902f2566d2d76"
               }
             },
             "id": 15
@@ -8507,33 +7908,12 @@
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 5
+                        "turnId": 2
                       },
                       "versionIndex": 4
                     }
                   ],
                   "status": "modified"
-                },
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 5
-                      },
-                      "versionIndex": 5
-                    }
-                  ],
-                  "status": "created"
                 }
               ],
               "scopes": [
@@ -8556,16 +7936,11 @@
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
                       "status": "modified"
-                    },
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
                     }
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 5
+                    "turnId": 2
                   }
                 }
               ]
@@ -8773,27 +8148,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -8809,7 +8163,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -8820,16 +8174,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -8842,9 +8196,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -8853,11 +8207,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -8879,7 +8228,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -9178,11 +8527,11 @@
                   "regions": [
                     {
                       "ordinal": 0,
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "ordinal": 0,
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "side": "additions"
@@ -9192,7 +8541,7 @@
                   "regions": [
                     {
                       "ordinal": 1,
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "side": "additions"
@@ -9448,27 +8797,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -9484,7 +8812,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -9495,16 +8823,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -9517,9 +8845,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -9528,11 +8856,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -9554,7 +8877,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -9832,7 +9155,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "Alpha\nbeta\nGAMMA\n"
           }
         },
@@ -9855,7 +9178,7 @@
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -10160,29 +9483,8 @@
         {
           "context": [
             {
-              "content": {
-                "prose": 455,
-                "sha256": "916bce18a99c44f06908f6e06700313c95aceaf3c871d884a54bff5ac087b68d"
-              },
+              "content": "Create a file and edit the notes",
               "role": "user"
-            },
-            {
-              "content": "Turn one done.",
-              "role": "assistant"
-            },
-            {
-              "content": "Edit the notes again",
-              "role": "user"
-            },
-            {
-              "content": "",
-              "role": "assistant",
-              "toolCalls": [
-                "edit"
-              ]
-            },
-            {
-              "role": "tool"
             }
           ]
         },
@@ -10193,27 +9495,6 @@
             "id": 6,
             "result": {
               "files": [
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
                 {
                   "path": "<ws>/notes.txt",
                   "regions": [
@@ -10230,22 +9511,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
-                    },
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 2,
-                      "currentLineCount": 1,
-                      "currentStart": 2,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 7
-                      },
-                      "versionIndex": 5
+                      "versionIndex": 2
                     }
                   ],
                   "status": "modified"
@@ -10255,11 +9521,6 @@
                 {
                   "files": [
                     {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
-                    {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
                       "status": "modified"
@@ -10268,19 +9529,6 @@
                   "owner": {
                     "kind": "agent",
                     "turnId": 1
-                  }
-                },
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/notes.txt",
-                      "regionCount": 1,
-                      "status": "modified"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 7
                   }
                 }
               ]
@@ -10293,7 +9541,7 @@
           "response": {
             "id": 7,
             "result": {
-              "content": ""
+              "content": "alpha\nbeta\ngamma\n"
             }
           }
         },
@@ -10343,10 +9591,28 @@
           "method": "review/hunks",
           "notifications": [],
           "response": {
-            "id": 10,
-            "result": {
-              "hunks": []
-            }
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 10
           }
         },
         {
@@ -10354,113 +9620,6 @@
           "notifications": [],
           "response": {
             "id": 11,
-            "result": {
-              "baseline": "",
-              "current": "made in turn one\n",
-              "status": "created"
-            }
-          }
-        },
-        {
-          "method": "review/turnDiff",
-          "notifications": [],
-          "response": {
-            "id": 12,
-            "result": {
-              "baseline": "",
-              "current": "",
-              "status": "modified"
-            }
-          }
-        },
-        {
-          "method": "review/baseline",
-          "notifications": [],
-          "response": {
-            "id": 13,
-            "result": {
-              "content": "alpha\nbeta\ngamma\n"
-            }
-          }
-        },
-        {
-          "method": "review/hunks",
-          "notifications": [],
-          "response": {
-            "id": 14,
-            "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 3
-                    }
-                  ],
-                  "side": "additions"
-                },
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/hunks",
-          "notifications": [],
-          "response": {
-            "id": 15,
-            "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 3
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/hunks",
-          "notifications": [],
-          "response": {
-            "id": 16,
-            "result": {
-              "hunks": [
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 5
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "method": "review/turnDiff",
-          "notifications": [],
-          "response": {
-            "id": 17,
             "result": {
               "baseline": "alpha\nbeta\ngamma\n",
               "current": "ALPHA\nbeta\ngamma\n",
@@ -10472,12 +9631,126 @@
           "method": "review/turnDiff",
           "notifications": [],
           "response": {
-            "id": 18,
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 12
+          }
+        },
+        {
+          "method": "review/baseline",
+          "notifications": [],
+          "response": {
+            "id": 13,
             "result": {
-              "baseline": "ALPHA\nbeta\ngamma\n",
-              "current": "ALPHA\nbeta\nGAMMA\n",
+              "content": ""
+            }
+          }
+        },
+        {
+          "method": "review/hunks",
+          "notifications": [],
+          "response": {
+            "id": 14,
+            "result": {
+              "hunks": []
+            }
+          }
+        },
+        {
+          "method": "review/hunks",
+          "notifications": [],
+          "response": {
+            "id": 15,
+            "result": {
+              "hunks": []
+            }
+          }
+        },
+        {
+          "method": "review/hunks",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 16
+          }
+        },
+        {
+          "method": "review/turnDiff",
+          "notifications": [],
+          "response": {
+            "id": 17,
+            "result": {
+              "baseline": "",
+              "current": "",
               "status": "modified"
             }
+          }
+        },
+        {
+          "method": "review/turnDiff",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 67,
+                      "sha256": "eddf1416521b98d10092f574bbabf547289affd3f33c39b1d7624393e4ad7df5"
+                    },
+                    "path": [
+                      "owner"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            },
+            "id": 18
           }
         }
       ],
@@ -10485,7 +9758,7 @@
         "backend": [
           {
             "completionTokens": 8,
-            "promptTokens": 12,
+            "promptTokens": 60000,
             "toolCalls": [
               {
                 "arguments": {
@@ -10537,7 +9810,7 @@
             "text": "Turn two done."
           }
         ],
-        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 16\n",
+        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 50000\n",
         "files": {
           "notes.txt": "alpha\nbeta\ngamma\n"
         },
@@ -10688,29 +9961,8 @@
         {
           "context": [
             {
-              "content": {
-                "prose": 455,
-                "sha256": "916bce18a99c44f06908f6e06700313c95aceaf3c871d884a54bff5ac087b68d"
-              },
+              "content": "Create a file and edit the notes",
               "role": "user"
-            },
-            {
-              "content": "Turn one done.",
-              "role": "assistant"
-            },
-            {
-              "content": "Edit the notes again",
-              "role": "user"
-            },
-            {
-              "content": "",
-              "role": "assistant",
-              "toolCalls": [
-                "edit"
-              ]
-            },
-            {
-              "role": "tool"
             }
           ]
         },
@@ -10721,27 +9973,6 @@
             "id": 6,
             "result": {
               "files": [
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
                 {
                   "path": "<ws>/notes.txt",
                   "regions": [
@@ -10758,22 +9989,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
-                    },
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 2,
-                      "currentLineCount": 1,
-                      "currentStart": 2,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 7
-                      },
-                      "versionIndex": 5
+                      "versionIndex": 2
                     }
                   ],
                   "status": "modified"
@@ -10783,11 +9999,6 @@
                 {
                   "files": [
                     {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
-                    {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
                       "status": "modified"
@@ -10796,19 +10007,6 @@
                   "owner": {
                     "kind": "agent",
                     "turnId": 1
-                  }
-                },
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/notes.txt",
-                      "regionCount": 1,
-                      "status": "modified"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 7
                   }
                 }
               ]
@@ -10825,8 +10023,8 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
-            "notes.txt": "ALPHA\nbeta\ngamma\n"
+            "created.txt": null,
+            "notes.txt": "alpha\nbeta\ngamma\n"
           }
         },
         {
@@ -10835,89 +10033,13 @@
           "response": {
             "id": 9,
             "result": {
-              "files": [
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
-                  "path": "<ws>/notes.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 3
-                    },
-                    {
-                      "baselineLineCount": 1,
-                      "baselineStart": 2,
-                      "currentLineCount": 1,
-                      "currentStart": 2,
-                      "decision": "revert",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 7
-                      },
-                      "versionIndex": 5
-                    }
-                  ],
-                  "status": "modified"
-                }
-              ],
+              "files": [],
               "scopes": [
-                {
-                  "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
-                    {
-                      "path": "<ws>/notes.txt",
-                      "regionCount": 1,
-                      "status": "modified"
-                    }
-                  ],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 1
-                  }
-                },
                 {
                   "files": [],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 7
+                    "turnId": 1
                   }
                 }
               ]
@@ -10934,8 +10056,8 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
-            "notes.txt": "ALPHA\nbeta\ngamma\n"
+            "created.txt": null,
+            "notes.txt": "alpha\nbeta\ngamma\n"
           }
         },
         {
@@ -10952,13 +10074,6 @@
                     "kind": "agent",
                     "turnId": 1
                   }
-                },
-                {
-                  "files": [],
-                  "owner": {
-                    "kind": "agent",
-                    "turnId": 7
-                  }
                 }
               ]
             }
@@ -10970,7 +10085,7 @@
           "response": {
             "id": 13,
             "result": {
-              "content": "ALPHA\nbeta\ngamma\n"
+              "content": "alpha\nbeta\ngamma\n"
             }
           }
         }
@@ -10979,7 +10094,7 @@
         "backend": [
           {
             "completionTokens": 8,
-            "promptTokens": 12,
+            "promptTokens": 60000,
             "toolCalls": [
               {
                 "arguments": {
@@ -11031,7 +10146,7 @@
             "text": "Turn two done."
           }
         ],
-        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 16\n",
+        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 50000\n",
         "files": {
           "notes.txt": "alpha\nbeta\ngamma\n"
         },
@@ -11132,27 +10247,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -11168,7 +10262,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -11179,16 +10273,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -11201,9 +10295,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -11212,11 +10306,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -11238,7 +10327,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -11247,7 +10336,10 @@
         },
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "session/updated",
+            "history/entryAdded"
+          ],
           "response": {
             "id": 7,
             "result": {
@@ -11257,7 +10349,7 @@
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": "<vibe-home>/logs/session/session_<time>_<short>",
+                "path": "<vibe-home>/logs/session/unified/<id-1>",
                 "persisted": true,
                 "sessionId": "<id-1>",
                 "title": null
@@ -11280,6 +10372,7 @@
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -11293,74 +10386,13 @@
                     "createdAt": "<time>",
                     "detail": {
                       "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-4>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-1>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-3>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 39,
-                          "sha256": "a784a704b3dcb23d1bd7f50c542a52ce73dc2237b0740e3861fc72af2f7dc9e0"
-                        },
+                        "content": null,
                         "message": "notes.txt",
                         "settledMessage": "notes.txt",
                         "settledVerb": "Edited",
                         "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
+                          "prose": 12,
+                          "sha256": "cba0c8fabef9370f267d9501b92d017af452633b19810c859240a18f820fad26"
                         },
                         "suffix": "",
                         "summary": {
@@ -11376,11 +10408,11 @@
                         "replaceAll": false
                       },
                       "kind": "file_edit",
-                      "toolName": "edit"
+                      "toolName": "file_system.edit"
                     },
                     "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
+                    "id": "<id-4>",
+                    "inputEntryId": "<id-2>",
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -11398,20 +10430,22 @@
                       "durationMs": "<duration>",
                       "output": {
                         "file": "<ws>/notes.txt",
-                        "newString": "ALPHA",
+                        "newString": null,
                         "occurrences": [
                           {
+                            "newStartLine": 1,
                             "newText": "ALPHA",
                             "oldText": "alpha",
                             "startLine": 1
                           }
                         ],
-                        "oldString": "alpha"
+                        "oldString": null,
+                        "previousContent": "alpha\nbeta\ngamma\n"
                       },
                       "outputText": "",
                       "status": "completed"
                     },
-                    "title": "edit",
+                    "title": "file_system.edit",
                     "turnId": "<id-3>",
                     "type": "effect",
                     "updatedAt": "<time>"
@@ -11425,12 +10459,15 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
+                    "id": "<id-5>",
+                    "inputEntryId": "<id-2>",
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
-                    "source": null,
+                    "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
                     "updatedAt": "<time>",
@@ -11439,12 +10476,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-7>",
+                      "entryId": "<id-6>",
                       "inplace": true,
                       "restoreFiles": false
                     },
                     "generationStatus": "completed",
-                    "id": "<id-8>",
+                    "id": "<id-7>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -11459,7 +10496,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -11477,31 +10514,36 @@
                   },
                   "archivedAt": null,
                   "bumpedAt": "<time>",
-                  "contextUsage": null,
+                  "contextUsage": {
+                    "cachedInputTokens": 0,
+                    "inputTokens": 10,
+                    "outputTokens": 5,
+                    "totalTokens": 15
+                  },
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-1>",
-                  "isUnseen": false,
+                  "isUnseen": true,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": null,
                   "pinnedAt": null,
                   "preview": "Create a file and edit the notes",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
                   "tokenUsage": {
+                    "cachedInputTokens": 0,
                     "inputTokens": 50,
                     "outputTokens": 25,
                     "totalTokens": 75
                   },
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -11522,27 +10564,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -11558,7 +10579,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -11569,7 +10590,7 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
@@ -11578,7 +10599,7 @@
                         "index": 1,
                         "kind": "manual"
                       },
-                      "versionIndex": 7
+                      "versionIndex": 6
                     },
                     {
                       "baselineLineCount": 1,
@@ -11593,7 +10614,7 @@
                         "index": 1,
                         "kind": "manual"
                       },
-                      "versionIndex": 7
+                      "versionIndex": 6
                     }
                   ],
                   "status": "modified"
@@ -11602,11 +10623,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -11641,7 +10657,7 @@
           "response": {
             "id": 9,
             "result": {
-              "content": "alpha\nbeta\ngamma\n"
+              "content": ""
             }
           }
         },
@@ -11651,32 +10667,7 @@
           "response": {
             "id": 10,
             "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 3
-                    },
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 7
-                    }
-                  ],
-                  "side": "additions"
-                },
-                {
-                  "line": 2,
-                  "regions": [
-                    {
-                      "ordinal": 1,
-                      "versionIndex": 7
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
+              "hunks": []
             }
           }
         },
@@ -11686,18 +10677,7 @@
           "response": {
             "id": 11,
             "result": {
-              "hunks": [
-                {
-                  "line": 0,
-                  "regions": [
-                    {
-                      "ordinal": 0,
-                      "versionIndex": 3
-                    }
-                  ],
-                  "side": "additions"
-                }
-              ]
+              "hunks": []
             }
           }
         },
@@ -11717,8 +10697,8 @@
           "response": {
             "id": 13,
             "result": {
-              "baseline": "alpha\nbeta\ngamma\n",
-              "current": "ALPHA\nbeta\ngamma\n",
+              "baseline": "",
+              "current": "",
               "status": "modified"
             }
           }
@@ -11937,27 +10917,6 @@
             "result": {
               "files": [
                 {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
-                {
                   "path": "<ws>/notes.txt",
                   "regions": [
                     {
@@ -11973,7 +10932,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     },
                     {
                       "baselineLineCount": 1,
@@ -11984,16 +10943,16 @@
                       "dependsOn": [
                         {
                           "ordinal": 0,
-                          "versionIndex": 3
+                          "versionIndex": 2
                         }
                       ],
                       "kind": "text",
                       "ordinal": 0,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     },
                     {
                       "baselineLineCount": 1,
@@ -12006,9 +10965,9 @@
                       "ordinal": 1,
                       "owner": {
                         "kind": "agent",
-                        "turnId": 6
+                        "turnId": 2
                       },
-                      "versionIndex": 5
+                      "versionIndex": 4
                     }
                   ],
                   "status": "modified"
@@ -12017,11 +10976,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,
@@ -12043,7 +10997,7 @@
                   ],
                   "owner": {
                     "kind": "agent",
-                    "turnId": 6
+                    "turnId": 2
                   }
                 }
               ]
@@ -12052,7 +11006,9 @@
         },
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 7,
             "result": {
@@ -12064,8 +11020,8 @@
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -12087,141 +11043,15 @@
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
-                    "source": "turn_start",
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 39,
-                          "sha256": "a784a704b3dcb23d1bd7f50c542a52ce73dc2237b0740e3861fc72af2f7dc9e0"
-                        },
-                        "message": "notes.txt",
-                        "settledMessage": "notes.txt",
-                        "settledVerb": "Edited",
-                        "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 17,
-                          "sha256": "591c4a1a1fc6f86f0e713c0b74fa3b07001fd161ae3e3924e9daddfb7b03cfc7"
-                        },
-                        "verb": "Editing"
-                      },
-                      "input": {
-                        "filePath": "notes.txt",
-                        "newString": "ALPHA",
-                        "oldString": "alpha",
-                        "replaceAll": false
-                      },
-                      "kind": "file_edit",
-                      "toolName": "edit"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "notes.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Edited",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "file": "<ws>/notes.txt",
-                        "newString": "ALPHA",
-                        "occurrences": [
-                          {
-                            "newText": "ALPHA",
-                            "oldText": "alpha",
-                            "startLine": 1
-                          }
-                        ],
-                        "oldString": "alpha"
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "edit",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
                   },
                   {
                     "content": [
@@ -12232,13 +11062,16 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-7>",
+                    "id": "<id-4>",
                     "inputEntryId": null,
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-2>",
-                    "source": null,
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
@@ -12246,12 +11079,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-8>",
+                      "entryId": "<id-5>",
                       "inplace": false,
                       "restoreFiles": true
                     },
                     "generationStatus": "completed",
-                    "id": "<id-9>",
+                    "id": "<id-6>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -12266,7 +11099,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -12283,32 +11116,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "Create a file and edit the notes",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -12323,7 +11151,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "ALPHA\nbeta\ngamma\n"
           }
         },
@@ -12334,27 +11162,6 @@
             "id": 9,
             "result": {
               "files": [
-                {
-                  "path": "<ws>/created.txt",
-                  "regions": [
-                    {
-                      "baselineLineCount": 0,
-                      "baselineStart": 0,
-                      "currentLineCount": 1,
-                      "currentStart": 0,
-                      "decision": "pending",
-                      "dependsOn": [],
-                      "kind": "text",
-                      "ordinal": 0,
-                      "owner": {
-                        "kind": "agent",
-                        "turnId": 1
-                      },
-                      "versionIndex": 2
-                    }
-                  ],
-                  "status": "created"
-                },
                 {
                   "path": "<ws>/notes.txt",
                   "regions": [
@@ -12371,7 +11178,7 @@
                         "kind": "agent",
                         "turnId": 1
                       },
-                      "versionIndex": 3
+                      "versionIndex": 2
                     }
                   ],
                   "status": "modified"
@@ -12380,11 +11187,6 @@
               "scopes": [
                 {
                   "files": [
-                    {
-                      "path": "<ws>/created.txt",
-                      "regionCount": 1,
-                      "status": "created"
-                    },
                     {
                       "path": "<ws>/notes.txt",
                       "regionCount": 1,

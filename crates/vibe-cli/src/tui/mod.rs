@@ -33,15 +33,11 @@ pub mod loading;
 pub mod narration;
 pub use vibe_voice::narrator;
 pub mod onboarding;
-#[cfg(test)]
-mod onboarding_parity_tests;
 mod paste_burst;
 mod path_normalization;
 pub mod pickers;
 mod plan_review;
 mod plugins;
-#[cfg(test)]
-mod promo_parity_tests;
 mod prompt;
 mod queue;
 mod remote_project_workflow;

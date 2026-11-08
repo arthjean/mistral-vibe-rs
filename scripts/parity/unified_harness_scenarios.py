@@ -377,16 +377,7 @@ def scenarios() -> list[dict[str, Any]]:
             "name": "selection/default",
             "steps": [config_read(), session_start(), runtime_read()],
         },
-        {
-            "name": "selection/experimental-flag",
-            "flags": ["--experimental-harness"],
-            "steps": [config_read(), session_start(), runtime_read()],
-        },
-        {
-            "name": "selection/legacy-flag",
-            "flags": ["--legacy-harness"],
-            "steps": [config_read(), session_start(), runtime_read()],
-        },
+        # v3.0.0 removed both harness flags, so no scenario selects a backend.
         # -- what a turn sends the model and raises --------------------------
         {
             "name": "turn/text",

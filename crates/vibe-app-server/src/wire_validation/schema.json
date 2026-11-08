@@ -6,7 +6,12 @@
   "agents/install": "AgentInstallParams",
   "agents/list": "AgentsListParams",
   "agents/uninstall": "AgentInstallParams",
+  "artifacts/list": "ArtifactsListParams",
+  "artifacts/markViewed": "ArtifactsMarkViewedParams",
+  "artifacts/subscribe": null,
+  "artifacts/sync": "ArtifactsSyncParams",
   "callback/result": "CallbackResultParams",
+  "config/effective/read": "ConfigEffectiveReadParams",
   "config/fields/read": "ConfigFieldsReadParams",
   "config/model/write": "ModelConfigWriteParams",
   "config/proxy/read": "ConfigProxyReadParams",
@@ -16,18 +21,21 @@
   "config/schema": "ConfigSchemaReadParams",
   "config/write": "ConfigWriteParams",
   "connector_catalog/auth/request": "ConnectorCatalogAuthRequestParams",
+  "connector_catalog/connect": "ConnectorCatalogConnectParams",
   "connector_catalog/read": "ConnectorCatalogReadParams",
   "connector_catalog/refresh": "ConnectorCatalogRefreshParams",
   "connector_catalog/toggle": "ConnectorCatalogToggleParams",
   "connectors/auth/read": "ConnectorAuthReadParams",
   "connectors/read": "ConnectorsReadParams",
   "connectors/refresh": "ConnectorRefreshParams",
-  "diagnostics/list": "DiagnosticsListParams",
   "diagnostics/logs/read": "DiagnosticsLogsReadParams",
   "events/read": "EventsReadParams",
   "feedback/record": "FeedbackRecordParams",
   "feedback/shouldShow": "FeedbackShouldShowParams",
   "identity/read": "IdentityReadParams",
+  "imports/discover": "ImportDiscoveryParams",
+  "imports/read": "ImportJobReadParams",
+  "imports/start": "ImportJobStartParams",
   "loops/clear": "LoopsClearParams",
   "loops/create": "LoopsCreateParams",
   "loops/delete": "LoopsDeleteParams",
@@ -46,6 +54,7 @@
   "mcp_catalog/remove": "MCPRemoveParams",
   "mcp_catalog/toggle": "MCPToggleParams",
   "narration/summarize": "NarrationSummarizeParams",
+  "platformCredentials/headers": "PlatformCredentialHeadersParams",
   "plugin/info": "PluginInfoParams",
   "plugin/reload": "PluginReloadParams",
   "plugin_catalog/read": "PluginCatalogReadParams",
@@ -59,6 +68,10 @@
   "projectLinks/resolveRoot": "ProjectLinksResolveRootParams",
   "projectLinks/save": "ProjectLinksSaveParams",
   "projectLinks/unlink": "ProjectLinksUnlinkParams",
+  "projects/create": "ProjectsCreateParams",
+  "projects/list": "ProjectsListParams",
+  "projects/remove": "ProjectsRemoveParams",
+  "projects/rename": "ProjectsRenameParams",
   "providerAuth/read": "ProviderAuthReadParams",
   "review/approve": "ReviewMutationParams",
   "review/baseline": "ReviewBaselineParams",
@@ -73,18 +86,20 @@
   "session/backgroundProcess/stop": "BackgroundProcessStopParams",
   "session/compact": "SessionCompactParams",
   "session/context/inject": "ContextInjectParams",
+  "session/context/read": "SessionContextReadParams",
   "session/continue": "SessionContinueParams",
   "session/delete": "SessionDeleteParams",
   "session/fork": "SessionForkParams",
   "session/history/clear": "SessionHistoryClearParams",
   "session/history/get": "SessionHistoryGetParams",
   "session/history/list": "SessionHistoryListParams",
+  "session/lease/subscribe": null,
   "session/list": "SessionListParams",
   "session/log/read": "SessionLogReadParams",
   "session/markAsSeen": "SessionMarkAsSeenParams",
   "session/pin": "SessionPinParams",
   "session/read": "SessionReadParams",
-  "session/ready/read": "SessionReadyReadParams",
+  "session/ready/read": null,
   "session/ready/wait": "SessionReadyWaitParams",
   "session/relocate": "SessionRelocateParams",
   "session/rename": "SessionTitleUpdateParams",
@@ -95,6 +110,9 @@
   "session/shellCommand": "SessionShellCommandParams",
   "session/start": "SessionStartParams",
   "session/stop": "SessionStopParams",
+  "session/subagents/interrupt": "SessionSubagentsInterruptParams",
+  "session/subagents/read": "SessionSubagentsReadParams",
+  "session/subagents/wait": "SessionSubagentsWaitParams",
   "session/title/update": "SessionTitleUpdateParams",
   "session/turn/enqueue": "TurnEnqueueParams",
   "session/turn/queue/read": "TurnQueueReadParams",
@@ -103,6 +121,11 @@
   "session/turn/queue/resume": "TurnQueueResumeParams",
   "session/turn/queue/steer": "TurnQueueSteerParams",
   "session/turns/list": "SessionTurnsListParams",
+  "setup/oidc-cancel": "OidcAttemptParams",
+  "setup/oidc-clear": "ProtocolModel",
+  "setup/oidc-poll": "OidcAttemptParams",
+  "setup/oidc-probe": "ProtocolModel",
+  "setup/oidc-start": "ProtocolModel",
   "setup/status": "SetupStatusParams",
   "setup/store-credential": "SetupStoreCredentialParams",
   "setup/submit-choices": "SetupSubmitChoicesParams",
@@ -114,6 +137,11 @@
   "skills/import": "SkillsImportParams",
   "skills/installed": "SkillsInstalledParams",
   "skills/list": "SkillsListParams",
+  "skills/local/delete": "SkillsLocalDeleteParams",
+  "skills/local/list": "SkillsLocalListParams",
+  "skills/local/read": "SkillsLocalReadParams",
+  "skills/local/setEnabled": "SkillsLocalSetEnabledParams",
+  "skills/local/write": "SkillsLocalWriteParams",
   "skills/remove": "SkillsRemoveParams",
   "skills/setAlias": "SkillsSetAliasParams",
   "skills/setEnabled": "SkillsSetEnabledParams",
@@ -121,9 +149,7 @@
   "skills/setVersion": "SkillsSetVersionParams",
   "skills/updates": "SkillsUpdatesParams",
   "skills/versions": "SkillsVersionsParams",
-  "stats/read": "StatsReadParams",
   "telemetry/record": "TelemetryRecordParams",
-  "tools/list": "ToolsListParams",
   "turn/interrupt": "TurnInterruptParams",
   "turn/start": "TurnStartParams",
   "turn/steer": "TurnSteerParams",
@@ -141,8 +167,6 @@
   "workspace/git/worktrees/limit/update": "WorkspaceWorktreeLimitUpdateParams",
   "workspace/git/worktrees/list": "WorkspaceWorktreeListParams",
   "workspace/git/worktrees/prune": "WorkspaceWorktreePruneParams",
-  "workspace/git/worktrees/reap": "WorkspaceWorktreeReapParams",
-  "workspace/git/worktrees/reap/cancel": "WorkspaceWorktreeReapCancelParams",
   "workspace/git/worktrees/remove": "WorkspaceWorktreeRemoveConfirmParams",
   "workspace/prompt/prepare": "WorkspacePromptPrepareParams",
   "workspace/trust/decision": "WorkspaceTrustDecisionParams",
@@ -152,17 +176,21 @@
  "lifecycle": {
   "initialize": "InitializeParams"
  },
- "nested": {
-  "callback/result": "CallbackRespondParams"
+ "nested": {},
+ "unreduced": {
+  "session/turn/queue/edit/abandon": "uuid",
+  "session/turn/queue/edit/cancel": "uuid",
+  "session/turn/queue/edit/save": "uuid",
+  "session/turn/queue/edit/start": "uuid"
  },
  "functions": [
+  "AgentConfig._reject_blank_system_prompt",
   "AgentConfig._reject_empty_cwd",
+  "ImportJobStartParams.validate_unique_harnesses",
   "SessionEmbeddedResourceContentBlock.validate_content",
   "SessionSettingsUpdateParams.require_update",
   "SessionShellCommandParams.validate_action",
   "UserDisplayContent.strip_nonempty",
-  "WorkspaceWorktreeReapCancelParams.validate_request_identity",
-  "WorkspaceWorktreeReapParams.validate_request_identity",
   "_TurnQueueInputParams.validate_entries",
   "_infer_resource_kind"
  ],
@@ -492,6 +520,37 @@
        }
       }
      }
+    },
+    {
+     "name": "terminal_key",
+     "alias": "terminalKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str",
+        "min_length": 1
+       }
+      }
+     }
+    },
+    {
+     "name": "system_prompt",
+     "alias": "systemPrompt",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "function-after",
+       "function": "AgentConfig._reject_blank_system_prompt",
+       "schema": {
+        "type": "nullable",
+        "schema": {
+         "type": "str"
+        }
+       }
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -562,41 +621,39 @@
    "extra": "forbid",
    "byName": true
   },
-  "ApprovalCallbackOutput": {
+  "ArtifactsListParams": {
    "type": "model",
-   "name": "ApprovalCallbackOutput",
+   "name": "ArtifactsListParams",
    "fields": [
     {
-     "name": "type",
-     "alias": "type",
+     "name": "session_id",
+     "alias": "sessionId",
      "schema": {
-      "type": "default",
-      "schema": {
-       "type": "literal",
-       "expected": [
-        "approval"
-       ]
-      }
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ArtifactsMarkViewedParams": {
+   "type": "model",
+   "name": "ArtifactsMarkViewedParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
      }
     },
     {
-     "name": "decision",
-     "alias": "decision",
+     "name": "artifact_ids",
+     "alias": "artifactIds",
      "schema": {
-      "type": "ref",
-      "name": "ApprovalDecision"
-     }
-    },
-    {
-     "name": "feedback",
-     "alias": "feedback",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "nullable",
-       "schema": {
-        "type": "str"
-       }
+      "type": "list",
+      "items": {
+       "type": "str"
       }
      }
     }
@@ -604,43 +661,15 @@
    "extra": "forbid",
    "byName": true
   },
-  "ApprovalDecision": {
+  "ArtifactsSyncParams": {
    "type": "model",
-   "name": "ApprovalDecision",
+   "name": "ArtifactsSyncParams",
    "fields": [
     {
-     "name": "type",
-     "alias": "type",
+     "name": "session_id",
+     "alias": "sessionId",
      "schema": {
-      "type": "enum",
-      "name": "ApprovalDecisionType",
-      "values": [
-       "approve",
-       "approve_for_session",
-       "approve_permanently",
-       "deny",
-       "cancel_turn"
-      ],
-      "sub_type": "str"
-     }
-    },
-    {
-     "name": "path_scope",
-     "alias": "pathScope",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "nullable",
-       "schema": {
-        "type": "enum",
-        "name": "PathGrantScope",
-        "values": [
-         "exact",
-         "directory_recursive"
-        ],
-        "sub_type": "str"
-       }
-      }
+      "type": "str"
      }
     }
    ],
@@ -755,54 +784,6 @@
      "alias": "processId",
      "schema": {
       "type": "str"
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
-  "CallbackRespondParams": {
-   "type": "model",
-   "name": "CallbackRespondParams",
-   "fields": [
-    {
-     "name": "session_id",
-     "alias": "sessionId",
-     "schema": {
-      "type": "str"
-     }
-    },
-    {
-     "name": "callback_id",
-     "alias": "callbackId",
-     "schema": {
-      "type": "str"
-     }
-    },
-    {
-     "name": "output",
-     "alias": "output",
-     "schema": {
-      "type": "tagged-union",
-      "discriminator": "type",
-      "choices": [
-       [
-        "approval",
-        {
-         "type": "ref",
-         "name": "ApprovalCallbackOutput"
-        }
-       ],
-       [
-        "user_input",
-        {
-         "type": "ref",
-         "name": "UserInputCallbackOutput"
-        }
-       ]
-      ],
-      "strict": false,
-      "from_attributes": true
      }
     }
    ],
@@ -950,6 +931,36 @@
      }
     },
     {
+     "name": "session_spawn",
+     "alias": "sessionSpawn",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "session_peers",
+     "alias": "sessionPeers",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "session_peer_restore",
+     "alias": "sessionPeerRestore",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
      "name": "disabled_notifications",
      "alias": "disabledNotifications",
      "schema": {
@@ -961,9 +972,23 @@
        }
       }
      }
+    },
+    {
+     "name": "platform_credentials",
+     "alias": "platformCredentials",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "PlatformCredentialsCapability"
+       }
+      }
+     }
     }
    ],
-   "extra": "forbid",
+   "extra": "ignore",
    "byName": true
   },
   "ClientInfo": {
@@ -1067,6 +1092,21 @@
       "schema": {
        "type": "str"
       }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigEffectiveReadParams": {
+   "type": "model",
+   "name": "ConfigEffectiveReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
      }
     }
    ],
@@ -1339,6 +1379,28 @@
    "extra": "forbid",
    "byName": true
   },
+  "ConnectorCatalogConnectParams": {
+   "type": "model",
+   "name": "ConnectorCatalogConnectParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "alias",
+     "alias": "alias",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
   "ConnectorCatalogReadParams": {
    "type": "model",
    "name": "ConnectorCatalogReadParams",
@@ -1558,21 +1620,6 @@
         "name": "MentionStats"
        }
       }
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
-  "DiagnosticsListParams": {
-   "type": "model",
-   "name": "DiagnosticsListParams",
-   "fields": [
-    {
-     "name": "session_id",
-     "alias": "sessionId",
-     "schema": {
-      "type": "str"
      }
     }
    ],
@@ -1959,6 +2006,74 @@
    "extra": "forbid",
    "byName": true
   },
+  "ImportDiscoveryParams": {
+   "type": "model",
+   "name": "ImportDiscoveryParams",
+   "fields": [],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ImportJobReadParams": {
+   "type": "model",
+   "name": "ImportJobReadParams",
+   "fields": [
+    {
+     "name": "after_event_id",
+     "alias": "afterEventId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "strict": true,
+       "ge": 0
+      }
+     }
+    },
+    {
+     "name": "wait_ms",
+     "alias": "waitMs",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "strict": true,
+       "ge": 0,
+       "le": 5000
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ImportJobStartParams": {
+   "type": "model",
+   "name": "ImportJobStartParams",
+   "fields": [
+    {
+     "name": "harnesses",
+     "alias": "harnesses",
+     "schema": {
+      "type": "function-after",
+      "function": "ImportJobStartParams.validate_unique_harnesses",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "enum",
+        "name": "ImportHarness",
+        "values": [
+         "claude"
+        ],
+        "sub_type": "str"
+       },
+       "min_length": 1
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
   "InitializeParams": {
    "type": "model",
    "name": "InitializeParams",
@@ -2116,7 +2231,13 @@
      "name": "url",
      "alias": "url",
      "schema": {
-      "type": "str"
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
      }
     },
     {
@@ -2154,7 +2275,8 @@
        "type": "literal",
        "expected": [
         "http",
-        "streamable-http"
+        "streamable-http",
+        "stdio"
        ]
       }
      }
@@ -2166,6 +2288,131 @@
       "type": "default",
       "schema": {
        "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "command",
+     "alias": "command",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "args",
+     "alias": "args",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "env",
+     "alias": "env",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "headers",
+     "alias": "headers",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "api_key_env",
+     "alias": "apiKeyEnv",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "api_key_header",
+     "alias": "apiKeyHeader",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "api_key_format",
+     "alias": "apiKeyFormat",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "startup_timeout_sec",
+     "alias": "startupTimeoutSec",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "float",
+        "allow_inf_nan": false
+       }
+      }
+     }
+    },
+    {
+     "name": "tool_timeout_sec",
+     "alias": "toolTimeoutSec",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "float",
+        "allow_inf_nan": false
+       }
       }
      }
     }
@@ -2454,6 +2701,16 @@
        }
       }
      }
+    },
+    {
+     "name": "session_only",
+     "alias": "sessionOnly",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -2551,6 +2808,21 @@
    "extra": "forbid",
    "byName": true
   },
+  "OidcAttemptParams": {
+   "type": "model",
+   "name": "OidcAttemptParams",
+   "fields": [
+    {
+     "name": "attempt_id",
+     "alias": "attemptId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
   "PageRequest": {
    "type": "model",
    "name": "PageRequest",
@@ -2592,6 +2864,50 @@
         "backward"
        ]
       }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "PlatformCredentialHeadersParams": {
+   "type": "model",
+   "name": "PlatformCredentialHeadersParams",
+   "fields": [
+    {
+     "name": "url",
+     "alias": "url",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "PlatformCredentialsCapability": {
+   "type": "model",
+   "name": "PlatformCredentialsCapability",
+   "fields": [
+    {
+     "name": "version",
+     "alias": "version",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       1
+      ]
+     }
+    },
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "oauth_access_token",
+       "oidc_id_token"
+      ]
      }
     }
    ],
@@ -2841,6 +3157,89 @@
      }
     }
    ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectsCreateParams": {
+   "type": "model",
+   "name": "ProjectsCreateParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectsListParams": {
+   "type": "model",
+   "name": "ProjectsListParams",
+   "fields": [],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectsRemoveParams": {
+   "type": "model",
+   "name": "ProjectsRemoveParams",
+   "fields": [
+    {
+     "name": "id",
+     "alias": "id",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectsRenameParams": {
+   "type": "model",
+   "name": "ProjectsRenameParams",
+   "fields": [
+    {
+     "name": "id",
+     "alias": "id",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProtocolModel": {
+   "type": "model",
+   "name": "ProtocolModel",
+   "fields": [],
    "extra": "forbid",
    "byName": true
   },
@@ -3503,6 +3902,16 @@
      "schema": {
       "type": "bool"
      }
+    },
+    {
+     "name": "require_idle",
+     "alias": "requireIdle",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -3527,6 +3936,21 @@
       "schema": {
        "type": "str"
       }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionContextReadParams": {
+   "type": "model",
+   "name": "SessionContextReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
      }
     }
    ],
@@ -3983,6 +4407,38 @@
        "type": "bool"
       }
      }
+    },
+    {
+     "name": "session_ids",
+     "alias": "sessionIds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "list",
+        "items": {
+         "type": "str"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "include",
+     "alias": "include",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "literal",
+        "expected": [
+         "pullRequests"
+        ]
+       }
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -4166,6 +4622,33 @@
    "extra": "forbid",
    "byName": true
   },
+  "SessionProjectStamp": {
+   "type": "model",
+   "name": "SessionProjectStamp",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "local",
+       "cloud"
+      ]
+     }
+    },
+    {
+     "name": "id",
+     "alias": "id",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
   "SessionReadParams": {
    "type": "model",
    "name": "SessionReadParams",
@@ -4209,21 +4692,6 @@
    "extra": "forbid",
    "byName": true
   },
-  "SessionReadyReadParams": {
-   "type": "model",
-   "name": "SessionReadyReadParams",
-   "fields": [
-    {
-     "name": "session_id",
-     "alias": "sessionId",
-     "schema": {
-      "type": "str"
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
   "SessionReadyWaitParams": {
    "type": "model",
    "name": "SessionReadyWaitParams",
@@ -4233,6 +4701,16 @@
      "alias": "sessionId",
      "schema": {
       "type": "str"
+     }
+    },
+    {
+     "name": "integrations",
+     "alias": "integrations",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
      }
     }
    ],
@@ -4638,6 +5116,20 @@
      }
     },
     {
+     "name": "project",
+     "alias": "project",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "SessionProjectStamp"
+       }
+      }
+     }
+    },
+    {
      "name": "kind",
      "alias": "kind",
      "schema": {
@@ -4650,6 +5142,141 @@
         "ephemeral"
        ],
        "sub_type": "str"
+      }
+     }
+    },
+    {
+     "name": "title",
+     "alias": "title",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str",
+        "min_length": 1
+       }
+      }
+     }
+    },
+    {
+     "name": "model",
+     "alias": "model",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "reasoning_effort",
+     "alias": "reasoningEffort",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_only",
+     "alias": "sessionOnly",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "first_turn",
+     "alias": "firstTurn",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "SessionStartTurn"
+       }
+      }
+     }
+    },
+    {
+     "name": "started_by_session_id",
+     "alias": "startedBySessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionStartTurn": {
+   "type": "model",
+   "name": "SessionStartTurn",
+   "fields": [
+    {
+     "name": "message",
+     "alias": "message",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "type",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "TextContentBlock"
+         }
+        ],
+        [
+         "image",
+         {
+          "type": "ref",
+          "name": "ImageContentBlock"
+         }
+        ],
+        [
+         "resource",
+         {
+          "type": "ref",
+          "name": "ResourceContentBlock"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      },
+      "min_length": 1
+     }
+    },
+    {
+     "name": "client_user_message_id",
+     "alias": "clientUserMessageId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
       }
      }
     }
@@ -4679,6 +5306,80 @@
         "type": "str"
        }
       }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionSubagentsInterruptParams": {
+   "type": "model",
+   "name": "SessionSubagentsInterruptParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "reason",
+     "alias": "reason",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionSubagentsReadParams": {
+   "type": "model",
+   "name": "SessionSubagentsReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "timeout_ms",
+     "alias": "timeoutMs",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 0,
+       "le": 600000
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionSubagentsWaitParams": {
+   "type": "model",
+   "name": "SessionSubagentsWaitParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "timeout_ms",
+     "alias": "timeoutMs",
+     "schema": {
+      "type": "int",
+      "ge": 0,
+      "le": 86400000
      }
     }
    ],
@@ -5163,7 +5864,285 @@
      "name": "session_id",
      "alias": "sessionId",
      "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "trust_workspace",
+     "alias": "trustWorkspace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsLocalDeleteParams": {
+   "type": "model",
+   "name": "SkillsLocalDeleteParams",
+   "fields": [
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
       "type": "str"
+     }
+    },
+    {
+     "name": "project_root",
+     "alias": "projectRoot",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "other_project_roots",
+     "alias": "otherProjectRoots",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsLocalListParams": {
+   "type": "model",
+   "name": "SkillsLocalListParams",
+   "fields": [
+    {
+     "name": "project_root",
+     "alias": "projectRoot",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "trust_workspace",
+     "alias": "trustWorkspace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsLocalReadParams": {
+   "type": "model",
+   "name": "SkillsLocalReadParams",
+   "fields": [
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "project_root",
+     "alias": "projectRoot",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "trust_workspace",
+     "alias": "trustWorkspace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsLocalSetEnabledParams": {
+   "type": "model",
+   "name": "SkillsLocalSetEnabledParams",
+   "fields": [
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "enabled",
+     "alias": "enabled",
+     "schema": {
+      "type": "bool"
+     }
+    },
+    {
+     "name": "project_root",
+     "alias": "projectRoot",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "trust_workspace",
+     "alias": "trustWorkspace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsLocalWriteParams": {
+   "type": "model",
+   "name": "SkillsLocalWriteParams",
+   "fields": [
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "description",
+     "alias": "description",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "body",
+     "alias": "body",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "assets",
+     "alias": "assets",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "expected_version",
+     "alias": "expectedVersion",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "enabled",
+     "alias": "enabled",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "bool"
+       }
+      }
+     }
+    },
+    {
+     "name": "project_root",
+     "alias": "projectRoot",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "trust_workspace",
+     "alias": "trustWorkspace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
      }
     }
    ],
@@ -5370,21 +6349,6 @@
     {
      "name": "skill_id",
      "alias": "skillId",
-     "schema": {
-      "type": "str"
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
-  "StatsReadParams": {
-   "type": "model",
-   "name": "StatsReadParams",
-   "fields": [
-    {
-     "name": "session_id",
-     "alias": "sessionId",
      "schema": {
       "type": "str"
      }
@@ -5639,21 +6603,6 @@
    "extra": "forbid",
    "byName": true
   },
-  "ToolsListParams": {
-   "type": "model",
-   "name": "ToolsListParams",
-   "fields": [
-    {
-     "name": "session_id",
-     "alias": "sessionId",
-     "schema": {
-      "type": "str"
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
   "TurnContextInputEntry": {
    "type": "model",
    "name": "TurnContextInputEntry",
@@ -5795,6 +6744,16 @@
        "from_attributes": true
       },
       "min_length": 1
+     }
+    },
+    {
+     "name": "sent_by_session",
+     "alias": "sentBySession",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
      }
     }
    ],
@@ -6320,38 +7279,6 @@
    "extra": "forbid",
    "byName": true
   },
-  "UserAnswer": {
-   "type": "model",
-   "name": "UserAnswer",
-   "fields": [
-    {
-     "name": "question",
-     "alias": "question",
-     "schema": {
-      "type": "str"
-     }
-    },
-    {
-     "name": "answer",
-     "alias": "answer",
-     "schema": {
-      "type": "str"
-     }
-    },
-    {
-     "name": "is_other",
-     "alias": "isOther",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "bool"
-      }
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
   "UserBlobResource": {
    "type": "model",
    "name": "UserBlobResource",
@@ -6453,64 +7380,6 @@
    "extra": "forbid",
    "byName": false,
    "allowInfNan": false
-  },
-  "UserInputCallbackOutput": {
-   "type": "model",
-   "name": "UserInputCallbackOutput",
-   "fields": [
-    {
-     "name": "type",
-     "alias": "type",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "literal",
-       "expected": [
-        "user_input"
-       ]
-      }
-     }
-    },
-    {
-     "name": "result",
-     "alias": "result",
-     "schema": {
-      "type": "ref",
-      "name": "UserQuestionResult"
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
-  },
-  "UserQuestionResult": {
-   "type": "model",
-   "name": "UserQuestionResult",
-   "fields": [
-    {
-     "name": "answers",
-     "alias": "answers",
-     "schema": {
-      "type": "list",
-      "items": {
-       "type": "ref",
-       "name": "UserAnswer"
-      }
-     }
-    },
-    {
-     "name": "cancelled",
-     "alias": "cancelled",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "bool"
-      }
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true
   },
   "UserResourceLink": {
    "type": "model",
@@ -7092,106 +7961,6 @@
    "extra": "forbid",
    "byName": true
   },
-  "WorkspaceWorktreeReapCancelParams": {
-   "type": "model",
-   "name": "WorkspaceWorktreeReapCancelParams",
-   "fields": [
-    {
-     "name": "cwd",
-     "alias": "cwd",
-     "schema": {
-      "type": "str",
-      "min_length": 1
-     }
-    },
-    {
-     "name": "requester_id",
-     "alias": "requesterId",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "nullable",
-       "schema": {
-        "type": "str",
-        "min_length": 1
-       }
-      }
-     }
-    },
-    {
-     "name": "request_id",
-     "alias": "requestId",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "nullable",
-       "schema": {
-        "type": "str",
-        "min_length": 1
-       }
-      }
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true,
-   "validators": [
-    {
-     "mode": "function-after",
-     "function": "WorkspaceWorktreeReapCancelParams.validate_request_identity"
-    }
-   ]
-  },
-  "WorkspaceWorktreeReapParams": {
-   "type": "model",
-   "name": "WorkspaceWorktreeReapParams",
-   "fields": [
-    {
-     "name": "cwd",
-     "alias": "cwd",
-     "schema": {
-      "type": "str",
-      "min_length": 1
-     }
-    },
-    {
-     "name": "requester_id",
-     "alias": "requesterId",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "nullable",
-       "schema": {
-        "type": "str",
-        "min_length": 1
-       }
-      }
-     }
-    },
-    {
-     "name": "request_id",
-     "alias": "requestId",
-     "schema": {
-      "type": "default",
-      "schema": {
-       "type": "nullable",
-       "schema": {
-        "type": "str",
-        "min_length": 1
-       }
-      }
-     }
-    }
-   ],
-   "extra": "forbid",
-   "byName": true,
-   "validators": [
-    {
-     "mode": "function-after",
-     "function": "WorkspaceWorktreeReapParams.validate_request_identity"
-    }
-   ]
-  },
   "WorkspaceWorktreeRemoveConfirmParams": {
    "type": "model",
    "name": "WorkspaceWorktreeRemoveConfirmParams",
@@ -7243,6 +8012,6 @@
   }
  },
  "reference": {
-  "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+  "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
  }
 }

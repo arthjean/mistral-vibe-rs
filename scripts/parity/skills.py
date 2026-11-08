@@ -18,6 +18,22 @@ skill bodies and descriptions are recorded as length plus SHA-256, error
 messages are normalized to a kind, and the registry store's fallback
 description is masked behind a marker and recorded as a digest.
 
+Builtin skills ship as the packaged ``vibe`` plugin since the v3 line
+(``vibe/plugins/builtins/vibe/``, resolved by ``vibe/app_server/_plugins.py``
+through ``vibe/core/plugins/``); the ``vibe/core/skills/builtins/`` catalog and
+the name reservation ``SkillManager`` held for it are gone. The ``builtins``
+family reads the catalog where it now lives, and the discovery and loading
+families no longer subtract a builtin catalog, because ``SkillManager``
+publishes none.
+
+The ``command`` family is dropped at schema version 2. It measured
+``SkillManager.parse_skill_command``, which the v3 line deleted: a leading
+``/name`` is now recognized by ``vibe/app_server/_skill_invocation.py`` and
+resolved against the session's skills inside the unified harness adapter
+(``vibe/app_server/_unified_harness_backend_adapter.py``), which appends the
+skill body to the prompt instead of splitting off extra instructions. That
+path needs a running session, so no in-process family measures it here.
+
 Usage::
 
     scripts/parity/skills.py --reference /path/to/reference
@@ -44,8 +60,6 @@ from typing import Any
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
 from skills_cases import (
-    COMMAND_CASES,
-    COMMAND_FIXTURES,
     DISCOVERY_SCENARIOS,
     FILTERING_SCENARIOS,
     FRONTMATTER_CASES,
@@ -62,7 +76,7 @@ from skills_cases import (
 from inprocess import digest
 import host_env  # noqa: E402
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/skills/corpus.json")
 #: Stands where the registry store's own fallback description was, so the
 #: corpus records the structure of the generated file without a byte of the
@@ -72,9 +86,9 @@ FALLBACK_DESCRIPTION_MARK = "{fallbackDescription}"
 NOTE = (
     "Captured from the pinned reference by scripts/parity/skills.py. "
     "Scenario-supplied values, field names, verdicts, counts and digests are "
-    "observations; no reference-authored prose is recorded. Builtin bodies and "
-    "descriptions appear as length plus SHA-256 only, and the registry store's "
-    "fallback description is masked as {fallbackDescription}. Normalizations: "
+    "observations; no reference-authored prose is recorded. Builtin (packaged "
+    "plugin) bodies and descriptions appear as length plus SHA-256 only, and the "
+    "registry store's fallback description is masked as {fallbackDescription}. Normalizations: "
     "published skill lists are sorted by name because the reference walks "
     "directories in filesystem order; the winner of a duplicate name within a "
     "single root is filesystem-order dependent, so its path is recorded null; "
@@ -182,7 +196,7 @@ def capture_metadata() -> list[dict[str, Any]]:
 
 
 # --------------------------------------------------------------------------
-# Families over temporary trees: discovery, filtering, command
+# Families over temporary trees: discovery and filtering
 # --------------------------------------------------------------------------
 
 
@@ -266,8 +280,6 @@ def _build_manager(scenario: dict[str, Any], roots: dict[str, Path], case_root: 
 
 
 def capture_discovery(scratch: Path) -> list[dict[str, Any]]:
-    from vibe.core.skills.builtins import BUILTIN_SKILLS
-
     captured: list[dict[str, Any]] = []
     for scenario in DISCOVERY_SCENARIOS:
         case = scenario["case"]
@@ -277,7 +289,7 @@ def capture_discovery(scratch: Path) -> list[dict[str, Any]]:
 
         published = []
         for info in manager.available_skills.values():
-            builtin = info.name in BUILTIN_SKILLS
+            builtin = info.source.value == "builtin"
             location = None if info.skill_path is None else _label_path(info.skill_path, roots)
             if scenario.get("pathUnrecorded"):
                 location = None
@@ -356,40 +368,6 @@ def capture_filtering(scratch: Path) -> list[dict[str, Any]]:
             ),
         })
     return captured
-
-
-def capture_command(scratch: Path) -> dict[str, Any]:
-    tree = {
-        "configured": {
-            f"{fixture['name']}/SKILL.md": skill_file(
-                fixture["name"],
-                fixture["description"],
-                invocable=fixture["invocable"],
-                body=fixture["body"],
-            )
-            for fixture in COMMAND_FIXTURES
-        }
-    }
-    spec = {"case": "command-fixtures", "tree": tree, "skillPaths": ["${configured}"]}
-    case_root = scratch / "cases" / spec["case"]
-    roots = _materialize_case(scratch, spec)
-    manager = _build_manager(spec, roots, case_root)
-
-    cases = []
-    for case, prompt in COMMAND_CASES:
-        parsed = manager.parse_skill_command(prompt)
-        cases.append({
-            "case": case,
-            "prompt": prompt,
-            "result": None
-            if parsed is None
-            else {
-                "name": parsed.name,
-                "extraInstructions": parsed.extra_instructions,
-                "content": digest(parsed.content),
-            },
-        })
-    return {"skills": COMMAND_FIXTURES, "cases": cases}
 
 
 # --------------------------------------------------------------------------
@@ -735,8 +713,6 @@ def _label_skill_file(path: Path, roots: dict[str, Path]) -> tuple[str, str] | N
 
 
 def capture_loading(scratch: Path) -> list[dict[str, Any]]:
-    from vibe.core.skills.builtins import BUILTIN_SKILLS
-
     captured: list[dict[str, Any]] = []
     for scenario in LOADING_SCENARIOS:
         case = f"loading-{scenario['case']}"
@@ -758,7 +734,7 @@ def capture_loading(scratch: Path) -> list[dict[str, Any]]:
         manager = _build_manager(spec, roots, case_root)
         published = []
         for info in manager.available_skills.values():
-            if info.name in BUILTIN_SKILLS and info.source.value == "builtin":
+            if info.source.value == "builtin":
                 continue
             location = None if info.skill_path is None else _label_skill_file(info.skill_path, roots)
             published.append({
@@ -1066,10 +1042,17 @@ def _patched_service(registry: FakeRegistry, endpoint: bool):
     from vibe.core.skills.registry import _service
 
     original = (_service._resolve_endpoint, _service.RegistrySkillsClient)
+    # Since the v3 line the endpoint carries a credential provider rather than
+    # a key, and the resolver takes the session's credential factory beside
+    # the config. The scripted client ignores both, so neither is modeled.
     _service._resolve_endpoint = (
-        (lambda _config: _service._Endpoint(api_base="http://registry.invalid", api_key="k"))
+        (
+            lambda _config, _credentials=None: _service._Endpoint(
+                api_base="http://registry.invalid", credentials=None
+            )
+        )
         if endpoint
-        else (lambda _config: None)
+        else (lambda _config, _credentials=None: None)
     )
     _service.RegistrySkillsClient = registry.client_class()
     return original
@@ -1293,12 +1276,33 @@ def capture_ledger(scratch: Path) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
-def capture_builtins() -> dict[str, Any]:
-    from vibe.core.skills.builtins import BUILTIN_SKILLS
+def capture_builtins(scratch: Path) -> dict[str, Any]:
+    """The skills the packaged builtin plugin contributes.
 
+    The plugin resolver walks the packaged roots plus whatever plugins the user
+    and project layers install; the scratch home installs none, and the
+    project layer is left out, so every skill it answers comes from the
+    package. A skill from any other root fails the capture rather than
+    entering the catalog.
+    """
+    from vibe.app_server._plugins import _resolve_installed, packaged_builtin_plugin_roots
+    from vibe.core.config.harness_files import HarnessFilesManager
+
+    roots = [root.resolve() for root in packaged_builtin_plugin_roots()]
+    if not roots:
+        raise OracleError("the reference ships no builtin plugin root")
+    workdir = scratch / "builtins-workdir"
+    workdir.mkdir(parents=True, exist_ok=True)
+    harness = HarnessFilesManager(
+        sources=("user",), cwd=workdir, trust_store=StubTrust(False)
+    )
+    catalog = _resolve_installed(harness, None, roots).skills
     skills = []
-    for name in sorted(BUILTIN_SKILLS):
-        info = BUILTIN_SKILLS[name]
+    for name in sorted(catalog):
+        info = catalog[name]
+        path = None if info.skill_path is None else Path(info.skill_path).resolve()
+        if path is None or not any(root in path.parents for root in roots):
+            raise OracleError(f"builtin catalog entry {name!r} lies outside the package")
         skills.append({
             "name": info.name,
             "userInvocable": info.user_invocable,
@@ -1308,7 +1312,7 @@ def capture_builtins() -> dict[str, Any]:
             "description": digest(info.description),
             "prompt": digest(info.prompt),
         })
-    return {"count": len(BUILTIN_SKILLS), "skills": skills}
+    return {"count": len(catalog), "skills": skills}
 
 
 # --------------------------------------------------------------------------
@@ -1327,12 +1331,11 @@ def build_corpus(commit: str, scratch: Path) -> dict[str, Any]:
         "schemaVersion": SCHEMA_VERSION,
         "reference": {"commit": commit},
         "note": NOTE,
-        "builtins": capture_builtins(),
+        "builtins": capture_builtins(scratch),
         "frontmatter": capture_frontmatter(),
         "metadata": capture_metadata(),
         "discovery": capture_discovery(scratch),
         "filtering": capture_filtering(scratch),
-        "command": capture_command(scratch),
         "projection": capture_projection(scratch),
         "store": capture_store(),
         "manifest": capture_manifest(scratch),
@@ -1398,7 +1401,6 @@ def main() -> int:
             "metadata",
             "discovery",
             "filtering",
-            "command",
             "projection",
             "store",
             "manifest",

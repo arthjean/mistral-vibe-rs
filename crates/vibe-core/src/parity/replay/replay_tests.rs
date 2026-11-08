@@ -7,8 +7,8 @@ use serde_json::{Value, json};
 
 use super::{
     Band, Class, Divergence, Entry, FieldDivergence, OwnProse, PatternDivergence, assert_ledger,
-    count_problems, differences, is_top_level, pattern_is_top_level, pointer_ends_with,
-    pointer_matches, pointer_within,
+    count_problems, differences, is_top_level, own_row_gap_admitted, pattern_is_top_level,
+    pointer_ends_with, pointer_matches, pointer_within,
 };
 
 /// A corpus the manifest lists, which [`assert_ledger`] resolves a row and a
@@ -339,11 +339,29 @@ fn a_gap_of_the_row_the_corpus_measures_is_not_a_ledger_entry() {
     )
     .expect("the corpus parses");
     let recorded = super::scenarios(&corpus);
-    assert!(
-        std::panic::catch_unwind(|| {
-            assert_ledger(LISTED, &recorded, [&entry as &dyn Entry]);
-        })
-        .is_err(),
+    let refused = std::panic::catch_unwind(|| {
+        assert_ledger(LISTED, &recorded, [&entry as &dyn Entry]);
+    })
+    .is_err();
+    // While a re-pin is open, a corpus recaptured at its target may count a
+    // gap of its own row; outside one, or at the previous commit, it may not.
+    let commit =
+        crate::parity::manifest::recorded_commit(&corpus).expect("the corpus records a commit");
+    assert_eq!(
+        refused,
+        !own_row_gap_admitted(crate::parity::PREVIOUS_COMMIT, commit),
         "row 15 is what the review corpus measures"
+    );
+}
+
+#[test]
+fn a_gap_of_the_measured_row_is_admitted_only_at_the_target_of_an_open_transition() {
+    const LEFT: &str = "fedcba9876543210fedcba9876543210fedcba98";
+    let target = crate::parity::REFERENCE_COMMIT;
+    assert!(own_row_gap_admitted(LEFT, target));
+    assert!(!own_row_gap_admitted("", target), "no transition is open");
+    assert!(
+        !own_row_gap_admitted(LEFT, LEFT),
+        "a corpus still at the previous commit keeps the rule"
     );
 }

@@ -1,7 +1,7 @@
 {
   "note": "Captured by scripts/parity/mcp_catalog.py from the pinned reference's vibe-app-server against vibe-oauth-script-fixture. Scenario inputs, names and digests only: every string the server authored is a length and a SHA-256.",
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {
@@ -501,23 +501,10 @@
           "response": {
             "error": {
               "code": "invalid_params",
-              "data": {
-                "errorCount": 1,
-                "issues": [
-                  {
-                    "message": {
-                      "prose": 43,
-                      "sha256": "8101ab0606e56eb20c352cc84398b8b62bd71243c45970cf30f208b7682e834e"
-                    },
-                    "path": [
-                      "transport"
-                    ]
-                  }
-                ]
-              },
+              "data": null,
               "message": {
-                "prose": 26,
-                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+                "prose": 41,
+                "sha256": "2b8a39a4f744acbdc46006322372a807bdcccfe6580912227f3d64e615ce6a30"
               }
             }
           }
@@ -528,23 +515,10 @@
           "response": {
             "error": {
               "code": "invalid_params",
-              "data": {
-                "errorCount": 1,
-                "issues": [
-                  {
-                    "message": {
-                      "prose": 30,
-                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
-                    },
-                    "path": [
-                      "headers"
-                    ]
-                  }
-                ]
-              },
+              "data": null,
               "message": {
-                "prose": 26,
-                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+                "prose": 34,
+                "sha256": "f8cc8f45c997a299d84ea5ff84989d1e6435301085dee8665d422d7201ddac9d"
               }
             }
           }
@@ -555,23 +529,10 @@
           "response": {
             "error": {
               "code": "invalid_params",
-              "data": {
-                "errorCount": 1,
-                "issues": [
-                  {
-                    "message": {
-                      "prose": 14,
-                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
-                    },
-                    "path": [
-                      "url"
-                    ]
-                  }
-                ]
-              },
+              "data": null,
               "message": {
-                "prose": 26,
-                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+                "prose": 39,
+                "sha256": "b6e34f8cbcbe0f341f6b7dd4756d7f9953d084109ff07f4edacc7c52fa709e8b"
               }
             }
           }
@@ -1560,6 +1521,7 @@
         {
           "keyring": {
             "mcp-oauth:secure:client_info": {
+              "application_type": null,
               "client_id": "client-1",
               "client_id_issued_at": null,
               "client_name": null,
@@ -1571,6 +1533,7 @@
                 "authorization_code",
                 "refresh_token"
               ],
+              "issuer": "http://<server:secure>",
               "jwks": null,
               "jwks_uri": null,
               "logo_uri": null,
@@ -1729,6 +1692,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -1739,14 +1703,14 @@
                     "status": "enabled",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -1775,6 +1739,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -1785,14 +1750,14 @@
                     "status": "enabled",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -2080,6 +2045,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -2090,14 +2056,14 @@
                     "status": "enabled",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": false,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -2114,6 +2080,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "docs",
@@ -2124,14 +2091,14 @@
                       "status": "enabled",
                       "tools": [
                         {
-                          "description": "Fetch one page",
-                          "enabled": true,
-                          "name": "fetch"
-                        },
-                        {
                           "description": "Search the docs.",
                           "enabled": false,
                           "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
                         }
                       ],
                       "transport": "streamable-http"
@@ -2165,6 +2132,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -2173,64 +2141,16 @@
                     "name": "docs",
                     "pluginName": null,
                     "status": "disabled",
-                    "tools": [],
-                    "transport": "streamable-http"
-                  }
-                ]
-              },
-              "method": "runtime/updated"
-            }
-          ],
-          "response": {
-            "result": {
-              "runtime": {
-                "mcp": {
-                  "connectorError": null,
-                  "discoveryErrors": {},
-                  "manageConnectorsUrl": null,
-                  "sources": [
-                    {
-                      "displayName": "docs",
-                      "error": null,
-                      "kind": "server",
-                      "name": "docs",
-                      "pluginName": null,
-                      "status": "disabled",
-                      "tools": [],
-                      "transport": "streamable-http"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        {
-          "method": "mcp_catalog/toggle",
-          "notifications": [
-            {
-              "mcp": {
-                "connectorError": null,
-                "discoveryErrors": {},
-                "manageConnectorsUrl": null,
-                "sources": [
-                  {
-                    "displayName": "docs",
-                    "error": null,
-                    "kind": "server",
-                    "name": "docs",
-                    "pluginName": null,
-                    "status": "enabled",
                     "tools": [
-                      {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
                       {
                         "description": "Search the docs.",
                         "enabled": false,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": false,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -2247,6 +2167,79 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "disabled",
+                      "tools": [
+                        {
+                          "description": "Search the docs.",
+                          "enabled": false,
+                          "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": false,
+                          "name": "fetch"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Search the docs.",
+                        "enabled": false,
+                        "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "docs",
@@ -2257,14 +2250,14 @@
                       "status": "enabled",
                       "tools": [
                         {
-                          "description": "Fetch one page",
-                          "enabled": true,
-                          "name": "fetch"
-                        },
-                        {
                           "description": "Search the docs.",
                           "enabled": false,
                           "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
                         }
                       ],
                       "transport": "streamable-http"
@@ -2283,6 +2276,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -2293,14 +2287,14 @@
                     "status": "enabled",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -2317,6 +2311,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "docs",
@@ -2327,14 +2322,14 @@
                       "status": "enabled",
                       "tools": [
                         {
-                          "description": "Fetch one page",
-                          "enabled": true,
-                          "name": "fetch"
-                        },
-                        {
                           "description": "Search the docs.",
                           "enabled": true,
                           "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
                         }
                       ],
                       "transport": "streamable-http"
@@ -2513,6 +2508,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -2523,14 +2519,14 @@
                     "status": "enabled",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -2547,6 +2543,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "docs",
@@ -2557,14 +2554,14 @@
                       "status": "enabled",
                       "tools": [
                         {
-                          "description": "Fetch one page",
-                          "enabled": true,
-                          "name": "fetch"
-                        },
-                        {
                           "description": "Search the docs.",
                           "enabled": true,
                           "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
                         }
                       ],
                       "transport": "streamable-http"
@@ -2625,6 +2622,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "docs",
@@ -2635,14 +2633,14 @@
                     "status": "enabled",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -2659,6 +2657,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "docs",
@@ -2669,14 +2668,14 @@
                       "status": "enabled",
                       "tools": [
                         {
-                          "description": "Fetch one page",
-                          "enabled": true,
-                          "name": "fetch"
-                        },
-                        {
                           "description": "Search the docs.",
                           "enabled": true,
                           "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
                         }
                       ],
                       "transport": "streamable-http"
@@ -2762,19 +2761,11 @@
           "method": "mcp_catalog/add",
           "notifications": [
             {
-              "method": "mcp_catalog/authRequired",
-              "params": {
-                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:0",
-                "name": "127",
-                "observedConnectionRevision": null,
-                "sessionId": "<session-1>"
-              }
-            },
-            {
               "mcp": {
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "127",
@@ -2791,10 +2782,20 @@
               "method": "runtime/updated"
             },
             {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:0",
+                "name": "127",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
               "mcp": {
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "127",
@@ -2820,6 +2821,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "127",
@@ -2858,19 +2860,11 @@
           "method": "mcp_catalog/add",
           "notifications": [
             {
-              "method": "mcp_catalog/authRequired",
-              "params": {
-                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:0",
-                "name": "127",
-                "observedConnectionRevision": null,
-                "sessionId": "<session-1>"
-              }
-            },
-            {
               "mcp": {
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "127",
@@ -2887,10 +2881,20 @@
               "method": "runtime/updated"
             },
             {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:0",
+                "name": "127",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
               "mcp": {
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "127",
@@ -2916,6 +2920,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "127",
@@ -2942,6 +2947,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": []
               },
               "method": "runtime/updated"
@@ -2956,6 +2962,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": []
                 }
               }
@@ -2964,28 +2971,14 @@
         },
         {
           "method": "mcp_catalog/remove",
-          "notifications": [
-            {
-              "mcp": {
-                "connectorError": null,
-                "discoveryErrors": {},
-                "manageConnectorsUrl": null,
-                "sources": []
-              },
-              "method": "runtime/updated"
-            }
-          ],
+          "notifications": [],
           "response": {
-            "result": {
-              "name": "missing",
-              "removed": false,
-              "runtime": {
-                "mcp": {
-                  "connectorError": null,
-                  "discoveryErrors": {},
-                  "manageConnectorsUrl": null,
-                  "sources": []
-                }
+            "error": {
+              "code": "internal_error",
+              "data": null,
+              "message": {
+                "prose": 28,
+                "sha256": "72ff477488789223cf2778b4f63e2ae523aabd9759c94999f0aed09dba2052ee"
               }
             }
           }
@@ -3093,6 +3086,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3158,6 +3152,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3168,14 +3163,14 @@
                     "status": "connected",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -3192,6 +3187,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "secure",
@@ -3202,14 +3198,14 @@
                       "status": "connected",
                       "tools": [
                         {
-                          "description": "Fetch one page",
-                          "enabled": true,
-                          "name": "fetch"
-                        },
-                        {
                           "description": "Search the docs.",
                           "enabled": true,
                           "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
                         }
                       ],
                       "transport": "streamable-http"
@@ -3223,6 +3219,7 @@
         {
           "keyring": {
             "mcp-oauth:secure:client_info": {
+              "application_type": null,
               "client_id": "client-1",
               "client_id_issued_at": null,
               "client_name": null,
@@ -3234,6 +3231,7 @@
                 "authorization_code",
                 "refresh_token"
               ],
+              "issuer": "http://<server:secure>",
               "jwks": null,
               "jwks_uri": null,
               "logo_uri": null,
@@ -3269,6 +3267,38 @@
           "method": "mcp_catalog/logout",
           "notifications": [
             {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
               "method": "mcp_catalog/authRequired",
               "params": {
                 "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:2",
@@ -3282,6 +3312,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3290,27 +3321,18 @@
                     "name": "secure",
                     "pluginName": null,
                     "status": "needs_auth",
-                    "tools": [],
-                    "transport": "streamable-http"
-                  }
-                ]
-              },
-              "method": "runtime/updated"
-            },
-            {
-              "mcp": {
-                "connectorError": null,
-                "discoveryErrors": {},
-                "manageConnectorsUrl": null,
-                "sources": [
-                  {
-                    "displayName": "secure",
-                    "error": null,
-                    "kind": "server",
-                    "name": "secure",
-                    "pluginName": null,
-                    "status": "needs_auth",
-                    "tools": [],
+                    "tools": [
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      }
+                    ],
                     "transport": "streamable-http"
                   }
                 ]
@@ -3325,6 +3347,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "secure",
@@ -3333,7 +3356,18 @@
                       "name": "secure",
                       "pluginName": null,
                       "status": "needs_auth",
-                      "tools": [],
+                      "tools": [
+                        {
+                          "description": "Search the docs.",
+                          "enabled": true,
+                          "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        }
+                      ],
                       "transport": "streamable-http"
                     }
                   ]
@@ -3511,6 +3545,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3665,6 +3700,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3675,14 +3711,14 @@
                     "status": "connected",
                     "tools": [
                       {
-                        "description": "Fetch one page",
-                        "enabled": true,
-                        "name": "fetch"
-                      },
-                      {
                         "description": "Search the docs.",
                         "enabled": true,
                         "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
                       }
                     ],
                     "transport": "streamable-http"
@@ -3720,6 +3756,38 @@
           "method": "mcp_catalog/logout",
           "notifications": [
             {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
               "method": "mcp_catalog/authRequired",
               "params": {
                 "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:1",
@@ -3733,6 +3801,7 @@
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3741,27 +3810,18 @@
                     "name": "secure",
                     "pluginName": null,
                     "status": "needs_auth",
-                    "tools": [],
-                    "transport": "streamable-http"
-                  }
-                ]
-              },
-              "method": "runtime/updated"
-            },
-            {
-              "mcp": {
-                "connectorError": null,
-                "discoveryErrors": {},
-                "manageConnectorsUrl": null,
-                "sources": [
-                  {
-                    "displayName": "secure",
-                    "error": null,
-                    "kind": "server",
-                    "name": "secure",
-                    "pluginName": null,
-                    "status": "needs_auth",
-                    "tools": [],
+                    "tools": [
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      },
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      }
+                    ],
                     "transport": "streamable-http"
                   }
                 ]
@@ -3776,6 +3836,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "secure",
@@ -3784,7 +3845,18 @@
                       "name": "secure",
                       "pluginName": null,
                       "status": "needs_auth",
-                      "tools": [],
+                      "tools": [
+                        {
+                          "description": "Search the docs.",
+                          "enabled": true,
+                          "name": "search"
+                        },
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        }
+                      ],
                       "transport": "streamable-http"
                     }
                   ]
@@ -3800,19 +3872,11 @@
           "method": "mcp_catalog/refresh",
           "notifications": [
             {
-              "method": "mcp_catalog/authRequired",
-              "params": {
-                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:1",
-                "name": "secure",
-                "observedConnectionRevision": null,
-                "sessionId": "<session-1>"
-              }
-            },
-            {
               "mcp": {
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3829,10 +3893,20 @@
               "method": "runtime/updated"
             },
             {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:1",
+                "name": "secure",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
               "mcp": {
                 "connectorError": null,
                 "discoveryErrors": {},
                 "manageConnectorsUrl": null,
+                "privateConnectorsHidden": false,
                 "sources": [
                   {
                     "displayName": "secure",
@@ -3856,6 +3930,7 @@
                   "connectorError": null,
                   "discoveryErrors": {},
                   "manageConnectorsUrl": null,
+                  "privateConnectorsHidden": false,
                   "sources": [
                     {
                       "displayName": "secure",

@@ -140,7 +140,7 @@ pub enum ProviderChunk {
     Usage {
         input_tokens: u64,
         output_tokens: u64,
-        /// The part of `input_tokens` the provider served from its cache.
+        /// How many of `input_tokens` were cache hits on the provider side.
         #[serde(default, skip_serializing_if = "is_zero")]
         cached_tokens: u64,
     },
@@ -157,7 +157,7 @@ pub enum ProviderChunk {
 pub struct Usage {
     pub input_tokens: u64,
     pub output_tokens: u64,
-    /// The part of `input_tokens` the provider served from its cache, which
+    /// How many of `input_tokens` were cache hits on the provider side, which
     /// reference `LLMUsage.cached_tokens` reads from
     /// `prompt_tokens_details.cached_tokens`.
     #[serde(default, skip_serializing_if = "is_zero")]

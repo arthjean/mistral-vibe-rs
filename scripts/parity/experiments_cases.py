@@ -24,10 +24,10 @@ ORACLE_API_HOST = "https://experiments.example.test"
 ORACLE_CLIENT_KEY = "sdk-oracle-client-key"
 
 #: The surface every attribute set names. The reference requires it with no
-#: default (``vibe/core/experiments/models.py:27``); ``legacy`` is the surface of
-#: the reference's own ``AgentLoop`` and the rollout's default variant
-#: (``vibe/core/experiments/active.py:38``), and the one this port's single
-#: backend corresponds to.
+#: default (``vibe/core/experiments/models.py:27``). ``legacy`` is still a member
+#: of ``ExperimentSurface`` at the pin (``vibe/core/experiments/active.py:9``)
+#: after the rollout that defaulted to it was removed, and it is the surface this
+#: port's single backend corresponds to.
 ORACLE_HARNESS = "legacy"
 
 #: The three original reference experiment keys, spelled here so a rename on either side
@@ -36,12 +36,13 @@ SYSTEM_PROMPT = "vibe_cli_system_prompt"
 MANAGED_SHELL = "vibe_cli_managed_shell_tools"
 MODEL_ROUTING = "vibe_cli_default_routing_model"
 
-#: The five keys the reference added since, spelled for the same reason.
+#: The keys the reference added since that still resolve at the pin, spelled
+#: for the same reason. The smart-approve default and Unified Harness rollout
+#: keys left ``vibe/core/experiments/active.py`` at v3.0.0, so no case names
+#: them any more.
 SMART_APPROVE = "vibe_cli_smart_approve"
-SMART_APPROVE_DEFAULT = "vibe_cli_smart_approve_default"
 EXTRA_MODELS = "vibe_cli_extra_models"
 REGISTRY_SKILLS = "vibe_cli_registry_skills"
-UNIFIED_HARNESS = "vibe_cli_unified_harness_rollout"
 
 #: A model definition the routing variant carries, authored so the layer has
 #: something valid to re-encode and the orchestrator something to merge.
@@ -426,7 +427,6 @@ STARTUP_FIELDS = (
     "system_prompt_id",
     "managed_shell_tools_enabled",
     "smart_approve_available",
-    "smart_approve_default",
     "experimental_enable_registry_skills",
 )
 
@@ -451,7 +451,6 @@ STARTUP_INERT: dict[str, Any] = {
 STARTUP_LIVE: dict[str, Any] = {
     "features": {
         SYSTEM_PROMPT: feature("cli", [{"force": "tests", "tracks": [track()]}]),
-        SMART_APPROVE_DEFAULT: feature(False, [{"force": True}]),
     }
 }
 

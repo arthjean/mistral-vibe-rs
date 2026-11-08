@@ -142,6 +142,21 @@ class Reducer:
             } | constraints(schema, ("strict", "from_attributes", "custom_error_type"))
         if kind == "literal":
             return {"type": "literal", "expected": [plain(value) for value in schema["expected"]]}
+        if kind == "union" and all(
+            choice.get("type") == "literal" for choice in map(union_choice, schema["choices"])
+        ):
+            # A union of literals, such as `MCPAddParams.transport`
+            # (vibe/app_server/protocol.py), accepts exactly the joint values,
+            # so it is recorded as one literal. Pydantic refuses it once per
+            # choice, which the cases record and the replay ledgers.
+            return {
+                "type": "literal",
+                "expected": [
+                    plain(value)
+                    for choice in map(union_choice, schema["choices"])
+                    for value in choice["expected"]
+                ],
+            }
         if kind == "enum":
             return {
                 "type": "enum",
@@ -154,7 +169,7 @@ class Reducer:
                 ("strict", "ge", "gt", "le", "lt", "min_length", "max_length", "pattern",
                  "allow_inf_nan", "multiple_of", "strip_whitespace"),
             )
-        raise OracleError(f"no reduction for schema kind {kind}")
+        raise Unreduced(kind)
 
     def model_class(self, schema: dict[str, Any]) -> type | None:
         """The model class a schema validates, through references."""
@@ -212,6 +227,40 @@ class Reducer:
         return ref
 
 
+class Unreduced(OracleError):
+    """A schema kind the reduced format, and so the port's walker, lacks."""
+
+
+def union_choice(choice: Any) -> dict[str, Any]:
+    """A union choice's schema, without its optional label."""
+    return choice[0] if isinstance(choice, tuple) else choice
+
+
+def model_named(name: str) -> type:
+    """The parameter model the census names, from the module declaring it.
+
+    Most models live in `vibe.app_server.protocol`; a method added at v3 may
+    take its model from a sibling module, such as `_setup_oidc`.
+    """
+    import importlib
+    import pkgutil
+
+    import vibe.app_server as package
+    from vibe.app_server import protocol
+
+    if hasattr(protocol, name):
+        return getattr(protocol, name)
+    found = []
+    for module in pkgutil.iter_modules(package.__path__):
+        loaded = importlib.import_module(f"{package.__name__}.{module.name}")
+        candidate = loaded.__dict__.get(name)
+        if isinstance(candidate, type) and candidate.__module__ == loaded.__name__:
+            found.append(candidate)
+    if len(found) != 1:
+        raise OracleError(f"the census model {name} is declared {len(found)} times under vibe.app_server")
+    return found[0]
+
+
 def constraints(schema: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {key: plain(schema[key]) for key in keys if key in schema and schema[key] is not None}
 
@@ -234,14 +283,29 @@ def capture() -> dict[str, Any]:
     census = json.loads(CENSUS.read_text(encoding="utf-8"))
     reducer = Reducer()
     methods: dict[str, str | None] = {}
+    unreduced: dict[str, str] = {}
     for entry in census["methods"]:
         name = entry["params"]
-        methods[entry["name"]] = reducer.reduce_model(getattr(protocol, name)) if name else None
+        if not name:
+            methods[entry["name"]] = None
+            continue
+        # A model holding a kind the format lacks is named under `unreduced`
+        # with that kind rather than recorded partially: its methods stay
+        # unvalidated, which the census counts as unmeasured. Reducing into a
+        # scratch reducer first keeps its partial definitions out of `defs`.
+        try:
+            Reducer().reduce_model(model_named(name))
+        except Unreduced as error:
+            unreduced[entry["name"]] = str(error)
+            continue
+        methods[entry["name"]] = reducer.reduce_model(model_named(name))
     lifecycle = {"initialize": reducer.reduce_model(protocol.InitializeParams)}
-    # Models a handler validates past its parameters: `callback/result` reads
-    # its output as `CallbackOutput`, the field `CallbackRespondParams` holds
-    # (vibe/app_server/_handler.py, `_callback_result`).
-    nested = {"callback/result": reducer.reduce_model(protocol.CallbackRespondParams)}
+    # Models a handler validates past its parameters and refuses the request
+    # on. None at v3.1.0: `callback/result` validates `CallbackResultParams`,
+    # whose `output` is any JSON value, and reads an approval's output past it
+    # only to record a grant, swallowing the refusal (`_record_approval_grant`
+    # in vibe/app_server/_unified_harness_backend_adapter.py).
+    nested: dict[str, str] = {}
     return {
         "schemaVersion": SCHEMA_VERSION,
         "note": (
@@ -252,6 +316,7 @@ def capture() -> dict[str, Any]:
         "methods": dict(sorted(methods.items())),
         "lifecycle": lifecycle,
         "nested": nested,
+        "unreduced": dict(sorted(unreduced.items())),
         "functions": sorted(reducer.functions),
         "defs": dict(sorted(reducer.defs.items())),
     }
@@ -387,8 +452,6 @@ def outcome(model: type, value: Any) -> dict[str, Any]:
 
 
 def capture_cases(payload: dict[str, Any]) -> dict[str, Any]:
-    from vibe.app_server import protocol
-
     cases = Cases(payload["defs"])
     models = sorted(
         {name for name in payload["methods"].values() if name}
@@ -397,7 +460,7 @@ def capture_cases(payload: dict[str, Any]) -> dict[str, Any]:
     )
     recorded = []
     for name in models:
-        model = getattr(protocol, name)
+        model = model_named(name)
         for value in cases.inputs(payload["defs"][name]):
             recorded.append({"model": name, "input": value, **outcome(model, value)})
     return {

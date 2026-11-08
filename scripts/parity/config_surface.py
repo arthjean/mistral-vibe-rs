@@ -12,6 +12,13 @@ observations, not authored prose, so unlike the tool-surface corpus this one is
 committed. Field *descriptions* are never captured: ``NOTICE`` forbids shipping
 reference-authored text.
 
+Every family resolves at v3.1.0, whose configuration package still lives
+under ``vibe/core/config/``. Two things moved: ``ConfigBuilder._merge_fields``
+also returns the entries each layer defines per keyed field, which the merge
+scenarios ignore, and the schema renamed one field and withdrew two, which the
+``migrations`` family records by running ``migrate_config``
+(``vibe/core/config/_migration.py``) over documents an older client wrote.
+
 Usage::
 
     scripts/parity/config_surface.py --reference /path/to/reference
@@ -50,6 +57,7 @@ from config_surface_cases import (
     MCP_TOKEN_VALUE,
     MCP_TOKEN_VARIABLE,
     MCP_URLS,
+    MIGRATION_CASES,
     MODEL_SCENARIOS,
     ORIGIN_REWRITE_CASES,
     SCENARIOS,
@@ -57,7 +65,7 @@ from config_surface_cases import (
     WRITE_SCENARIOS,
 )
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
 #: The strategies the reference vocabulary declares but no field adopts. The
 #: census asserts this stays true. v2.25.5 gave four fields ``WithShallowMerge``
@@ -68,7 +76,9 @@ DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
 #: Schema version 5 adds the shallow-merge, allowlist, routed and vision
 #: scenarios, the layer stack and its writes, the environment layer, the agent
 #: profile layer, the global dotenv file and the browser sign-in origin
-#: rewrite.
+#: rewrite. Schema version 7 adds ``migrations``, the field migrations run over
+#: documents an older client wrote, which is where the census tells a renamed
+#: field from a withdrawn one.
 UNREACHABLE_STRATEGIES = ("conflict",)
 #: Stands in for the machine-dependent vibe home in the captured default
 #: document, so the corpus stays identical on every workstation.
@@ -309,6 +319,20 @@ def capture_stack() -> dict[str, list[dict[str, Any]]]:
 # --------------------------------------------------------------------------
 
 
+def capture_migrations() -> list[dict[str, Any]]:
+    """What the reference migration leaves of each document an older client
+    wrote (``migrate_config``, ``vibe/core/config/_migration.py``), run on the
+    parsed document as a layer hands it over."""
+    from vibe.core.config._migration import migrate_config
+
+    captured = []
+    for case in MIGRATION_CASES:
+        data = tomllib.loads(case["toml"])
+        changed = migrate_config(data)
+        captured.append({**case, "changed": changed, "migrated": data})
+    return captured
+
+
 def capture_encoding() -> list[dict[str, str]]:
     import tomli_w
 
@@ -458,7 +482,8 @@ async def merge_scenario(layers: list[tuple[str, str]]) -> tuple[dict[str, Any],
         if raw:
             layer_data.append(_LayerData(name=name, data=raw))
 
-    merged, _origins = builder._merge_fields(VibeConfigSchema, layer_data)
+    # v3 also returns the entries each layer defines per keyed field.
+    merged, _origins, _defined = builder._merge_fields(VibeConfigSchema, layer_data)
     dropped = sorted(supplied - set(merged))
     return dict(merged), dropped
 
@@ -723,6 +748,7 @@ def build_corpus(commit: str) -> dict[str, Any]:
         "dotenv": capture_dotenv(),
         "originRewrite": capture_origin_rewrite(),
         "encoding": capture_encoding(),
+        "migrations": capture_migrations(),
     }
 
 

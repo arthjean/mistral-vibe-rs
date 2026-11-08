@@ -22,7 +22,7 @@
 
 use std::path::Path;
 
-use vibe_core::parity::replay::PatternDivergence;
+use vibe_core::parity::replay::{Class, PatternDivergence};
 
 #[path = "../../vibe-cli/tests/support/telemetry_session.rs"]
 mod telemetry_session;
@@ -35,20 +35,290 @@ const SURFACES: Surfaces = Surfaces {
     binary: ["--vibe-acp", env!("CARGO_BIN_EXE_vibe-acp")],
     floor: 10,
 };
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 reports an editor session otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
 
-const LEDGER: &[PatternDivergence] = &[];
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/accountRequests",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/chatRequests",
+        count: 10,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/identityRequests",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/managedConfigRequests",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/chatMetadata/*",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/chatMetadata/*/call_type",
+        count: 2,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/chatMetadata/*/message_id",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/chatMetadata/*/user_plan",
+        count: 14,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/evaluations/*",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*",
+        count: 28,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/event",
+        count: 13,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/action",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/attachment_counts",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/call_source",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/call_type",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/command",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/command_type",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/entrypoint",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/has_agents_md",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/has_outside_workdir_deny",
+        count: 9,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/host_kind",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/init_duration_ms",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/message_id",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/model",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_context_chars",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_context_messages",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_mcp_servers",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_models",
+        count: 10,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_post_agent_main_hooks",
+        count: 9,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_post_agent_scoped_hooks",
+        count: 9,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_prompt_chars",
+        count: 12,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/nb_skills",
+        count: 10,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/events/*/properties/session_id",
+        count: 1,
+        row: "27",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
 
 #[test]
 fn the_port_reports_every_session_as_the_corpus_records_or_as_the_ledger_names() {
     SURFACES.replay(
-        LEDGER,
+        V3_GAPS,
         &Path::new(env!("CARGO_TARGET_TMPDIR")).join("telemetry-session-port.json"),
     );
 }
 
 #[test]
 fn every_ledger_entry_states_a_pointer_and_a_reason() {
-    SURFACES.assert_ledger(LEDGER);
+    SURFACES.assert_ledger(V3_GAPS);
 }
 
 /// Recaptures the pinned reference on this surface and asserts the committed

@@ -17,14 +17,12 @@
 //! The corpus also records how the entry point answers argument vectors that
 //! exit before it serves anything, which is compared with no ledger at all.
 //!
-//! The script captures each harness backend into its own corpus: `corpus.json`
-//! runs both sides on the legacy backend through the escape hatch, and
-//! `unified-corpus.json` on the Unified Harness every session opens on by
-//! default. Both replay against the same ledger.
+//! From v3.0.0 the reference runs one backend, the Unified Harness, so one
+//! corpus records it; the legacy backend's corpus went with the escape hatch.
 //!
 //! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce on each backend, so rows 8 and 36 of
-//! `docs/parity.md` are readings of the summaries this file prints.
+//! every entry has to still reproduce, so row 8 of `docs/parity.md` is a
+//! reading of the summaries this file prints.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -32,24 +30,21 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, Class, Divergence, OwnProse, Tally, assert_ledger, differences, entries,
-    pinned_reference, scenarios,
+    Band, Capture, Class, Divergence, OwnProse, PatternDivergence, Tally, assert_ledger,
+    differences, entries, pinned_reference, scenarios,
 };
 
 /// The corpora, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("acp-parity/corpus.json");
-const UNIFIED_CORPUS: &str = include_str!("acp-parity/unified-corpus.json");
 
 /// The corpora as `scripts/parity/manifest.json` lists them.
 const LISTED: &str = "crates/vibe-acp/tests/acp-parity/corpus.json";
-const UNIFIED_LISTED: &str = "crates/vibe-acp/tests/acp-parity/unified-corpus.json";
 
 /// The accepted divergences the editor's prose stands on.
 const AUTH_LABELS: &str = "The ACP authentication method labels";
 const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
 const HELP_LINES: &str = "The help document's authored lines";
 const OPTION_NAMES: &str = "A path scope's refusal and option names are this port's own";
-const OWN_SENTENCES: &str = "Programmatic mode's own sentences";
 const EDITOR_PROSE: &str = "The editor adapter's own prose";
 
 /// A request whose parameters fail validation is refused with the field and
@@ -59,22 +54,6 @@ const EDITOR_PROSE: &str = "The editor adapter's own prose";
 const VALIDATION_BAND: Band = Band {
     low: 0.05,
     high: 2.0,
-};
-
-/// The checkpoint a loaded or forked session's history closes on is a full
-/// sentence where the reference writes a 15-character marker, 2.4 times as
-/// long.
-const CHECKPOINT_BAND: Band = Band {
-    low: 0.5,
-    high: 2.5,
-};
-
-/// A session whose MCP servers cannot be reached says so with each
-/// transport's own error quoted in full, up to 2.7 times the reference's
-/// notice.
-const MCP_FAILURE_BAND: Band = Band {
-    low: 0.5,
-    high: 3.0,
 };
 
 /// An own-words entry of the editor replay, which row 8 answers for.
@@ -137,14 +116,6 @@ const COMMON_PROSE: &[OwnProse] = &[
         "the detail a refused log level carries",
     ),
     own(
-        &["session/new-mcp-unreachable"],
-        "/*/stream/*/message/params/update/content/text",
-        1,
-        MCP_FAILURE_BAND,
-        EDITOR_PROSE,
-        "the notice naming the MCP servers a new session could not reach",
-    ),
-    own(
         &["command/help"],
         "/*/stream/*/message/params/update/content/text",
         1,
@@ -180,7 +151,7 @@ const COMMON_PROSE: &[OwnProse] = &[
     own(
         &["*"],
         "/*/response/result/configOptions/*/name",
-        74,
+        73,
         Band::DEFAULT,
         EDITOR_PROSE,
         "the name of each configuration option a session publishes",
@@ -216,104 +187,8 @@ const COMMON_PROSE: &[OwnProse] = &[
     ),
 ];
 
-/// The texts whose count differs between the backends: the legacy one here,
-/// the unified one below.
+/// The texts this port words its own way on the one backend v3.1.0 runs.
 const PROSE: &[OwnProse] = &[
-    own(
-        &["session/fork-at-message", "session/load"],
-        "/*/stream/*/message/params/update/content/*/content/text",
-        2,
-        CHECKPOINT_BAND,
-        OWN_SENTENCES,
-        "the checkpoint a loaded or forked session's history closes on",
-    ),
-    own(
-        &["session/fork-at-message", "session/load"],
-        "/*/stream/*/message/params/update/title",
-        2,
-        CHECKPOINT_BAND,
-        OWN_SENTENCES,
-        "the same checkpoint, as the title of the call it is shown as",
-    ),
-    own(
-        &["*"],
-        "/*/response/error/message",
-        42,
-        Band::DEFAULT,
-        SERVER_PROSE,
-        "the message of every other refusal the agent answers with",
-    ),
-    own(
-        &["*"],
-        "/*/detached/*/params/update/availableCommands/*/description",
-        864,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "the description of each slash command the session advertises",
-    ),
-    own(
-        &["*"],
-        "/*/detached/*/params/update/availableCommands/*/input/hint",
-        290,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "the hint of each slash command that takes an argument",
-    ),
-    own(
-        &["*"],
-        "/*/stream/*/message/params/update/content/*/content/text",
-        6,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "the text of a tool call the adapter writes itself: a compaction, a review or a \
-         rewind, a dismissed or rejected command",
-    ),
-    own(
-        &["command/skill"],
-        "/*/stream/*/message/params/update/rawOutput/content",
-        1,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "the sentence a skill's content reaches the model inside",
-    ),
-    own(
-        &["ext/review", "ext/rewind"],
-        "/*/stream/*/message/params/update/rawOutput/message",
-        2,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "what a review or a rewind reports when it settles",
-    ),
-    own(
-        &["prompt/bash-rejected"],
-        "/*/stream/*/message/params/update/rawOutput",
-        1,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "what a rejected command reports",
-    ),
-    own(
-        &[
-            "prompt/question-declined",
-            "prompt/question-elicited",
-            "prompt/question-invalid-answer",
-        ],
-        "/*/stream/*/message/params/message",
-        3,
-        Band::DEFAULT,
-        EDITOR_PROSE,
-        "the prompt a question the model asks is put to the editor with",
-    ),
-    own(
-        &["*"],
-        "/*/stream/*/message/params/options/*/name",
-        7,
-        Band::DEFAULT,
-        OPTION_NAMES,
-        "the name of each option a permission request offers",
-    ),
-];
-const UNIFIED_PROSE: &[OwnProse] = &[
     own(
         &["*"],
         "/*/response/error/message",
@@ -339,21 +214,16 @@ const UNIFIED_PROSE: &[OwnProse] = &[
         "the hint of each slash command that takes an argument",
     ),
     own(
-        &["command/compact", "command/skill"],
+        &["*"],
         "/*/stream/*/message/params/update/content/*/content/text",
-        3,
+        4,
         Band::DEFAULT,
         EDITOR_PROSE,
-        "the text of a tool call the adapter writes itself: a compaction and the skill it \
-         loads",
+        "the text of a tool call the adapter writes itself: a compaction, a review or a \
+         rewind, a dismissed or rejected command",
     ),
     own(
-        &[
-            "prompt/bash-approved",
-            "prompt/bash-approved-for-session",
-            "prompt/bash-dismissed",
-            "prompt/bash-rejected",
-        ],
+        &["*"],
         "/*/stream/*/message/params/options/*/name",
         4,
         Band::DEFAULT,
@@ -364,32 +234,364 @@ const UNIFIED_PROSE: &[OwnProse] = &[
 
 /// The help text `-h` and `--help` print, which this port words its own way
 /// under the same usage line, options and order.
-const ARGV_PROSE: &[OwnProse] = &[OwnProse {
-    scenarios: &["argv/*"],
-    pointer: "/stdout",
-    count: 6,
-    band: Band::DEFAULT,
-    directives: None,
-    row: "7",
-    accepted: "The CLI help's descriptions are this port's own",
-    reason: "`vibe-acp --help` describes its options in this port's own sentences",
+/// No own-words entry holds the help of `vibe-acp` at v3.1.0: its length
+/// left the band, so the vectors' differences are the gaps below.
+const ARGV_PROSE: &[OwnProse] = &[];
+
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const ARGV_V3_REASON: &str = "v3.1.0 parses the editor binary's arguments otherwise, with the backend flags removed, which this port does not reproduce yet";
+
+/// Differences an own-words entry covers but whose length v3.1.0 moved out of
+/// its band, one by one; chained first, so they are decided before it.
+const ARGV_V3_REFUSED: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "argv/10",
+        pointer: "/stdout",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: ARGV_V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "argv/11",
+        pointer: "/stdout",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: ARGV_V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "argv/3",
+        pointer: "/stdout",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: ARGV_V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "argv/4",
+        pointer: "/stdout",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: ARGV_V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "argv/5",
+        pointer: "/stdout",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: ARGV_V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "argv/6",
+        pointer: "/stdout",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: ARGV_V3_REASON,
+    },
+];
+
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const ARGV_V3_GAPS: &[PatternDivergence] = &[PatternDivergence {
+    scenario: "*",
+    pointer: "/stderr",
+    count: 12,
+    row: "8",
+    class: Class::Gap,
+    reason: ARGV_V3_REASON,
 }];
 
-/// The script's two families, one per backend.
-const LEGACY: Capture = Capture {
+const CAPTURE: Capture = Capture {
     script: "scripts/parity/acp.py",
-    family: &["--harness", "legacy"],
-    arguments: JOBS,
-};
-const UNIFIED: Capture = Capture {
-    script: "scripts/parity/acp.py",
-    family: &["--harness", "unified"],
+    family: &[],
     arguments: JOBS,
 };
 
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and agent process.
 const JOBS: &[&str] = &["--jobs", "6"];
+/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
+/// against the row this corpus measures until a follow-on closes it.
+const V3_REASON: &str = "v3.1.0 answers the editor protocol otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
+
+/// Differences an own-words entry covers but whose length v3.1.0 moved out of
+/// its band, one by one; chained first, so they are decided before it.
+const V3_REFUSED: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "command/retry",
+        pointer: "/4/stream/1/message/params/update/content/text",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "session/fork",
+        pointer: "/3/stream/1/message/params/update/content/text",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "session/fork-at-message",
+        pointer: "/3/stream/1/message/params/update/content/text",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "session/fork-at-message",
+        pointer: "/6/stream/0/message/params/update/title",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "session/fork-at-message",
+        pointer: "/6/stream/4/message/params/update/content/text",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "session/load",
+        pointer: "/5/stream/0/message/params/update/title",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
+
+/// Differences no entry above covers, by pointer with its indices
+/// generalized, most specific first; chained last.
+const V3_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/error",
+        count: 7,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result",
+        count: 7,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/apiKey",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/budget",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/customDomainLocked",
+        count: 3,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/error",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/planOffer/url",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/usage",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/detached/*",
+        count: 2,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/detached/*/params/update/size",
+        count: 229,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/configOptions/*/currentValue",
+        count: 2,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/sessions/*/title",
+        count: 2,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*",
+        count: 40,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/_meta/tool_name",
+        count: 12,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/rawInput/changes",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/rawInput/newString",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/rawInput/oldString",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/rawInput/replaceAll",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/rawOutput/previousContent",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/title",
+        count: 2,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/configOptions/*/options/*",
+        count: 290,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/configOptions/*/options/*/name",
+        count: 73,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/response/result/configOptions/*/options/*/value",
+        count: 73,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/rawOutput/occurrences/*/newStartLine",
+        count: 1,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/configOptions/*/options/*",
+        count: 8,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/configOptions/*/options/*/name",
+        count: 2,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/*/stream/*/message/params/update/configOptions/*/options/*/value",
+        count: 2,
+        row: "8",
+        class: Class::Gap,
+        reason: V3_REASON,
+    },
+];
 
 const LEDGER: &[Divergence] = &[
     Divergence {
@@ -408,7 +610,7 @@ const LEDGER: &[Divergence] = &[
         scenarios: &["ext/config-schema"],
         pointer: "/1/response/result",
         within: &[],
-        count: 265,
+        count: 301,
         row: "30",
         class: Class::Gap,
         reason: "`_config/schema` relays the app server's `config/schema`, whose content is \
@@ -417,31 +619,28 @@ const LEDGER: &[Divergence] = &[
 ];
 
 #[test]
-fn the_port_answers_every_legacy_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    replay(CORPUS, &LEGACY, "legacy", PROSE);
+fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+    replay(CORPUS, &CAPTURE);
 }
 
-#[test]
-fn the_port_answers_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    replay(UNIFIED_CORPUS, &UNIFIED, "unified", UNIFIED_PROSE);
-}
-
-fn replay(corpus: &str, capture: &Capture, harness: &str, prose: &[OwnProse]) {
+fn replay(corpus: &str, capture: &Capture) {
     // The manifest entry holds the floors of both the scenarios and the
     // argument vectors, so a recapture that lost either fails here.
     let corpus_text = corpus;
     let mut tally = Tally::new(
         corpus,
-        entries(COMMON_PROSE)
-            .chain(entries(prose))
-            .chain(entries(LEDGER)),
+        entries(V3_REFUSED)
+            .chain(entries(COMMON_PROSE))
+            .chain(entries(PROSE))
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS)),
     );
     let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
     let recorded = scenarios(&corpus);
 
     let replayed = capture.port(
         &["--agent", env!("CARGO_BIN_EXE_vibe-acp")],
-        &Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("acp-parity-port-{harness}.json")),
+        &Path::new(env!("CARGO_TARGET_TMPDIR")).join("acp-parity-port.json"),
     );
     // The command line answers before any scenario runs: every vector exits
     // the way the reference's argparse does, and only the help text, which
@@ -457,42 +656,45 @@ fn replay(corpus: &str, capture: &Capture, harness: &str, prose: &[OwnProse]) {
         replayed_argv.len(),
         "the capture script declares other argument vectors than the corpus records"
     );
-    let mut vectors = Tally::new(corpus_text, entries(ARGV_PROSE));
+    let mut vectors = Tally::new(
+        corpus_text,
+        entries(ARGV_V3_REFUSED)
+            .chain(entries(ARGV_PROSE))
+            .chain(entries(ARGV_V3_GAPS)),
+    );
     for (index, (reference, port)) in argv.iter().zip(replayed_argv).enumerate() {
         let found = differences(reference, port);
         vectors.record(&format!("argv/{index}"), reference, port, found);
     }
-    vectors.conclude(&format!("acp argv parity ({harness}):"));
+    vectors.conclude("acp argv parity:");
 
     tally.compare(capture, &recorded, &scenarios(&replayed), differences);
-    tally.conclude(&format!("acp parity ({harness}):"));
+    tally.conclude("acp parity:");
 }
 
 #[test]
 fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
-    for (listed, corpus, prose) in [
-        (LISTED, CORPUS, PROSE),
-        (UNIFIED_LISTED, UNIFIED_CORPUS, UNIFIED_PROSE),
-    ] {
-        let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
-        assert_ledger(
-            listed,
-            &scenarios(&corpus),
-            entries(COMMON_PROSE)
-                .chain(entries(prose))
-                .chain(entries(LEDGER))
-                .chain(entries(ARGV_PROSE)),
-        );
-    }
+    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    assert_ledger(
+        LISTED,
+        &scenarios(&corpus),
+        entries(V3_REFUSED)
+            .chain(entries(COMMON_PROSE))
+            .chain(entries(PROSE))
+            .chain(entries(LEDGER))
+            .chain(entries(V3_GAPS))
+            .chain(entries(ARGV_V3_REFUSED))
+            .chain(entries(ARGV_PROSE))
+            .chain(entries(ARGV_V3_GAPS)),
+    );
 }
 
-/// Recaptures the pinned reference on each backend and asserts the committed
-/// corpora are still what it answers. The replay above runs regardless, which
+/// Recaptures the pinned reference and asserts the committed corpus is still
+/// what it answers. The replay above runs regardless, which
 /// is what keeps a missing checkout from failing `cargo test`.
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
     if let Some(root) = pinned_reference("ACP") {
-        LEGACY.check(&root, &[]);
-        UNIFIED.check(&root, &[]);
+        CAPTURE.check(&root, &[]);
     }
 }

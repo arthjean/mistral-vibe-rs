@@ -55,9 +55,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
-from reference import OracleError, reference_command  # noqa: E402
+from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
@@ -270,7 +270,13 @@ def saved_tree(world: blackbox.World) -> list[Any]:
                          "agent": (meta.get("agent_profile") or {}).get("name")
                          if isinstance(meta.get("agent_profile"), dict) else meta.get("agent_profile")})
         else:
-            tree.append({"file": relative.as_posix()})
+            # A unified session stores its log as content-addressed chunks
+            # whose digest covers the timestamps a run writes (v3.0.0 and
+            # later), so a chunk is recorded by its place, not its name.
+            name = relative.as_posix()
+            if relative.parent.name == "chunks":
+                name = f"{relative.parent.as_posix()}/<chunk>{relative.suffix}"
+            tree.append({"file": name})
     return tree
 
 
@@ -579,18 +585,6 @@ SHELL_BACKEND = [
     {"text": "Done delegating."},
 ]
 
-#: The four answers `exit_plan_mode` offers, by the label a client returns.
-CLEAR_AUTO = "Yes, clear context and auto approve edits"
-AUTO = "Yes, and auto approve edits"
-MANUAL = "Yes, and request approval for edits"
-STAY = "No"
-
-EXIT_PLAN_BACKEND = [
-    {"text": "The plan is ready.", "toolCalls": [call("exit_plan_mode", {}, "call_x1")]},
-    {"text": "Now implementing."},
-]
-
-
 def scenarios() -> list[dict[str, Any]]:
     tools = ["tools"]
     return [
@@ -769,7 +763,7 @@ def scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "profile/builtin-tools",
-            "steps": [{"start": {"agent": "plan"}}, turn("Hello"), switch("ask"), turn("Again"),
+            "steps": [{"start": {"agent": "accept-edits"}}, turn("Hello"), switch("ask"), turn("Again"),
                       switch("auto-approve"), turn("Once more")],
             "observe": tools,
         },
@@ -875,35 +869,9 @@ def scenarios() -> list[dict[str, Any]]:
             "callbacks": [{"approve": True}],
             "steps": [{"start": {"agent": "ask"}}, turn("Delegate the search")],
         },
-        # -- switch ---------------------------------------------------------
-        {
-            "name": "switch/exit-plan-auto",
-            "backend": EXIT_PLAN_BACKEND,
-            "callbacks": [{"choose": AUTO}],
-            "steps": [{"start": {"agent": "plan"}}, turn("Plan it"), agents_list(), {"tree": True}],
-            "observe": tools,
-        },
-        {
-            "name": "switch/exit-plan-manual",
-            "backend": EXIT_PLAN_BACKEND,
-            "callbacks": [{"choose": MANUAL}],
-            "steps": [{"start": {"agent": "plan"}}, turn("Plan it"), agents_list(), {"tree": True}],
-            "observe": tools,
-        },
-        {
-            "name": "switch/exit-plan-clear",
-            "backend": EXIT_PLAN_BACKEND,
-            "callbacks": [{"choose": CLEAR_AUTO}],
-            "steps": [{"start": {"agent": "plan"}}, turn("Plan it"), agents_list(), {"tree": True}],
-            "observe": tools,
-        },
-        {
-            "name": "switch/exit-plan-stay",
-            "backend": EXIT_PLAN_BACKEND,
-            "callbacks": [{"choose": STAY}],
-            "steps": [{"start": {"agent": "plan"}}, turn("Plan it"), agents_list(), {"tree": True}],
-            "observe": tools,
-        },
+        # The plan agent and its exit switch were removed at v3.0.0, which runs
+        # a saved `plan` default as `ask` (`REMOVED_BUILTIN_AGENTS` in
+        # vibe/core/agents/models.py), so no scenario switches out of it.
     ]
 
 
@@ -931,14 +899,14 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
         selected = [
             scenario
             for scenario in scenarios()
@@ -963,7 +931,7 @@ def main() -> int:
             return entry
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
-            captured = list(pool.map(capture, selected))
+            captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

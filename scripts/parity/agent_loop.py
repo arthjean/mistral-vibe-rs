@@ -60,9 +60,9 @@ from loop_capture import (  # noqa: E402
     run_scenario,
     send,
 )
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
-from reference import OracleError, reference_command  # noqa: E402
+from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/agent-loop-parity/corpus.json"
@@ -411,25 +411,8 @@ def scenarios() -> list[dict[str, Any]]:
                            input=[{"type": "text", "text": "Background fact"}]),
                       {"turn": "Use it"}, PERSISTED],
         },
-        # -- plan review ---------------------------------------------------
-        {
-            "name": "plan/edited-during-review",
-            "backend": [
-                {"text": "The plan is ready.", "toolCalls": [call("exit_plan_mode", {}, "call_x1")]},
-                {"text": "Staying in plan mode."},
-            ],
-            "callbacks": [{"choose": "No", "editPlan": "# Edited plan\n\n1. Do it by hand.\n"}],
-            "steps": [{"start": {"agent": "plan"}}, {"turn": "Plan it"}, PERSISTED],
-        },
-        {
-            "name": "plan/unchanged-during-review",
-            "backend": [
-                {"text": "The plan is ready.", "toolCalls": [call("exit_plan_mode", {}, "call_x1")]},
-                {"text": "Staying in plan mode."},
-            ],
-            "callbacks": [{"choose": "No"}],
-            "steps": [{"start": {"agent": "plan"}}, {"turn": "Plan it"}, PERSISTED],
-        },
+        # The plan agent and its review were removed at v3.0.0
+        # (`REMOVED_BUILTIN_AGENTS` in vibe/core/agents/models.py).
         # -- background titles ---------------------------------------------
         {
             **TITLES,
@@ -543,14 +526,14 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
         selected = [
             scenario
             for scenario in scenarios()
@@ -575,7 +558,7 @@ def main() -> int:
             return entry
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
-            captured = list(pool.map(capture, selected))
+            captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

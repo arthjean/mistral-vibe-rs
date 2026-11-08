@@ -43,8 +43,7 @@ identifier, open with the action and the topic.
 - Lines starting with `tool(` or `tool result(` show what the assistant ran and learned: use the \
 facts they reveal to name the topic, never the tool activity itself. Ignore the assistant's \
 narration of what it is about to do.
-- When the user's first message is only a link or a terse reference, name what it turned out to \
-be about.
+- If the opening message is just a URL or a short pointer, title the subject it led to.
 - Prefer concrete nouns from the code or the domain over generic wording, and the shortest title \
 that still says what the work is.
 - Write in English whatever language the transcript is in.

@@ -19,6 +19,7 @@ import queue
 import re
 import time
 from typing import Any
+import uuid
 
 import blackbox
 import host_env
@@ -48,17 +49,71 @@ TIME_KEYS = {"createdAt", "updatedAt", "bumpedAt", "pinnedAt", "emittedAt", "sta
 #: Keys whose values count events, which depends on every notification a server
 #: raised before the call; whether one is zero is what a rewind decides.
 COUNTER_KEYS = {"eventId", "lastEventId"}
-#: Keys whose numeric values measure elapsed time or throughput.
-DURATION_KEYS = {"durationMs"}
+#: Keys whose numeric values measure elapsed time or throughput: since v3.0.0
+#: a smart approval reports how long its model call took as `latency_ms`.
+DURATION_KEYS = {"durationMs", "latency_ms"}
 
 UUID = re.compile(
     r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+    # Since v3.0.0 the reference also mints prefixed ids, such as a turn's
+    # `turn-` and 32 hex digits, which reach error details and messages.
+    r"|\b[a-z][a-z_]*-[0-9a-f]{32}\b"
 )
 
 
 # --------------------------------------------------------------------------
 # What each request to the chat-completions stand-in carried
 # --------------------------------------------------------------------------
+
+
+def commuted(operations: list[Any]) -> list[Any]:
+    """A JSON patch in one canonical order when its operations commute.
+
+    Operations on distinct paths, none inside another, apply in any order to
+    the same result. Since v3.0.0 the reference diffs the old and new session
+    through `jsonpatch` (`make_json_patch` in `vibe/app_server/_patch.py`),
+    which walks the changed keys as a set, so its order follows the
+    interpreter's string hashing and differs from one process to the next.
+    Sorting such a patch by path keeps what the contract fixes (which field,
+    which operation, which shape) and drops what it leaves free. A patch whose
+    paths repeat or nest is order-dependent and kept as written.
+    """
+    paths = [item.get("path") if isinstance(item, dict) else None for item in operations]
+    if any(not isinstance(path, str) for path in paths) or len(set(paths)) != len(paths):
+        return operations
+    nested = any(
+        other != path and other.startswith(path.rstrip("/") + "/")
+        for path in paths
+        for other in paths
+    )
+    return operations if nested else sorted(operations, key=lambda item: item["path"])
+
+
+#: Session fields that date a change, which a state diff carries or not
+#: depending on whether the clock moved between the two states it compares.
+CLOCK_KEYS = {"updatedAt", "createdAt", "bumpedAt"}
+
+
+def without_clock(message: dict[str, Any]) -> dict[str, Any] | None:
+    """``message`` with the patch operations on clock fields left out, or
+    nothing when it patched only those.
+
+    A session notification follows every state change, and whether the clock
+    moved between two changes depends on how long the step took, so such an
+    operation comes and goes with timing, on either side.
+    """
+    params = message.get("params") or {}
+    patch = params.get("patch")
+    if not isinstance(patch, list):
+        return message
+    kept = [
+        item
+        for item in patch
+        if not (isinstance(item, dict) and str(item.get("path", "")).rsplit("/", 1)[-1] in CLOCK_KEYS)
+    ]
+    if patch and not kept:
+        return None
+    return {**message, "params": {**params, "patch": kept}}
 
 
 def conversation(messages: list[Any]) -> list[dict[str, Any]]:
@@ -123,6 +178,14 @@ class Server(blackbox.Agent):
 class Session:
     """What a scenario learned: sessions, and the entries each turn added."""
 
+    #: Whether each turn names its user message with a fresh
+    #: ``clientUserMessageId``, the id a v3 rewind or fork resolves a user
+    #: entry by (``history_user_anchor`` in
+    #: harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/_fork.py),
+    #: rather than learning the entry ids history announces. A driver
+    #: recaptured at v3 turns it on.
+    client_ids = False
+
     def __init__(self, root: Path) -> None:
         self.world = blackbox.World(root)
         self.sessions: list[str] = []
@@ -140,10 +203,22 @@ class Session:
                         self.sessions.append(session["id"])
         if message.get("method") == "history/entryAdded":
             entry = (message.get("params") or {}).get("entry") or {}
-            if entry.get("type") == "message":
+            if entry.get("type") == "message" and not (
+                self.client_ids and entry.get("role") == "user"
+            ):
                 table = self.users if entry.get("role") == "user" else self.assistants
                 if entry.get("id") not in table:
                     table.append(entry["id"])
+
+    def turn_params(self, dialect: str, session_id: str, text: str) -> dict[str, Any]:
+        """The parameters of a ``turn/start``, naming its user message when
+        :attr:`client_ids` is on."""
+        params = render_turn(dialect, session_id, text)
+        if self.client_ids:
+            message_id = str(uuid.uuid4())
+            params["clientUserMessageId"] = message_id
+            self.users.append(message_id)
+        return params
 
     def substitute(self, value: Any) -> Any:
         if isinstance(value, dict):
@@ -280,7 +355,7 @@ def run_steps(
         if "turn" in step:
             target = session.substitute(step.get("session", "$S1"))
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "turn/start",
-                         "params": render_turn(dialect, target, step["turn"])})
+                         "params": session.turn_params(dialect, target, step["turn"])})
             if step.get("background"):
                 # The turn is left running; its answer arrives later.
                 # What it announced so far is drained, so the next

@@ -224,9 +224,10 @@ async fn discovered_fixture(
     // OAuth server; a reachable stdio server is `enabled`.
     assert_eq!(integrations.mcp["sources"][0]["status"], json!("enabled"));
 
-    // The reference reads the first page of `tools/list` and never follows
-    // `nextCursor` (measured by `mcp_transport_parity_tests`), so the tool the
-    // fixture holds back for its second page stays unpublished.
+    // The v2.26.0 reference read the first page of `tools/list` and never
+    // followed `nextCursor`, as its in-process MCP client oracle measured
+    // before v3.0.0 moved that client into the Unified Harness, so the tool
+    // the fixture holds back for its second page stays unpublished.
     assert_eq!(
         tools.list().len(),
         1,

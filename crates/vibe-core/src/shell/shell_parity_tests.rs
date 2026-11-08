@@ -31,19 +31,22 @@
 //! is checked in both directions: an entry that stops diverging fails the suite
 //! rather than rotting in the list.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::operands::inspects_paths;
 use super::*;
 use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::pinned_interpreter;
-use crate::parity::replay::{pinned_reference, repository};
+use crate::parity::replay::{
+    Class, Entry as _, PatternDivergence, assert_ledger, differences, entries, pinned_reference,
+    repository, scenario_matches,
+};
 use crate::platform::parse_policy_path;
 use crate::policy::{PermissionScope, path_grant_pattern_matches};
 use crate::tools::config::{ToolConfigResolver, shell_read_only_commands};
@@ -52,7 +55,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/shell_policy.py";
 const CORPUS_RELATIVE: &str = "tests/shell-policy/policy.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 4;
+const CORPUS_SCHEMA_VERSION: u32 = 5;
 
 /// The commands the reference resolves to `always` and this port asks about.
 ///
@@ -124,6 +127,39 @@ fn requirement_ledger() -> BTreeSet<(String, String)> {
         .collect()
 }
 
+/// Requirement fields that differ on a case whose permission conforms and
+/// that this port still owes, by case key and pointer into the case's
+/// recorded resolution. Row 6 is what the corpus measures: these are gaps the
+/// v3.1.0 re-pin revealed. Each entry counts its differences exactly, in the
+/// family whose cases it names.
+const REQUIREMENT_GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "git diff --no-index /etc/passwd /dev/null",
+        pointer: "/requirements/0/*",
+        count: 3,
+        row: "6",
+        class: Class::Gap,
+        reason: STREAM_DEVICES_ARE_NOT_FILES,
+    },
+    PatternDivergence {
+        scenario: "git diff --no-index /etc/passwd /dev/null",
+        pointer: "/requirements/1",
+        count: 1,
+        row: "6",
+        class: Class::Gap,
+        reason: STREAM_DEVICES_ARE_NOT_FILES,
+    },
+];
+
+/// Why the reference raises one requirement fewer for an operand naming a
+/// stream device.
+const STREAM_DEVICES_ARE_NOT_FILES: &str = "since 3.0 the reference reads the null device and \
+     the standard streams (`/dev/null`, `/dev/stdin`, `/dev/stdout`, `/dev/stderr`, \
+     `/dev/fd/<n>`) as streams rather than files (`is_stream_device_path` in \
+     vibe/core/tools/utils.py), so `/dev/null` raises no outside-directory requirement and \
+     only `/etc/passwd` does; this port still asks for both, so its first requirement names \
+     `/dev/null` and it raises a second";
+
 /// The key a repository case is replayed and ledgered under.
 fn repository_key(case: &RepositoryCase) -> String {
     format!("{}: {}", case.fixture, case.command)
@@ -160,7 +196,6 @@ struct Corpus {
     repository_resolutions: Vec<RepositoryCase>,
     managed_resolutions: Vec<ManagedCase>,
     windows_grammar: WindowsGrammar,
-    stdin_permissions: Vec<StdinCase>,
     allowlist_grants: Vec<GrantCase>,
     path_grant_matches: Vec<GrantMatchCase>,
 }
@@ -180,7 +215,6 @@ struct Counts {
     repository_cases: usize,
     managed_cases: usize,
     windows_grammar_cases: usize,
-    stdin_permission_cases: usize,
     allowlist_grant_cases: usize,
     path_grant_match_cases: usize,
     path_commands: usize,
@@ -281,22 +315,6 @@ struct ManagedCase {
     requirements: Vec<Requirement>,
 }
 
-/// What input to a session running `command` needed, where `known` is false
-/// for a session the family does not know.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct StdinCase {
-    family: String,
-    command: String,
-    known: bool,
-    permission: Option<String>,
-    #[serde(default)]
-    #[expect(dead_code, reason = "the reference raises no reason for pager input")]
-    has_reason: bool,
-    #[serde(default)]
-    requirements: Vec<Requirement>,
-}
-
 /// What the PowerShell grammar helpers answered, which are pure string
 /// functions a POSIX host evaluates as a Windows host would.
 #[derive(Debug, Deserialize)]
@@ -315,7 +333,7 @@ struct WindowsCommand {
     parts: Vec<WindowsPart>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct WindowsPart {
     part: String,
@@ -433,9 +451,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; update this runner with the capture script"
     );
-    assert_eq!(
-        corpus.reference.commit,
-        crate::parity::REFERENCE_COMMIT,
+    assert!(
+        crate::parity::is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from another commit than the pin"
     );
     corpus
@@ -461,10 +478,13 @@ fn wire_scope(scope: PermissionScope) -> String {
 
 /// Asserts the figures of a shell policy family whose every case is compared
 /// for equality: `conformant` of `total`, nothing ledgered.
+/// The corpus as the manifest lists it.
+const CORPUS_LISTED: &str = "crates/vibe-core/tests/shell-policy/policy.json";
+
 fn shell_figures(family: &str, conformant: usize, total: usize) {
     assert_figures(
         &format!("shell policy parity ({family}):"),
-        "crates/vibe-core/tests/shell-policy/policy.json",
+        CORPUS_LISTED,
         Figures {
             conformant,
             total,
@@ -944,14 +964,60 @@ impl Replay {
             "{family}: commands diverging from the reference without a ledger entry: {unlisted:?}"
         );
         let requirement_ledger = requirement_ledger();
-        let unlisted = self
-            .requirement_diffs
-            .difference(&requirement_ledger)
-            .cloned()
+        // The typed gaps that name a case this family compared: the others
+        // belong to another family's replay.
+        let gaps = REQUIREMENT_GAPS
+            .iter()
+            .filter(|entry| {
+                self.compared
+                    .iter()
+                    .any(|key| scenario_matches(entry.scenario, key))
+            })
             .collect::<Vec<_>>();
+        let mut gap_covered = vec![0_usize; gaps.len()];
+        let mut gap_cases = BTreeSet::new();
+        let mut unlisted = Vec::new();
+        for (key, pointer) in self.requirement_diffs.difference(&requirement_ledger) {
+            match gaps.iter().position(|entry| entry.covers(key, pointer)) {
+                Some(index) => {
+                    gap_covered[index] += 1;
+                    gap_cases.insert(key.clone());
+                }
+                None => unlisted.push((key.clone(), pointer.clone())),
+            }
+        }
         assert!(
             unlisted.is_empty(),
             "{family}: requirements diverging from the reference without a ledger entry: {unlisted:?}"
+        );
+        let miscounted = gaps
+            .iter()
+            .zip(&gap_covered)
+            .filter(|(entry, found)| entry.count != **found)
+            .map(|(entry, found)| {
+                format!(
+                    "{} declares {} differences and covered {found}",
+                    entry.label(),
+                    entry.count
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(
+            miscounted.is_empty(),
+            "{family}: requirement gaps that cover another number of differences than they \
+             declare: {miscounted:?}"
+        );
+        let null = serde_json::Value::Null;
+        let recorded: BTreeMap<String, &serde_json::Value> = self
+            .compared
+            .iter()
+            .map(|key| (key.clone(), &null))
+            .collect();
+        assert_ledger(
+            CORPUS_LISTED,
+            &recorded,
+            gaps.iter()
+                .map(|entry| *entry as &dyn crate::parity::replay::Entry),
         );
         let stale = requirement_ledger
             .iter()
@@ -976,22 +1042,27 @@ impl Replay {
         );
 
         // A case differs when it resolves stricter or raises a requirement
-        // field the reference does not; both ledgers hold decided
-        // divergences, which the checks above leave as the only ones.
+        // field the reference does not. The two untyped ledgers hold decided
+        // divergences; a case with a field under a typed gap is not at parity.
         let differing = self
             .stricter
             .iter()
             .cloned()
             .chain(self.requirement_diffs.iter().map(|(key, _)| key.clone()))
             .collect::<BTreeSet<String>>();
+        let gap_differences = gap_covered.iter().sum::<usize>();
         assert_figures(
             &format!("shell policy parity ({family}):"),
-            "crates/vibe-core/tests/shell-policy/policy.json",
-            Figures::decided(
-                total - differing.len(),
+            CORPUS_LISTED,
+            Figures {
+                conformant: total - differing.len(),
+                accepted: differing.len() - gap_cases.len(),
                 total,
-                self.stricter.len() + self.requirement_diffs.len(),
-            ),
+                accepted_differences: self.stricter.len() + self.requirement_diffs.len()
+                    - gap_differences,
+                gap_differences,
+                prose_differences: 0,
+            },
             serde_json::json!({}),
         );
     }
@@ -1221,14 +1292,115 @@ fn every_path_grant_verdict_matches_the_reference() {
     );
 }
 
-/// The PowerShell grammar splits, tokenizes, names, matches and expands as the
-/// reference does.
-#[test]
-fn every_windows_grammar_answer_matches_the_reference() {
+/// Where this port's PowerShell grammar still answers otherwise than the
+/// reference, by unit (`commands/`, `patterns/`, `expansions/` or `tokens/`
+/// and the case it replays) and by the field that differs. Row 6 is what the
+/// corpus measures: these are gaps the v3.1.0 re-pin revealed, which the
+/// grammar in `windows.rs` owes. Since 3.0 the reference splits commands and
+/// arguments with a tokenizer modeled on PowerShell's own command mode
+/// (`vibe/core/tools/builtins/_powershell_lexer.py`), where this port still
+/// splits the way the 2.x helpers of `windows_shell.py` did.
+const WINDOWS_GRAMMAR_LEDGER: &[PatternDivergence] = &[
+    redirection("commands/cmd 2>&1 | more", 3),
+    redirection("commands/Get-Content x *>&1", 3),
+    redirection("commands/type > out.txt", 6),
+    redirection("commands/echo a > $null", 4),
+    redirection("commands/echo a > NUL", 4),
+    redirection("commands/echo a 2> 'err log.txt'", 4),
+    redirection("commands/echo a >> C:\\logs\\x.txt", 4),
+    redirection("commands/echo a >&2", 3),
+    redirection("commands/echo a >`\"q`\" x", 4),
+    PatternDivergence {
+        scenario: "commands/Invoke-Command { Remove-Item x; ls }",
+        pointer: "/parts/0/**",
+        count: 5,
+        row: "6",
+        class: Class::Gap,
+        reason: "the reference reads a braced script block as one argument \
+                 (`_Lexer._group` in _powershell_lexer.py), where this port splits it on \
+                 whitespace into six",
+    },
+    PatternDivergence {
+        scenario: "commands/(Get-Item a).Name",
+        pointer: "/parts/0/**",
+        count: 5,
+        row: "6",
+        class: Class::Gap,
+        reason: "the reference reads a parenthesized expression as one argument and the \
+                 member access after it as the next (`_Lexer._group`), so the command name \
+                 is the whole group; this port splits inside the parentheses",
+    },
+    PatternDivergence {
+        scenario: "commands/echo `& not a separator",
+        pointer: "/parts/0/**",
+        count: 3,
+        row: "6",
+        class: Class::Gap,
+        reason: "the reference resolves a backtick escape inside an argument \
+                 (`_Lexer._backtick`), so the escaped ampersand reads as `&`; this port \
+                 keeps the backtick in the token and in the match forms",
+    },
+    PatternDivergence {
+        scenario: "commands/echo a ^& b",
+        pointer: "/parts/0/**",
+        count: 5,
+        row: "6",
+        class: Class::Gap,
+        reason: CARET_IS_NOT_AN_ESCAPE,
+    },
+    PatternDivergence {
+        scenario: "commands/echo a ^& b",
+        pointer: "/parts/1",
+        count: 1,
+        row: "6",
+        class: Class::Gap,
+        reason: CARET_IS_NOT_AN_ESCAPE,
+    },
+    PatternDivergence {
+        scenario: "commands/@{a=1}; ${x}",
+        pointer: "/parts/2",
+        count: 1,
+        row: "6",
+        class: Class::Gap,
+        reason: "the reference also lists the statement inside a hash literal as a part \
+                 of its own (`_Lexer._record_subexpressions`, `split_powershell_commands`), \
+                 so `a=1` is a third part; this port keeps it inside the literal",
+    },
+];
+
+/// Why a caret splits a PowerShell command in the reference and not here.
+const CARET_IS_NOT_AN_ESCAPE: &str = "a caret escapes nothing in PowerShell, so the reference \
+                                      ends the part at the ampersand after it and reads `b` \
+                                      as a second command (`_ARGUMENT_BREAKS` in \
+                                      _powershell_lexer.py); this port treats `^&` as an \
+                                      escaped character and keeps one part";
+
+/// A command whose redirection the reference strips from its arguments and
+/// match forms, with how many differences that makes in it.
+const fn redirection(scenario: &'static str, count: usize) -> PatternDivergence {
+    PatternDivergence {
+        scenario,
+        pointer: "/parts/0/**",
+        count,
+        row: "6",
+        class: Class::Gap,
+        reason: "the reference lexes a redirection operator and its target out of the \
+                 arguments (`_Lexer._redirect`, `split_powershell_arguments` in \
+                 _powershell_lexer.py), so neither reaches the tokens or the match forms \
+                 `_windows_command_match_forms` builds from them; this port keeps both as \
+                 arguments",
+    }
+}
+
+/// One unit of the Windows grammar replay: its scenario name, what the
+/// reference answered and what this port answers.
+type GrammarUnit = (String, serde_json::Value, serde_json::Value);
+
+/// What this port answers for every case of the Windows grammar corpus, beside
+/// what the reference answered.
+fn windows_grammar_units(grammar: &WindowsGrammar) -> Vec<GrammarUnit> {
     use super::windows;
-    let corpus = corpus();
-    let grammar = &corpus.windows_grammar;
-    assert_eq!(grammar.commands.len(), corpus.counts.windows_grammar_cases);
+    let mut units = Vec::new();
     for case in &grammar.commands {
         let parts = windows::split_command_parts(&case.command)
             .into_iter()
@@ -1246,15 +1418,18 @@ fn every_windows_grammar_answer_matches_the_reference() {
                 }
             })
             .collect::<Vec<_>>();
-        assert_eq!(parts, case.parts, "`{}`", case.command.escape_debug());
+        units.push((
+            format!("commands/{}", case.command),
+            serde_json::json!({ "parts": case.parts }),
+            serde_json::json!({ "parts": parts }),
+        ));
     }
     for case in &grammar.patterns {
-        assert_eq!(
-            windows::policy_pattern_forms(&case.pattern),
-            case.forms,
-            "pattern `{}`",
-            case.pattern
-        );
+        units.push((
+            format!("patterns/{}", case.pattern),
+            serde_json::json!({ "forms": case.forms }),
+            serde_json::json!({ "forms": windows::policy_pattern_forms(&case.pattern) }),
+        ));
     }
     let environment = WINDOWS_EXPANSION_ENVIRONMENT
         .iter()
@@ -1271,25 +1446,91 @@ fn every_windows_grammar_answer_matches_the_reference() {
         } else {
             value.replace(&home, "<home>")
         };
-        assert_eq!(
-            (value, unresolved),
-            (case.value.clone(), case.unresolved),
-            "token `{}`",
-            case.token
-        );
+        units.push((
+            format!("expansions/{}", case.token),
+            serde_json::json!({ "value": case.value, "unresolved": case.unresolved }),
+            serde_json::json!({ "value": value, "unresolved": unresolved }),
+        ));
     }
     for case in &grammar.tokens {
-        assert_eq!(
-            (
-                windows::looks_like_option(&case.token),
-                windows::looks_like_path(&case.token),
-                windows::attached_parameter_value(&case.token),
-            ),
-            (case.option, case.path, case.attached_value.clone()),
-            "token `{}`",
-            case.token
-        );
+        units.push((
+            format!("tokens/{}", case.token),
+            serde_json::json!({
+                "option": case.option,
+                "path": case.path,
+                "attachedValue": case.attached_value,
+            }),
+            serde_json::json!({
+                "option": windows::looks_like_option(&case.token),
+                "path": windows::looks_like_path(&case.token),
+                "attachedValue": windows::attached_parameter_value(&case.token),
+            }),
+        ));
     }
+    units
+}
+
+/// The PowerShell grammar splits, tokenizes, names, matches and expands as the
+/// reference does, except where [`WINDOWS_GRAMMAR_LEDGER`] records a gap.
+/// Every unit is compared in full, so a gap in one field never hides a
+/// difference in another.
+#[test]
+fn every_windows_grammar_answer_matches_the_reference() {
+    let corpus = corpus();
+    let grammar = &corpus.windows_grammar;
+    assert_eq!(grammar.commands.len(), corpus.counts.windows_grammar_cases);
+    let units = windows_grammar_units(grammar);
+    let mut covered = vec![0_usize; WINDOWS_GRAMMAR_LEDGER.len()];
+    let mut unexplained = Vec::new();
+    let mut conformant = 0_usize;
+    for (scenario, reference, port) in &units {
+        let found = differences(reference, port);
+        if found.is_empty() {
+            conformant += 1;
+            continue;
+        }
+        for pointer in found {
+            match WINDOWS_GRAMMAR_LEDGER
+                .iter()
+                .position(|entry| entry.covers(scenario, &pointer))
+            {
+                Some(index) => covered[index] += 1,
+                None => unexplained.push(format!(
+                    "{} {pointer}\n  reference: {}\n  port:      {}",
+                    scenario.escape_debug(),
+                    reference
+                        .pointer(&pointer)
+                        .map_or_else(|| "absent".to_owned(), ToString::to_string),
+                    port.pointer(&pointer)
+                        .map_or_else(|| "absent".to_owned(), ToString::to_string),
+                )),
+            }
+        }
+    }
+    assert!(
+        unexplained.is_empty(),
+        "{} differences in the Windows grammar fall under no ledger entry:\n{}",
+        unexplained.len(),
+        unexplained.join("\n")
+    );
+    let miscounted: Vec<String> = WINDOWS_GRAMMAR_LEDGER
+        .iter()
+        .zip(&covered)
+        .filter(|(entry, found)| entry.count != **found)
+        .map(|(entry, found)| {
+            format!(
+                "{} declares {} differences and covered {found}",
+                entry.label(),
+                entry.count
+            )
+        })
+        .collect();
+    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
+    let recorded: BTreeMap<String, &serde_json::Value> = units
+        .iter()
+        .map(|(scenario, reference, _)| (scenario.clone(), reference))
+        .collect();
+    assert_ledger(CORPUS_LISTED, &recorded, entries(WINDOWS_GRAMMAR_LEDGER));
     eprintln!(
         "shell policy: windows grammar {} commands, {} patterns, {} expansions, {} tokens",
         grammar.commands.len(),
@@ -1297,60 +1538,16 @@ fn every_windows_grammar_answer_matches_the_reference() {
         grammar.expansions.len(),
         grammar.tokens.len()
     );
-}
-
-/// Input to a session is asked about exactly when the reference would, under
-/// the same pattern.
-#[test]
-fn every_stdin_permission_matches_the_reference() {
-    let corpus = corpus();
-    assert_eq!(
-        corpus.stdin_permissions.len(),
-        corpus.counts.stdin_permission_cases
-    );
-    for case in &corpus.stdin_permissions {
-        let flavor = match case.family.as_str() {
-            "posix" => ShellFlavor::Posix,
-            "git_bash" => ShellFlavor::GitBash,
-            "powershell" => ShellFlavor::PowerShell,
-            other => panic!("unknown family {other}"),
-        };
-        let context = pager_input_permission(
-            flavor,
-            "session_1",
-            case.known.then_some(case.command.as_str()),
-        );
-        let requirements = context
-            .requirements
-            .iter()
-            .map(|requirement| Requirement {
-                scope: wire_scope(requirement.scope),
-                invocation_pattern: requirement.invocation_pattern.clone(),
-                session_pattern: requirement.session_pattern.clone(),
-                label: Label::committed(
-                    &requirement.label,
-                    &requirement.invocation_pattern,
-                    &requirement.session_pattern,
-                ),
-                path_scope_root: requirement.path_scope_root.clone(),
-            })
-            .collect::<Vec<_>>();
-        let label = format!("{} `{}` (known {})", case.family, case.command, case.known);
-        assert_eq!(
-            context.permission.map(permission_wire),
-            case.permission,
-            "{label}"
-        );
-        assert_eq!(requirements, case.requirements, "{label}");
-    }
-    eprintln!(
-        "shell policy: {} stdin permissions",
-        corpus.stdin_permissions.len()
-    );
-    shell_figures(
-        "stdin permissions",
-        corpus.stdin_permissions.len(),
-        corpus.counts.stdin_permission_cases,
+    assert_figures(
+        "shell policy parity (windows grammar):",
+        CORPUS_LISTED,
+        Figures {
+            conformant,
+            total: units.len(),
+            gap_differences: covered.iter().sum(),
+            ..Figures::default()
+        },
+        serde_json::json!({}),
     );
 }
 

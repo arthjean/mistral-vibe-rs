@@ -1,12 +1,26 @@
 #!/usr/bin/env python3
-"""Capture what the pinned Python reference's experiments engine and VS Code promo answer.
+"""Capture what the pinned Python reference's experiments engine answers.
 
-This rank splits across three reference subtrees that are never read in
-isolation: the engine under ``vibe/core/experiments/``, the only place a variant
-becomes a configuration value in ``vibe/core/config/layers/growthbook.py``, and
-the promo under ``vibe/cli/vscode_extension_promo/``. This capture drives every
-one of them directly, over inputs this script authors, and writes three corpora
-because the three replays live in three crates.
+This rank splits across two reference subtrees that are never read in
+isolation: the engine under ``vibe/core/experiments/`` and the only place a
+variant becomes a configuration value in
+``vibe/core/config/layers/growthbook.py``. This capture drives both directly,
+over inputs this script authors, and writes two corpora because the two replays
+live in two crates. The VS Code promo it once also drove left the Python tree at
+v3.0.0 for the Rust terminal client (``vibe/cli-rust/src/startup/banners.rs``),
+which the terminal-client oracle measures.
+
+Three other inputs left the reference at v3.0.0 and took their cases with
+them. The smart-approve default and Unified Harness rollout experiments were
+removed from ``vibe/core/experiments/active.py`` (and their mapper from
+``vibe/core/config/layers/growthbook.py``), so no typed or mapping case names
+them. The helper that restored a resumed session's assignment from its metadata
+was deleted from ``vibe/core/experiments/session.py``, so ``sessionGates`` no
+longer records hydration cases and ``startup`` no longer has a resumed half
+(``capture_startup`` says where the session path moved). The experiments the
+reference added at v3 (default agent, PR monitoring, the Mistral MCP connector
+and the local runtime session API) reach this corpus only through the families
+that enumerate every experiment name; no case authors a variant for them yet.
 
 The engine corpus records seventeen families the Rust replay in
 ``crates/vibe-core/src/experiments_parity_tests.rs`` compares this build
@@ -35,19 +49,10 @@ The startup corpus records one family, replayed from
 
     startup             a session's configuration before and after its lookup
 
-The promo corpus records four more, replayed from
-``crates/vibe-cli/src/tui/promo_parity_tests.rs``::
-
-    promoConstants      the ceiling, the start instant, the section and the URI
-    promoPredicate      the decision per stored state and instant
-    promoState          what the repository reads back out of ``cache.toml``
-    promoProse          a length and a SHA-256 for each reference sentence
-
 Three artifacts come out of a run::
 
     .parity/experiments-corpus.json                 the full capture, gitignored
     crates/vibe-core/tests/experiments/corpus.json  the committed engine corpus
-    crates/vibe-cli/tests/promo/corpus.json         the committed promo corpus
     crates/vibe-app-server/tests/experiments/corpus.json
                                                     the committed startup corpus
 
@@ -57,10 +62,7 @@ recorded as the variable it came from and never as a value, and a socket guard
 fails the run on any connection or DNS attempt, so a scenario that accidentally
 reached ``experiments.mistral.services`` could not write a corpus. The eval
 request is intercepted one call before the connection, which is where
-``scripts/parity/voice.py`` already intercepts the reference. Reference-authored
-sentences, which here are the two promo sentences, are recorded as a byte length
-and a SHA-256: a digest still fails the replay on any change while no reference
-sentence ships.
+``scripts/parity/voice.py`` already intercepts the reference.
 
 Usage::
 
@@ -90,7 +92,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
-from inprocess import SocketGuard, digest, patched_environ
+from inprocess import SocketGuard, patched_environ
 from experiments_cases import (
     BASE_USER_DOCUMENT,
     CACHED_RESPONSE,
@@ -110,20 +112,22 @@ from experiments_cases import (
     ROUTED_MODEL_CONFIG,
     SECOND_EXTRA_MODEL,
     SMART_APPROVE,
-    SMART_APPROVE_DEFAULT,
     STARTUP_FIELDS,
     STARTUP_LIVE,
     STARTUP_SEEDS,
     SYSTEM_PROMPT,
-    UNIFIED_HARNESS,
     feature,
     track,
 )
 
-SCHEMA_VERSION = 1
+#: The engine corpus layout, which ``experiments_parity_tests.rs`` matches.
+ENGINE_SCHEMA_VERSION = 1
+#: The startup corpus layout, which ``startup_parity_tests.rs`` matches. Version
+#: 2 drops the ``session`` input and the ``hydrated`` answer with the resumed
+#: half of each scenario, which left the reference at v3.0.0.
+STARTUP_SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/experiments-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/experiments/corpus.json")
-DEFAULT_PROMO_CORPUS = Path("crates/vibe-cli/tests/promo/corpus.json")
 DEFAULT_STARTUP_CORPUS = Path("crates/vibe-app-server/tests/experiments/corpus.json")
 #: Stands in for the platform identifier, which differs per workstation. The
 #: replay substitutes what its own host answers before comparing.
@@ -235,22 +239,6 @@ def scrub(value: Any) -> Any:
     return value
 
 
-def variable_for(value: str | None) -> str | None:
-    """The environment variable a captured credential came from.
-
-    A credential is recorded by the variable that supplied it, so no value ever
-    reaches a corpus even when a scenario resolves one. A value no sentinel
-    matches is recorded as ``unrecognized`` rather than as itself.
-    """
-
-    if value is None:
-        return None
-    for name, sentinel in SENTINELS.items():
-        if sentinel == value:
-            return name
-    return "unrecognized"
-
-
 def sentinel_variable(value: str | None) -> str | None:
     """The variable a value is the sentinel of, or [`None`] when it is not one.
 
@@ -283,7 +271,8 @@ def build_config(document: str) -> Any:
 
 
 class _Response:
-    """The shape ``RemoteEvalClient.evaluate`` reads off an httpx response."""
+    """The shape ``RemoteEvalClient.evaluate`` reads off an ``httpx2``
+    response, the HTTP client package v3 adopted in place of ``httpx``."""
 
     def __init__(self, status: int, body: Any, *, raw: str | None = None) -> None:
         self.status_code = status
@@ -542,7 +531,7 @@ def capture_eval_url() -> list[dict[str, Any]]:
 
 
 def capture_eval_request() -> list[dict[str, Any]]:
-    import httpx
+    import httpx2
 
     from vibe.core.experiments._constants import build_eval_url
 
@@ -593,7 +582,7 @@ def capture_eval_request() -> list[dict[str, Any]]:
         )
 
     # The timeout is a property of the client the reference builds lazily, so it
-    # is read off a real one. Constructing an httpx client opens no socket, and
+    # is read off a real one. Constructing an httpx2 client opens no socket, and
     # the guard would fail the run if it did.
     lazy = eval_client(None, url=url)
     timeout = lazy._client.timeout  # noqa: SLF001 - the lazy build is the subject
@@ -620,7 +609,7 @@ def capture_eval_request() -> list[dict[str, Any]]:
         }
     )
     asyncio.run(lazy.aclose())
-    assert isinstance(timeout, httpx.Timeout)
+    assert isinstance(timeout, httpx2.Timeout)
 
     # A client that was never used closes without touching a transport, and
     # closing twice is a no-op.
@@ -657,7 +646,7 @@ def capture_eval_request() -> list[dict[str, Any]]:
 
 
 def capture_eval_failures() -> list[dict[str, Any]]:
-    import httpx
+    import httpx2
 
     from vibe.core.experiments._constants import build_eval_url
     from vibe.core.experiments.active import DEFAULT_VARIANTS, ExperimentName
@@ -670,9 +659,9 @@ def capture_eval_failures() -> list[dict[str, Any]]:
         (
             "connection-error",
             url,
-            {"error": httpx.ConnectError("the oracle refuses to connect")},
+            {"error": httpx2.ConnectError("the oracle refuses to connect")},
         ),
-        ("timeout", url, {"error": httpx.ReadTimeout("the oracle timed out")}),
+        ("timeout", url, {"error": httpx2.ReadTimeout("the oracle timed out")}),
         ("status-400", url, {"status": 400, "body": {"features": {}}}),
         ("status-404", url, {"status": 404, "body": {"features": {}}}),
         ("status-500", url, {"status": 500, "body": {"features": {}}}),
@@ -1202,11 +1191,10 @@ def _json_value(value: Any) -> Any:
 
 
 class _RecordingSessionLogger:
-    """Stands where the reference's session logger stands: it records what would
-    have been persisted and answers the metadata a hydration reads."""
+    """Stands where the reference's session sink stands: it records what would
+    have been persisted."""
 
-    def __init__(self, metadata: Any = None) -> None:
-        self.session_metadata = metadata
+    def __init__(self) -> None:
         self.persisted: list[Any] = []
 
     async def persist_experiments(self, response: Any) -> None:
@@ -1214,14 +1202,16 @@ class _RecordingSessionLogger:
 
 
 async def no_whoami(
-    *, base_url: str, api_key: str, timeout: float | None = None
+    *, base_url: str, credentials: Any, timeout: float | None = None
 ) -> Any:
     """Stands where the reference's ``/api/vibe/whoami`` lookup stands.
 
     ``initialize_experiments`` fetches the plan concurrently with the identity
     and falls back to ``fetch_whoami`` when no resolver is passed
-    (``vibe/core/experiments/session.py:74-86``), which would open a socket. The
-    lookup answers nothing, which is the reference's own fail-open state.
+    (``vibe/core/experiments/session.py:94-106``), which would open a socket.
+    Both resolvers receive the credential provider rather than a key since
+    v3.0.0. The lookup answers nothing, which is the reference's own fail-open
+    state.
     """
 
     return None
@@ -1230,10 +1220,7 @@ async def no_whoami(
 def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
     from vibe.core.experiments.active import ExperimentSurface
     from vibe.core.experiments.models import EvalResponse
-    from vibe.core.experiments.session import (
-        hydrate_experiments_from_session,
-        initialize_experiments,
-    )
+    from vibe.core.experiments.session import initialize_experiments
 
     forced = {
         "features": {SYSTEM_PROMPT: feature("cli", [{"force": "tests", "tracks": [track()]}])}
@@ -1245,15 +1232,9 @@ def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
             identity_calls: list[dict[str, Any]] = []
 
             async def resolve_identity(
-                *, base_url: str, api_key: str, timeout: float | None = None
+                *, base_url: str, credentials: Any, timeout: float | None = None
             ) -> Any:
-                identity_calls.append(
-                    {
-                        "baseUrl": base_url,
-                        "credentialVariable": variable_for(api_key),
-                        "timeout": timeout,
-                    }
-                )
+                identity_calls.append({"baseUrl": base_url, "timeout": timeout})
                 if not identity_present:
                     return None
                 from vibe.core.identity import IdentityResult
@@ -1324,7 +1305,7 @@ def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
         identity_calls = []
 
         async def no_identity(
-            *, base_url: str, api_key: str, timeout: float | None = None
+            *, base_url: str, credentials: Any, timeout: float | None = None
         ) -> Any:
             identity_calls.append({"timeout": timeout})
             return None
@@ -1357,51 +1338,7 @@ def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
                 "organizationId": None,
             }
         )
-
-    # Hydration reads the same two gates and never issues a request.
-    metadata_states: list[tuple[str, Any]] = [
-        ("metadata-absent", None),
-        ("metadata-without-experiments", _Metadata(None)),
-        ("metadata-with-experiments", _Metadata(EvalResponse.model_validate(forced))),
-    ]
-    for configuration in GATE_CONFIGURATIONS[:4]:
-        for identifier, metadata in metadata_states:
-            transport = RecordingEvalTransport(body=forced)
-            manager = manager_with(None)
-            manager._client = eval_client(  # noqa: SLF001
-                transport, url=f"{ORACLE_API_HOST}/api/eval/{ORACLE_CLIENT_KEY}"
-            )
-            logger_stub = _RecordingSessionLogger(metadata)
-            with patched_environ({"VIBE_HOME": str(scratch / "gates")}):
-                with captured_logs():
-                    hydrated = asyncio.run(
-                        hydrate_experiments_from_session(
-                            config=build_config(configuration["toml"]),
-                            manager=manager,
-                            session_logger=logger_stub,
-                        )
-                    )
-            cases.append(
-                {
-                    "id": f"hydrate/{configuration['id']}/{identifier}",
-                    "helper": "hydrate",
-                    "configuration": configuration["id"],
-                    "returned": hydrated,
-                    "evalRequests": len(transport.requests),
-                    "identityRequests": 0,
-                    "identityTimeout": None,
-                    "persisted": len(logger_stub.persisted),
-                    "organizationId": None,
-                }
-            )
     return cases
-
-
-class _Metadata:
-    """The one metadata field the hydration helper reads."""
-
-    def __init__(self, experiments: Any) -> None:
-        self.experiments = experiments
 
 
 # --------------------------------------------------------------------------
@@ -1484,7 +1421,6 @@ def capture_attributes(scratch: Path) -> list[dict[str, Any]]:
                 )
                 attributes = _build_attributes(
                     config,
-                    SENTINELS["ORACLE_MISTRAL_KEY"],
                     context,
                     harness=ExperimentSurface(ORACLE_HARNESS),
                     identity=identity,
@@ -1501,173 +1437,6 @@ def capture_attributes(scratch: Path) -> list[dict[str, Any]]:
                     }
                 )
     return cases
-
-
-# --------------------------------------------------------------------------
-# The promo
-# --------------------------------------------------------------------------
-
-
-def capture_promo_constants() -> list[dict[str, Any]]:
-    from vibe.cli.textual_ui.widgets.messages import (
-        VSCODE_EXTENSION_LINK_LABEL,
-        VSCODE_EXTENSION_URI,
-    )
-    from vibe.cli.vscode_extension_promo import MAX_SHOWN_COUNT, PROMO_START
-    from vibe.cli.vscode_extension_promo.adapters.filesystem_repository import (
-        _CACHE_SECTION,
-        FileSystemVscodeExtensionPromoRepository,
-    )
-
-    # The reference names the file inline rather than exporting a constant, so
-    # it is read off a repository built on a base path. Constructing one joins a
-    # path and touches no disk.
-    cache_file = FileSystemVscodeExtensionPromoRepository(
-        Path("oracle-home")
-    )._cache_file  # noqa: SLF001 - the file name is the subject
-
-    return [
-        {"id": "maxShownCount", "value": MAX_SHOWN_COUNT},
-        {"id": "promoStart", "value": PROMO_START.isoformat()},
-        {"id": "promoStartEpochSeconds", "value": int(PROMO_START.timestamp())},
-        {"id": "cacheSection", "value": _CACHE_SECTION},
-        {"id": "cacheFile", "value": cache_file.name},
-        {"id": "extensionUri", "value": VSCODE_EXTENSION_URI},
-        {"id": "linkLabel", "value": VSCODE_EXTENSION_LINK_LABEL},
-    ]
-
-
-def capture_promo_predicate() -> list[dict[str, Any]]:
-    from datetime import UTC, datetime, timedelta
-
-    from vibe.cli.vscode_extension_promo import PROMO_START, should_show_promo
-    from vibe.cli.vscode_extension_promo._port import VscodeExtensionPromoState
-
-    instants: list[tuple[str, Any]] = [
-        ("a-day-before-the-start", PROMO_START - timedelta(days=1)),
-        ("a-second-before-the-start", PROMO_START - timedelta(seconds=1)),
-        ("exactly-at-the-start", PROMO_START),
-        ("a-second-after-the-start", PROMO_START + timedelta(seconds=1)),
-        ("long-after-the-start", datetime(2027, 1, 1, tzinfo=UTC)),
-    ]
-    states: list[tuple[str, Any]] = [
-        ("absent", None),
-        ("zero", VscodeExtensionPromoState(shown_count=0)),
-        ("one-below-the-ceiling", VscodeExtensionPromoState(shown_count=9)),
-        ("at-the-ceiling", VscodeExtensionPromoState(shown_count=10)),
-        ("above-the-ceiling", VscodeExtensionPromoState(shown_count=11)),
-    ]
-    return [
-        {
-            "id": f"{state_id}/{instant_id}",
-            "shownCount": None if state is None else state.shown_count,
-            "instant": instant.isoformat(),
-            "show": should_show_promo(state, instant),
-        }
-        for state_id, state in states
-        for instant_id, instant in instants
-    ]
-
-
-def capture_promo_state(scratch: Path) -> list[dict[str, Any]]:
-    from vibe.cli.vscode_extension_promo._port import VscodeExtensionPromoState
-    from vibe.cli.vscode_extension_promo.adapters.filesystem_repository import (
-        FileSystemVscodeExtensionPromoRepository,
-    )
-
-    documents: list[tuple[str, str | None]] = [
-        ("no-cache-file", None),
-        ("empty-cache-file", ""),
-        ("section-absent", '[update_cache]\nlatest_version = "1.0.0"\n'),
-        ("empty-section", "[vscode_extension_promo]\n"),
-        ("valid-count", "[vscode_extension_promo]\nshown_count = 4\n"),
-        ("zero-count", "[vscode_extension_promo]\nshown_count = 0\n"),
-        ("count-is-a-string", '[vscode_extension_promo]\nshown_count = "4"\n'),
-        ("count-is-a-float", "[vscode_extension_promo]\nshown_count = 4.0\n"),
-        ("count-is-a-boolean", "[vscode_extension_promo]\nshown_count = true\n"),
-        ("count-is-negative", "[vscode_extension_promo]\nshown_count = -1\n"),
-        ("malformed-toml", "[vscode_extension_promo\nshown_count = 4\n"),
-        (
-            "other-keys-in-the-section",
-            "[vscode_extension_promo]\nunrelated = 1\nshown_count = 6\n",
-        ),
-    ]
-
-    cases: list[dict[str, Any]] = []
-    for index, (identifier, document) in enumerate(documents):
-        home = scratch / f"promo-{index}"
-        home.mkdir(parents=True, exist_ok=True)
-        if document is not None:
-            (home / "cache.toml").write_text(document, encoding="utf-8", newline="")
-        repository = FileSystemVscodeExtensionPromoRepository(home)
-        state = asyncio.run(repository.get())
-        cases.append(
-            {
-                "id": identifier,
-                "document": document,
-                "shownCount": None if state is None else state.shown_count,
-                "documentAfterWrite": None,
-            }
-        )
-
-    # Writing the promo section preserves the update cache beside it.
-    home = scratch / "promo-write"
-    home.mkdir(parents=True, exist_ok=True)
-    (home / "cache.toml").write_text(
-        '[update_cache]\nlatest_version = "1.2.3"\nstored_at_timestamp = 42\n',
-        encoding="utf-8",
-        newline="",
-    )
-    repository = FileSystemVscodeExtensionPromoRepository(home)
-    asyncio.run(repository.set(VscodeExtensionPromoState(shown_count=3)))
-    written = asyncio.run(repository.get())
-    cases.append(
-        {
-            "id": "write-preserves-siblings",
-            "document": '[update_cache]\nlatest_version = "1.2.3"\nstored_at_timestamp = 42\n',
-            "shownCount": None if written is None else written.shown_count,
-            "documentAfterWrite": _read_toml(home / "cache.toml"),
-        }
-    )
-
-    # Writing into a home with no cache file at all creates one.
-    home = scratch / "promo-create"
-    home.mkdir(parents=True, exist_ok=True)
-    repository = FileSystemVscodeExtensionPromoRepository(home)
-    asyncio.run(repository.set(VscodeExtensionPromoState(shown_count=1)))
-    asyncio.run(repository.set(VscodeExtensionPromoState(shown_count=2)))
-    written = asyncio.run(repository.get())
-    cases.append(
-        {
-            "id": "write-creates-the-file",
-            "document": None,
-            "shownCount": None if written is None else written.shown_count,
-            "documentAfterWrite": _read_toml(home / "cache.toml"),
-        }
-    )
-    return cases
-
-
-def _read_toml(path: Path) -> Any:
-    import tomllib
-
-    try:
-        with path.open("rb") as handle:
-            return tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-
-
-def capture_promo_prose() -> list[dict[str, Any]]:
-    from vibe.cli.textual_ui.widgets.messages import (
-        VSCODE_EXTENSION_PROMO_STANDALONE,
-        VSCODE_EXTENSION_PROMO_WHATS_NEW_SUFFIX,
-    )
-
-    return [
-        {"id": "standalone", **digest(VSCODE_EXTENSION_PROMO_STANDALONE)},
-        {"id": "whatsNewSuffix", **digest(VSCODE_EXTENSION_PROMO_WHATS_NEW_SUFFIX)},
-    ]
 
 
 # --------------------------------------------------------------------------
@@ -1723,10 +1492,8 @@ def capture_typed_variants() -> list[dict[str, Any]]:
                     MANAGED_SHELL: feature("legacy"),
                     MODEL_ROUTING: feature({}),
                     SMART_APPROVE: feature(False),
-                    SMART_APPROVE_DEFAULT: feature(False),
                     EXTRA_MODELS: feature({}),
                     REGISTRY_SKILLS: feature(False),
-                    UNIFIED_HARNESS: feature("legacy"),
                 }
             },
         ),
@@ -1740,7 +1507,6 @@ def capture_typed_variants() -> list[dict[str, Any]]:
                     SMART_APPROVE: feature(
                         False, [{"force": True, "tracks": [track(key=SMART_APPROVE)]}]
                     ),
-                    SMART_APPROVE_DEFAULT: feature(False, [{"force": True}]),
                     EXTRA_MODELS: feature(
                         {},
                         [
@@ -1751,10 +1517,6 @@ def capture_typed_variants() -> list[dict[str, Any]]:
                         ],
                     ),
                     REGISTRY_SKILLS: feature(False, [{"force": "on"}]),
-                    UNIFIED_HARNESS: feature(
-                        "legacy",
-                        [{"force": "unified", "tracks": [track(key=UNIFIED_HARNESS)]}],
-                    ),
                 }
             },
         ),
@@ -1763,7 +1525,6 @@ def capture_typed_variants() -> list[dict[str, Any]]:
             {
                 "features": {
                     SMART_APPROVE: feature(None, [{"force": 0}]),
-                    SMART_APPROVE_DEFAULT: feature(None, [{"force": 0.0}]),
                     REGISTRY_SKILLS: feature(None, [{"force": 1}]),
                     MANAGED_SHELL: feature(None, [{"force": 1}]),
                 }
@@ -1784,7 +1545,6 @@ def capture_typed_variants() -> list[dict[str, Any]]:
             {
                 "features": {
                     SMART_APPROVE: feature("false"),
-                    SMART_APPROVE_DEFAULT: feature("true"),
                     REGISTRY_SKILLS: feature(None, [{"force": "False"}]),
                 }
             },
@@ -1794,7 +1554,6 @@ def capture_typed_variants() -> list[dict[str, Any]]:
             {
                 "features": {
                     SYSTEM_PROMPT: feature("lean"),
-                    UNIFIED_HARNESS: feature("unified"),
                     EXTRA_MODELS: feature({"models": [EXTRA_MODEL]}),
                 }
             },
@@ -1805,15 +1564,6 @@ def capture_typed_variants() -> list[dict[str, Any]]:
                 "features": {
                     SMART_APPROVE: feature(
                         False, [{"force": True, "tracks": [track(key=SMART_APPROVE)]}]
-                    ),
-                    SMART_APPROVE_DEFAULT: feature(
-                        None,
-                        [
-                            {
-                                "force": 0.5,
-                                "tracks": [track(key=SMART_APPROVE_DEFAULT)],
-                            }
-                        ],
                     ),
                     MODEL_ROUTING: feature(
                         {},
@@ -1873,10 +1623,9 @@ def capture_typed_mapping() -> list[dict[str, Any]]:
     unaliased = {"name": "oracle-unaliased-model", "provider": "mistral"}
     variants: list[tuple[str, dict[str, Any]]] = [
         ("smart-approve-true", {SMART_APPROVE: True}),
-        ("smart-approve-on-tokens", {SMART_APPROVE: " On ", SMART_APPROVE_DEFAULT: "TRUE"}),
-        ("smart-approve-off-tokens", {SMART_APPROVE: "off", SMART_APPROVE_DEFAULT: False}),
-        ("smart-approve-one-is-not-true", {SMART_APPROVE: 1, SMART_APPROVE_DEFAULT: "1"}),
-        ("smart-approve-default-alone", {SMART_APPROVE_DEFAULT: True}),
+        ("smart-approve-on-tokens", {SMART_APPROVE: " On "}),
+        ("smart-approve-off-tokens", {SMART_APPROVE: "off"}),
+        ("smart-approve-one-is-not-true", {SMART_APPROVE: 1}),
         ("registry-skills-true-string", {REGISTRY_SKILLS: "true"}),
         ("registry-skills-yes", {REGISTRY_SKILLS: "yes"}),
         ("registry-skills-typed", {REGISTRY_SKILLS: True}),
@@ -1939,7 +1688,6 @@ def capture_typed_mapping() -> list[dict[str, Any]]:
                 EXTRA_MODELS: [{**ROUTED_MODEL_CONFIG, "name": "oracle-extra-routed-model"}],
             },
         ),
-        ("unified-harness-maps-to-nothing", {UNIFIED_HARNESS: "unified"}),
         (
             "every-typed-experiment",
             {
@@ -1948,16 +1696,13 @@ def capture_typed_mapping() -> list[dict[str, Any]]:
                 EXTRA_MODELS: {"models": [EXTRA_MODEL]},
                 MANAGED_SHELL: True,
                 SMART_APPROVE: "on",
-                SMART_APPROVE_DEFAULT: True,
                 REGISTRY_SKILLS: "TRUE",
-                UNIFIED_HARNESS: "unified",
             },
         ),
         (
             "authored-in-reverse-order",
             {
                 REGISTRY_SKILLS: True,
-                SMART_APPROVE_DEFAULT: True,
                 SMART_APPROVE: True,
                 MANAGED_SHELL: True,
                 EXTRA_MODELS: [EXTRA_MODEL],
@@ -1996,12 +1741,21 @@ def _cache_entry(stored_at: Any, payload: Any = None) -> dict[str, Any]:
 
 
 def _patched_cache_clock():
+    """The cache's clock, frozen at the scenario's instant.
+
+    Since v3.0.0 the experiments cache delegates its reads and writes to the
+    shared keyed cache (``vibe/core/utils/keyed_json_cache.py``), which is the
+    module that reads the clock.
+    """
+
     from types import SimpleNamespace
     from unittest import mock
 
-    from vibe.core.experiments import cache as cache_module
+    from vibe.core.utils import keyed_json_cache
 
-    return mock.patch.object(cache_module, "time", SimpleNamespace(time=lambda: CACHE_CLOCK))
+    return mock.patch.object(
+        keyed_json_cache, "time", SimpleNamespace(time=lambda: CACHE_CLOCK)
+    )
 
 
 def capture_eval_cache(scratch: Path) -> list[dict[str, Any]]:
@@ -2204,7 +1958,7 @@ def capture_cache_initialize(scratch: Path, key: str) -> list[dict[str, Any]]:
         cache_file = home / "experiment_eval_cache.json"
 
         async def resolve_identity(
-            *, base_url: str, api_key: str, timeout: float | None = None
+            *, base_url: str, credentials: Any, timeout: float | None = None
         ) -> Any:
             if not identity_present:
                 return None
@@ -2268,104 +2022,181 @@ def _startup_fields(config: Any) -> dict[str, Any]:
     return {field: _json_value(getattr(config, field)) for field in STARTUP_FIELDS}
 
 
+class _StandInSession:
+    """Stands where the native Unified Harness session stands under the
+    adapter: it admits no turn and counts each configuration pushed to it."""
+
+    session_id = "oracle-session"
+    started_by_session_id: str | None = None
+    cwd: str | None = None
+    active_turn_id: str | None = None
+
+    def __init__(self) -> None:
+        self.pushed = 0
+
+    def configure_turn_settlement(self, settle: Any) -> None:
+        self.settle = settle
+
+    async def apply_config(self, configuration: Any, **_: Any) -> None:
+        del configuration
+        self.pushed += 1
+
+    async def shutdown(self) -> None:
+        return None
+
+
+class _StandInCache:
+    """Stands where the identity and ``/whoami`` caches stand: only their
+    ``resolve`` is read on the lookup path."""
+
+    def __init__(self, resolve: Any) -> None:
+        self.resolve = resolve
+
+
 def capture_startup(scratch: Path) -> list[dict[str, Any]]:
     """A session built the way the reference's app server builds one, from the
     cached rollout through the live lookup.
 
-    ``HarnessProcess.build_root_blueprint`` applies the cache to the session
-    configuration (``_apply_cached_experiment_variants``), the blueprint hands
-    the cached response to the loop and decides whether the loop waits on its
-    lookup for a model, and ``start_initialize_experiments`` runs the lookup as
-    a task. The eval request, the identity and the account read are answered
-    one call before the connection.
+    Since v3.0.0 every session runs on the Unified Harness.
+    ``HarnessProcess.build_unified_session_context``
+    (``vibe/app_server/_runtime.py``) applies the cache to the session
+    configuration (``_apply_cached_experiment_variants`` in
+    ``vibe/app_server/_cached_layers.py``), and the backend adapter's
+    ``initialize_experiments``
+    (``vibe/app_server/_unified_harness_backend_adapter.py``) runs the lookup
+    and applies its variants. Whether a session holds its first turn for the
+    lookup is ``experiments_wait_needed`` (``vibe/core/experiments/wait.py``),
+    read when the session opens and again after the lookup. The build reads the
+    organization configuration the process holds, as the reference's own tests
+    build it, rather than ensuring one, which would leave the process.
+
+    The resumed half of each scenario left with v3.0.0: the session helper
+    that restored a resumed session's assignment from its metadata was deleted
+    from ``vibe/core/experiments/session.py``, the adapter persists nothing
+    (it hands the lookup a null sink), and the manager opens empty for every
+    session. So no case is resumed and none records a hydrated state.
+
+    The eval request, the identity and the account read are answered one call
+    before the connection, and the native session sits behind a stand-in that
+    only counts the configurations pushed to it.
     """
 
+    from dataclasses import replace
+
+    from vibe.app_server._launch_context import client_launch_context
+    from vibe.app_server._process_services import ProcessServices
     from vibe.app_server._runtime import HarnessProcess
+    from vibe.app_server._unified_harness_backend_adapter import (
+        UnifiedHarnessBackendAdapter,
+        UnifiedSessionSettings,
+    )
     from vibe.app_server.protocol import ClientInfo, SessionOptions
     from vibe.core.config.harness_files import HarnessFilesManager
     from vibe.core.experiments.manager import hash_api_key
+    from vibe.core.experiments.wait import (
+        experiments_wait_needed,
+        reset_experiments_eval_failed,
+    )
     from vibe.core.identity import IdentityResult
     from vibe.core.telemetry.send import TelemetryClient
+
+    from vibe.app_server import _completion_facts
 
     key = hash_api_key(SENTINELS["ORACLE_MISTRAL_KEY"])
     # A session that refreshes its configuration reports it, and the report
     # would leave the process; what it says is the telemetry corpus's subject.
     TelemetryClient.send_telemetry_event = lambda *_, **__: None  # type: ignore[method-assign]
+    # Deriving a session's runtime asks the provider's model catalogue for the
+    # model's limits (``vibe/app_server/_completion_facts.py``), which would
+    # leave the process. Without a fetcher the derivation reads no catalogue,
+    # as the reference's own test configuration runs it; no field this family
+    # reads depends on the catalogue.
+    _completion_facts.catalogue_fetcher_factory = None
 
     async def resolve_identity(**_: Any) -> Any:
         return IdentityResult.model_validate({"id": "oracle-user"})
 
-    async def build_and_look_up(work: Path, session: str) -> dict[str, Any]:
-        process = HarnessProcess(HarnessFilesManager(sources=("user",)))
-        blueprint = await process.build_root_blueprint(
-            SessionOptions(cwd=str(work)), ClientInfo(name="oracle-client", version="1.2.3")
-        )
-        start_config = _startup_fields(blueprint.config)
-        loop = blueprint.build(
-            session_id="oracle-resumed-session" if session == "resumed" else None
-        )
-        state = loop.experiment_manager.export_state()
-        awaiting = loop.awaiting_experiment_model
-        loop.experiment_manager._client._http = RecordingEvalTransport(  # noqa: SLF001
-            body=STARTUP_LIVE
-        )
-        loop.identity_cache.resolve = resolve_identity
-        loop.whoami_cache.resolve = no_whoami
-        loop.start_initialize_experiments()
-        await loop._experiments_task  # noqa: SLF001 - the lookup is the subject
-        answers = {
-            "startConfig": start_config,
-            "awaitingExperimentModel": awaiting,
-            "hydrated": state.model_dump(mode="json") if state is not None else None,
-            "afterLookup": _startup_fields(loop.config),
-            "awaitingAfterLookup": loop.awaiting_experiment_model,
-        }
-        await loop.aclose()
-        return answers
+    async def build_and_look_up(work: Path) -> dict[str, Any]:
+        services = ProcessServices.create()
+        process = HarnessProcess(HarnessFilesManager(sources=("user",)), services=services)
+        try:
+            built = await process.build_unified_session_context(SessionOptions(cwd=str(work)))
+            orchestrator = built.config_orchestrator
+            credentials = built.platform_credentials
+            start_config = _startup_fields(orchestrator.config)
+            awaiting = experiments_wait_needed(orchestrator, credentials)
+            built.experiment_manager._client._http = RecordingEvalTransport(  # noqa: SLF001
+                body=STARTUP_LIVE
+            )
+            context = replace(
+                built,
+                identity_cache=_StandInCache(resolve_identity),
+                whoami_cache=_StandInCache(no_whoami),
+            )
+            adapter = UnifiedHarnessBackendAdapter(
+                _StandInSession(),  # type: ignore[arg-type]
+                context,
+                context.derive(UnifiedSessionSettings()),
+            )
+            await adapter.initialize_experiments(
+                client_launch_context(ClientInfo(name="oracle-client", version="1.2.3"))
+            )
+            answers = {
+                "startConfig": start_config,
+                "awaitingExperimentModel": awaiting,
+                "afterLookup": _startup_fields(orchestrator.config),
+                "awaitingAfterLookup": experiments_wait_needed(orchestrator, credentials),
+            }
+            await built.experiment_manager.aclose()
+            return answers
+        finally:
+            await process.close()
+            await services.close()
 
     cases: list[dict[str, Any]] = []
     for configuration in ("mistral-active", "telemetry-disabled", "experiments-disabled"):
         for seed_id, seed in STARTUP_SEEDS:
-            for session in ("new", "resumed"):
-                home = scratch / f"startup-{configuration}-{seed_id}-{session}"
-                work = home / "project"
-                work.mkdir(parents=True, exist_ok=True)
-                document = _startup_document(configuration)
-                (home / "config.toml").write_text(document, encoding="utf-8", newline="")
-                cache_file = home / "experiment_eval_cache.json"
-                if seed is not None:
-                    owner = key if seed["owner"] == "oracle" else "0" * 32
-                    cache_file.write_text(
-                        json.dumps(
-                            {
-                                owner: {
-                                    "stored_at_timestamp": CACHE_NOW - seed["ageSeconds"],
-                                    "payload": seed["payload"],
-                                }
+            home = scratch / f"startup-{configuration}-{seed_id}"
+            work = home / "project"
+            work.mkdir(parents=True, exist_ok=True)
+            document = _startup_document(configuration)
+            (home / "config.toml").write_text(document, encoding="utf-8", newline="")
+            cache_file = home / "experiment_eval_cache.json"
+            if seed is not None:
+                owner = key if seed["owner"] == "oracle" else "0" * 32
+                cache_file.write_text(
+                    json.dumps(
+                        {
+                            owner: {
+                                "stored_at_timestamp": CACHE_NOW - seed["ageSeconds"],
+                                "payload": seed["payload"],
                             }
-                        ),
-                        encoding="utf-8",
-                        newline="",
-                    )
-                with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
-                    with captured_logs():
-                        answers = asyncio.run(build_and_look_up(work, session))
-                stored = None
-                if cache_file.exists():
-                    stored = (
-                        json.loads(cache_file.read_text(encoding="utf-8")).get(key, {}).get("payload")
-                    )
-                cases.append(
-                    {
-                        "id": f"{configuration}/{seed_id}/{session}",
-                        "document": document,
-                        "cached": seed,
-                        "session": session,
-                        "live": STARTUP_LIVE,
-                        **answers,
-                        "cachedAfterLookup": stored,
-                    }
+                        }
+                    ),
+                    encoding="utf-8",
+                    newline="",
                 )
+            # A failed lookup is remembered for the process, and an earlier
+            # family's failure must not decide this session's wait.
+            reset_experiments_eval_failed()
+            with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
+                with captured_logs():
+                    answers = asyncio.run(build_and_look_up(work))
+            stored = None
+            if cache_file.exists():
+                stored = (
+                    json.loads(cache_file.read_text(encoding="utf-8")).get(key, {}).get("payload")
+                )
+            cases.append(
+                {
+                    "id": f"{configuration}/{seed_id}",
+                    "document": document,
+                    "cached": seed,
+                    "live": STARTUP_LIVE,
+                    **answers,
+                    "cachedAfterLookup": stored,
+                }
+            )
     return cases
 
 
@@ -2395,15 +2226,6 @@ def build_startup_families(scratch: Path) -> dict[str, Any]:
     return {"startup": capture_startup(scratch)}
 
 
-def build_promo_families(scratch: Path) -> dict[str, Any]:
-    return {
-        "promoConstants": capture_promo_constants(),
-        "promoPredicate": capture_promo_predicate(),
-        "promoState": capture_promo_state(scratch),
-        "promoProse": capture_promo_prose(),
-    }
-
-
 ENGINE_NOTE = (
     "Experiments corpus: what the pinned reference's remote eval client, experiment manager, "
     "GrowthBook configuration layer and session helpers answer for each scripted input. The eval "
@@ -2415,29 +2237,21 @@ ENGINE_NOTE = (
     "--corpus when the pinned reference moves."
 )
 
-PROMO_NOTE = (
-    "VS Code promo corpus: the ceiling, the start instant, the predicate, and what the pinned "
-    "reference's filesystem repository reads back out of each cache.toml document. The two "
-    "reference sentences are committed as a byte length and a SHA-256 because NOTICE forbids "
-    "shipping reference-authored prose; the replay asserts this port's own sentences never match "
-    "either digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned "
-    "reference moves."
-)
-
-
 STARTUP_NOTE = (
     "Experiments startup corpus: what a session the pinned reference's app server builds "
-    "configures before and after its rollout lookup, for each gate document, each eval cache seed "
-    "and a new or a resumed session. The cache seed is recorded by its age against the scenario's "
+    "configures before and after its rollout lookup, for each gate document and each eval cache "
+    "seed. The cache seed is recorded by its age against the scenario's "
     "clock, the lookup is answered one call before the connection, and the only key derivative "
     "the capture reads is the 32-character API-key digest. Regenerate with "
     "scripts/parity/experiments.py --corpus when the pinned reference moves."
 )
 
 
-def build_corpus(commit: str, families: dict[str, Any], note: str) -> dict[str, Any]:
+def build_corpus(
+    commit: str, families: dict[str, Any], note: str, *, schema_version: int
+) -> dict[str, Any]:
     return {
-        "schemaVersion": SCHEMA_VERSION,
+        "schemaVersion": schema_version,
         "reference": {"commit": commit},
         "note": note,
         **families,
@@ -2474,15 +2288,6 @@ def parse_arguments() -> argparse.Namespace:
         help=(
             "also write the committed engine corpus, which the Rust replay reads "
             f"unconditionally (default {DEFAULT_CORPUS})"
-        ),
-    )
-    parser.add_argument(
-        "--promo-corpus",
-        type=Path,
-        default=None,
-        help=(
-            "where the committed promo corpus goes; defaults beside --corpus at "
-            f"{DEFAULT_PROMO_CORPUS}"
         ),
     )
     parser.add_argument(
@@ -2545,7 +2350,6 @@ def main() -> int:
                 init_harness_files_manager("user")
                 api_keys.get_api_key_from_keyring = lambda _: None
                 engine = build_engine_families(scratch)
-                promo = build_promo_families(scratch)
                 startup = build_startup_families(scratch)
     except OracleError as error:
         print(f"experiments capture failed: {error}", file=sys.stderr)
@@ -2558,12 +2362,14 @@ def main() -> int:
         )
         return 1
 
-    engine_corpus = build_corpus(reference["commit"], engine, ENGINE_NOTE)
-    promo_corpus = build_corpus(reference["commit"], promo, PROMO_NOTE)
-    startup_corpus = build_corpus(reference["commit"], startup, STARTUP_NOTE)
+    engine_corpus = build_corpus(
+        reference["commit"], engine, ENGINE_NOTE, schema_version=ENGINE_SCHEMA_VERSION
+    )
+    startup_corpus = build_corpus(
+        reference["commit"], startup, STARTUP_NOTE, schema_version=STARTUP_SCHEMA_VERSION
+    )
     try:
         assert_no_credential_leaked(engine_corpus)
-        assert_no_credential_leaked(promo_corpus)
         assert_no_credential_leaked(startup_corpus)
     except OracleError as error:
         print(f"experiments capture failed: {error}", file=sys.stderr)
@@ -2573,7 +2379,6 @@ def main() -> int:
         arguments.output,
         {
             "engine": engine_corpus,
-            "promo": promo_corpus,
             "startup": startup_corpus,
             "reference": reference,
             "platform": platform.system().lower(),
@@ -2582,14 +2387,11 @@ def main() -> int:
     )
     if arguments.corpus is not None:
         write_json(arguments.corpus, engine_corpus)
-        promo_path = arguments.promo_corpus or DEFAULT_PROMO_CORPUS
-        write_json(promo_path, promo_corpus)
         startup_path = arguments.startup_corpus or DEFAULT_STARTUP_CORPUS
         write_json(startup_path, startup_corpus)
 
     counted = {
         **count_comparisons(engine),
-        **count_comparisons(promo),
         **count_comparisons(startup),
     }
     total = sum(counted.values())
@@ -2601,7 +2403,7 @@ def main() -> int:
         print(f"  {family}: {count}")
     if arguments.corpus is not None:
         print(
-            f"wrote the committed corpora to {arguments.corpus}, {promo_path} and {startup_path}"
+            f"wrote the committed corpora to {arguments.corpus} and {startup_path}"
         )
     return 0
 

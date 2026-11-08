@@ -35,6 +35,15 @@
 //! line is removed, so the baseline only shrinks. Every run measures the
 //! baseline it found and writes it to `target/parity/licensing/baseline.txt`;
 //! the test never rewrites the committed one.
+//!
+//! **During a rolling re-pin** the baseline stays cut at `PREVIOUS_COMMIT`,
+//! whose digest set stays committed: a listed run is stale when it no longer
+//! occurs there, and a run the target finds is admitted when the baseline
+//! lists it (as often as the line counts) or when it re-cuts a listed run,
+//! covering some of the same words of the same file and fewer than a
+//! shingle's worth outside them (a new pin moves the boundaries of a copy the
+//! baseline already names). A run over text no listed run covers fails, as it
+//! does outside a transition.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -44,9 +53,9 @@ use std::time::Instant;
 
 use sha2::{Digest as _, Sha256};
 
-use super::REFERENCE_COMMIT;
 use super::live::records;
 use super::replay::repository;
+use super::{PREVIOUS_COMMIT, REFERENCE_COMMIT};
 
 /// How many words a shingle holds.
 const WIDTH: usize = 8;
@@ -60,6 +69,25 @@ const LICENSING: &str = "crates/vibe-core/tests/licensing";
 /// Files that carry a standard text both trees ship verbatim on purpose, which
 /// the reference did not author: the Apache License 2.0.
 const STANDARD_TEXTS: [&str; 1] = ["LICENSE"];
+
+/// Runs that reproduce a third-party library's own message, which a pin's
+/// reference quotes only in a test asserting that library's output: the file,
+/// the digest of the run's first shingle, its length in words, and the author.
+/// They stand where `STANDARD_TEXTS` stands, for one run rather than a file.
+const THIRD_PARTY_RUNS: [(&str, u64, usize, &str); 2] = [
+    (
+        "crates/vibe-core/src/pycompat/pydantic.rs",
+        0x726a_e35b_b63c_e1ce,
+        13,
+        "pydantic-core's `int_parsing` message",
+    ),
+    (
+        "crates/vibe-harness/src/engine/provider_errors.rs",
+        0x8e3f_b812_7126_7dab,
+        8,
+        "httpx's `raise_for_status` message",
+    ),
+];
 
 /// One word of a scanned file: where it starts and ends, and its line.
 struct Word {
@@ -77,12 +105,99 @@ struct Run {
     first: u64,
     /// Its length in words.
     words: usize,
+    /// The index of its first word in the file, which tells whether two cuts
+    /// of the same text overlap.
+    start: usize,
 }
 
 impl Run {
     fn key(&self) -> (String, u64, usize) {
         (self.file.clone(), self.first, self.words)
     }
+
+    /// Whether `other` covers some of the same words of the same file.
+    fn overlaps(&self, other: &Self) -> bool {
+        self.file == other.file
+            && self.start < other.start + other.words
+            && other.start < self.start + self.words
+    }
+}
+
+/// The runs of `found` the baseline does not admit, and its stale lines.
+///
+/// Outside a transition, `found` is measured at the target and `prior` is
+/// empty: a run is admitted when the baseline lists it, and a listed run that
+/// no longer occurs is stale. During a rolling re-pin the baseline stays cut
+/// at the previous commit, whose runs are `prior`: staleness is measured
+/// there, and a run at the target is also admitted when it re-cuts a listed
+/// run of `prior` ([`recuts`]), since a new pin moves the boundaries of a copy
+/// the baseline already names. A run the target reveals over text no listed
+/// run covers is not admitted, and a listed line admits at most as many runs
+/// as it counts.
+fn judge<'r>(
+    found: &'r [Run],
+    prior: Option<&[Run]>,
+    listed: &BTreeMap<(String, u64, usize), usize>,
+) -> (Vec<&'r Run>, Vec<String>) {
+    let mut remaining = listed.clone();
+    let mut admitted_prior = Vec::new();
+    for run in prior.unwrap_or(found) {
+        if let Some(count) = remaining.get_mut(&run.key())
+            && *count > 0
+        {
+            *count -= 1;
+            admitted_prior.push(run);
+        }
+    }
+    let stale = remaining
+        .iter()
+        .filter(|(_, count)| **count > 0)
+        .map(|((file, first, words), _)| format!("{file}\t{first:016x}\t{words}"))
+        .collect();
+    // A listed line admits as many runs as it counts, at either commit, so a
+    // second paste of a listed copy is not admitted by the first one's line.
+    let mut budget = listed.clone();
+    let unlisted = found
+        .iter()
+        .filter(|run| {
+            if let Some(count) = budget.get_mut(&run.key())
+                && *count > 0
+            {
+                *count -= 1;
+                return false;
+            }
+            prior.is_none() || !recuts(run, &admitted_prior)
+        })
+        .collect();
+    (unlisted, stale)
+}
+
+/// Whether `run`, found at the target, re-cuts the listed runs `prior` found
+/// at the previous commit: it overlaps at least one of them, and fewer than a
+/// shingle's worth of its words lie outside every one, so the new cut reveals
+/// no copy the baseline does not already name. A run that grows past a listed
+/// one by a shingle or more holds text no listed run covers.
+fn recuts(run: &Run, prior: &[&Run]) -> bool {
+    let mut spans: Vec<(usize, usize)> = prior
+        .iter()
+        .filter(|known| known.overlaps(run))
+        .map(|known| (known.start, known.start + known.words))
+        .collect();
+    if spans.is_empty() {
+        return false;
+    }
+    spans.sort_unstable();
+    let end = run.start + run.words;
+    let mut cursor = run.start;
+    let mut covered = 0;
+    for (begin, finish) in spans {
+        let (begin, finish) = (begin.max(cursor), finish.min(end));
+        if finish > begin {
+            covered += finish - begin;
+            cursor = finish;
+        }
+    }
+    run.words.saturating_sub(covered) < WIDTH
 }
 
 /// The words of `text` under the normalization `scripts/parity/shingles.py`
@@ -209,6 +324,7 @@ fn runs(file: &str, text: &str, set: &[u64]) -> Vec<Run> {
                 line: words[begin].line,
                 first,
                 words: index - begin + WIDTH - 1,
+                start: begin,
             });
         }
     }
@@ -352,26 +468,36 @@ fn no_tracked_file_shares_prose_with_the_reference_outside_the_baseline() {
     let root = repository();
     let set = digest_set(&root, REFERENCE_COMMIT);
     let files = tracked(&root);
-    let found = scan(&root, &files, &set);
+    let third_party = |run: &Run| {
+        THIRD_PARTY_RUNS
+            .iter()
+            .any(|(file, first, words, _)| run.key() == ((*file).to_owned(), *first, *words))
+    };
+    let (quoted, found): (Vec<Run>, Vec<Run>) =
+        scan(&root, &files, &set).into_iter().partition(third_party);
+    let gone: Vec<&str> = THIRD_PARTY_RUNS
+        .iter()
+        .filter(|(file, first, words, _)| {
+            !quoted
+                .iter()
+                .any(|run| run.key() == ((*file).to_owned(), *first, *words))
+        })
+        .map(|(_, _, _, author)| *author)
+        .collect();
+    assert!(
+        gone.is_empty(),
+        "these third-party runs no longer occur; remove them from THIRD_PARTY_RUNS: {gone:?}"
+    );
 
     let measured = records().join("licensing");
     if std::fs::create_dir_all(&measured).is_ok() {
         let _ = std::fs::write(measured.join("baseline.txt"), render(&found));
     }
 
-    let mut remaining = baseline(&root);
-    let mut unlisted = Vec::new();
-    for run in &found {
-        match remaining.get_mut(&run.key()) {
-            Some(count) if *count > 0 => *count -= 1,
-            _ => unlisted.push(run),
-        }
-    }
-    let stale: Vec<String> = remaining
-        .iter()
-        .filter(|(_, count)| **count > 0)
-        .map(|((file, first, words), _)| format!("{file}\t{first:016x}\t{words}"))
-        .collect();
+    let prior = (!PREVIOUS_COMMIT.is_empty())
+        .then(|| scan(&root, &files, &digest_set(&root, PREVIOUS_COMMIT)));
+    let listed = baseline(&root);
+    let (unlisted, stale) = judge(&found, prior.as_deref(), &listed);
 
     println!(
         "licensing guard: {} tracked files, {} reference shingles, {} shared runs, {} unlisted, \
@@ -456,4 +582,72 @@ fn consecutive_shared_shingles_form_one_run() {
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].words, 10);
     assert_eq!(found[0].line, 1);
+}
+
+fn run(file: &str, first: u64, words: usize, start: usize) -> Run {
+    Run {
+        file: file.to_owned(),
+        line: 1,
+        first,
+        words,
+        start,
+    }
+}
+
+#[test]
+fn a_transition_admits_a_recut_of_a_listed_run_and_nothing_else() {
+    let listed = BTreeMap::from([(("a.rs".to_owned(), 1, 10), 1)]);
+    let prior = [run("a.rs", 1, 10, 100)];
+    // The target cuts the same copy from a later word, and finds a run over
+    // text no listed run covers, in the same file and in another.
+    let recut = run("a.rs", 7, 12, 104);
+    let fresh = run("a.rs", 8, 9, 300);
+    let elsewhere = run("b.rs", 9, 12, 104);
+    let found = [recut.clone(), fresh.clone(), elsewhere.clone()];
+    let (unlisted, stale) = judge(&found, Some(&prior), &listed);
+    assert_eq!(unlisted, [&fresh, &elsewhere]);
+    assert!(
+        stale.is_empty(),
+        "staleness is measured at the previous commit"
+    );
+
+    let (_, stale) = judge(&found, Some(&[]), &listed);
+    assert_eq!(stale, ["a.rs\t0000000000000001\t10"]);
+}
+
+#[test]
+fn a_transition_refuses_a_run_that_grows_past_a_listed_run_by_a_shingle() {
+    let listed = BTreeMap::from([(("a.rs".to_owned(), 1, 10), 1)]);
+    let prior = [run("a.rs", 1, 10, 100)];
+    // Seven words past the listed copy is a new cut of it; eight words past
+    // it is text the baseline does not name, pasted beside a listed copy.
+    let recut = run("a.rs", 7, 17, 100);
+    let grown = run("a.rs", 8, 18, 100);
+    let (unlisted, _) = judge(std::slice::from_ref(&recut), Some(&prior), &listed);
+    assert!(unlisted.is_empty(), "{unlisted:?}");
+    let (unlisted, _) = judge(std::slice::from_ref(&grown), Some(&prior), &listed);
+    assert_eq!(unlisted, [&grown]);
+}
+
+#[test]
+fn a_transition_admits_a_listed_line_only_as_often_as_it_counts() {
+    let listed = BTreeMap::from([(("a.rs".to_owned(), 1, 10), 1)]);
+    // The listed copy, and a second paste of it further down the same file,
+    // which the previous commit already finds unlisted.
+    let original = run("a.rs", 1, 10, 100);
+    let pasted = run("a.rs", 1, 10, 500);
+    let prior = [original.clone(), pasted.clone()];
+    let found = [original, pasted.clone()];
+    let (unlisted, stale) = judge(&found, Some(&prior), &listed);
+    assert_eq!(unlisted, [&pasted]);
+    assert!(stale.is_empty(), "{stale:?}");
+}
+
+#[test]
+fn outside_a_transition_only_a_listed_run_is_admitted() {
+    let listed = BTreeMap::from([(("a.rs".to_owned(), 1, 10), 1)]);
+    let recut = run("a.rs", 7, 12, 104);
+    let (unlisted, stale) = judge(std::slice::from_ref(&recut), None, &listed);
+    assert_eq!(unlisted, [&recut]);
+    assert_eq!(stale, ["a.rs\t0000000000000001\t10"]);
 }

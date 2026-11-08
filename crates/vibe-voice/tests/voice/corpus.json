@@ -620,46 +620,6 @@
       "rate": 44100
     }
   ],
-  "audioMetadata": [
-    {
-      "case": "root",
-      "keys": [
-        "os",
-        "version",
-        "session_id",
-        "call_type",
-        "call_source",
-        "os_version"
-      ],
-      "parentSessionId": null,
-      "sessionId": "fixture-session",
-      "values": {
-        "call_source": "vibe_code",
-        "call_type": "secondary_call",
-        "session_id": "fixture-session"
-      }
-    },
-    {
-      "case": "child",
-      "keys": [
-        "os",
-        "version",
-        "session_id",
-        "call_type",
-        "call_source",
-        "os_version",
-        "parent_session_id"
-      ],
-      "parentSessionId": "fixture-parent",
-      "sessionId": "fixture-child",
-      "values": {
-        "call_source": "vibe_code",
-        "call_type": "secondary_call",
-        "parent_session_id": "fixture-parent",
-        "session_id": "fixture-child"
-      }
-    }
-  ],
   "captureSignal": [
     {
       "blocks": [
@@ -1157,8 +1117,7 @@
         ],
         "model": "mistral-vibe-cli-fast",
         "provider": "mistral",
-        "temperature": 0.0,
-        "userAgent": "mistral-client-python/Mistral-Vibe/<version>"
+        "temperature": 0.0
       },
       "summary": "Parser written and tested."
     },
@@ -1209,8 +1168,7 @@
         ],
         "model": "mistral-vibe-cli-fast",
         "provider": "mistral",
-        "temperature": 0.0,
-        "userAgent": "mistral-client-python/Mistral-Vibe/<version>"
+        "temperature": 0.0
       },
       "summary": "The deploy hit a rate limit."
     },
@@ -1258,8 +1216,7 @@
         ],
         "model": "mistral-vibe-cli-fast",
         "provider": "mistral",
-        "temperature": 0.0,
-        "userAgent": "mistral-client-python/Mistral-Vibe/<version>"
+        "temperature": 0.0
       },
       "summary": ""
     },
@@ -1307,8 +1264,7 @@
         ],
         "model": "mistral-vibe-cli-fast",
         "provider": "mistral",
-        "temperature": 0.0,
-        "userAgent": "mistral-client-python/Mistral-Vibe/<version>"
+        "temperature": 0.0
       },
       "summary": null
     },
@@ -1398,8 +1354,7 @@
         ],
         "model": "mistral-vibe-cli-fast",
         "provider": "mistral",
-        "temperature": 0.0,
-        "userAgent": "mistral-client-python/Mistral-Vibe/<version>"
+        "temperature": 0.0
       },
       "summary": "Keyless summary."
     }
@@ -2123,9 +2078,9 @@
   ],
   "note": "Voice corpus: what the pinned reference resolves an audio session from, per configuration document. Every document, alias, model name, provider name, host and variable is authored by scripts/parity/voice.py; the reference contributes resolved values, defaults and exception class names, and no reference-authored text, no reference source and no machine path is recorded. A failure is recorded as a stage and an exception class rather than a message, so the replay compares causes. The two wire frames are intercepted at the last call before the network, the websocket opener and the HTTP sender, so nothing is ever sent. No credential is recorded: every variable a document names carries a sentinel during the capture and is recorded as a variable name and an origin. The behavior families drive the reference's recorder, player, realtime client, dictation and read-aloud managers, turn summary service and editor bridge over stand-ins scripts/parity/voice_behavior.py authors; a text the reference writes is recorded as its length and SHA-256 only. Regenerate with scripts/parity/voice.py --corpus when the pinned reference moves.",
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "speechResolution": [
     {
       "case": "defaults",
@@ -5260,15 +5215,13 @@
         },
         "credential": {
           "envVar": "",
+          "reason": "missing",
           "source": "unset"
         },
-        "endpointUrl": "wss://anonymous.fixture.invalid/v1/audio/transcriptions/realtime?model=fixture-anonymous-model",
-        "headerNames": [
-          "Authorization",
-          "user-agent",
-          "x-metadata"
-        ],
         "model": "fixture-anonymous-model",
+        "refusal": {
+          "type": "TranscribeError"
+        },
         "serverUrl": "wss://anonymous.fixture.invalid",
         "targetStreamingDelayMs": 500
       }
@@ -5656,21 +5609,15 @@
     {
       "case": "speech-provider-without-credential",
       "speech": {
-        "body": {
-          "input": "fixture summary",
-          "metadata": {},
-          "model": "fixture-anonymous-speech-model",
-          "response_format": "wav",
-          "stream": false,
-          "voice_id": "gb_jane_neutral"
-        },
         "credential": {
           "envVar": "",
+          "reason": "missing",
           "source": "unset"
         },
-        "endpointUrl": "https://anonymous.fixture.invalid/v1/audio/speech",
-        "method": "POST",
         "model": "fixture-anonymous-speech-model",
+        "refusal": {
+          "type": "PlatformCredentialUnavailable"
+        },
         "responseFormat": "wav",
         "serverUrl": "https://anonymous.fixture.invalid",
         "voice": "gb_jane_neutral"

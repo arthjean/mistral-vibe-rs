@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Black-box capture of the Unified Harness, the backend a session runs on by default.
 
-Since v2.26.0 the reference opens every session on its Unified Harness unless
-``--legacy-harness`` asks for the legacy backend (``vibe/_experimental_harness.py``).
-Rows 1 to 35 of ``docs/parity.md`` measure that legacy backend through the
-flag; this capture measures the default one, row 36.
+From v3.0.0 the Unified Harness is the reference's only backend: the legacy
+one and the flags that chose between them are gone. This capture measures it
+through the session methods, row 36 of ``docs/parity.md``.
 
 Every scenario starts an app server over stdio in a fresh home, behind the
 scripted chat-completions stand-in of ``loop_capture.py``, and drives it the
@@ -513,6 +512,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--server", type=Path, default=None, help="drive this binary instead")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
+    parser.add_argument(
+        "--exclude", action="append", default=[], help="leave out scenarios whose name starts so"
+    )
     parser.add_argument("--raw", action="store_true", help="also keep the raw answers")
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
@@ -536,7 +538,8 @@ def main() -> int:
         selected = [
             scenario
             for scenario in scenarios()
-            if not arguments.only or any(name in scenario["name"] for name in arguments.only)
+            if (not arguments.only or any(name in scenario["name"] for name in arguments.only))
+            and not any(scenario["name"].startswith(prefix) for prefix in arguments.exclude)
         ]
 
         def capture(scenario: dict[str, Any]) -> dict[str, Any]:

@@ -7,8 +7,11 @@ This is the Python half of the pin. The Rust half is
 a re-pin is one edit per language rather than eleven scattered constants that
 nothing forces to agree.
 
-Re-pinning means changing :data:`EXPECTED_COMMIT` here, the Rust constant, and
-regenerating every committed corpus in the same change.
+A re-pin is rolling: it moves :data:`EXPECTED_COMMIT` (here and in Rust) to
+the target, names the commit it leaves in :data:`PREVIOUS_COMMIT`, and lists in
+the manifest's ``transition`` every corpus not yet recaptured at the target.
+Each ``repin.py capture`` at the target drops its corpus from the list, and the
+transition ends when the list is empty and :data:`PREVIOUS_COMMIT` is cleared.
 
 Oracles that live outside ``scripts/parity`` import this module by inserting
 this directory on ``sys.path``.
@@ -19,20 +22,17 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-#: The reference commit every committed corpus was captured from. A checkout at
-#: any other revision is not an oracle for those corpora.
-EXPECTED_COMMIT = "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+#: The target of the pin: the commit every corpus records outside a transition.
+EXPECTED_COMMIT = "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
+
+#: The commit a re-pin leaves, still accepted for the corpora the manifest's
+#: ``transition`` list names; empty outside a transition. The Rust half is
+#: ``vibe_core::parity::PREVIOUS_COMMIT``.
+PREVIOUS_COMMIT = "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
 
 #: The package version :data:`EXPECTED_COMMIT` publishes.
-EXPECTED_VERSION = "2.26.0"
+EXPECTED_VERSION = "3.1.0"
 
-#: The flags a capture adds to every entry point it starts, on both sides of a
-#: replay. Since v2.26.0 the reference starts on its Unified Harness unless told
-#: otherwise (``vibe/_experimental_harness.py``), while this port reproduces the
-#: legacy backend, so the corpora measure that backend through its escape hatch
-#: and the Unified Harness is scorecard row 36. The port receives the same flags
-#: so the selection a session reports stays comparable.
-HARNESS_FLAGS = ("--legacy-harness",)
 
 #: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides
 #: the default for machines that hold it elsewhere, and ``--reference`` wins

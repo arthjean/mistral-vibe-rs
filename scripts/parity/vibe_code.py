@@ -5,8 +5,18 @@ Code API and the datalake. This module holds what their captures share: one
 stand-in that plays every one of those endpoints on top of the chat
 completions (:class:`Backend`), the answers a scenario scripts for it, the
 configuration that points a server at it, the Git environment of a scenario's
-checkouts (:func:`git_env`), and the normalizer of what those endpoints carry
-(:class:`Normalizer`). Nothing here imports the reference.
+checkouts (:func:`git_env`, :func:`write_gitconfig`), and the normalizer of
+what those endpoints carry (:class:`Normalizer`). Nothing here imports the
+reference.
+
+A checkout's ``origin`` names a GitHub repository, and every HTTPS fetch of it
+goes through the stand-in as its proxy, which refuses every tunnel at once. A
+loopback port nothing listens on does not fail the same way on every host: in
+WSL's mirrored networking a connection to ``127.0.0.1:9`` is dropped rather
+than refused, so the fetch a run starts with hangs until a bound gives up, and
+a capture records that host's network instead of the server.
+:func:`write_gitconfig` therefore proves the refusal once per checkout before
+any server runs.
 """
 
 from __future__ import annotations
@@ -24,6 +34,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import blackbox
 import host_env
+from reference import OracleError
 import stand_in
 import subagent_client
 
@@ -31,8 +42,10 @@ import subagent_client
 EVENT_TIMEOUT = 40.0
 API_KEY = "oracle-key"
 GITHUB_URL = "https://github.com/oracle/repo.git"
-#: A proxy nothing listens on, so a fetch of the GitHub remote fails at once.
-DEAD_PROXY = "http://127.0.0.1:9"
+#: How long the refused fetch :func:`write_gitconfig` makes may take. The
+#: stand-in answers a tunnel at once, so only a fetch that reached past it
+#: comes near this bound.
+REFUSAL_SECONDS = 5.0
 
 
 # --------------------------------------------------------------------------
@@ -89,6 +102,8 @@ class Backend(stand_in.Backend):
         self.whoami: Any = code.get("whoami", ok({"plan_type": "API", "plan_name": "Scale"}))
         self.code_log: list[dict[str, Any]] = []
         self.telemetry: list[dict[str, Any]] = []
+        #: The hosts a fetch asked the proxy to tunnel to, all of them refused.
+        self.tunnels: list[str] = []
         self.release = threading.Event()
         handler = self.server.RequestHandlerClass
         backend = self
@@ -149,8 +164,19 @@ class Backend(stand_in.Backend):
                 return
             chat(self)
 
+        def do_connect(self: Any) -> None:
+            # The proxy side: no tunnel is ever opened, so a fetch fails with
+            # the refusal instead of reaching the network.
+            with backend.lock:
+                backend.tunnels.append(self.path)
+            self.close_connection = True
+            self.send_response(403)
+            self.send_header("content-length", "0")
+            self.end_headers()
+
         handler.do_GET = do_get
         handler.do_POST = do_post
+        handler.do_CONNECT = do_connect
 
     def answer(self, handler: Any, answer: Any) -> None:
         if answer.get("block"):
@@ -198,6 +224,52 @@ def git_env(world: blackbox.World) -> dict[str, str]:
         ),
         "LANG": "C.UTF-8",
     }
+
+
+def write_gitconfig(world: blackbox.World, backend: Backend) -> None:
+    """Writes the fixture home's ``.gitconfig``, with ``backend`` as the proxy
+    of every HTTPS fetch, then proves a fetch of the GitHub remote is refused
+    there at once.
+
+    Raises :class:`OracleError` when the fetch outlives
+    :data:`REFUSAL_SECONDS`, succeeds, or fails without asking the stand-in
+    for a tunnel: each means git reached past the proxy, and a scenario run
+    there would measure the host's network.
+    """
+
+    (world.home / ".gitconfig").write_text(
+        "[user]\n\tname = Oracle\n\temail = oracle@example.com\n"
+        "[init]\n\tdefaultBranch = main\n"
+        f"[http]\n\tproxy = {backend.base}\n"
+        "[advice]\n\tdetachedHead = false\n",
+        encoding="utf-8",
+        newline="",
+    )
+    with backend.lock:
+        before = len(backend.tunnels)
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", GITHUB_URL],
+            cwd=world.root,
+            env={**git_env(world), "GIT_TERMINAL_PROMPT": "0"},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=REFUSAL_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise OracleError(
+            f"a fetch of {GITHUB_URL} through the stand-in proxy was still running after "
+            f"{REFUSAL_SECONDS:.0f}s; this host does not route it to the proxy"
+        ) from error
+    with backend.lock:
+        tunnels = backend.tunnels[before:]
+    if result.returncode == 0 or "github.com:443" not in tunnels:
+        raise OracleError(
+            f"a fetch of {GITHUB_URL} was not refused by the stand-in proxy "
+            f"(exit {result.returncode}, tunnels asked: {tunnels}): {result.stderr.strip()}"
+        )
 
 
 def base_config(backend: Backend, scenario: dict[str, Any]) -> str:

@@ -20,11 +20,20 @@ the questions its policy ports:
   the encoded grants a permanent approval writes there and the absolute path
   globs an operator may write, beside command prefixes that must never read as
   one, and what ``path_grant_pattern_matches`` answers for each kind of entry;
-* what ``BashStdin.resolve_permission`` decides for input to a session, given
-  the command the session runs;
-* what the PowerShell grammar helpers of ``windows_shell.py`` answer: part
-  splitting, tokens, match forms, policy patterns, path expansion and option
-  detection, all pure string functions a POSIX host evaluates.
+* what the PowerShell grammar helpers answer: part splitting and tokens from
+  ``vibe/core/tools/builtins/_powershell_lexer.py`` (the hand-written splitters
+  of ``windows_shell.py`` until 3.0), and match forms, policy patterns, path
+  expansion and option detection from ``windows_shell.py``, all pure string
+  functions a POSIX host evaluates.
+
+Until schema 4 the corpus also held ``stdinPermissions``, the verdict of
+``BashStdin.resolve_permission`` on input sent to a session that may run a
+pager. The 3.0 reference deleted that gate: ``BashStdin`` in
+``vibe/core/tools/builtins/experimental_bash.py`` keeps only its schema and
+availability, inherits the ``BaseTool`` default that defers to its configured
+permission, and no other module of the package or of ``harness/`` takes it
+over. Schema 5 drops the family rather than record a resolver that no longer
+exists.
 
 Since 2.25.4 the reference keeps its ``find`` gate as a set local to
 ``_find_policy`` (``vibe/core/tools/builtins/_shell_command_policy.py``), which
@@ -77,7 +86,6 @@ from shell_policy_cases import (
     REPOSITORY_COMMANDS,
     REPOSITORY_FIXTURES,
     RESOLUTION_CASES,
-    STDIN_PERMISSION_CASES,
     WINDOWS_EXPANSION_CASES,
     WINDOWS_EXPANSION_ENVIRONMENT,
     WINDOWS_GRAMMAR_CASES,
@@ -85,7 +93,7 @@ from shell_policy_cases import (
     WINDOWS_TOKEN_CASES,
 )
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/shell-policy/policy.json")
 
 
@@ -419,66 +427,42 @@ def capture_path_grant_matches() -> list[dict[str, Any]]:
     ]
 
 
-def capture_stdin_permissions() -> list[dict[str, Any]]:
-    """What ``BashStdin.resolve_permission`` decides for each session command."""
-    from types import SimpleNamespace
-
-    from vibe.core.tools.builtins.experimental_bash import (
-        BashStdin,
-        BashStdinArgs,
-        ManagedShellError,
-    )
-
-    def manager_for(command: str | None) -> Any:
-        def info(_session_id: str) -> Any:
-            if command is None:
-                raise ManagedShellError("unknown session")
-            return SimpleNamespace(command=command)
-
-        return SimpleNamespace(info=info)
-
-    captured = []
-    for family, command in STDIN_PERMISSION_CASES:
-        tool = SimpleNamespace(
-            shell_family=family,
-            _PAGER_SESSION_COMMANDS=BashStdin._PAGER_SESSION_COMMANDS,
-            _pager_input_permission=BashStdin._pager_input_permission,
-            _session_manager=lambda command=command: manager_for(command),
-        )
-        context = BashStdin.resolve_permission(
-            tool, BashStdinArgs(session_id="session_1", text="q")
-        )
-        captured.append(
-            {"family": family, **_resolution(command or "", context, [])}
-            | {"known": command is not None}
-        )
-    return captured
-
-
 def capture_windows_grammar() -> dict[str, Any]:
-    """What the PowerShell grammar helpers answer for the authored cases."""
+    """What the PowerShell grammar helpers answer for the authored cases.
+
+    Since 3.0 the command and argument splitting lives in
+    ``vibe/core/tools/builtins/_powershell_lexer.py`` and path detection also
+    asks whether a bare name is a link in the command's cwd; the tokens are
+    offered an empty directory, so only their spelling decides.
+    """
+    import tempfile
+
     from vibe.core.tools.builtins import windows_shell as windows
+    from vibe.core.tools.builtins._powershell_lexer import (
+        split_powershell_arguments,
+        split_powershell_commands,
+    )
 
     commands = []
     for command in WINDOWS_GRAMMAR_CASES:
-        parts = windows._split_windows_command_parts(command)
+        parts = split_powershell_commands(command)
         commands.append(
             {
                 "command": command,
                 "parts": [
                     {
                         "part": part,
-                        "tokens": windows._split_windows_command_tokens(part),
+                        "tokens": split_powershell_arguments(part),
                         "forms": windows._windows_command_match_forms(part),
                         "formsWithoutBasename": windows._windows_command_match_forms(
                             part, include_path_basename=False
                         ),
                         "commandName": windows._windows_command_name(
                             windows._windows_invoked_command(
-                                windows._split_windows_command_tokens(part)
+                                split_powershell_arguments(part)
                             )[0]
                         )
-                        if windows._split_windows_command_tokens(part)
+                        if split_powershell_arguments(part)
                         else None,
                         "fileRedirections": windows._windows_file_redirection_targets(
                             part
@@ -503,6 +487,16 @@ def capture_windows_grammar() -> dict[str, Any]:
                 "unresolved": unresolved,
             }
         )
+    with tempfile.TemporaryDirectory() as empty:
+        tokens = [
+            {
+                "token": token,
+                "option": windows._windows_looks_like_option(token),
+                "path": windows._windows_looks_like_path(token, Path(empty)),
+                "attachedValue": windows._windows_attached_parameter_value(token),
+            }
+            for token in WINDOWS_TOKEN_CASES
+        ]
     return {
         "commands": commands,
         "patterns": [
@@ -510,15 +504,7 @@ def capture_windows_grammar() -> dict[str, Any]:
             for pattern in WINDOWS_PATTERN_CASES
         ],
         "expansions": expansions,
-        "tokens": [
-            {
-                "token": token,
-                "option": windows._windows_looks_like_option(token),
-                "path": windows._windows_looks_like_path(token),
-                "attachedValue": windows._windows_attached_parameter_value(token),
-            }
-            for token in WINDOWS_TOKEN_CASES
-        ],
+        "tokens": tokens,
     }
 
 
@@ -557,7 +543,6 @@ def build_corpus(commit: str) -> dict[str, Any]:
     repository = capture_repository_resolutions()
     managed = capture_managed_resolutions()
     windows = capture_windows_grammar()
-    stdin = capture_stdin_permissions()
     grants = capture_allowlist_grants()
     matches = capture_path_grant_matches()
     return {
@@ -579,7 +564,6 @@ def build_corpus(commit: str) -> dict[str, Any]:
             "repositoryCases": len(repository),
             "managedCases": len(managed),
             "windowsGrammarCases": len(windows["commands"]),
-            "stdinPermissionCases": len(stdin),
             "allowlistGrantCases": len(grants),
             "pathGrantMatchCases": len(matches),
             "pathCommands": len(sets["pathCommands"]),
@@ -591,7 +575,6 @@ def build_corpus(commit: str) -> dict[str, Any]:
         "repositoryResolutions": repository,
         "managedResolutions": managed,
         "windowsGrammar": windows,
-        "stdinPermissions": stdin,
         "allowlistGrants": grants,
         "pathGrantMatches": matches,
     }
@@ -637,7 +620,6 @@ def main() -> int:
         f"{counts['resolutionCases']} resolution cases, "
         f"{counts['repositoryCases']} repository cases, "
         f"{counts['managedCases']} managed cases, "
-        f"{counts['stdinPermissionCases']} stdin cases, "
         f"{counts['allowlistGrantCases']} allowlist grant cases, "
         f"{counts['pathGrantMatchCases']} path grant verdicts, "
         f"{counts['pathCommands']} path commands)"

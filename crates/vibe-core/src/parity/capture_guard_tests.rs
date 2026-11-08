@@ -198,3 +198,103 @@ fn an_off_pin_reference_capture_runs_only_through_repin() {
         "a capture repin.py started reaches the environment check: {stderr}"
     );
 }
+
+/// The drivers of the server session oracles, each mapping its scenarios
+/// through `reference.naming_scenarios`.
+const SESSION_DRIVERS: [&str; 7] = [
+    "sessions",
+    "review",
+    "rewind",
+    "hooks",
+    "agents",
+    "agent_loop",
+    "app_server_protocol",
+];
+
+/// A driver that a new reference breaks fails on the scenario it was
+/// capturing, by name, so the capture stops there and `repin.py capture`
+/// replaces nothing (US-014 of `tasks/prd-trustworthy-parity-v3.md`).
+#[test]
+fn a_session_driver_that_raises_names_the_scenario_it_was_capturing() {
+    let root = repository();
+    for driver in SESSION_DRIVERS {
+        let path = root.join(format!("scripts/parity/{driver}.py"));
+        let source = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("{} is unreadable: {error}", path.display()));
+        assert!(
+            source.contains("pool.map(naming_scenarios(capture), selected)"),
+            "{driver}.py maps its scenarios without naming the one that fails"
+        );
+    }
+    let script = r#"
+import sys
+sys.path.insert(0, ".")
+import reference
+
+def capture(scenario):
+    raise KeyError("steps")
+
+try:
+    reference.naming_scenarios(capture)({"name": "flows/sample"})
+except reference.OracleError as error:
+    print(error)
+else:
+    print("no error")
+"#;
+    let output = Command::new("python3")
+        .args(["-c", script])
+        .current_dir(root.join("scripts/parity"))
+        .output()
+        .expect("python3 runs");
+    let printed = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && printed.contains("flows/sample") && printed.contains("KeyError"),
+        "stdout: {printed}\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// From v3.0.0 the reference ships one backend and neither flag that chose
+/// between backends, so no driver passes `--legacy-harness` or
+/// `--experimental-harness` to either side, nor offers a `--harness` option.
+/// The one exception is a `REMOVED_BACKEND_FLAGS = (...)` declaration on a
+/// single line, which an argv oracle uses to record how a binary refuses the
+/// removed flags (`scripts/parity/acp.py`); it selects no backend.
+#[test]
+fn no_driver_passes_a_harness_flag() {
+    let root = repository();
+    let mut offending = Vec::new();
+    for directory in ["scripts/parity", "crates/vibe-cli/tests/runtime-parity"] {
+        for entry in std::fs::read_dir(root.join(directory))
+            .unwrap_or_else(|error| panic!("{directory} is unreadable: {error}"))
+            .flatten()
+        {
+            let path = entry.path();
+            if path.extension().is_none_or(|extension| extension != "py") {
+                continue;
+            }
+            let raw = std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("{} is unreadable: {error}", path.display()));
+            let text = raw
+                .lines()
+                .filter(|line| !line.starts_with("REMOVED_BACKEND_FLAGS = ("))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if [
+                "HARNESS_FLAGS",
+                "\"--legacy-harness",
+                "\"--experimental-harness",
+                "\"--harness\"",
+            ]
+            .iter()
+            .any(|flag| text.contains(flag))
+            {
+                offending.push(path.display().to_string());
+            }
+        }
+    }
+    assert!(
+        offending.is_empty(),
+        "these drivers still pass or offer a harness flag: {offending:?}"
+    );
+}

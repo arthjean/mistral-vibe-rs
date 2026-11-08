@@ -10,14 +10,12 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ],
       "shellClasses": {
@@ -35,14 +33,12 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ],
       "shellClasses": {
@@ -64,14 +60,12 @@
         "bash_sessions",
         "bash_stdin",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ],
       "shellClasses": {
@@ -97,14 +91,12 @@
         "ask_user_question",
         "bash",
         "edit",
-        "exit_plan_mode",
         "grep",
         "read_file",
         "skill",
         "task",
         "todo",
         "web_fetch",
-        "web_search",
         "write_file"
       ],
       "shellClasses": {
@@ -115,6 +107,6 @@
       ]
     }
   ],
-  "referenceCommit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+  "referenceCommit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
   "schemaVersion": 1
 }

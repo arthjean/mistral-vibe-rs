@@ -57,7 +57,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
@@ -119,15 +119,8 @@ def make_repository(world: blackbox.World, path: Path, spec: dict[str, Any]) -> 
         (path / nested).mkdir(parents=True, exist_ok=True)
 
 
-def lay_out(world: blackbox.World, layout: dict[str, Any]) -> None:
-    (world.home / ".gitconfig").write_text(
-        "[user]\n\tname = Oracle\n\temail = oracle@example.com\n"
-        "[init]\n\tdefaultBranch = main\n"
-        f"[http]\n\tproxy = {vibe_code.DEAD_PROXY}\n"
-        "[advice]\n\tdetachedHead = false\n",
-        encoding="utf-8",
-        newline="",
-    )
+def lay_out(world: blackbox.World, layout: dict[str, Any], backend: vibe_code.Backend) -> None:
+    vibe_code.write_gitconfig(world, backend)
     for name, spec in layout.items():
         path = world.root / name
         if spec == "plain":
@@ -178,7 +171,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         session = app_server_client.Session(root)
         world = session.world
         try:
-            lay_out(world, scenario.get("layout", {}))
+            lay_out(world, scenario.get("layout", {}), backend)
             (world.vibe_home / "config.toml").write_text(
                 vibe_code.base_config(backend, scenario), encoding="utf-8", newline=""
             )
@@ -766,14 +759,14 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
         selected = [
             scenario
             for scenario in scenarios()

@@ -33,7 +33,7 @@ use crate::capture::{
     AudioRecorder, AudioStream, CAPTURE_BUFFER_MS, CAPTURE_CHANNELS, CAPTURE_SAMPLE_FORMAT,
     RecorderError, SignalMeter,
 };
-use crate::identity::{MetadataGetter, audio_request_metadata};
+use crate::identity::MetadataGetter;
 use crate::manager::{StartRequest, VoiceEvent, VoiceManager};
 use crate::narrator::{NarratorEffect, NarratorManager};
 use crate::playback::{
@@ -111,16 +111,6 @@ struct Decoded {
     channels: u16,
     pcm_bytes: usize,
     pcm_sha256: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct MetadataCase {
-    case: String,
-    session_id: String,
-    parent_session_id: Option<String>,
-    keys: Vec<String>,
-    values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -315,7 +305,7 @@ fn wav_at(rate: u32, channels: u16) -> Vec<u8> {
 }
 
 // --------------------------------------------------------------------------
-// captureSignal, audioDevices, decodeWav, audioMetadata
+// captureSignal, audioDevices, decodeWav
 // --------------------------------------------------------------------------
 
 /// Reference `AudioRecorder._process_audio` against [`SignalMeter::observe`].
@@ -418,33 +408,6 @@ pub(super) fn run_decode_wav(cases: &[WavCase], report: &mut Report) {
         };
         report.check("decodeWav", "decoded", &case.case, &case.decoded, &decoded);
         report.check("decodeWav", "error", &case.case, &case.error, &error);
-    }
-}
-
-/// Reference `build_audio_request_metadata` against
-/// [`audio_request_metadata`].
-pub(super) fn run_audio_metadata(cases: &[MetadataCase], report: &mut Report) {
-    for case in cases {
-        let metadata = audio_request_metadata(&case.session_id, case.parent_session_id.as_deref());
-        let keys = metadata
-            .iter()
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
-        let values = metadata
-            .iter()
-            .filter(|(key, _)| {
-                [
-                    "session_id",
-                    "parent_session_id",
-                    "call_type",
-                    "call_source",
-                ]
-                .contains(&key.as_str())
-            })
-            .cloned()
-            .collect::<BTreeMap<_, _>>();
-        report.check("audioMetadata", "keys", &case.case, &case.keys, &keys);
-        report.check("audioMetadata", "values", &case.case, &case.values, &values);
     }
 }
 
@@ -1149,16 +1112,11 @@ fn completion(content: &Value) -> Value {
     })
 }
 
-fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
-    head.lines().find_map(|line| {
-        let (key, value) = line.split_once(':')?;
-        key.eq_ignore_ascii_case(name).then(|| value.trim())
-    })
-}
-
 /// The request as the oracle records the reference's: the system prompt is
-/// this port's own prose, so only its role and presence are compared.
-fn request_record(head: &str, body: &Value) -> Value {
+/// this port's own prose, so only its role and presence are compared. The
+/// user agent is not part of it: from the v3 pin the reference sets it inside
+/// the Harness adapters, past the Python seam the oracle reads.
+fn request_record(body: &Value) -> Value {
     let messages = body["messages"]
         .as_array()
         .map(|messages| {
@@ -1180,7 +1138,6 @@ fn request_record(head: &str, body: &Value) -> Value {
         "temperature": body["temperature"],
         "maxTokens": body["max_tokens"],
         "messages": messages,
-        "userAgent": normalize(header(head, "user-agent").unwrap_or_default()),
         "metadataKeys": keys,
         "metadata": {
             "call_type": metadata.get("call_type").cloned().unwrap_or(Value::Null),
@@ -1257,7 +1214,7 @@ async fn narration_case(case: &NarrationCase) -> (Option<String>, Option<Value>)
     // A run that never called leaves the server waiting, which is how no
     // request is told from one.
     let request = match tokio::time::timeout(SETTLE * 5, server).await {
-        Ok(Ok((head, body))) => Some(request_record(&head, &body)),
+        Ok(Ok((_head, body))) => Some(request_record(&body)),
         _ => None,
     };
     (summary, request)

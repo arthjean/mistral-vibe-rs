@@ -79,9 +79,9 @@ from app_server_protocol_scenarios import (  # noqa: E402
     session_flows,
 )
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
-from reference import OracleError, reference_command  # noqa: E402
+from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -303,7 +303,9 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
             servers = [spawn()]
             steps: list[dict[str, Any]] = []
             try:
-                run_steps(scenario, servers, spawn, session, steps, quiet)
+                # A scenario whose answers trail a file watcher waits longer
+                # for silence, so a late notification lands in its own step.
+                run_steps(scenario, servers, spawn, session, steps, scenario.get("quiet", quiet))
             except OracleError as error:
                 steps.append({"failure": str(error)})
             finally:
@@ -379,11 +381,12 @@ def shape(value: Any, pointer: str = "", opaque: frozenset[str] = frozenset()) -
     # A JSON patch is its operations in order: which field each one touches
     # and how is the contract, only the value it writes is a shape.
     if isinstance(value, list) and pointer.endswith("/patch"):
-        return [
+        operations = [
             {**item, "value": shape(item.get("value"), f"{pointer}/<op>", opaque)}
             if isinstance(item, dict) else shape(item, f"{pointer}/<op>", opaque)
             for item in value
         ]
+        return app_server_client.commuted(operations)
     if isinstance(value, dict):
         return {key: shape(item, f"{pointer}/{key}", opaque) for key, item in value.items()}
     if isinstance(value, list):
@@ -635,10 +638,15 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[Any]:
         entry = managed_roots(normalizer.value(copy.deepcopy(step)))
         # A notification is compared by its name and the shape of what it
         # carries, whatever the step: its values are ids, clocks and counters.
+        # What patches only the clock comes and goes with timing.
         entry["notifications"] = [
             {"method": item["method"], "params": shape(item.get("params"), "", frozenset())}
             if isinstance(item, dict) else item
-            for item in entry.get("notifications", [])
+            for item in (
+                app_server_client.without_clock(item) if isinstance(item, dict) else item
+                for item in entry.get("notifications", [])
+            )
+            if item is not None
         ]
         response = entry.get("response")
         if not entry.pop("exact", False) and isinstance(response, dict) and "result" in response:
@@ -705,14 +713,14 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
         selected = [
             scenario
             for scenario in scenarios()
@@ -737,7 +745,7 @@ def main() -> int:
             return entry
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
-            captured = list(pool.map(capture, selected))
+            captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {
             "schemaVersion": SCHEMA_VERSION,
             "reference": reference,

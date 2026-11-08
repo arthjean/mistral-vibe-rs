@@ -14,9 +14,10 @@ checkout, behind one scripted stand-in that plays every endpoint row 22 of
   answer, refuse, delay, drop or hold until a later step releases it;
 - ``POST /v1/datalake/events``, where the Teleport telemetry lands.
 
-Each checkout has an ``origin`` naming a GitHub repository whose fetches fail
-fast through a dead global proxy, so nothing reaches the network, and whose
-pushes land in a local bare repository through ``remote.origin.pushurl``.
+Each checkout has an ``origin`` naming a GitHub repository whose fetches the
+stand-in, as the global proxy, refuses at once, so nothing reaches the network
+(``vibe_code.write_gitconfig`` proves it before each run), and whose pushes
+land in a local bare repository through ``remote.origin.pushurl``.
 
 What is recorded:
 
@@ -69,14 +70,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import host_env  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
 from vibe_code import (  # noqa: E402
     API_KEY,
     Backend,
-    DEAD_PROXY,
     EVENT_TIMEOUT,
     GITHUB_URL,
     Normalizer,
@@ -87,6 +88,7 @@ from vibe_code import (  # noqa: E402
     page,
     project,
     started,
+    write_gitconfig,
 )
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -118,15 +120,8 @@ def run_git(world: blackbox.World, *args: str, cwd: Path | None = None, check: b
     return result.stdout.strip()
 
 
-def prepare_git(world: blackbox.World, spec: dict[str, Any] | None) -> None:
-    (world.home / ".gitconfig").write_text(
-        "[user]\n\tname = Oracle\n\temail = oracle@example.com\n"
-        "[init]\n\tdefaultBranch = main\n"
-        f"[http]\n\tproxy = {DEAD_PROXY}\n"
-        "[advice]\n\tdetachedHead = false\n",
-        encoding="utf-8",
-        newline="",
-    )
+def prepare_git(world: blackbox.World, spec: dict[str, Any] | None, backend: Backend) -> None:
+    write_gitconfig(world, backend)
     if spec is None:
         return
     for name, contents in spec.get("files", {"README.md": "hello\n"}).items():
@@ -187,13 +182,16 @@ def prepare_git(world: blackbox.World, spec: dict[str, Any] | None) -> None:
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
     backend = Backend(scenario.get("code", {}))
+    dead = stand_in.ClosedPort()
     with host_env.scratch_root("vibe-teleport-oracle-") as root:
         session = app_server_client.Session(root)
         world = session.world
         try:
             backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
-            prepare_git(world, scenario.get("git", {}))
-            (world.vibe_home / "config.toml").write_text(base_config(backend, scenario), encoding="utf-8", newline="")
+            prepare_git(world, scenario.get("git", {}), backend)
+            (world.vibe_home / "config.toml").write_text(
+                base_config(backend, scenario).replace(DEAD_BASE, dead.base), encoding="utf-8", newline=""
+            )
             (world.vibe_home / "trusted_folders.toml").write_text(
                 f"trusted = [{json.dumps(str(world.workspace))}]\nuntrusted = []\n", encoding="utf-8", newline=""
             )
@@ -245,6 +243,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         finally:
             backend.release.set()
             backend.close()
+            dead.close()
 
 
 def substitute(value: Any, session: app_server_client.Session, state: dict[str, Any]) -> Any:
@@ -560,11 +559,15 @@ def linked(project_id: str = "proj-1") -> list[dict[str, Any]]:
 
 ONE_PROJECT = {"pages": {"": page(project("proj-1", "Repo"))}}
 
+#: Where a provider with no server behind it points: :func:`run_scenario`
+#: replaces it with a port of its own that refuses every connection.
+DEAD_BASE = "$DEAD"
+
 #: An active model on a provider of its own, with the Mistral provider second.
 OTHER_TABLES = (
     "\n[[providers]]\n"
     'name = "other"\n'
-    'api_base = "http://127.0.0.1:9/v1"\n'
+    f'api_base = "{DEAD_BASE}/v1"\n'
     'api_key_env_var = "OTHER_KEY"\n'
     'api_style = "openai"\n'
     "\n[[models]]\n"
@@ -914,14 +917,14 @@ def main() -> int:
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
         else:
             commit, binary = reference_command(
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
         selected = [
             scenario
             for scenario in scenarios()

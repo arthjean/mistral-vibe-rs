@@ -1,8 +1,8 @@
 {
   "counts": {
-    "keys": 22,
-    "pairs": 146,
-    "tools": 26
+    "keys": 21,
+    "pairs": 136,
+    "tools": 25
   },
   "keys": [
     "allowlist",
@@ -19,7 +19,6 @@
     "max_poll_seconds",
     "max_read_bytes",
     "max_timeout",
-    "max_timeout_seconds",
     "max_todos",
     "max_write_bytes",
     "model",
@@ -30,7 +29,7 @@
   ],
   "note": "Captured from the pinned reference by scripts/parity/tool_config.py. Tool names, configuration key names and default values are observations; no reference-authored description text is recorded here.",
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "schemaVersion": 1,
   "shellBranch": "posix",
@@ -202,7 +201,6 @@
         "wc",
         "which"
       ],
-      "default_timeout": 300,
       "denylist": [
         "gdb",
         "pdb",
@@ -234,7 +232,6 @@
       ],
       "max_inline_bytes": 30000,
       "max_output_bytes": 16000,
-      "max_timeout_seconds": 600.0,
       "permission": "ask",
       "sensitive_patterns": [
         "sudo"
@@ -280,12 +277,6 @@
         "**/.envrc.*",
         "**/.envrc~"
       ]
-    },
-    "exit_plan_mode": {
-      "allowlist": [],
-      "denylist": [],
-      "permission": "always",
-      "sensitive_patterns": []
     },
     "git_bash": {
       "allowlist": [
@@ -334,7 +325,6 @@
         "wc",
         "which"
       ],
-      "default_timeout": 300,
       "denylist": [
         "gdb",
         "pdb",
@@ -366,7 +356,6 @@
       ],
       "max_inline_bytes": 30000,
       "max_output_bytes": 16000,
-      "max_timeout_seconds": 600.0,
       "permission": "ask",
       "sensitive_patterns": [
         "sudo"
@@ -489,7 +478,6 @@
         "wc",
         "which"
       ],
-      "default_timeout": 300,
       "denylist": [
         "gdb",
         "pdb",
@@ -521,7 +509,6 @@
       ],
       "max_inline_bytes": 30000,
       "max_output_bytes": 16000,
-      "max_timeout_seconds": 600.0,
       "permission": "ask",
       "sensitive_patterns": [
         "sudo"
@@ -558,7 +545,7 @@
     "read_file": {
       "allowlist": [],
       "denylist": [],
-      "max_read_bytes": 51200,
+      "max_read_bytes": 64000,
       "permission": "always",
       "sensitive_patterns": [
         "**/.env",

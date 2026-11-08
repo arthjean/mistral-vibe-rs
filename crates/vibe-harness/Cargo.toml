@@ -26,6 +26,9 @@ tokio.workspace = true
 v8 = "=150.3.0"
 vibe-core = { path = "../vibe-core" }
 
+[dev-dependencies]
+vibe-core = { path = "../vibe-core", features = ["parity-replay"] }
+
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true
 

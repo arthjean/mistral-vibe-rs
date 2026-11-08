@@ -54,7 +54,7 @@ from urllib.parse import parse_qsl, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
 import host_env  # noqa: E402
@@ -927,7 +927,7 @@ def main() -> int:
     try:
         fixture = (arguments.fixture or build_fixture()).resolve()
         if arguments.server is not None:
-            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
+            command = [str(arguments.server.resolve())]
             reference = {"commit": "server-override"}
             dialect = "port"
         else:
@@ -935,7 +935,7 @@ def main() -> int:
                 arguments.reference, "vibe-app-server", arguments.expected_commit
             )
             reference = {"commit": commit}
-            command = [*binary, *HARNESS_FLAGS]
+            command = [*binary]
             dialect = "reference"
         selected = [s for s in scenarios() if not arguments.only or any(name in s["name"] for name in arguments.only)]
         captured = []

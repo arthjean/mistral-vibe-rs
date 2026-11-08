@@ -38,7 +38,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
 import host_env  # noqa: E402
 from blackbox import (  # noqa: E402
     Agent,
@@ -56,7 +56,6 @@ import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/corpus.json"
-UNIFIED_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/unified-corpus.json"
 SCHEMA_VERSION = 1
 
 #: How long the agent must stay silent before a step is considered settled.
@@ -245,6 +244,14 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[dict[st
 # The command line
 # --------------------------------------------------------------------------
 
+#: The backend flags v3.0.0 removed, spelled once: the argv vectors below hand
+#: them to the binary under test only to record how it refuses them, and no
+#: capture selects a backend with them
+#: (`no_driver_passes_a_harness_flag` in
+#: `crates/vibe-core/src/parity/capture_guard_tests.rs` allows this line alone).
+REMOVED_BACKEND_FLAGS = ("--legacy-harness", "--experimental-harness")
+LEGACY_FLAG, EXPERIMENTAL_FLAG = REMOVED_BACKEND_FLAGS
+
 #: Argument vectors the entry point answers before it serves anything: every
 #: one exits after printing, so no server starts and nothing reads stdin.
 ARGV_CASES: list[list[str]] = [
@@ -268,9 +275,12 @@ ARGV_CASES: list[list[str]] = [
     ["--", "x"],
     ["--setup=1"],
     ["--version=1"],
-    ["--legacy-harness=yes"],
-    ["--experimental-harness", "--legacy-harness"],
-    ["--legacy-harness", "--experimental-harness"],
+    # The backend flags v3.0.0 removed: the reference refuses each as an
+    # unknown argument, while this port still declares both. Each vector is
+    # one this port refuses too, so no server starts on either side.
+    [f"{LEGACY_FLAG}=yes"],
+    [EXPERIMENTAL_FLAG, LEGACY_FLAG],
+    [LEGACY_FLAG, EXPERIMENTAL_FLAG],
 ]
 
 VERSION_LINE = re.compile(r"^(vibe-acp )\d+\.\d+\.\d+\S*$", re.MULTILINE)
@@ -320,13 +330,6 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--agent", type=Path, default=None, help="drive this binary instead")
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument(
-        "--harness",
-        choices=["legacy", "unified"],
-        default="legacy",
-        help="the backend both sides run: the legacy one through the escape hatch, or the "
-        "Unified Harness every session opens on by default",
-    )
     parser.add_argument("--only", action="append", default=[], help="scenario name filter")
     parser.add_argument("--raw", action="store_true", help="also keep the raw messages")
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
@@ -338,9 +341,7 @@ def parse_arguments() -> argparse.Namespace:
 
 def main() -> int:
     arguments = parse_arguments()
-    flags = HARNESS_FLAGS if arguments.harness == "legacy" else ()
-    default_output = DEFAULT_OUTPUT if arguments.harness == "legacy" else UNIFIED_OUTPUT
-    arguments.output = provenance.port_output(arguments.output, default_output, agent=arguments.agent)
+    arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, agent=arguments.agent)
     try:
         if arguments.agent is not None:
             command = [str(arguments.agent.resolve())]
@@ -357,7 +358,7 @@ def main() -> int:
         ]
         def capture(scenario: dict[str, Any]) -> dict[str, Any]:
             started = time.monotonic()
-            run = run_scenario(scenario, [*command, *flags], arguments.quiet)
+            run = run_scenario(scenario, command, arguments.quiet)
             entry = {
                 "name": scenario["name"],
                 "scenario": scenario,

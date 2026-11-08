@@ -23,9 +23,11 @@
 //! a running session opens and sends. Where this build still answers something
 //! else, the ledger below names it rather than the replay passing quietly.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -33,12 +35,16 @@ use toml::Table;
 
 use vibe_core::config::registry::default_document;
 use vibe_core::config::{ConfigPaths, ConfigSnapshot, LayeredConfig};
-use vibe_core::parity::REFERENCE_COMMIT;
-use vibe_core::parity::replay::pinned_reference;
+use vibe_core::parity::is_pin_commit;
+use vibe_core::parity::replay::{
+    Class, Entry, PatternDivergence, assert_ledger, entries, pinned_reference,
+};
 
 use super::manager::TRANSCRIPTION_DRAIN_TIMEOUT;
 use super::playback::{PLAYBACK_BUFFER_MS, PLAYBACK_SAMPLE_WIDTH};
-use super::settings::{SpeechSettings, TranscriptionSettings};
+use super::settings::{
+    CredentialLookup, SpeechSettings, TranscriptionSettings, credential_missing,
+};
 use super::speech::SpeechRequest;
 use super::transcribe::{RealtimeEndpoint, session_update};
 
@@ -48,7 +54,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-voice/tests/voice/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/voice.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 /// The comparison floor this replay commits to, so a regeneration that
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 200;
@@ -59,7 +65,7 @@ const CONFIG_FILE: &str = "config.toml";
 /// capture adds without a reader here fails the replay by name rather than
 /// passing unread, and so does a family this replay expects and the corpus
 /// dropped.
-const FAMILIES: [&str; 13] = [
+const FAMILIES: [&str; 12] = [
     "constants",
     "transcriptionResolution",
     "speechResolution",
@@ -67,7 +73,6 @@ const FAMILIES: [&str; 13] = [
     "captureSignal",
     "audioDevices",
     "decodeWav",
-    "audioMetadata",
     "transcribeStream",
     "voiceManager",
     "narrator",
@@ -141,6 +146,49 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
 ];
 
+/// The open gaps of row 24, typed: each names the scenario and the
+/// `/family/field` pointer of the comparison it covers, and how many
+/// differences it covers, which the replay fails on when it moves. A
+/// divergence one of these covers is counted as a gap difference, never as an
+/// accepted one.
+const GAPS: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "transcribe-provider-without-credential",
+        pointer: "/wireFrames/transcription.refused",
+        count: 1,
+        row: "24",
+        class: Class::Gap,
+        reason: "from the v3 pin the reference resolves the realtime credential before it opens \
+                 a stream and ends the stream on an error event when a provider names no \
+                 variable (`resolve_snapshot`, `vibe/cli/transcribe/mistral_transcribe_client.py`); \
+                 this port's voice manager refuses only a named variable that resolves to \
+                 nothing (`credential_missing` in `crates/vibe-voice/src/settings.rs`) and opens \
+                 the stream with an empty key",
+    },
+    PatternDivergence {
+        scenario: "speech-provider-without-credential",
+        pointer: "/wireFrames/speech.refused",
+        count: 1,
+        row: "24",
+        class: Class::Gap,
+        reason: "from the v3 pin the reference resolves the speech credential before it builds a \
+                 request and raises when a provider names no variable (`resolve_snapshot`, \
+                 `vibe/cli/tts/mistral_tts_client.py`); this port's speech manager posts with \
+                 whatever the variable resolves to, an empty key included (`resolve_credential` \
+                 in `crate::speech`)",
+    },
+];
+
+/// The gap of [`GAPS`] a divergence keyed `family/field/case` falls under.
+fn gap_for(key: &str) -> Option<usize> {
+    let mut parts = key.splitn(3, '/');
+    let (Some(family), Some(field), Some(case)) = (parts.next(), parts.next(), parts.next()) else {
+        return None;
+    };
+    let pointer = format!("/{family}/{field}");
+    GAPS.iter().position(|gap| gap.covers(case, &pointer))
+}
+
 // --------------------------------------------------------------------------
 // The corpus
 // --------------------------------------------------------------------------
@@ -160,7 +208,6 @@ struct Corpus {
     capture_signal: Vec<behavior::SignalCase>,
     audio_devices: Vec<behavior::DeviceCase>,
     decode_wav: Vec<behavior::WavCase>,
-    audio_metadata: Vec<behavior::MetadataCase>,
     transcribe_stream: Vec<behavior::StreamCase>,
     voice_manager: Vec<behavior::VoiceCase>,
     narrator: Vec<behavior::NarratorCase>,
@@ -309,11 +356,18 @@ struct FrameCase {
     speech: Option<SpeechFrame>,
 }
 
+/// A frame the reference opened carries its endpoint and headers; one it
+/// refused before the wire, because the credential resolved to nothing,
+/// carries a [`Refusal`] in their place.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TranscriptionFrame {
-    endpoint_url: String,
-    header_names: Vec<String>,
+    #[serde(default)]
+    endpoint_url: Option<String>,
+    #[serde(default)]
+    header_names: Option<Vec<String>>,
+    #[serde(default)]
+    refusal: Option<Refusal>,
     server_url: String,
     model: String,
     audio_format: AudioFormat,
@@ -331,9 +385,14 @@ struct AudioFormat {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SpeechFrame {
-    method: String,
-    endpoint_url: String,
-    body: Table,
+    #[serde(default)]
+    method: Option<String>,
+    #[serde(default)]
+    endpoint_url: Option<String>,
+    #[serde(default)]
+    body: Option<Table>,
+    #[serde(default)]
+    refusal: Option<Refusal>,
     server_url: String,
     model: String,
     voice: String,
@@ -353,6 +412,27 @@ struct Credential {
                   this port is compared on"
     )]
     source: String,
+    /// Why the provider resolved no credential, for an `unset` origin.
+    #[serde(default)]
+    #[expect(
+        dead_code,
+        reason = "the reason documents the refusal; whether a frame was refused is what this \
+                  port is compared on"
+    )]
+    reason: Option<String>,
+}
+
+/// What stopped a frame before the wire: the class of the error event the
+/// realtime stream ended on, or of the exception the speech call raised.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Refusal {
+    #[expect(
+        dead_code,
+        reason = "the class names the reference's refusal; that one happened is what this port \
+                  is compared on"
+    )]
+    r#type: String,
 }
 
 fn repo_root() -> PathBuf {
@@ -372,8 +452,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate it with {CAPTURE_SCRIPT}"
     );
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     corpus
@@ -435,7 +515,7 @@ fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>
         .iter()
         .filter(|line| {
             let key = line.split(':').next().unwrap_or_default();
-            !ledger.iter().any(|(entry, _)| covers(entry, key))
+            !ledger.iter().any(|(entry, _)| covers(entry, key)) && gap_for(key).is_none()
         })
         .cloned()
         .collect::<Vec<_>>();
@@ -450,8 +530,14 @@ fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>
 }
 
 /// Fails on any divergence the ledger does not name, and on any ledger entry
-/// whose divergence no longer reproduces, then reports the family's count.
-fn settle(report: &Report, family: &str) -> usize {
+/// whose divergence no longer reproduces, then reports the family's count and
+/// adds every divergence a typed gap covers to that gap's tally in `gaps`.
+fn settle(gaps: &mut [usize], report: &Report, family: &str) -> usize {
+    for key in &report.observed {
+        if let Some(index) = gap_for(key) {
+            gaps[index] += 1;
+        }
+    }
     let (unrecorded, stale) = audit(report, family, DIVERGENCES);
     assert!(
         unrecorded.is_empty(),
@@ -576,6 +662,16 @@ struct PortTranscriptionFrame {
     sample_rate: i64,
     target_streaming_delay_ms: i64,
     credential_env_var: String,
+    /// Whether this port's voice manager refuses the recording before it
+    /// opens anything.
+    refused: bool,
+}
+
+/// What every variable a capture document names resolves to during the
+/// capture: the oracle sets each one to a sentinel, so a named variable always
+/// carries a credential.
+fn capture_credentials() -> CredentialLookup {
+    Arc::new(|_: &str| Some("parity-sentinel-credential".to_owned()))
 }
 
 /// The frame a session opened against `view` would carry, or nothing where the
@@ -602,6 +698,7 @@ fn port_transcription_frame(view: &Value) -> Option<PortTranscriptionFrame> {
         encoding: string_at(&frame, "/session/audio_format/encoding"),
         sample_rate: integer_at(&frame, "/session/audio_format/sample_rate"),
         target_streaming_delay_ms: integer_at(&frame, "/session/target_streaming_delay_ms"),
+        refused: credential_missing(&settings.api_key_env_var, &capture_credentials()),
         credential_env_var: settings.api_key_env_var.clone(),
     })
 }
@@ -616,6 +713,10 @@ struct PortSpeechFrame {
     voice: String,
     response_format: String,
     credential_env_var: String,
+    /// Whether this port refuses the call before it builds a request. Its
+    /// speech manager has no such path: it sends whatever the provider's
+    /// variable resolves to (`resolve_credential` in `crate::speech`).
+    refused: bool,
     body: Value,
 }
 
@@ -632,6 +733,7 @@ fn port_speech_frame(view: &Value, input: &str) -> Option<PortSpeechFrame> {
         voice: settings.voice.clone(),
         response_format: settings.response_format.clone(),
         credential_env_var: settings.api_key_env_var.clone(),
+        refused: false,
         body: request.body,
     })
 }
@@ -1109,13 +1211,26 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
         let port = port_transcription_frame(&view)
             .unwrap_or_else(|| panic!("`{}` resolves a voice session", case.case));
         if let Some(frame) = case.transcription.as_ref() {
+            // From the v3 pin the reference refuses a stream whose credential
+            // resolves to nothing before it opens anything. This port refuses
+            // a recording on the rule its voice manager applies, over the
+            // variables the capture set.
             report.check(
                 "wireFrames",
-                "transcription.endpointUrl",
+                "transcription.refused",
                 &case.case,
-                &frame.endpoint_url,
-                &port.endpoint,
+                &frame.refusal.is_some(),
+                &port.refused,
             );
+            if let Some(endpoint_url) = frame.endpoint_url.as_ref() {
+                report.check(
+                    "wireFrames",
+                    "transcription.endpointUrl",
+                    &case.case,
+                    endpoint_url,
+                    &port.endpoint,
+                );
+            }
             report.check(
                 "wireFrames",
                 "transcription.model",
@@ -1163,13 +1278,19 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
                 &frame.server_url,
                 &port.server_url,
             );
-            assert!(
-                frame
-                    .header_names
-                    .iter()
-                    .any(|name| name.eq_ignore_ascii_case("authorization")),
-                "the reference authorizes its realtime request: {:?}",
-                frame.header_names
+            if let Some(header_names) = frame.header_names.as_ref() {
+                assert!(
+                    header_names
+                        .iter()
+                        .any(|name| name.eq_ignore_ascii_case("authorization")),
+                    "the reference authorizes its realtime request: {header_names:?}"
+                );
+            }
+            assert_eq!(
+                frame.refusal.is_some(),
+                frame.endpoint_url.is_none() && frame.header_names.is_none(),
+                "`{}` records an endpoint exactly when the stream opened",
+                case.case
             );
         }
         let Some(frame) = case.speech.as_ref() else {
@@ -1178,23 +1299,44 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
         // The reference's request is posted for a text the capture authored, so
         // this port builds its own request for the same text and the two bodies
         // are compared field for field.
-        let input = body_scalar(frame.body.get("input"));
+        // A refused request has no body, and the text it would have carried
+        // is then not compared, so any text builds this port's request.
+        let input = body_scalar(frame.body.as_ref().and_then(|body| body.get("input")));
         let port = port_speech_frame(&view, &input)
             .unwrap_or_else(|| panic!("`{}` resolves a speech request", case.case));
+        assert_eq!(
+            frame.refusal.is_some(),
+            frame.method.is_none() && frame.endpoint_url.is_none() && frame.body.is_none(),
+            "`{}` records a request exactly when the call reached its sender",
+            case.case
+        );
+        // From the v3 pin the reference refuses a speech call whose credential
+        // resolves to nothing before it builds a request.
         report.check(
             "wireFrames",
-            "speech.method",
+            "speech.refused",
             &case.case,
-            &frame.method,
-            &port.method.to_owned(),
+            &frame.refusal.is_some(),
+            &port.refused,
         );
-        report.check(
-            "wireFrames",
-            "speech.endpointUrl",
-            &case.case,
-            &frame.endpoint_url,
-            &port.endpoint,
-        );
+        if let Some(method) = frame.method.as_ref() {
+            report.check(
+                "wireFrames",
+                "speech.method",
+                &case.case,
+                method,
+                &port.method.to_owned(),
+            );
+        }
+        if let Some(endpoint_url) = frame.endpoint_url.as_ref() {
+            report.check(
+                "wireFrames",
+                "speech.endpointUrl",
+                &case.case,
+                endpoint_url,
+                &port.endpoint,
+            );
+        }
         report.check(
             "wireFrames",
             "speech.serverUrl",
@@ -1230,13 +1372,16 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
             &frame.credential.env_var,
             &port.credential_env_var,
         );
+        let Some(body) = frame.body.as_ref() else {
+            continue;
+        };
         // The body itself, which is what a summary is actually spoken through.
         for key in ["model", "input", "voice_id", "response_format", "stream"] {
             report.check(
                 "wireFrames",
                 &format!("speech.body.{key}"),
                 &case.case,
-                &body_scalar(frame.body.get(key)),
+                &body_scalar(body.get(key)),
                 &port_body_scalar(&port.body, key),
             );
         }
@@ -1246,7 +1391,7 @@ fn run_wire_frames(corpus: &Corpus, report: &mut Report) {
             "wireFrames",
             "speech.body.metadata",
             &case.case,
-            &frame.body.contains_key("metadata"),
+            &body.contains_key("metadata"),
             &port.body.get("metadata").is_some(),
         );
     }
@@ -1422,53 +1567,50 @@ fn the_committed_corpus_replays_against_this_port() {
     }
     let mut scenarios = 0;
     let mut conformant = 0;
+    let mut gaps = vec![0; GAPS.len()];
     let mut report = Report::default();
     run_constants(&corpus.constants, &mut report);
-    scenarios += settle(&report, "constants");
+    scenarios += settle(&mut gaps, &report, "constants");
     conformant += report.conformant;
     let mut report = Report::default();
     run_transcription_resolution(&corpus, &mut report);
-    scenarios += settle(&report, "transcriptionResolution");
+    scenarios += settle(&mut gaps, &report, "transcriptionResolution");
     conformant += report.conformant;
     let mut report = Report::default();
     run_speech_resolution(&corpus, &mut report);
-    scenarios += settle(&report, "speechResolution");
+    scenarios += settle(&mut gaps, &report, "speechResolution");
     conformant += report.conformant;
     let mut report = Report::default();
     run_wire_frames(&corpus, &mut report);
-    scenarios += settle(&report, "wireFrames");
+    scenarios += settle(&mut gaps, &report, "wireFrames");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_capture_signal(&corpus.capture_signal, &mut report);
-    scenarios += settle(&report, "captureSignal");
+    scenarios += settle(&mut gaps, &report, "captureSignal");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_audio_devices(&corpus.audio_devices, &mut report);
-    scenarios += settle(&report, "audioDevices");
+    scenarios += settle(&mut gaps, &report, "audioDevices");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_decode_wav(&corpus.decode_wav, &mut report);
-    scenarios += settle(&report, "decodeWav");
-    conformant += report.conformant;
-    let mut report = Report::default();
-    behavior::run_audio_metadata(&corpus.audio_metadata, &mut report);
-    scenarios += settle(&report, "audioMetadata");
+    scenarios += settle(&mut gaps, &report, "decodeWav");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_transcribe_stream(&corpus.transcribe_stream, &mut report);
-    scenarios += settle(&report, "transcribeStream");
+    scenarios += settle(&mut gaps, &report, "transcribeStream");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_voice_manager(&corpus.voice_manager, &mut report);
-    scenarios += settle(&report, "voiceManager");
+    scenarios += settle(&mut gaps, &report, "voiceManager");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_narrator(&corpus.narrator, &mut report);
-    scenarios += settle(&report, "narrator");
+    scenarios += settle(&mut gaps, &report, "narrator");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_narration_service(&corpus.narration_service, &mut report);
-    scenarios += settle(&report, "narrationService");
+    scenarios += settle(&mut gaps, &report, "narrationService");
     conformant += report.conformant;
     println!(
         "voice: {scenarios} comparisons across {} families replayed at {}",
@@ -1480,13 +1622,44 @@ fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
-    // Every ledger entry is an `ACCEPTED` divergence `docs/parity.md` records,
-    // one comparison per difference.
+    // Every typed gap covers exactly the differences it declares, and stands
+    // on a row the scorecard carries.
+    let miscounted = GAPS
+        .iter()
+        .zip(&gaps)
+        .filter(|(gap, found)| gap.count != **found)
+        .map(|(gap, found)| {
+            format!(
+                "{} declares {} differences and covered {found}",
+                gap.label(),
+                gap.count
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
+    let null = Value::Null;
+    let recorded = corpus
+        .wire_frames
+        .iter()
+        .map(|case| (case.case.clone(), &null))
+        .collect::<BTreeMap<_, _>>();
+    assert_ledger(CORPUS_RELATIVE, &recorded, entries(GAPS));
+    // Every other ledger entry is an `ACCEPTED` divergence `docs/parity.md`
+    // records, one comparison per difference; a gap is one comparison too.
+    let gap_differences = gaps.iter().sum::<usize>();
+    let accepted = scenarios - conformant - gap_differences;
     vibe_core::parity::figures::assert_figures(
         "voice parity:",
         "crates/vibe-voice/tests/voice/corpus.json",
-        vibe_core::parity::figures::Figures::decided(conformant, scenarios, scenarios - conformant),
-        serde_json::json!({ "entries": DIVERGENCES.len() }),
+        vibe_core::parity::figures::Figures {
+            conformant,
+            accepted,
+            total: scenarios,
+            accepted_differences: accepted,
+            gap_differences,
+            prose_differences: 0,
+        },
+        serde_json::json!({ "entries": DIVERGENCES.len(), "gaps": GAPS.len() }),
     );
 }
 

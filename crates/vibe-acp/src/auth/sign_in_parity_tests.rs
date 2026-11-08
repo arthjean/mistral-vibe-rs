@@ -21,7 +21,7 @@ use vibe_core::auth::{
     SignInAttempt, SignInError, SignInErrorCode, allows_origin_rewrite, default_mistral_provider,
     effective_browser_auth_url,
 };
-use vibe_core::parity::REFERENCE_COMMIT;
+use vibe_core::parity::is_pin_commit;
 use vibe_core::whoami::{WhoAmIResult, adopt_tenant_domains};
 
 use super::{
@@ -307,8 +307,8 @@ fn the_editor_sign_in_resolves_and_writes_what_the_reference_does() {
     let path = repo_root().join(CORPUS_RELATIVE);
     let raw = std::fs::read_to_string(&path).expect("the setup-auth corpus is readable");
     let corpus: Corpus = serde_json::from_str(&raw).expect("the setup-auth corpus parses");
-    assert_eq!(
-        corpus.reference.commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference.commit),
         "the corpus was captured from an unpinned reference"
     );
     assert!(

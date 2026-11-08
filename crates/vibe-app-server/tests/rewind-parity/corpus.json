@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.5,
   "reference": {
-    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
   },
   "scenarios": [
     {
@@ -15,7 +15,6 @@
             "result": {
               "hasFileChanges": true,
               "paths": [
-                "<ws>/created.txt",
                 "<ws>/notes.txt"
               ]
             }
@@ -150,8 +149,8 @@
               "code": "not_found",
               "data": null,
               "message": {
-                "prose": 42,
-                "sha256": "65f7e53c8e77050639fafbbe160495b7fb0571139bdc2c16848401a46abbda7b"
+                "prose": 52,
+                "sha256": "1b06d30073ccdf7680b0fbfd71c133a021d6b0b948653ee2d17cc9009be9b25b"
               }
             },
             "id": 6
@@ -310,7 +309,9 @@
       "observed": [
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 6,
             "result": {
@@ -322,8 +323,8 @@
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -345,141 +346,15 @@
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
-                    "source": "turn_start",
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 47,
-                          "sha256": "e6f3eda1356bed9c86ef81a4cca0251ee9ff9e334fc88d619004c163eb0e5db3"
-                        },
-                        "message": "notes.txt",
-                        "settledMessage": "notes.txt",
-                        "settledVerb": "Edited",
-                        "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 17,
-                          "sha256": "591c4a1a1fc6f86f0e713c0b74fa3b07001fd161ae3e3924e9daddfb7b03cfc7"
-                        },
-                        "verb": "Editing"
-                      },
-                      "input": {
-                        "filePath": "notes.txt",
-                        "newString": "first edit",
-                        "oldString": "original",
-                        "replaceAll": false
-                      },
-                      "kind": "file_edit",
-                      "toolName": "edit"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "notes.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Edited",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "file": "<ws>/notes.txt",
-                        "newString": "first edit",
-                        "occurrences": [
-                          {
-                            "newText": "first edit",
-                            "oldText": "original",
-                            "startLine": 1
-                          }
-                        ],
-                        "oldString": "original"
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "edit",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
                   },
                   {
                     "content": [
@@ -490,13 +365,16 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-7>",
+                    "id": "<id-4>",
                     "inputEntryId": null,
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-2>",
-                    "source": null,
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
@@ -504,12 +382,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-8>",
+                      "entryId": "<id-5>",
                       "inplace": false,
                       "restoreFiles": true
                     },
                     "generationStatus": "completed",
-                    "id": "<id-9>",
+                    "id": "<id-6>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -524,7 +402,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -541,32 +419,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "Create a file and edit the notes",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -581,7 +454,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "first edit\n"
           }
         },
@@ -713,7 +586,9 @@
       "observed": [
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 6,
             "result": {
@@ -723,8 +598,8 @@
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -746,141 +621,15 @@
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
-                    "source": "turn_start",
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 47,
-                          "sha256": "e6f3eda1356bed9c86ef81a4cca0251ee9ff9e334fc88d619004c163eb0e5db3"
-                        },
-                        "message": "notes.txt",
-                        "settledMessage": "notes.txt",
-                        "settledVerb": "Edited",
-                        "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 17,
-                          "sha256": "591c4a1a1fc6f86f0e713c0b74fa3b07001fd161ae3e3924e9daddfb7b03cfc7"
-                        },
-                        "verb": "Editing"
-                      },
-                      "input": {
-                        "filePath": "notes.txt",
-                        "newString": "first edit",
-                        "oldString": "original",
-                        "replaceAll": false
-                      },
-                      "kind": "file_edit",
-                      "toolName": "edit"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "notes.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Edited",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "file": "<ws>/notes.txt",
-                        "newString": "first edit",
-                        "occurrences": [
-                          {
-                            "newText": "first edit",
-                            "oldText": "original",
-                            "startLine": 1
-                          }
-                        ],
-                        "oldString": "original"
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "edit",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
                   },
                   {
                     "content": [
@@ -891,13 +640,16 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-7>",
+                    "id": "<id-4>",
                     "inputEntryId": null,
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-2>",
-                    "source": null,
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
@@ -905,12 +657,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-8>",
+                      "entryId": "<id-5>",
                       "inplace": false,
                       "restoreFiles": false
                     },
                     "generationStatus": "completed",
-                    "id": "<id-9>",
+                    "id": "<id-6>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -925,7 +677,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -942,32 +694,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "Create a file and edit the notes",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -982,7 +729,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "second edit\n"
           }
         },
@@ -1113,7 +860,10 @@
       "observed": [
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "session/updated",
+            "history/entryAdded"
+          ],
           "response": {
             "id": 6,
             "result": {
@@ -1125,7 +875,7 @@
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": "<vibe-home>/logs/session/session_<time>_<short>",
+                "path": "<vibe-home>/logs/session/unified/<id-1>",
                 "persisted": true,
                 "sessionId": "<id-1>",
                 "title": null
@@ -1148,6 +898,7 @@
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -1161,74 +912,13 @@
                     "createdAt": "<time>",
                     "detail": {
                       "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-4>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-1>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-3>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 47,
-                          "sha256": "e6f3eda1356bed9c86ef81a4cca0251ee9ff9e334fc88d619004c163eb0e5db3"
-                        },
+                        "content": null,
                         "message": "notes.txt",
                         "settledMessage": "notes.txt",
                         "settledVerb": "Edited",
                         "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
+                          "prose": 12,
+                          "sha256": "cba0c8fabef9370f267d9501b92d017af452633b19810c859240a18f820fad26"
                         },
                         "suffix": "",
                         "summary": {
@@ -1244,11 +934,11 @@
                         "replaceAll": false
                       },
                       "kind": "file_edit",
-                      "toolName": "edit"
+                      "toolName": "file_system.edit"
                     },
                     "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
+                    "id": "<id-4>",
+                    "inputEntryId": "<id-2>",
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -1266,20 +956,22 @@
                       "durationMs": "<duration>",
                       "output": {
                         "file": "<ws>/notes.txt",
-                        "newString": "first edit",
+                        "newString": null,
                         "occurrences": [
                           {
+                            "newStartLine": 1,
                             "newText": "first edit",
                             "oldText": "original",
                             "startLine": 1
                           }
                         ],
-                        "oldString": "original"
+                        "oldString": null,
+                        "previousContent": "original\n"
                       },
                       "outputText": "",
                       "status": "completed"
                     },
-                    "title": "edit",
+                    "title": "file_system.edit",
                     "turnId": "<id-3>",
                     "type": "effect",
                     "updatedAt": "<time>"
@@ -1293,12 +985,15 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
+                    "id": "<id-5>",
+                    "inputEntryId": "<id-2>",
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
-                    "source": null,
+                    "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
                     "updatedAt": "<time>",
@@ -1307,12 +1002,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-7>",
+                      "entryId": "<id-6>",
                       "inplace": true,
-                      "restoreFiles": true
+                      "restoreFiles": false
                     },
                     "generationStatus": "completed",
-                    "id": "<id-8>",
+                    "id": "<id-7>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -1327,7 +1022,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -1345,31 +1040,36 @@
                   },
                   "archivedAt": null,
                   "bumpedAt": "<time>",
-                  "contextUsage": null,
+                  "contextUsage": {
+                    "cachedInputTokens": 0,
+                    "inputTokens": 10,
+                    "outputTokens": 5,
+                    "totalTokens": 15
+                  },
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-1>",
-                  "isUnseen": false,
+                  "isUnseen": true,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": null,
                   "pinnedAt": null,
                   "preview": "Create a file and edit the notes",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
                   "tokenUsage": {
+                    "cachedInputTokens": 0,
                     "inputTokens": 50,
                     "outputTokens": 25,
                     "totalTokens": 75
                   },
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -1384,7 +1084,7 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "first edit\n"
           }
         },
@@ -1516,20 +1216,22 @@
       "observed": [
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "session/updated",
+            "history/entryAdded"
+          ],
           "response": {
             "id": 6,
             "result": {
               "message": "Create a file and edit the notes",
               "restoreErrors": [],
               "restoredPaths": [
-                "<ws>/created.txt",
                 "<ws>/notes.txt"
               ],
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": "<vibe-home>/logs/session/session_<time>_<short>",
+                "path": "<vibe-home>/logs/session/unified/<id-1>",
                 "persisted": true,
                 "sessionId": "<id-1>",
                 "title": null
@@ -1546,7 +1248,7 @@
                     "details": {
                       "entryId": "<id-2>",
                       "inplace": true,
-                      "restoreFiles": true
+                      "restoreFiles": false
                     },
                     "generationStatus": "completed",
                     "id": "<id-3>",
@@ -1564,7 +1266,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -1582,31 +1284,36 @@
                   },
                   "archivedAt": null,
                   "bumpedAt": "<time>",
-                  "contextUsage": null,
+                  "contextUsage": {
+                    "cachedInputTokens": 0,
+                    "inputTokens": 10,
+                    "outputTokens": 5,
+                    "totalTokens": 15
+                  },
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-1>",
-                  "isUnseen": false,
+                  "isUnseen": true,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": null,
                   "pinnedAt": null,
-                  "preview": "",
-                  "reasoningEffort": null,
+                  "preview": "Create a file and edit the notes",
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
                   "tokenUsage": {
+                    "cachedInputTokens": 0,
                     "inputTokens": 50,
                     "outputTokens": 25,
                     "totalTokens": 75
                   },
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -1731,21 +1438,22 @@
       "observed": [
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 6,
             "result": {
               "message": "Create a file and edit the notes",
               "restoreErrors": [],
               "restoredPaths": [
-                "<ws>/created.txt",
                 "<ws>/notes.txt"
               ],
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -1779,7 +1487,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -1796,32 +1504,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -1952,8 +1655,8 @@
               "code": "not_found",
               "data": null,
               "message": {
-                "prose": 42,
-                "sha256": "8f6bf414629fe524ea7a037fec14c37e6cfd89b4abac0fac588054489c811eee"
+                "prose": 52,
+                "sha256": "a7eef0dc6e922a320c719d75f192ac5b693a776df6d30f275f23cdc81d559708"
               }
             },
             "id": 6
@@ -2034,21 +1737,22 @@
         },
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 11,
             "result": {
               "message": "Create a file and edit the notes",
               "restoreErrors": [],
               "restoredPaths": [
-                "<ws>/created.txt",
                 "<ws>/notes.txt"
               ],
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -2082,7 +1786,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -2099,32 +1803,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -2329,10 +2028,12 @@
           "response": {
             "error": {
               "code": "conflict",
-              "data": null,
+              "data": {
+                "activeTurnId": "<id-2>"
+              },
               "message": {
-                "prose": 38,
-                "sha256": "9f7981a5089fc00dfaafc0fc85c0c163e0e27fa3ecd3b6507724f9f9be82a671"
+                "prose": 33,
+                "sha256": "9df84fcbd96418fc411fed65c364ac715a59b41af0b79fb99f9902f2566d2d76"
               }
             },
             "id": 6
@@ -2391,7 +2092,9 @@
       "observed": [
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 6,
             "result": {
@@ -2401,8 +2104,8 @@
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -2424,141 +2127,15 @@
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
-                    "source": "turn_start",
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 47,
-                          "sha256": "e6f3eda1356bed9c86ef81a4cca0251ee9ff9e334fc88d619004c163eb0e5db3"
-                        },
-                        "message": "notes.txt",
-                        "settledMessage": "notes.txt",
-                        "settledVerb": "Edited",
-                        "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 17,
-                          "sha256": "591c4a1a1fc6f86f0e713c0b74fa3b07001fd161ae3e3924e9daddfb7b03cfc7"
-                        },
-                        "verb": "Editing"
-                      },
-                      "input": {
-                        "filePath": "notes.txt",
-                        "newString": "first edit",
-                        "oldString": "original",
-                        "replaceAll": false
-                      },
-                      "kind": "file_edit",
-                      "toolName": "edit"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "notes.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Edited",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "file": "<ws>/notes.txt",
-                        "newString": "first edit",
-                        "occurrences": [
-                          {
-                            "newText": "first edit",
-                            "oldText": "original",
-                            "startLine": 1
-                          }
-                        ],
-                        "oldString": "original"
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "edit",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
                   },
                   {
                     "content": [
@@ -2569,13 +2146,16 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-7>",
+                    "id": "<id-4>",
                     "inputEntryId": null,
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-2>",
-                    "source": null,
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
@@ -2589,85 +2169,17 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-8>",
+                    "id": "<id-5>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
-                    "source": "turn_start",
-                    "turnId": "<id-9>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": {
-                          "prose": 50,
-                          "sha256": "2b814816a2f81ecca75740097cf7411db5ee6f4752422f3e9a581b5e7b87627b"
-                        },
-                        "message": "notes.txt",
-                        "settledMessage": "notes.txt",
-                        "settledVerb": "Edited",
-                        "statusText": {
-                          "prose": 13,
-                          "sha256": "d868fdd01755f295f90b7740277dbc994ecb847e29a06c2db5d72ef66e898764"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 17,
-                          "sha256": "591c4a1a1fc6f86f0e713c0b74fa3b07001fd161ae3e3924e9daddfb7b03cfc7"
-                        },
-                        "verb": "Editing"
-                      },
-                      "input": {
-                        "filePath": "notes.txt",
-                        "newString": "second edit",
-                        "oldString": "first edit",
-                        "replaceAll": false
-                      },
-                      "kind": "file_edit",
-                      "toolName": "edit"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-10>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "notes.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Edited",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "file": "<ws>/notes.txt",
-                        "newString": "second edit",
-                        "occurrences": [
-                          {
-                            "newText": "second edit",
-                            "oldText": "first edit",
-                            "startLine": 1
-                          }
-                        ],
-                        "oldString": "first edit"
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "edit",
-                    "turnId": "<id-9>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
                   },
                   {
                     "content": [
@@ -2678,13 +2190,16 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "completed",
-                    "id": "<id-11>",
+                    "id": "<id-6>",
                     "inputEntryId": null,
+                    "outcome": {
+                      "type": "committed"
+                    },
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-2>",
-                    "source": null,
-                    "turnId": "<id-9>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
@@ -2692,12 +2207,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-12>",
+                      "entryId": "<id-7>",
                       "inplace": false,
                       "restoreFiles": true
                     },
                     "generationStatus": "completed",
-                    "id": "<id-13>",
+                    "id": "<id-8>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -2712,7 +2227,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -2729,32 +2244,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "Create a file and edit the notes",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -2771,129 +2281,80 @@
           "method": "session/rewind/read",
           "notifications": [],
           "response": {
-            "id": 7,
-            "result": {
-              "hasFileChanges": true,
-              "paths": [
-                "<ws>/created.txt",
-                "<ws>/notes.txt"
-              ]
-            }
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 42,
+                "sha256": "26cbea1ebb15c890ffe44f462df01232b5218420d33c4073bbe748610bb64a79"
+              }
+            },
+            "id": 7
           }
         },
         {
           "method": "session/rewind",
           "notifications": [],
           "response": {
-            "id": 8,
-            "result": {
-              "message": "Create a file and edit the notes",
-              "restoreErrors": [],
-              "restoredPaths": [
-                "<ws>/created.txt",
-                "<ws>/notes.txt"
-              ],
-              "sessionLog": {
-                "enabled": true,
-                "needsInitialAutoTitle": true,
-                "path": "<vibe-home>/logs/session/session_<time>_<short>",
-                "persisted": true,
-                "sessionId": "<id-2>",
-                "title": null
-              },
-              "state": {
-                "activeCallbacks": [],
-                "backgroundProcesses": [],
-                "childSessions": [],
-                "eventId": 0,
-                "format": "vibe.public-session-state/v1",
-                "history": [
-                  {
-                    "createdAt": "<time>",
-                    "details": {
-                      "entryId": "<id-3>",
-                      "inplace": true,
-                      "restoreFiles": true
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-14>",
-                    "inputEntryId": null,
-                    "kind": "rewind",
-                    "message": {
-                      "prose": 20,
-                      "sha256": "b61bb01df946e96f818182bf48d0a7c7c0e262ed6c0c797fa8e5d276afa65c2c"
-                    },
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "turnId": null,
-                    "type": "checkpoint",
-                    "updatedAt": "<time>"
-                  }
-                ],
-                "historyBeforeCursor": null,
-                "isQuiescent": true,
-                "retrying": null,
-                "session": {
-                  "agent": {
-                    "agentType": "agent",
-                    "description": {
-                      "prose": 33,
-                      "sha256": "46db4059b46ac5104646872011c4f006bfbfcbf96096e678b0919fb3ebc2b1cd"
-                    },
-                    "displayName": {
-                      "prose": 12,
-                      "sha256": "f38e7a50d0e155c641fa9da95701dab50f00143ea8e55226eb6ae9ded5cf32d9"
-                    },
-                    "name": "auto-approve",
-                    "safety": "yolo"
-                  },
-                  "archivedAt": null,
-                  "bumpedAt": null,
-                  "contextUsage": null,
-                  "createdAt": "<time>",
-                  "cwd": "<ws>",
-                  "harness": null,
-                  "id": "<id-2>",
-                  "isUnseen": false,
-                  "model": "mistral-medium-3.5",
-                  "parentSessionId": "<id-1>",
-                  "pinnedAt": null,
-                  "preview": "",
-                  "reasoningEffort": null,
-                  "rootSessionId": "<id-1>",
-                  "status": {
-                    "type": "idle"
-                  },
-                  "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 50,
-                    "outputTokens": 25,
-                    "totalTokens": 75
-                  },
-                  "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
-                  "worktree": null
-                },
-                "turnQueue": {
-                  "items": [],
-                  "maxItems": 32,
-                  "paused": false
-                },
-                "turns": []
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 42,
+                "sha256": "26cbea1ebb15c890ffe44f462df01232b5218420d33c4073bbe748610bb64a79"
               }
-            }
+            },
+            "id": 8
           }
         },
         {
           "files": {
             "created.txt": null,
-            "notes.txt": "original\n"
+            "notes.txt": "second edit\n"
           }
         },
         {
           "context": [
+            {
+              "content": "Create a file and edit the notes",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                "write_file",
+                "edit"
+              ]
+            },
+            {
+              "role": "tool"
+            },
+            {
+              "role": "tool"
+            },
+            {
+              "content": "Turn one done.",
+              "role": "assistant"
+            },
+            {
+              "content": "Edit the notes again",
+              "role": "user"
+            },
+            {
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                "edit"
+              ]
+            },
+            {
+              "role": "tool"
+            },
+            {
+              "content": "Turn two done.",
+              "role": "assistant"
+            },
             {
               "content": "After two rewinds",
               "role": "user"
@@ -3019,29 +2480,8 @@
         {
           "context": [
             {
-              "content": {
-                "prose": 434,
-                "sha256": "c49349baf2520478920e5b099f2f280fc782dc2cdfb608b589bc0b34834984ab"
-              },
+              "content": "Create a file",
               "role": "user"
-            },
-            {
-              "content": "Turn one done.",
-              "role": "assistant"
-            },
-            {
-              "content": "Edit the notes",
-              "role": "user"
-            },
-            {
-              "content": "",
-              "role": "assistant",
-              "toolCalls": [
-                "edit"
-              ]
-            },
-            {
-              "role": "tool"
             }
           ]
         },
@@ -3051,11 +2491,8 @@
           "response": {
             "id": 6,
             "result": {
-              "hasFileChanges": true,
-              "paths": [
-                "<ws>/created.txt",
-                "<ws>/notes.txt"
-              ]
+              "hasFileChanges": false,
+              "paths": []
             }
           }
         },
@@ -3065,29 +2502,27 @@
           "response": {
             "id": 7,
             "result": {
-              "hasFileChanges": true,
-              "paths": [
-                "<ws>/notes.txt"
-              ]
+              "hasFileChanges": false,
+              "paths": []
             }
           }
         },
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "session/updated",
+            "history/entryAdded"
+          ],
           "response": {
             "id": 8,
             "result": {
               "message": "Create a file",
               "restoreErrors": [],
-              "restoredPaths": [
-                "<ws>/created.txt",
-                "<ws>/notes.txt"
-              ],
+              "restoredPaths": [],
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": "<vibe-home>/logs/session/session_<time>_<short>",
+                "path": "<vibe-home>/logs/session/unified/<id-1>",
                 "persisted": true,
                 "sessionId": "<id-1>",
                 "title": null
@@ -3104,7 +2539,7 @@
                     "details": {
                       "entryId": "<id-2>",
                       "inplace": true,
-                      "restoreFiles": true
+                      "restoreFiles": false
                     },
                     "generationStatus": "completed",
                     "id": "<id-3>",
@@ -3122,7 +2557,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -3140,31 +2575,36 @@
                   },
                   "archivedAt": null,
                   "bumpedAt": "<time>",
-                  "contextUsage": null,
+                  "contextUsage": {
+                    "cachedInputTokens": 0,
+                    "inputTokens": 60000,
+                    "outputTokens": 8,
+                    "totalTokens": 60008
+                  },
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-1>",
-                  "isUnseen": false,
+                  "isUnseen": true,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": null,
                   "pinnedAt": null,
-                  "preview": "",
-                  "reasoningEffort": null,
+                  "preview": "Create a file",
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
                   "tokenUsage": {
-                    "inputTokens": 28,
-                    "outputTokens": 16,
-                    "totalTokens": 44
+                    "cachedInputTokens": 0,
+                    "inputTokens": 60000,
+                    "outputTokens": 8,
+                    "totalTokens": 60008
                   },
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -3196,7 +2636,7 @@
         "backend": [
           {
             "completionTokens": 8,
-            "promptTokens": 12,
+            "promptTokens": 60000,
             "toolCalls": [
               {
                 "arguments": {
@@ -3244,7 +2684,7 @@
             "text": "After the rewind."
           }
         ],
-        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 16\n",
+        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 50000\n",
         "files": {
           "notes.txt": "original\n"
         },
@@ -3312,48 +2752,27 @@
         {
           "context": [
             {
-              "content": {
-                "prose": 434,
-                "sha256": "c49349baf2520478920e5b099f2f280fc782dc2cdfb608b589bc0b34834984ab"
-              },
+              "content": "Create a file",
               "role": "user"
-            },
-            {
-              "content": "Turn one done.",
-              "role": "assistant"
-            },
-            {
-              "content": "Edit the notes",
-              "role": "user"
-            },
-            {
-              "content": "",
-              "role": "assistant",
-              "toolCalls": [
-                "edit"
-              ]
-            },
-            {
-              "role": "tool"
             }
           ]
         },
         {
           "method": "session/rewind",
-          "notifications": [],
+          "notifications": [
+            "runtime/updated"
+          ],
           "response": {
             "id": 6,
             "result": {
               "message": "Edit the notes",
               "restoreErrors": [],
-              "restoredPaths": [
-                "<ws>/notes.txt"
-              ],
+              "restoredPaths": [],
               "sessionLog": {
                 "enabled": true,
                 "needsInitialAutoTitle": true,
-                "path": null,
-                "persisted": false,
+                "path": "<vibe-home>/logs/session/unified/<id-2>",
+                "persisted": true,
                 "sessionId": "<id-2>",
                 "title": null
               },
@@ -3375,110 +2794,12 @@
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
+                    "outcome": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
-                    "source": "turn_start",
-                    "turnId": "<id-4>",
-                    "type": "message",
-                    "updatedAt": "<time>",
-                    "userDisplayContent": null
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "detail": {
-                      "display": {
-                        "content": "made in turn one\n",
-                        "message": "created.txt",
-                        "settledMessage": "created.txt",
-                        "settledVerb": "Created",
-                        "statusText": {
-                          "prose": 12,
-                          "sha256": "91713a5d3c5bf8ae4e680c52bed0ded723ae624902f3f3c89f81d31b7de587a9"
-                        },
-                        "suffix": "",
-                        "summary": {
-                          "prose": 19,
-                          "sha256": "55c83f66f5ccfe77fc5bf03cfc820aed1f38eabb9a74b12dad49c1a96237be34"
-                        },
-                        "verb": "Creating"
-                      },
-                      "input": {
-                        "content": "made in turn one\n",
-                        "filePath": "created.txt"
-                      },
-                      "kind": "file_write",
-                      "toolName": "write_file"
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-5>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "state": {
-                      "approvalSource": "bypass",
-                      "approvalType": "always",
-                      "decision": "execute",
-                      "display": {
-                        "approvalNote": null,
-                        "message": "created.txt",
-                        "success": true,
-                        "suffix": "",
-                        "verb": "Created",
-                        "warnings": []
-                      },
-                      "durationMs": "<duration>",
-                      "output": {
-                        "content": "made in turn one\n",
-                        "fileExisted": false,
-                        "filePath": "<ws>/created.txt",
-                        "previousContent": null
-                      },
-                      "outputText": "",
-                      "status": "completed"
-                    },
-                    "title": "write_file",
-                    "turnId": "<id-4>",
-                    "type": "effect",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "createdAt": "<time>",
-                    "details": {
-                      "newSessionId": "<id-1>",
-                      "oldSessionId": "<id-1>",
-                      "summaryLength": 24
-                    },
-                    "generationStatus": "completed",
-                    "id": "<id-6>",
-                    "inputEntryId": null,
-                    "kind": "compaction",
-                    "message": {
-                      "prose": 17,
-                      "sha256": "99ca2ce25713751b9d8bea6e190ee6e868199aa114b7668dec26f2a9051b599f"
-                    },
-                    "relatedEntryId": null,
-                    "sessionId": "<id-2>",
-                    "turnId": "<id-4>",
-                    "type": "checkpoint",
-                    "updatedAt": "<time>"
-                  },
-                  {
-                    "content": [
-                      {
-                        "text": "Turn one done.",
-                        "type": "text"
-                      }
-                    ],
-                    "createdAt": "<time>",
-                    "generationStatus": "completed",
-                    "id": "<id-7>",
-                    "inputEntryId": null,
-                    "relatedEntryId": null,
-                    "role": "assistant",
-                    "sessionId": "<id-2>",
-                    "source": null,
-                    "turnId": "<id-4>",
+                    "source": "harness",
+                    "turnId": null,
                     "type": "message",
                     "updatedAt": "<time>",
                     "userDisplayContent": null
@@ -3486,12 +2807,12 @@
                   {
                     "createdAt": "<time>",
                     "details": {
-                      "entryId": "<id-8>",
+                      "entryId": "<id-4>",
                       "inplace": false,
                       "restoreFiles": true
                     },
                     "generationStatus": "completed",
-                    "id": "<id-9>",
+                    "id": "<id-5>",
                     "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
@@ -3506,7 +2827,7 @@
                   }
                 ],
                 "historyBeforeCursor": null,
-                "isQuiescent": true,
+                "isQuiescent": null,
                 "retrying": null,
                 "session": {
                   "agent": {
@@ -3523,32 +2844,27 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": null,
+                  "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
-                  "harness": null,
+                  "harness": "unified",
                   "id": "<id-2>",
                   "isUnseen": false,
+                  "loops": [],
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
                   "preview": "Create a file",
-                  "reasoningEffort": null,
+                  "reasoningEffort": "high",
                   "rootSessionId": "<id-1>",
                   "status": {
                     "type": "idle"
                   },
                   "title": null,
-                  "tokenUsage": {
-                    "inputTokens": 28,
-                    "outputTokens": 16,
-                    "totalTokens": 44
-                  },
+                  "tokenUsage": null,
                   "updatedAt": "<time>",
-                  "workspaceRoots": [
-                    "<ws>"
-                  ],
+                  "workspaceRoots": [],
                   "worktree": null
                 },
                 "turnQueue": {
@@ -3563,22 +2879,25 @@
         },
         {
           "files": {
-            "created.txt": "made in turn one\n",
+            "created.txt": null,
             "notes.txt": "original\n"
           }
         },
         {
           "context": [
             {
-              "content": {
-                "prose": 434,
-                "sha256": "c49349baf2520478920e5b099f2f280fc782dc2cdfb608b589bc0b34834984ab"
-              },
+              "content": "Create a file",
               "role": "user"
             },
             {
-              "content": "Turn one done.",
-              "role": "assistant"
+              "content": "",
+              "role": "assistant",
+              "toolCalls": [
+                "write_file"
+              ]
+            },
+            {
+              "role": "tool"
             },
             {
               "content": "Try the edit again",
@@ -3591,7 +2910,7 @@
         "backend": [
           {
             "completionTokens": 8,
-            "promptTokens": 12,
+            "promptTokens": 60000,
             "toolCalls": [
               {
                 "arguments": {
@@ -3639,7 +2958,7 @@
             "text": "After the rewind."
           }
         ],
-        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 16\n",
+        "config": "\n[[models]]\nname = \"mistral-vibe-cli-latest\"\nprovider = \"mistral\"\nalias = \"mistral-medium-3.5\"\nauto_compact_threshold = 50000\n",
         "files": {
           "notes.txt": "original\n"
         },

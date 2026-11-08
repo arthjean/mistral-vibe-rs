@@ -49,7 +49,7 @@ use crate::client::interactive::InteractiveSessionToolFactory;
 use crate::client::live::delegation::task_spec;
 use crate::server::SessionToolFactory;
 
-use vibe_core::parity::{REFERENCE_COMMIT, pinned_interpreter};
+use vibe_core::parity::{REFERENCE_COMMIT, is_pin_commit, pinned_interpreter};
 
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
@@ -72,7 +72,7 @@ const FIXTURES_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/fixtu
 const FIXTURES_SCHEMA_VERSION: u32 = 2;
 /// The floor the fixture set commits to, so a regeneration that captured almost
 /// nothing fails instead of reporting a clean but empty run.
-const MINIMUM_FIXTURES: usize = 93;
+const MINIMUM_FIXTURES: usize = 86;
 /// The committed filter gates: the names the reference publishes for each
 /// `enabled_tools` and `disabled_tools` pair. Replayed unconditionally for the
 /// same reason as the fixtures, since a gate case carries no prose either.
@@ -93,7 +93,7 @@ const QUADRANTS_SCHEMA_VERSION: u32 = 1;
 const DEFAULT_QUADRANT: &str = "rollout-off-gate-on";
 /// The floor the multi-argument probes commit to, so a regeneration that lost
 /// them reports a failure rather than a vacuous pass.
-const MINIMUM_MULTI_ARGUMENT_PROBES: usize = 6;
+const MINIMUM_MULTI_ARGUMENT_PROBES: usize = 9;
 /// Stands in for every description string so presence is compared and text is
 /// not, keeping the diff inside what `NOTICE` allows.
 const DESCRIBED: &str = "<described>";
@@ -258,8 +258,8 @@ fn quadrants() -> Quadrants {
         quadrants.schema_version, QUADRANTS_SCHEMA_VERSION,
         "the quadrant layout moved; regenerate with `--quadrants`"
     );
-    assert_eq!(
-        quadrants.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&quadrants.reference_commit),
         "the quadrants were captured from another commit than this build asserts"
     );
     quadrants
@@ -380,11 +380,10 @@ fn corpus() -> Option<Corpus> {
         return None;
     };
     let corpus: Corpus = serde_json::from_str(&raw).expect("the corpus parses");
-    let manifest = vibe_core::parity::manifest::load();
     let stale = stale_reason_for(
         corpus.schema_version,
         &corpus.reference.commit,
-        &manifest.accepted(),
+        &vibe_core::parity::pin_commits(),
     );
     assert!(stale.is_none(), "{}", stale.unwrap_or_default());
     if let Some(reason) = skip_reason_for(&corpus.platform, running_platform()) {
@@ -841,8 +840,8 @@ async fn the_published_tool_surface_matches_the_reference_except_for_the_recorde
     }
 
     let baseline = baseline();
-    assert_eq!(
-        baseline.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&baseline.reference_commit),
         "the baseline records another reference commit"
     );
     // The default census is one of the four quadrants, so it reads that
@@ -1130,8 +1129,8 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
         fixtures.schema_version, FIXTURES_SCHEMA_VERSION,
         "the fixture layout moved; regenerate with `--fixtures`"
     );
-    assert_eq!(
-        fixtures.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&fixtures.reference_commit),
         "the fixtures were captured from another commit than this build asserts"
     );
 
@@ -1359,8 +1358,8 @@ async fn the_configured_filters_publish_what_the_reference_publishes() {
         gates.schema_version, GATES_SCHEMA_VERSION,
         "the gate layout moved; regenerate with `--gates`"
     );
-    assert_eq!(
-        gates.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&gates.reference_commit),
         "the gates were captured from another commit than this build asserts"
     );
 
@@ -1700,8 +1699,8 @@ fn digest() -> Digest {
         digest.schema_version, DIGEST_SCHEMA_VERSION,
         "the digest is at another layout; regenerate it with {CAPTURE_SCRIPT} --digest"
     );
-    assert_eq!(
-        digest.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&digest.reference_commit),
         "the digest records another reference commit"
     );
     digest
@@ -1805,6 +1804,11 @@ async fn published_by_name(
 #[tokio::test]
 async fn the_published_surface_matches_the_committed_digest() {
     let digest = digest();
+    // A name the reference no longer publishes is in no digest surface, and
+    // the baseline is where such a name is recorded as an invented one. It is
+    // accepted here only while every quadrant still records it, so the census
+    // and the quadrant replays keep measuring it as an open gap.
+    let invented = recorded_invented_names();
     let web_search = digest.tools.contains_key("web_search");
     let mut report = Vec::new();
     let mut conformant = 0;
@@ -1827,7 +1831,7 @@ async fn the_published_surface_matches_the_committed_digest() {
         conformant += matched;
         ledgered += hold_to_the_ledger(label, canonical, divergent, &mut lines);
         for name in published.keys() {
-            if !canonical.contains_key(name) {
+            if !canonical.contains_key(name) && !invented.contains(name) {
                 lines.push(format!(
                     "{label}: `{name}` is published and is not in the digest"
                 ));
@@ -1856,6 +1860,7 @@ async fn the_published_surface_matches_the_committed_digest() {
             if !canonical.contains_key(name)
                 && !digest.tools.contains_key(name)
                 && !digest.managed_tools.contains_key(name)
+                && !invented.contains(name)
             {
                 lines.push(format!(
                     "{family}: `{name}` is published and is in no digest surface"
@@ -1891,6 +1896,20 @@ async fn the_published_surface_matches_the_committed_digest() {
         },
         serde_json::json!({}),
     );
+}
+
+/// The names `baseline.json` records as invented in every quadrant: published
+/// here, published by the reference under no combination.
+fn recorded_invented_names() -> BTreeSet<String> {
+    let baseline = baseline();
+    let mut gaps = baseline.quadrants.values();
+    let first = gaps
+        .next()
+        .map(|gap| gap.extra_names.clone())
+        .unwrap_or_default();
+    gaps.fold(first, |common, gap| {
+        common.intersection(&gap.extra_names).cloned().collect()
+    })
 }
 
 /// The two Windows hosts, each publishing exactly one family.

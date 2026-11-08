@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "note": "The order a re-pin recaptures the manifest in, and the story that owns each driver. Read by `python3 scripts/parity/repin.py plan <sha>`; a driver no stage names is listed last, as unplanned. Written for the v2.26.0 to v3.1.0 re-pin of tasks/prd-trustworthy-parity-v3.md.",
+  "stages": [
+    {
+      "story": "US-014",
+      "title": "Unified-only server session oracles",
+      "drivers": [
+        "app_server_surface.py",
+        "app_server_protocol.py",
+        "app_server_params.py",
+        "sessions.py",
+        "review.py",
+        "rewind.py",
+        "hooks.py",
+        "agents.py",
+        "agent_loop.py"
+      ]
+    },
+    {
+      "story": "US-015",
+      "title": "Editor, programmatic and system-prompt oracles",
+      "drivers": [
+        "acp.py",
+        "programmatic.py",
+        "telemetry_session.py",
+        "system_prompt.py"
+      ]
+    },
+    {
+      "story": "US-016",
+      "title": "Integration oracles",
+      "drivers": [
+        "connectors.py",
+        "mcp_catalog.py",
+        "mcp_oauth.py",
+        "plugins.py",
+        "project_links.py",
+        "teleport.py",
+        "workspace_trust.py",
+        "unified_harness.py"
+      ]
+    },
+    {
+      "story": "US-017",
+      "title": "In-process oracles whose reference modules survive",
+      "drivers": [
+        "checkpoint_opcodes.py",
+        "checkpoints.py",
+        "compaction.py",
+        "permission_surface.py",
+        "setup_auth.py",
+        "shell_policy.py",
+        "skills.py",
+        "tool_config.py",
+        "tool_descriptions.py",
+        "tool_execution.py",
+        "tool_presentation.py",
+        "tool_surface.py",
+        "voice.py",
+        "worktree.py"
+      ]
+    },
+    {
+      "story": "US-018",
+      "title": "In-process oracles whose reference modules were removed",
+      "drivers": [
+        "config_surface.py",
+        "experiments.py",
+        "llm_backends.py",
+        "telemetry.py",
+        "cli-surface-oracle.py"
+      ]
+    },
+    {
+      "story": "US-021",
+      "title": "Terminal-client oracles, retired for the black-box TUI runner",
+      "drivers": [
+        "oracle.py",
+        "commands.py",
+        "autocompletion.py",
+        "active-turn-oracle.py",
+        "session-management-oracle.py",
+        "startup-oracle.py",
+        "tui-interactions-oracle.py",
+        "cargo"
+      ]
+    }
+  ]
+}

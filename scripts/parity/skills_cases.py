@@ -370,28 +370,6 @@ FILTERING_SCENARIOS: list[dict[str, Any]] = [
 ]
 
 
-COMMAND_FIXTURES: list[dict[str, Any]] = [
-    {"name": "probe", "description": "A probe", "invocable": True, "body": "Run the probe checklist."},
-    {"name": "hidden", "description": "Model only", "invocable": False, "body": "Hidden body."},
-]
-
-COMMAND_CASES: list[tuple[str, str]] = [
-    ("plain-text", "hello world"),
-    ("slash-only", "/"),
-    ("unknown-skill", "/nonexistent"),
-    ("simple", "/probe"),
-    ("with-args", "/probe fix the bug"),
-    ("multiple-spaces-kept-in-args", "/probe   spaced   args"),
-    ("uppercase-name", "/PROBE"),
-    ("leading-and-trailing-whitespace", "   /probe trailing   "),
-    ("newline-separated-args", "/probe\nsecond line"),
-    ("not-user-invocable", "/hidden"),
-    ("builtin-skill-creator", "/skill-creator"),
-    ("builtin-vibe-not-invocable", "/vibe"),
-    ("slash-inside-text", "run /probe later"),
-]
-
-
 PROJECTION_CASES: list[tuple[str, dict[str, Any]]] = [
     ("local-defaults", {"name": "probe", "description": "A probe", "prompt": "Body."}),
     (

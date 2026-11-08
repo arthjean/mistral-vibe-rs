@@ -39,7 +39,7 @@ use super::lines::{FileState, decode_lines};
 use super::matcher::SequenceMatcher;
 use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{pinned_reference, repository};
-use crate::parity::{REFERENCE_COMMIT, pinned_interpreter};
+use crate::parity::{is_pin_commit, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/checkpoint_opcodes.py";
 const CORPUS_RELATIVE: &str = "tests/checkpoints/opcodes.json";
@@ -140,8 +140,8 @@ fn corpus() -> Corpus {
         corpus.schema_version, CORPUS_SCHEMA_VERSION,
         "the corpus layout moved; regenerate with `{CAPTURE_SCRIPT}`"
     );
-    assert_eq!(
-        corpus.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference_commit),
         "the corpus was captured from another commit than this build asserts"
     );
     assert!(
@@ -746,8 +746,8 @@ fn engine_corpus() -> EngineCorpus {
         corpus.schema_version, ENGINE_SCHEMA_VERSION,
         "the corpus layout moved; regenerate with `{ENGINE_CAPTURE_SCRIPT}`"
     );
-    assert_eq!(
-        corpus.reference_commit, REFERENCE_COMMIT,
+    assert!(
+        is_pin_commit(&corpus.reference_commit),
         "the corpus was captured from another commit than this build asserts"
     );
     assert!(

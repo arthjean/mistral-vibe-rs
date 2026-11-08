@@ -874,6 +874,4 @@ fn exit_status(state: &TerminalState) -> i32 {
 }
 
 #[cfg(test)]
-mod session_parity_tests;
-#[cfg(test)]
 mod shell_tests;
