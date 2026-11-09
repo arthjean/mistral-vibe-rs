@@ -6,6 +6,7 @@
 | Version | Date | Author | Summary |
 |---------|------|--------|---------|
 | 1.0 | 2026-11-06 | Arthur Jean | Initial draft from the verified parity audit of 2026-11-06 (`docs/parity-audit-2026-11-06.md`): every finding C1, H1 to H4, M1 to M10 and L1 to L4 and all eleven recommendations, phased into three releases |
+| 1.1 | 2026-11-08 | Arthur Jean | Two stories from the decisions EP-004 left open: US-030 replaces the own-row gaps a transition admits with a measured, ratcheted debt per corpus before US-022 closes the transition; US-031 replaces the hand-kept third-party exemption of the clean-room guard with a layer derived from the reference's lockfile |
 
 ## Problem Statement
 
@@ -26,7 +27,7 @@ The plan rebuilds the parity system around three properties, then uses it to re-
 
 The re-pin is rolling rather than atomic: the pin names a target commit and, while a committed transition list names it, the previous commit; each corpus records its own commit and the manifest test enforces both. The v3.1.0 measurement drops `--legacy-harness` from every capture (Unified only on both sides; the port keeps its flag as an open divergence), recaptures the thirteen black-box drivers, migrates or rewrites the in-process drivers whose reference modules were removed, and replaces the eight Textual-pilot oracles with a black-box differential runner built on the `vibe-e2e` pseudo-terminal harness, which drives upstream's Rust `vibe` and this port's `vibe` through the same keystroke scripts.
 
-Licensing follows the precedent the accepted-divergence ledger already sets (`docs/parity.md:353`, `:372`, `:415`, `:416`): copied comments and messages are rewritten in original words and ledgered, a shingle-hash guard with a shrinking baseline keeps new copies out, and `NOTICE` stays true without amendment. The work ships in three releases: Release 1 is EP-001 to EP-003 (12 stories, at the current pin), Release 2 is EP-004 and EP-005 (10 stories, the re-pin), and Release 3 is EP-006 (7 stories). Release 3 measures the oracles themselves (mutation operators applied to captures, with a per-row sensitivity matrix) and clears the hygiene findings.
+Licensing follows the precedent the accepted-divergence ledger already sets (`docs/parity.md:353`, `:372`, `:415`, `:416`): copied comments and messages are rewritten in original words and ledgered, a shingle-hash guard with a shrinking baseline keeps new copies out, and `NOTICE` stays true without amendment. The work ships in three releases: Release 1 is EP-001 to EP-003 (12 stories, at the current pin), Release 2 is EP-004 and EP-005 (11 stories, the re-pin), and Release 3 is EP-006 (8 stories). Release 3 measures the oracles themselves (mutation operators applied to captures, with a per-row sensitivity matrix) and clears the hygiene findings.
 
 ## Goals
 
@@ -408,7 +409,7 @@ Release 2. The pin moves to `c96a6db` (v3.1.0) without a red `main`: the previou
 
 Release 2. The terminal client is measured black-box against upstream's Rust TUI, the Textual-pilot oracles are retired, and the scorecard is restated at v3.1.0 from replay figures.
 
-**Definition of Done:** the transition list is empty and `PREVIOUS_COMMIT` cleared; three TUI families replay against corpora captured from the v3.1.0 `vibe`; `docs/parity.md` carries "What the re-pin moved: v2.26.0 to v3.1.0" and a total derived entirely from figures.
+**Definition of Done:** the transition list is empty and `PREVIOUS_COMMIT` cleared with no ledger keeping a gap of the row its corpus measures, every such gap now measured debt; three TUI families replay against corpora captured from the v3.1.0 `vibe`; `docs/parity.md` carries "What the re-pin moved: v2.26.0 to v3.1.0" and a total derived entirely from figures.
 
 #### US-019: Validate assumption: upstream's Rust TUI is drivable and deterministic under a pseudo-terminal
 **Description:** As the maintainer, I want evidence that the v3.1.0 `vibe` runs under the `vibe-e2e` pseudo-terminal with a stand-in backend and renders reproducibly, so that the black-box TUI oracle rests on measurement.
@@ -451,12 +452,29 @@ Release 2. The terminal client is measured black-box against upstream's Rust TUI
 - [ ] Given rows 2, 14 and 23, when the pilot oracles are retired, then each names the TUI families that measure it, and any behavior no family covers is listed in the row as unmeasured
 - [ ] Given a composer scenario that depends on the clipboard or an external editor, when no hermetic seam exists for the reference, then the scenario is port-only with a reason rather than silently dropped
 
+#### US-030: Measured debt replaces the gaps a transition admits
+**Description:** As the maintainer, I want the gaps a recapture reveals in the row its corpus measures kept as a generated, ratcheted debt per corpus rather than as hand-written ledger entries, so that the transition can close without the 1 162 own-row `Class::Gap` entries EP-004 generated failing, and without a rule that a transition relaxes.
+
+**Priority:** P0
+**Size:** L (5 pts)
+**Dependencies:** Blocked by US-013, US-011
+
+**Acceptance Criteria:**
+- [ ] Given `python3 scripts/parity/repin.py debt <corpus>`, when it runs, then it runs the tests that replay the corpus in measure mode at least twice, refuses a measurement that differs between runs naming the group, and writes `scripts/parity/debt/<corpus>.json`: per replay heading, per exact scenario, per pointer with its indices generalized, how many differences no ledger entry covers, and no reference text
+- [ ] Given the manifest, when a debt is written, then its entry records the debt's SHA-256 and the corpus SHA-256 it was measured against, and `manifest_tests` and `repin.py verify` fail on a debt edited by hand, measured against another corpus, unlisted, or naming a heading that neither a line of the figures table nor a Rust source names
+- [ ] Given a replay, when a difference falls under no ledger entry (or under an own-words entry that refuses it), then its corpus's debt covers it when it holds its scenario and generalized pointer, the figures count it as a gap difference, and a difference outside the debt fails as unexplained
+- [ ] Given a debt group, when the replay covers more differences than it declares, then the replay fails naming it as a regression; when fewer, it fails until `repin.py debt` records the progress
+- [ ] Given a corpus unchanged since its debt was measured, when `repin.py debt` measures a new group or a group that grew, then it refuses and writes nothing; a recapture that changes the corpus is the only way a debt grows, and the command prints every group it adds or raises
+- [ ] Given `own_row_gap_admitted`, when this story lands, then it is removed and `assert_ledger` refuses a `Class::Gap` entry of the row its corpus measures in every state of the pin, and every such entry has moved into debt with each replay's line of "Measured figures" unchanged
+- [ ] Given the hand-rolled replays that keep their own comparison, when they meet a difference no entry covers, then they consult the same debt through one API, so no replay keeps an own-row gap
+- [ ] Given AGENTS.md, when this story lands, then the ledger paragraph states the debt rule in place of the transition exception
+
 #### US-022: Scorecard restatement at v3.1.0
 **Description:** As the maintainer and as a port user, I want `docs/parity.md` restated at v3.1.0 with rows retired, merged and added to match upstream's modules and every score derived from figures, so that the headline number describes the product upstream ships.
 
 **Priority:** P0
 **Size:** M (3 pts)
-**Dependencies:** Blocked by US-015, US-016, US-018, US-021, US-011
+**Dependencies:** Blocked by US-015, US-016, US-018, US-021, US-011, US-030
 
 **Acceptance Criteria:**
 - [ ] Given the v3.1.0 census, when the table is restated, then every row cites reference paths that exist at `c96a6db`, rows whose subject was deleted are retired or merged with a note, and new rows exist for the surfaces added at v3 (artifacts, imports, projects, OIDC setup, local skills, subagents, the Rust terminal client) with Parity derived from their figures or 0 when unmeasured
@@ -511,6 +529,21 @@ Release 3. The oracles are measured for what they can detect, the normalizations
 - [ ] Given every baseline run in string literals (including `crates/vibe-cli/src/tui/diagnostics.rs:85-96`, `crates/vibe-cli/src/tui/command_handlers.rs:406`, `crates/vibe-core/src/config/proxy.rs:53-57`, `crates/vibe-cli/src/update_notifier/gateway.rs:35`), when it is rewritten, then the message names the same cause, value and limit, and an accepted-divergence row records it
 - [ ] Given committed corpora and prompt assets in the baseline, when they are revised, then reference rows are stored as digests and the assets reworded, and the corpora are recaptured through `repin.py capture`
 - [ ] Given the baseline file, when this story lands, then it is empty and the guard fails on any new run
+
+#### US-031: Third-party layer of the clean-room guard
+**Description:** As the maintainer, I want the clean-room guard to subtract the prose the reference's locked third-party distributions ship, derived from its attested environment, so that a run reproducing a library's own message passes on provenance rather than through a hand-kept exemption list.
+
+**Priority:** P1
+**Size:** M (3 pts)
+**Dependencies:** Blocked by US-012
+
+**Acceptance Criteria:**
+- [ ] Given `repin.py shingles <sha>`, when it runs on an attested environment, then it writes beside the digest set `third-party-<sha12>.json`: the reference digests that the Python sources and stubs of every installed distribution `uv.lock` resolves from an index, a Git repository or a URL also produce, each with the distributions that ship it, the lockfile digest and the platform it was measured on, and no text
+- [ ] Given a distribution `uv.lock` names as editable, virtual, a directory or a path, or one it does not name, when the layer is built, then its files are never read as third-party, and an unnamed one fails the command
+- [ ] Given the guard, when it runs, then it subtracts the layer from the digest set, refuses a layer that names another commit, attributes a digest to a distribution it did not read, or subtracts a digest the set does not hold, and `THIRD_PARTY_RUNS` no longer exists
+- [ ] Given an empty layer, when the guard runs, then it fails on the `pydantic` and `httpx2` messages the exemption list used to admit, and on nothing else
+- [ ] Given `repin.py shingles --check`, when it runs, then it recomputes both files and fails on any difference, comparing the attribution only on the platform the layer was measured on, and the weekly live workflow runs it
+- [ ] Given the Linux and Windows environments of one commit, when the layer is built on each, then the digests subtracted are the same
 
 #### US-026: Scorecard and ledger hygiene
 **Description:** As the maintainer, I want the scorecard's prose to match its mechanics, so that the document stops contradicting its own rows.
@@ -623,7 +656,7 @@ Release 3. The oracles are measured for what they can detect, the normalizations
 | 6 | The shingle digest set exceeds 4 MB | Low | Low | US-012 fails rather than committing a larger file and names the Bloom-filter fallback |
 | 7 | Rewriting copied messages lowers byte parity of user-visible output | High | Low | Accepted divergences with ledger rows, following the existing precedents; the message keeps cause, value and limit |
 | 8 | Sensitivity passes slow the default suite | Med | Low | Deterministic sampling with a 60 s budget; the full matrix runs in the weekly live workflow |
-| 9 | Effort (29 stories, 112 points) outlasts upstream's release cadence | High | Med | The rolling re-pin and the sentinel make the next re-pin incremental; Release 2 starts as soon as EP-001 and EP-002 land |
+| 9 | Effort (31 stories, 120 points) outlasts upstream's release cadence | High | Med | The rolling re-pin and the sentinel make the next re-pin incremental; Release 2 starts as soon as EP-001 and EP-002 land |
 
 ## Non-Goals
 
