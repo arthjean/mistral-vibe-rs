@@ -1,0 +1,17 @@
+{
+  "corpus": "crates/vibe-core/tests/plugins-parity/corpus.json",
+  "measuredAgainst": "194db6bf4f612ef9b3251a4b252926c6adc9bcfc091f85e7dd8112ae2f076ccc",
+  "schemaVersion": 1,
+  "tallies": {
+    "plugins resolve parity:": {
+      "native-namespaces": {
+        "/issues/*": 1,
+        "/issues/*/*": 2,
+        "/materialized/issues/*": 1,
+        "/materialized/issues/*/*": 2,
+        "/plugins/*": 1,
+        "/skills/*": 1
+      }
+    }
+  }
+}

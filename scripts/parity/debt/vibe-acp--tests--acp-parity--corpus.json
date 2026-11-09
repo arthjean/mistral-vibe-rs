@@ -1,0 +1,528 @@
+{
+  "corpus": "crates/vibe-acp/tests/acp-parity/corpus.json",
+  "measuredAgainst": "386e4521f7949c544a7177ff756193c04df2afa13ca4d5f14ddb389c6a4262f8",
+  "schemaVersion": 1,
+  "tallies": {
+    "acp argv parity:": {
+      "argv/10": {
+        "/stdout": 1
+      },
+      "argv/11": {
+        "/stdout": 1
+      },
+      "argv/12": {
+        "/stderr": 1
+      },
+      "argv/13": {
+        "/stderr": 1
+      },
+      "argv/14": {
+        "/stderr": 1
+      },
+      "argv/15": {
+        "/stderr": 1
+      },
+      "argv/16": {
+        "/stderr": 1
+      },
+      "argv/17": {
+        "/stderr": 1
+      },
+      "argv/18": {
+        "/stderr": 1
+      },
+      "argv/19": {
+        "/stderr": 1
+      },
+      "argv/20": {
+        "/stderr": 1
+      },
+      "argv/21": {
+        "/stderr": 1
+      },
+      "argv/22": {
+        "/stderr": 1
+      },
+      "argv/3": {
+        "/stdout": 1
+      },
+      "argv/4": {
+        "/stdout": 1
+      },
+      "argv/5": {
+        "/stdout": 1
+      },
+      "argv/6": {
+        "/stdout": 1
+      },
+      "argv/9": {
+        "/stderr": 1
+      }
+    },
+    "acp parity:": {
+      "auth/status": {
+        "/*/response/result/customDomainLocked": 2
+      },
+      "auth/status-without-key": {
+        "/*/response/result/customDomainLocked": 1
+      },
+      "command/compact": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "command/compact-empty": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/data-retention": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/help": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/lean": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*/message/params/update/configOptions/*/options/*": 8,
+        "/*/stream/*/message/params/update/configOptions/*/options/*/name": 2,
+        "/*/stream/*/message/params/update/configOptions/*/options/*/value": 2
+      },
+      "command/log": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/mcp": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/proxy-setup": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/reload": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/retry": {
+        "/*/detached/*": 2,
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/response/result/usage": 1,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/content/text": 1
+      },
+      "command/skill": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "command/teleport": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "command/unknown-and-case": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "ext/connectors": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/response/result/error": 1
+      },
+      "ext/log-level": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "ext/loops": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "ext/review": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/error": 5,
+        "/*/response/result": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "ext/rewind": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "ext/session-delete": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "ext/session-title": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "ext/telemetry": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "ext/trust": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "ext/whoami": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/apiKey": 1,
+        "/*/response/result/budget": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/response/result/planOffer/url": 1
+      },
+      "initialize/skipped": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "prompt/backend-error": {
+        "/*/detached/*/params/update/size": 2,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "prompt/backend-unauthorized": {
+        "/*/detached/*/params/update/size": 2,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "prompt/bash-approved": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/_meta/tool_name": 2
+      },
+      "prompt/bash-approved-for-session": {
+        "/*/detached/*/params/update/size": 6,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/_meta/tool_name": 4
+      },
+      "prompt/bash-ask-mode": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/bash-dismissed": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/_meta/tool_name": 2
+      },
+      "prompt/bash-rejected": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/_meta/tool_name": 2
+      },
+      "prompt/busy": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/cancel": {
+        "/*/detached/*/params/update/size": 3,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/content-blocks": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/edit-file": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/_meta/tool_name": 2,
+        "/*/stream/*/message/params/update/rawInput/changes": 1,
+        "/*/stream/*/message/params/update/rawInput/newString": 1,
+        "/*/stream/*/message/params/update/rawInput/oldString": 1,
+        "/*/stream/*/message/params/update/rawInput/replaceAll": 1,
+        "/*/stream/*/message/params/update/rawOutput/occurrences/*/newStartLine": 1,
+        "/*/stream/*/message/params/update/rawOutput/previousContent": 1,
+        "/*/stream/*/message/params/update/title": 1
+      },
+      "prompt/grep": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/grep-outside-folder": {
+        "/*/detached/*/params/update/size": 6,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/mention": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/question-declined": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/question-elicited": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/question-invalid-answer": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/question-without-elicitation": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/read-file": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/read-file-range": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/read-file-without-fs": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/read-outside-file": {
+        "/*/detached/*/params/update/size": 6,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/rejected-blocks": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "prompt/session-title": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/text": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/todo": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/user-display-content": {
+        "/*/detached/*/params/update/size": 7,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "prompt/write-file": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "session/close": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "session/fork": {
+        "/*/detached/*/params/update/size": 10,
+        "/*/response/result/configOptions/*/options/*": 16,
+        "/*/response/result/configOptions/*/options/*/name": 4,
+        "/*/response/result/configOptions/*/options/*/value": 4,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/content/text": 1
+      },
+      "session/fork-at-message": {
+        "/*/detached/*/params/update/size": 9,
+        "/*/response/result/configOptions/*/options/*": 12,
+        "/*/response/result/configOptions/*/options/*/name": 3,
+        "/*/response/result/configOptions/*/options/*/value": 3,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/content/text": 2,
+        "/*/stream/*/message/params/update/title": 1
+      },
+      "session/list": {
+        "/*/detached/*/params/update/size": 4,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/response/result/sessions/*/title": 2,
+        "/*/stream/*": 1
+      },
+      "session/load": {
+        "/*/detached/*/params/update/size": 8,
+        "/*/response/result/configOptions/*/options/*": 8,
+        "/*/response/result/configOptions/*/options/*/name": 2,
+        "/*/response/result/configOptions/*/options/*/value": 2,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/title": 1
+      },
+      "session/load-live": {
+        "/*/detached/*/params/update/size": 5,
+        "/*/response/result/configOptions/*/options/*": 8,
+        "/*/response/result/configOptions/*/options/*/name": 2,
+        "/*/response/result/configOptions/*/options/*/value": 2,
+        "/*/stream/*": 1,
+        "/*/stream/*/message/params/update/title": 1
+      },
+      "session/new": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "session/new-additional-directories": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      },
+      "session/new-mcp-unreachable": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "session/resume": {
+        "/*/detached/*/params/update/size": 9,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1,
+        "/*/stream/*": 1
+      },
+      "session/set-config-option": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/error": 2,
+        "/*/response/result": 2,
+        "/*/response/result/configOptions/*/currentValue": 2,
+        "/*/response/result/configOptions/*/options/*": 10,
+        "/*/response/result/configOptions/*/options/*/name": 3,
+        "/*/response/result/configOptions/*/options/*/value": 3
+      },
+      "session/set-mode": {
+        "/*/detached/*/params/update/size": 1,
+        "/*/response/result/configOptions/*/options/*": 4,
+        "/*/response/result/configOptions/*/options/*/name": 1,
+        "/*/response/result/configOptions/*/options/*/value": 1
+      }
+    }
+  }
+}

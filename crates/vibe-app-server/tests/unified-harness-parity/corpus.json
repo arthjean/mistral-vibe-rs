@@ -63664,8 +63664,8 @@
                   {
                     "function": {
                       "arguments": {
-                        "prose": 22,
-                        "sha256": "fb9b64733ae492a34208fe3393edf9351c68b62d56ceddce3fbd12be4a1c4e59"
+                        "prose": 79,
+                        "sha256": "41291b149dc389425fc471444f2383d02972538aac299092c62c811a71319dfb"
                       },
                       "name": "bash"
                     },
@@ -63677,12 +63677,16 @@
               },
               {
                 "content": {
-                  "prose": 100,
-                  "sha256": "dc37d39cf2d0f128ac8abdb4132f9a50eb293087a0432b495983054449e08ad3"
+                  "prose": 157,
+                  "sha256": "525eabf795f13336a4cd96528f2b75621545916eea5f3381f442402bc4f24f9f"
                 },
                 "name": "bash",
                 "role": "tool",
                 "tool_call_id": "call_s1"
+              },
+              {
+                "content": "Also this",
+                "role": "user"
               }
             ],
             "parameters": {
@@ -63695,7 +63699,7 @@
                 "client_name": "agent-loop-oracle",
                 "client_version": "0",
                 "host_kind": "local",
-                "message_id": "<id-3>",
+                "message_id": "<id-5>",
                 "os": "<host>",
                 "os_version": "<host>",
                 "session_id": "<id-1>",
@@ -63884,8 +63888,8 @@
                     "detail": {
                       "display": {
                         "content": null,
-                        "message": "sleep 1",
-                        "settledMessage": "sleep 1",
+                        "message": "for i in $(seq 100); do [ -e steered ] && break; sleep 0.1; done",
+                        "settledMessage": "for i in $(seq 100); do [ -e steered ] && break; sleep 0.1; done",
                         "settledVerb": "Ran",
                         "statusText": {
                           "prose": 15,
@@ -63893,13 +63897,13 @@
                         },
                         "suffix": "",
                         "summary": {
-                          "prose": 13,
-                          "sha256": "1ee8322d32703f94bc098bb5288eedbc50b86304b6f09e133cd5818d76da06ca"
+                          "prose": 70,
+                          "sha256": "4b890b892ff27ae643c9460751a5bb981c3aa4be386d16aa73bcbaf4c0f3d439"
                         },
                         "verb": "Running"
                       },
                       "input": {
-                        "command": "sleep 1"
+                        "command": "for i in $(seq 100); do [ -e steered ] && break; sleep 0.1; done"
                       },
                       "kind": "shell",
                       "toolName": "file_system.bash"
@@ -63920,6 +63924,61 @@
                   },
                   "sessionId": "<id-1>",
                   "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Also this",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "completed",
+                    "id": "<id-5>",
+                    "inputEntryId": null,
+                    "outcome": null,
+                    "relatedEntryId": null,
+                    "role": "user",
+                    "sessionId": "<id-1>",
+                    "source": "turn_steer",
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 202144,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": 0,
+                    "lastTurnPromptTokens": 10,
+                    "modelCalls": 1,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 5,
+                    "sessionPromptTokens": 10,
+                    "steps": 2,
+                    "tokensPerSecond": 0,
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
                 }
               },
               {
@@ -63952,7 +64011,7 @@
                       "path": "/state/display",
                       "value": {
                         "approvalNote": null,
-                        "message": "sleep 1",
+                        "message": "for i in $(seq 100); do [ -e steered ] && break; sleep 0.1; done",
                         "success": true,
                         "suffix": "",
                         "verb": "Ran",
@@ -63985,6 +64044,23 @@
                 }
               },
               {
+                "method": "turn/started",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": null,
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": "<id-5>",
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "in_progress",
+                    "stopReason": null
+                  }
+                }
+              },
+              {
                 "method": "history/entryAdded",
                 "params": {
                   "entry": {
@@ -63996,8 +64072,8 @@
                     ],
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
-                    "id": "<id-5>",
-                    "inputEntryId": "<id-3>",
+                    "id": "<id-6>",
+                    "inputEntryId": "<id-5>",
                     "outcome": null,
                     "relatedEntryId": null,
                     "role": "assistant",
@@ -64030,7 +64106,7 @@
                     "sessionCachedTokens": 0,
                     "sessionCompletionTokens": 5,
                     "sessionPromptTokens": 10,
-                    "steps": 2,
+                    "steps": 3,
                     "tokensPerSecond": 0,
                     "toolCallsAgreed": 0,
                     "toolCallsFailed": 0,
@@ -64080,7 +64156,7 @@
               {
                 "method": "history/entryUpdated",
                 "params": {
-                  "entryId": "<id-5>",
+                  "entryId": "<id-6>",
                   "patch": [
                     {
                       "op": "replace",
@@ -64117,7 +64193,7 @@
                     "sessionCachedTokens": 0,
                     "sessionCompletionTokens": 10,
                     "sessionPromptTokens": 20,
-                    "steps": 2,
+                    "steps": 3,
                     "tokensPerSecond": 0,
                     "toolCallsAgreed": 0,
                     "toolCallsFailed": 0,
@@ -64134,7 +64210,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
-                    "inputEntryId": "<id-3>",
+                    "inputEntryId": "<id-5>",
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -64284,7 +64360,7 @@
                       "latestTurn": {
                         "completedAt": "<time>",
                         "id": "<id-2>",
-                        "inputEntryId": "<id-3>",
+                        "inputEntryId": "<id-5>",
                         "queueItemId": null,
                         "sessionId": "<id-1>",
                         "startedAt": "<time>",
@@ -64336,7 +64412,7 @@
             "toolCalls": [
               {
                 "arguments": {
-                  "command": "sleep 1"
+                  "command": "for i in $(seq 100); do [ -e steered ] && break; sleep 0.1; done"
                 },
                 "id": "call_s1",
                 "name": "bash"
@@ -64359,6 +64435,11 @@
           },
           {
             "steer": "Also this"
+          },
+          {
+            "write": {
+              "steered": ""
+            }
           },
           {
             "wait": true

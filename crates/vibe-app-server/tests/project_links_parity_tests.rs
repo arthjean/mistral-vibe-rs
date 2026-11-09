@@ -14,12 +14,13 @@
 //! compares the two scenario by scenario. It needs no reference checkout; only
 //! the live probe at the end, which recaptures the reference, does.
 //!
-//! Both sides reduce a string their server authored to a length and a
-//! SHA-256, and two digests are compared exactly. What differs is the prose
-//! `NOTICE` keeps this port from reproducing: the sentences a refusal or a
-//! failure carries. Every difference has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 25 is a reading of the summary
-//! this file prints.
+//! Both sides reduce a string their server authored to a length and a SHA-256,
+//! and two digests are compared exactly. What differs is the prose `NOTICE`
+//! keeps this port from reproducing: the sentences a refusal or a failure
+//! carries. Every difference has to fall under a `LEDGER` entry or the corpus's
+//! measured debt (`vibe_core::parity::debt`), and every entry and every debt
+//! group has to still reproduce, so row 25 is a reading of the summary this
+//! file prints.
 
 #![cfg(feature = "test-fixtures")]
 
@@ -27,7 +28,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -86,55 +87,6 @@ const REFUSED: &[&str] = &[
     "save/missing-root",
     "save/file-root",
 ];
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 answers project links otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/steps/*/response/error",
-        count: 5,
-        row: "25",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/steps/*/response/result",
-        count: 5,
-        row: "25",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/steps/*/response/result/staleLinkClearFailed",
-        count: 2,
-        row: "25",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/steps/*/response/result/staleLinkCleared",
-        count: 2,
-        row: "25",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/steps/*/store/text/*",
-        count: 58,
-        row: "25",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
-
 /// Every text this port words its own way in these scenarios.
 const PROSE: &[OwnProse] = &[OwnProse {
     scenarios: REFUSED,
@@ -164,7 +116,7 @@ fn the_port_answers_every_project_links_scenario_as_the_corpus_records_or_as_the
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("project-links-parity-port.json"),
     }
-    .run(entries(PROSE).chain(entries(V3_GAPS)));
+    .run(entries(PROSE));
 }
 
 #[test]
@@ -172,11 +124,7 @@ fn every_ledger_entry_names_a_scorecard_row_that_answers_for_it() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     // Row 25 is what this corpus measures, so a difference it keeps has to
     // stand on a divergence the scorecard decided to keep.
-    assert_ledger(
-        LISTED,
-        &scenarios(&corpus),
-        entries(PROSE).chain(entries(V3_GAPS)),
-    );
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

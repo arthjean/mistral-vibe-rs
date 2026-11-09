@@ -1,0 +1,18 @@
+{
+  "corpus": "crates/vibe-app-server/tests/wire-validation/cases.json",
+  "measuredAgainst": "b66c6446d753da9657101569e482e0d8ed4acb772f5cf936f28d767e82112627",
+  "schemaVersion": 1,
+  "tallies": {
+    "wire validation parity:": {
+      "MCPAddParams": {
+        "/errors/transport": 15
+      },
+      "SessionArchiveParams": {
+        "/value/root": 1
+      },
+      "SessionListParams": {
+        "/value/root": 2
+      }
+    }
+  }
+}

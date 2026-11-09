@@ -14,9 +14,12 @@
     reason = "an integration failure must terminate with the output the launch produced"
 )]
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Output, Stdio};
+
+use vibe_core::parity::debt::{Debt, Note, assert_notes};
 
 mod support;
 use support::{FixtureEnvironment, canonical};
@@ -229,8 +232,9 @@ fn every_recorded_startup_failure_replays_at_the_process_boundary() {
         cases.len() >= 5,
         "the corpus no longer carries the startup vectors"
     );
-    let mut found = Vec::new();
-    let mut skipped = Vec::new();
+    let mut debt = Debt::load(LISTED, HEADING);
+    let mut unexplained = Vec::new();
+    let mut compared = BTreeSet::new();
     for case in cases {
         let name = case["name"].as_str().expect("a case carries a name");
         let id = name.trim_start_matches("case/startup/");
@@ -242,9 +246,9 @@ fn every_recorded_startup_failure_replays_at_the_process_boundary() {
             .collect();
         let Some(output) = replay_startup(id, &argv) else {
             eprintln!("skipping {id}: no POSIX shell to leave a process in a deleted directory");
-            skipped.push(format!("{id} /"));
             continue;
         };
+        compared.insert(name.to_owned());
         let observed = &case["observed"];
         let port = serde_json::json!({
             "exit": output.status.code(),
@@ -252,74 +256,57 @@ fn every_recorded_startup_failure_replays_at_the_process_boundary() {
             "stderr": !output.stderr.is_empty(),
         });
         for key in ["exit", "stdout", "stderr"] {
-            if observed[key] != port[key] {
-                found.push(format!("{id} /{key}"));
+            if observed[key] != port[key] && !debt.absorb(name, &format!("/{key}")) {
+                unexplained.push(format!("{name} /{key}"));
             }
         }
     }
-    found.sort();
-    // A vector this host cannot replay departs nowhere here, so its entries
-    // are only expected where it ran.
-    let mut known: Vec<String> = KNOWN
-        .iter()
-        .map(|(at, _)| (*at).to_owned())
-        .filter(|at| !skipped.iter().any(|prefix| at.starts_with(prefix.as_str())))
-        .collect();
-    known.sort();
-    assert_eq!(
-        found, known,
-        "the startup vectors depart from the corpus otherwise than `KNOWN` names"
+    assert!(
+        unexplained.is_empty(),
+        "the startup vectors depart from the corpus where its measured debt does not say they \
+         may:\n{}",
+        unexplained.join("\n")
     );
+    // A vector this host cannot replay owes nothing here.
+    debt.retain_compared(|scenario| compared.contains(scenario));
+    debt.assert_settled();
 }
 
-/// Where this port's launch still answers a startup vector otherwise than
-/// the corpus records, each a gap of row 7 the v3.1.0 re-pin revealed.
-const KNOWN: &[(&str, &str)] = &[
-    (
-        "add-dir-missing /stderr",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "add-dir-missing /stdout",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "add-dir-second-missing /stderr",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "add-dir-second-missing /stdout",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "check-upgrade-workdir-missing /stderr",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "check-upgrade-workdir-missing /stdout",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "update-add-dir-missing /exit",
-        "the v3.1.0 `update` subcommand exits 0 without checking `--add-dir`; this port validates it and exits 1",
-    ),
-    (
-        "workdir-missing /stderr",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "workdir-missing /stdout",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "working-directory-deleted /stderr",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
-    (
-        "working-directory-deleted /stdout",
-        "the v3.1.0 launcher reports a refused directory on stderr; this port reports it on stdout",
-    ),
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-cli/tests/runtime-parity/cli-surface.json";
+
+/// The key of this replay in the corpus's measured debt
+/// (`vibe_core::parity::debt`), which keeps every startup vector this port's
+/// launch still answers otherwise than the corpus records: gaps of row 7 the
+/// v3.1.0 re-pin revealed.
+const HEADING: &str = "cli surface parity (startup failures at the process boundary):";
+
+/// What the measured debt of this replay stands on.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &[
+            "case/startup/add-dir-missing",
+            "case/startup/add-dir-second-missing",
+            "case/startup/check-upgrade-workdir-missing",
+            "case/startup/workdir-missing",
+            "case/startup/working-directory-deleted",
+        ],
+        pointers: &["/stderr", "/stdout"],
+        reason: "the v3.1.0 launcher reports a refused directory on stderr; this port reports it \
+                 on stdout",
+    },
+    Note {
+        scenarios: &["case/startup/update-add-dir-missing"],
+        pointers: &["/exit"],
+        reason: "the v3.1.0 `update` subcommand exits 0 without checking `--add-dir`; this port \
+                 validates it and exits 1",
+    },
 ];
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
+}
 
 /// One recorded vector, launched from the directory its argv was captured in.
 ///

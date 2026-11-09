@@ -1,0 +1,53 @@
+{
+  "corpus": "crates/vibe-app-server/tests/plugins-parity/corpus.json",
+  "measuredAgainst": "df4d2a70480c89c41ea95a38ffc95f9523b6ce915f0b570c4925ef653e82ebff",
+  "schemaVersion": 1,
+  "tallies": {
+    "plugins parity:": {
+      "default/unified": {
+        "/*/answer/plugins/plugins/*/installedRoot": 1
+      },
+      "unified/dropped": {
+        "/*/answer/experimentalHarness": 1,
+        "/*/answer/mcp/connectorError": 1,
+        "/*/answer/mcp/privateConnectorsHidden": 1,
+        "/*/answer/plugins/plugins/*/installedRoot": 1
+      },
+      "unified/mcp-servers": {
+        "/*/answer/experimentalHarness": 1,
+        "/*/answer/mcp/connectorError": 2,
+        "/*/answer/mcp/privateConnectorsHidden": 2,
+        "/*/answer/plugins/plugins/*/installedRoot": 2
+      },
+      "unified/only-builtin": {
+        "/*/answer/experimentalHarness": 1,
+        "/*/answer/mcp/connectorError": 2,
+        "/*/answer/mcp/privateConnectorsHidden": 2,
+        "/*/answer/plugins/plugins/*/installedRoot": 2
+      },
+      "unified/reload": {
+        "/*/answer/experimentalHarness": 1,
+        "/*/answer/mcp/connectorError": 1,
+        "/*/answer/mcp/privateConnectorsHidden": 1,
+        "/*/answer/plugins/plugins/*/installedRoot": 2,
+        "/*/answer/skills/*": 1,
+        "/*/answer/skills/*/description": 2,
+        "/*/answer/skills/*/name": 5,
+        "/*/answer/skills/*/prompt": 1,
+        "/*/answer/skills/*/prompt/len": 1,
+        "/*/answer/skills/*/prompt/sha256": 1,
+        "/*/answer/skills/*/scope": 1,
+        "/*/answer/skills/*/userInvocable": 2
+      },
+      "unified/untrusted-project": {
+        "/*/answer/plugins/plugins/*/installedRoot": 1
+      },
+      "unified/user-and-project": {
+        "/*/answer/experimentalHarness": 1,
+        "/*/answer/mcp/connectorError": 2,
+        "/*/answer/mcp/privateConnectorsHidden": 2,
+        "/*/answer/plugins/plugins/*/installedRoot": 2
+      }
+    }
+  }
+}

@@ -31,7 +31,7 @@
 //! is checked in both directions: an entry that stops diverging fails the suite
 //! rather than rotting in the list.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -41,12 +41,10 @@ use sha2::{Digest, Sha256};
 
 use super::operands::inspects_paths;
 use super::*;
+use crate::parity::debt::{Debt, Note, assert_notes};
 use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::pinned_interpreter;
-use crate::parity::replay::{
-    Class, Entry as _, PatternDivergence, assert_ledger, differences, entries, pinned_reference,
-    repository, scenario_matches,
-};
+use crate::parity::replay::{differences, pinned_reference, repository};
 use crate::platform::parse_policy_path;
 use crate::policy::{PermissionScope, path_grant_pattern_matches};
 use crate::tools::config::{ToolConfigResolver, shell_read_only_commands};
@@ -127,27 +125,74 @@ fn requirement_ledger() -> BTreeSet<(String, String)> {
         .collect()
 }
 
-/// Requirement fields that differ on a case whose permission conforms and
-/// that this port still owes, by case key and pointer into the case's
-/// recorded resolution. Row 6 is what the corpus measures: these are gaps the
-/// v3.1.0 re-pin revealed. Each entry counts its differences exactly, in the
-/// family whose cases it names.
-const REQUIREMENT_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "git diff --no-index /etc/passwd /dev/null",
-        pointer: "/requirements/0/*",
-        count: 3,
-        row: "6",
-        class: Class::Gap,
-        reason: STREAM_DEVICES_ARE_NOT_FILES,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const REQUIREMENT_NOTES: &[Note] = &[Note {
+    scenarios: &["git diff --no-index /etc/passwd /dev/null"],
+    pointers: &["/requirements/*/*", "/requirements/*"],
+    reason: STREAM_DEVICES_ARE_NOT_FILES,
+}];
+
+/// Where this port's PowerShell grammar still answers otherwise than the
+/// reference, by unit (`commands/`, `patterns/`, `expansions/` or `tokens/`
+/// and the case it replays) and by the field that differs. Since 3.0 the
+/// reference splits commands and arguments with a tokenizer modeled on
+/// PowerShell's own command mode (`vibe/core/tools/builtins/_powershell_lexer.py`),
+/// where this port still splits the way the 2.x helpers of `windows_shell.py`
+/// did; the grammar in `windows.rs` owes these gaps of row 6.
+const WINDOWS_GRAMMAR_NOTES: &[Note] = &[
+    Note {
+        scenarios: &[
+            "commands/cmd 2>&1 | more",
+            "commands/Get-Content x *>&1",
+            "commands/type > out.txt",
+            "commands/echo a > $null",
+            "commands/echo a > NUL",
+            "commands/echo a 2> 'err log.txt'",
+            "commands/echo a >> C:\\logs\\x.txt",
+            "commands/echo a >&2",
+            "commands/echo a >`\"q`\" x",
+        ],
+        pointers: &["/parts/*/**"],
+        reason: "the reference lexes a redirection operator and its target out of the \
+                 arguments (`_Lexer._redirect`, `split_powershell_arguments` in \
+                 _powershell_lexer.py), so neither reaches the tokens or the match forms \
+                 `_windows_command_match_forms` builds from them; this port keeps both as \
+                 arguments",
     },
-    PatternDivergence {
-        scenario: "git diff --no-index /etc/passwd /dev/null",
-        pointer: "/requirements/1",
-        count: 1,
-        row: "6",
-        class: Class::Gap,
-        reason: STREAM_DEVICES_ARE_NOT_FILES,
+    Note {
+        scenarios: &["commands/Invoke-Command { Remove-Item x; ls }"],
+        pointers: &["/parts/*/**"],
+        reason: "the reference reads a braced script block as one argument \
+                 (`_Lexer._group` in _powershell_lexer.py), where this port splits it on \
+                 whitespace into six",
+    },
+    Note {
+        scenarios: &["commands/(Get-Item a).Name"],
+        pointers: &["/parts/*/**"],
+        reason: "the reference reads a parenthesized expression as one argument and the \
+                 member access after it as the next (`_Lexer._group`), so the command name \
+                 is the whole group; this port splits inside the parentheses",
+    },
+    Note {
+        scenarios: &["commands/echo `& not a separator"],
+        pointers: &["/parts/*/**"],
+        reason: "the reference resolves a backtick escape inside an argument \
+                 (`_Lexer._backtick`), so the escaped ampersand reads as `&`; this port \
+                 keeps the backtick in the token and in the match forms",
+    },
+    Note {
+        scenarios: &["commands/echo a ^& b"],
+        pointers: &["/parts/*/**", "/parts/*"],
+        reason: CARET_IS_NOT_AN_ESCAPE,
+    },
+    Note {
+        scenarios: &["commands/@{a=1}; ${x}"],
+        pointers: &["/parts/*"],
+        reason: "the reference also lists the statement inside a hash literal as a part \
+                 of its own (`_Lexer._record_subexpressions`, `split_powershell_commands`), \
+                 so `a=1` is a third part; this port keeps it inside the literal",
     },
 ];
 
@@ -480,6 +525,8 @@ fn wire_scope(scope: PermissionScope) -> String {
 /// for equality: `conformant` of `total`, nothing ledgered.
 /// The corpus as the manifest lists it.
 const CORPUS_LISTED: &str = "crates/vibe-core/tests/shell-policy/policy.json";
+/// The Windows grammar replay's line of the "Measured figures" table.
+const WINDOWS_GRAMMAR: &str = "shell policy parity (windows grammar):";
 
 fn shell_figures(family: &str, conformant: usize, total: usize) {
     assert_figures(
@@ -964,61 +1011,22 @@ impl Replay {
             "{family}: commands diverging from the reference without a ledger entry: {unlisted:?}"
         );
         let requirement_ledger = requirement_ledger();
-        // The typed gaps that name a case this family compared: the others
-        // belong to another family's replay.
-        let gaps = REQUIREMENT_GAPS
-            .iter()
-            .filter(|entry| {
-                self.compared
-                    .iter()
-                    .any(|key| scenario_matches(entry.scenario, key))
-            })
-            .collect::<Vec<_>>();
-        let mut gap_covered = vec![0_usize; gaps.len()];
+        let heading = format!("shell policy parity ({family}):");
+        let mut debt = Debt::load(CORPUS_LISTED, &heading);
         let mut gap_cases = BTreeSet::new();
         let mut unlisted = Vec::new();
         for (key, pointer) in self.requirement_diffs.difference(&requirement_ledger) {
-            match gaps.iter().position(|entry| entry.covers(key, pointer)) {
-                Some(index) => {
-                    gap_covered[index] += 1;
-                    gap_cases.insert(key.clone());
-                }
-                None => unlisted.push((key.clone(), pointer.clone())),
+            if debt.absorb(key, pointer) {
+                gap_cases.insert(key.clone());
+            } else {
+                unlisted.push((key.clone(), pointer.clone()));
             }
         }
         assert!(
             unlisted.is_empty(),
             "{family}: requirements diverging from the reference without a ledger entry: {unlisted:?}"
         );
-        let miscounted = gaps
-            .iter()
-            .zip(&gap_covered)
-            .filter(|(entry, found)| entry.count != **found)
-            .map(|(entry, found)| {
-                format!(
-                    "{} declares {} differences and covered {found}",
-                    entry.label(),
-                    entry.count
-                )
-            })
-            .collect::<Vec<_>>();
-        assert!(
-            miscounted.is_empty(),
-            "{family}: requirement gaps that cover another number of differences than they \
-             declare: {miscounted:?}"
-        );
-        let null = serde_json::Value::Null;
-        let recorded: BTreeMap<String, &serde_json::Value> = self
-            .compared
-            .iter()
-            .map(|key| (key.clone(), &null))
-            .collect();
-        assert_ledger(
-            CORPUS_LISTED,
-            &recorded,
-            gaps.iter()
-                .map(|entry| *entry as &dyn crate::parity::replay::Entry),
-        );
+        debt.assert_settled();
         let stale = requirement_ledger
             .iter()
             .filter(|(key, _)| self.compared.contains(key))
@@ -1050,9 +1058,9 @@ impl Replay {
             .cloned()
             .chain(self.requirement_diffs.iter().map(|(key, _)| key.clone()))
             .collect::<BTreeSet<String>>();
-        let gap_differences = gap_covered.iter().sum::<usize>();
+        let gap_differences = debt.covered();
         assert_figures(
-            &format!("shell policy parity ({family}):"),
+            &heading,
             CORPUS_LISTED,
             Figures {
                 conformant: total - differing.len(),
@@ -1292,105 +1300,12 @@ fn every_path_grant_verdict_matches_the_reference() {
     );
 }
 
-/// Where this port's PowerShell grammar still answers otherwise than the
-/// reference, by unit (`commands/`, `patterns/`, `expansions/` or `tokens/`
-/// and the case it replays) and by the field that differs. Row 6 is what the
-/// corpus measures: these are gaps the v3.1.0 re-pin revealed, which the
-/// grammar in `windows.rs` owes. Since 3.0 the reference splits commands and
-/// arguments with a tokenizer modeled on PowerShell's own command mode
-/// (`vibe/core/tools/builtins/_powershell_lexer.py`), where this port still
-/// splits the way the 2.x helpers of `windows_shell.py` did.
-const WINDOWS_GRAMMAR_LEDGER: &[PatternDivergence] = &[
-    redirection("commands/cmd 2>&1 | more", 3),
-    redirection("commands/Get-Content x *>&1", 3),
-    redirection("commands/type > out.txt", 6),
-    redirection("commands/echo a > $null", 4),
-    redirection("commands/echo a > NUL", 4),
-    redirection("commands/echo a 2> 'err log.txt'", 4),
-    redirection("commands/echo a >> C:\\logs\\x.txt", 4),
-    redirection("commands/echo a >&2", 3),
-    redirection("commands/echo a >`\"q`\" x", 4),
-    PatternDivergence {
-        scenario: "commands/Invoke-Command { Remove-Item x; ls }",
-        pointer: "/parts/0/**",
-        count: 5,
-        row: "6",
-        class: Class::Gap,
-        reason: "the reference reads a braced script block as one argument \
-                 (`_Lexer._group` in _powershell_lexer.py), where this port splits it on \
-                 whitespace into six",
-    },
-    PatternDivergence {
-        scenario: "commands/(Get-Item a).Name",
-        pointer: "/parts/0/**",
-        count: 5,
-        row: "6",
-        class: Class::Gap,
-        reason: "the reference reads a parenthesized expression as one argument and the \
-                 member access after it as the next (`_Lexer._group`), so the command name \
-                 is the whole group; this port splits inside the parentheses",
-    },
-    PatternDivergence {
-        scenario: "commands/echo `& not a separator",
-        pointer: "/parts/0/**",
-        count: 3,
-        row: "6",
-        class: Class::Gap,
-        reason: "the reference resolves a backtick escape inside an argument \
-                 (`_Lexer._backtick`), so the escaped ampersand reads as `&`; this port \
-                 keeps the backtick in the token and in the match forms",
-    },
-    PatternDivergence {
-        scenario: "commands/echo a ^& b",
-        pointer: "/parts/0/**",
-        count: 5,
-        row: "6",
-        class: Class::Gap,
-        reason: CARET_IS_NOT_AN_ESCAPE,
-    },
-    PatternDivergence {
-        scenario: "commands/echo a ^& b",
-        pointer: "/parts/1",
-        count: 1,
-        row: "6",
-        class: Class::Gap,
-        reason: CARET_IS_NOT_AN_ESCAPE,
-    },
-    PatternDivergence {
-        scenario: "commands/@{a=1}; ${x}",
-        pointer: "/parts/2",
-        count: 1,
-        row: "6",
-        class: Class::Gap,
-        reason: "the reference also lists the statement inside a hash literal as a part \
-                 of its own (`_Lexer._record_subexpressions`, `split_powershell_commands`), \
-                 so `a=1` is a third part; this port keeps it inside the literal",
-    },
-];
-
 /// Why a caret splits a PowerShell command in the reference and not here.
 const CARET_IS_NOT_AN_ESCAPE: &str = "a caret escapes nothing in PowerShell, so the reference \
                                       ends the part at the ampersand after it and reads `b` \
                                       as a second command (`_ARGUMENT_BREAKS` in \
                                       _powershell_lexer.py); this port treats `^&` as an \
                                       escaped character and keeps one part";
-
-/// A command whose redirection the reference strips from its arguments and
-/// match forms, with how many differences that makes in it.
-const fn redirection(scenario: &'static str, count: usize) -> PatternDivergence {
-    PatternDivergence {
-        scenario,
-        pointer: "/parts/0/**",
-        count,
-        row: "6",
-        class: Class::Gap,
-        reason: "the reference lexes a redirection operator and its target out of the \
-                 arguments (`_Lexer._redirect`, `split_powershell_arguments` in \
-                 _powershell_lexer.py), so neither reaches the tokens or the match forms \
-                 `_windows_command_match_forms` builds from them; this port keeps both as \
-                 arguments",
-    }
-}
 
 /// One unit of the Windows grammar replay: its scenario name, what the
 /// reference answered and what this port answers.
@@ -1471,7 +1386,8 @@ fn windows_grammar_units(grammar: &WindowsGrammar) -> Vec<GrammarUnit> {
 }
 
 /// The PowerShell grammar splits, tokenizes, names, matches and expands as the
-/// reference does, except where [`WINDOWS_GRAMMAR_LEDGER`] records a gap.
+/// reference does, except where its measured debt records a gap
+/// ([`WINDOWS_GRAMMAR_NOTES`] says why).
 /// Every unit is compared in full, so a gap in one field never hides a
 /// difference in another.
 #[test]
@@ -1480,7 +1396,7 @@ fn every_windows_grammar_answer_matches_the_reference() {
     let grammar = &corpus.windows_grammar;
     assert_eq!(grammar.commands.len(), corpus.counts.windows_grammar_cases);
     let units = windows_grammar_units(grammar);
-    let mut covered = vec![0_usize; WINDOWS_GRAMMAR_LEDGER.len()];
+    let mut debt = Debt::load(CORPUS_LISTED, WINDOWS_GRAMMAR);
     let mut unexplained = Vec::new();
     let mut conformant = 0_usize;
     for (scenario, reference, port) in &units {
@@ -1490,12 +1406,8 @@ fn every_windows_grammar_answer_matches_the_reference() {
             continue;
         }
         for pointer in found {
-            match WINDOWS_GRAMMAR_LEDGER
-                .iter()
-                .position(|entry| entry.covers(scenario, &pointer))
-            {
-                Some(index) => covered[index] += 1,
-                None => unexplained.push(format!(
+            if !debt.absorb(scenario, &pointer) {
+                unexplained.push(format!(
                     "{} {pointer}\n  reference: {}\n  port:      {}",
                     scenario.escape_debug(),
                     reference
@@ -1503,34 +1415,17 @@ fn every_windows_grammar_answer_matches_the_reference() {
                         .map_or_else(|| "absent".to_owned(), ToString::to_string),
                     port.pointer(&pointer)
                         .map_or_else(|| "absent".to_owned(), ToString::to_string),
-                )),
+                ));
             }
         }
     }
     assert!(
         unexplained.is_empty(),
-        "{} differences in the Windows grammar fall under no ledger entry:\n{}",
+        "{} differences in the Windows grammar fall outside its measured debt:\n{}",
         unexplained.len(),
         unexplained.join("\n")
     );
-    let miscounted: Vec<String> = WINDOWS_GRAMMAR_LEDGER
-        .iter()
-        .zip(&covered)
-        .filter(|(entry, found)| entry.count != **found)
-        .map(|(entry, found)| {
-            format!(
-                "{} declares {} differences and covered {found}",
-                entry.label(),
-                entry.count
-            )
-        })
-        .collect();
-    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
-    let recorded: BTreeMap<String, &serde_json::Value> = units
-        .iter()
-        .map(|(scenario, reference, _)| (scenario.clone(), reference))
-        .collect();
-    assert_ledger(CORPUS_LISTED, &recorded, entries(WINDOWS_GRAMMAR_LEDGER));
+    debt.assert_settled();
     eprintln!(
         "shell policy: windows grammar {} commands, {} patterns, {} expansions, {} tokens",
         grammar.commands.len(),
@@ -1539,12 +1434,12 @@ fn every_windows_grammar_answer_matches_the_reference() {
         grammar.tokens.len()
     );
     assert_figures(
-        "shell policy parity (windows grammar):",
+        WINDOWS_GRAMMAR,
         CORPUS_LISTED,
         Figures {
             conformant,
             total: units.len(),
-            gap_differences: covered.iter().sum(),
+            gap_differences: debt.covered(),
             ..Figures::default()
         },
         serde_json::json!({}),
@@ -1596,4 +1491,10 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         committed.replace("\r\n", "\n"),
         "the committed corpus no longer matches the pinned reference; rerun {CAPTURE_SCRIPT}"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_LISTED, REQUIREMENT_NOTES);
+    assert_notes(CORPUS_LISTED, WINDOWS_GRAMMAR_NOTES);
 }

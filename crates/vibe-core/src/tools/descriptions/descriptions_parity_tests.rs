@@ -31,8 +31,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::config::{ConfigPaths, ConfigSource, HarnessFiles};
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Class, PatternDivergence, Tally, differences, entries};
+use crate::parity::replay::{Tally, differences};
 
 use super::{SearchInputs, read_overrides, search_paths};
 
@@ -54,22 +55,18 @@ const IGNORED_UNREPORTED: &str = "the port still honors `tool_paths` and the too
      overrides that v3 removed, so it reports none of the custom tool modules or the former \
      `task` description override that v3 lists as having no effect";
 
-/// The differences this port keeps, each a gap of row 4.
-const LEDGER: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/descriptionsUnchanged",
-        count: 7,
-        row: "4",
-        class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["*"],
+        pointers: &["/descriptionsUnchanged"],
         reason: OVERRIDES_KEPT,
     },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/ignored/*",
-        count: 18,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["*"],
+        pointers: &["/ignored/*"],
         reason: IGNORED_UNREPORTED,
     },
 ];
@@ -312,7 +309,7 @@ fn the_tool_directories_and_ignored_files_match_the_reference() {
     let text = corpus_text();
     let corpus = corpus();
     let scratch = Scratch::build(&corpus.tree);
-    let mut tally = Tally::new(&text, entries(LEDGER));
+    let mut tally = Tally::new(&text, []);
     for scenario in &corpus.scenarios {
         let port = port_observation(&scratch, &corpus, &scenario.scenario);
         let found = differences(&scenario.observed, &port);
@@ -360,4 +357,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate it \
          with `{CAPTURE_SCRIPT} --corpus`"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

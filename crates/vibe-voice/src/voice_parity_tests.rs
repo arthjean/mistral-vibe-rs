@@ -35,10 +35,9 @@ use toml::Table;
 
 use vibe_core::config::registry::default_document;
 use vibe_core::config::{ConfigPaths, ConfigSnapshot, LayeredConfig};
+use vibe_core::parity::debt::{Debt, Note, assert_notes};
 use vibe_core::parity::is_pin_commit;
-use vibe_core::parity::replay::{
-    Class, Entry, PatternDivergence, assert_ledger, entries, pinned_reference,
-};
+use vibe_core::parity::replay::pinned_reference;
 
 use super::manager::TRANSCRIPTION_DRAIN_TIMEOUT;
 use super::playback::{PLAYBACK_BUFFER_MS, PLAYBACK_SAMPLE_WIDTH};
@@ -51,6 +50,8 @@ use super::transcribe::{RealtimeEndpoint, session_update};
 mod behavior;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-voice/tests/voice/corpus.json";
+/// The replay's line of the "Measured figures" table.
+const HEADING: &str = "voice parity:";
 const CAPTURE_SCRIPT: &str = "scripts/parity/voice.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
@@ -146,18 +147,13 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
 ];
 
-/// The open gaps of row 24, typed: each names the scenario and the
-/// `/family/field` pointer of the comparison it covers, and how many
-/// differences it covers, which the replay fails on when it moves. A
-/// divergence one of these covers is counted as a gap difference, never as an
-/// accepted one.
-const GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "transcribe-provider-without-credential",
-        pointer: "/wireFrames/transcription.refused",
-        count: 1,
-        row: "24",
-        class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["transcribe-provider-without-credential"],
+        pointers: &["/wireFrames/transcription.refused"],
         reason: "from the v3 pin the reference resolves the realtime credential before it opens \
                  a stream and ends the stream on an error event when a provider names no \
                  variable (`resolve_snapshot`, `vibe/cli/transcribe/mistral_transcribe_client.py`); \
@@ -165,12 +161,9 @@ const GAPS: &[PatternDivergence] = &[
                  nothing (`credential_missing` in `crates/vibe-voice/src/settings.rs`) and opens \
                  the stream with an empty key",
     },
-    PatternDivergence {
-        scenario: "speech-provider-without-credential",
-        pointer: "/wireFrames/speech.refused",
-        count: 1,
-        row: "24",
-        class: Class::Gap,
+    Note {
+        scenarios: &["speech-provider-without-credential"],
+        pointers: &["/wireFrames/speech.refused"],
         reason: "from the v3 pin the reference resolves the speech credential before it builds a \
                  request and raises when a provider names no variable (`resolve_snapshot`, \
                  `vibe/cli/tts/mistral_tts_client.py`); this port's speech manager posts with \
@@ -179,14 +172,14 @@ const GAPS: &[PatternDivergence] = &[
     },
 ];
 
-/// The gap of [`GAPS`] a divergence keyed `family/field/case` falls under.
-fn gap_for(key: &str) -> Option<usize> {
+/// The scenario and pointer the measured debt reads a divergence keyed
+/// `family/field/case` as: the case, and `/family/field`.
+fn gap_address(key: &str) -> Option<(&str, String)> {
     let mut parts = key.splitn(3, '/');
     let (Some(family), Some(field), Some(case)) = (parts.next(), parts.next(), parts.next()) else {
         return None;
     };
-    let pointer = format!("/{family}/{field}");
-    GAPS.iter().position(|gap| gap.covers(case, &pointer))
+    Some((case, format!("/{family}/{field}")))
 }
 
 // --------------------------------------------------------------------------
@@ -509,16 +502,23 @@ impl Report {
 /// What the ledger has to say about one family's report: the divergences it
 /// does not name, and the entries whose divergence no longer reproduces. A
 /// `prefix*` entry is stale once no observed divergence starts with its prefix.
-fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>, Vec<String>) {
-    let unrecorded = report
-        .divergences
-        .iter()
-        .filter(|line| {
-            let key = line.split(':').next().unwrap_or_default();
-            !ledger.iter().any(|(entry, _)| covers(entry, key)) && gap_for(key).is_none()
-        })
-        .cloned()
-        .collect::<Vec<_>>();
+fn audit(
+    report: &Report,
+    family: &str,
+    ledger: &[(&str, &str)],
+    debt: &mut Debt,
+) -> (Vec<String>, Vec<String>) {
+    let mut unrecorded = Vec::new();
+    for line in &report.divergences {
+        let key = line.split(':').next().unwrap_or_default();
+        if ledger.iter().any(|(entry, _)| covers(entry, key)) {
+            continue;
+        }
+        let absorbed = gap_address(key).is_some_and(|(case, pointer)| debt.absorb(case, &pointer));
+        if !absorbed {
+            unrecorded.push(line.clone());
+        }
+    }
     let family_prefix = format!("{family}/");
     let stale = ledger
         .iter()
@@ -530,15 +530,10 @@ fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>
 }
 
 /// Fails on any divergence the ledger does not name, and on any ledger entry
-/// whose divergence no longer reproduces, then reports the family's count and
-/// adds every divergence a typed gap covers to that gap's tally in `gaps`.
-fn settle(gaps: &mut [usize], report: &Report, family: &str) -> usize {
-    for key in &report.observed {
-        if let Some(index) = gap_for(key) {
-            gaps[index] += 1;
-        }
-    }
-    let (unrecorded, stale) = audit(report, family, DIVERGENCES);
+/// whose divergence no longer reproduces, then reports the family's count; a
+/// divergence the ledger does not name falls to the measured `debt`.
+fn settle(debt: &mut Debt, report: &Report, family: &str) -> usize {
+    let (unrecorded, stale) = audit(report, family, DIVERGENCES, debt);
     assert!(
         unrecorded.is_empty(),
         "{family} diverges from the reference and is unrecorded:\n{}",
@@ -1537,14 +1532,14 @@ fn the_ledger_fails_an_unrecorded_divergence_and_a_stale_entry() {
     let mut report = Report::default();
     report.check("wireFrames", "speech.model", "defaults", &1, &2);
     report.check("wireFrames", "speech.voice", "defaults", &1, &2);
-    let (unrecorded, stale) = audit(&report, "wireFrames", ledger);
+    let (unrecorded, stale) = audit(&report, "wireFrames", ledger, &mut no_debt());
     assert!(unrecorded.is_empty(), "recorded divergences pass");
     assert!(stale.is_empty(), "entries that reproduced are not stale");
 
     let mut report = Report::default();
     report.check("wireFrames", "speech.method", "defaults", &1, &2);
     report.check("wireFrames", "speech.voice", "defaults", &1, &2);
-    let (unrecorded, stale) = audit(&report, "wireFrames", ledger);
+    let (unrecorded, stale) = audit(&report, "wireFrames", ledger, &mut no_debt());
     assert_eq!(unrecorded.len(), 1, "the unnamed divergence is reported");
     assert!(
         unrecorded[0].starts_with("wireFrames/speech.method/defaults: reference"),
@@ -1567,50 +1562,50 @@ fn the_committed_corpus_replays_against_this_port() {
     }
     let mut scenarios = 0;
     let mut conformant = 0;
-    let mut gaps = vec![0; GAPS.len()];
+    let mut debt = Debt::load(CORPUS_RELATIVE, HEADING);
     let mut report = Report::default();
     run_constants(&corpus.constants, &mut report);
-    scenarios += settle(&mut gaps, &report, "constants");
+    scenarios += settle(&mut debt, &report, "constants");
     conformant += report.conformant;
     let mut report = Report::default();
     run_transcription_resolution(&corpus, &mut report);
-    scenarios += settle(&mut gaps, &report, "transcriptionResolution");
+    scenarios += settle(&mut debt, &report, "transcriptionResolution");
     conformant += report.conformant;
     let mut report = Report::default();
     run_speech_resolution(&corpus, &mut report);
-    scenarios += settle(&mut gaps, &report, "speechResolution");
+    scenarios += settle(&mut debt, &report, "speechResolution");
     conformant += report.conformant;
     let mut report = Report::default();
     run_wire_frames(&corpus, &mut report);
-    scenarios += settle(&mut gaps, &report, "wireFrames");
+    scenarios += settle(&mut debt, &report, "wireFrames");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_capture_signal(&corpus.capture_signal, &mut report);
-    scenarios += settle(&mut gaps, &report, "captureSignal");
+    scenarios += settle(&mut debt, &report, "captureSignal");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_audio_devices(&corpus.audio_devices, &mut report);
-    scenarios += settle(&mut gaps, &report, "audioDevices");
+    scenarios += settle(&mut debt, &report, "audioDevices");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_decode_wav(&corpus.decode_wav, &mut report);
-    scenarios += settle(&mut gaps, &report, "decodeWav");
+    scenarios += settle(&mut debt, &report, "decodeWav");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_transcribe_stream(&corpus.transcribe_stream, &mut report);
-    scenarios += settle(&mut gaps, &report, "transcribeStream");
+    scenarios += settle(&mut debt, &report, "transcribeStream");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_voice_manager(&corpus.voice_manager, &mut report);
-    scenarios += settle(&mut gaps, &report, "voiceManager");
+    scenarios += settle(&mut debt, &report, "voiceManager");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_narrator(&corpus.narrator, &mut report);
-    scenarios += settle(&mut gaps, &report, "narrator");
+    scenarios += settle(&mut debt, &report, "narrator");
     conformant += report.conformant;
     let mut report = Report::default();
     behavior::run_narration_service(&corpus.narration_service, &mut report);
-    scenarios += settle(&mut gaps, &report, "narrationService");
+    scenarios += settle(&mut debt, &report, "narrationService");
     conformant += report.conformant;
     println!(
         "voice: {scenarios} comparisons across {} families replayed at {}",
@@ -1622,34 +1617,15 @@ fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {scenarios} comparisons, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
-    // Every typed gap covers exactly the differences it declares, and stands
-    // on a row the scorecard carries.
-    let miscounted = GAPS
-        .iter()
-        .zip(&gaps)
-        .filter(|(gap, found)| gap.count != **found)
-        .map(|(gap, found)| {
-            format!(
-                "{} declares {} differences and covered {found}",
-                gap.label(),
-                gap.count
-            )
-        })
-        .collect::<Vec<_>>();
-    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
-    let null = Value::Null;
-    let recorded = corpus
-        .wire_frames
-        .iter()
-        .map(|case| (case.case.clone(), &null))
-        .collect::<BTreeMap<_, _>>();
-    assert_ledger(CORPUS_RELATIVE, &recorded, entries(GAPS));
-    // Every other ledger entry is an `ACCEPTED` divergence `docs/parity.md`
+    // Every group of the measured debt covers exactly the differences it
+    // measured.
+    debt.assert_settled();
+    // Every ledger entry is an `ACCEPTED` divergence `docs/parity.md`
     // records, one comparison per difference; a gap is one comparison too.
-    let gap_differences = gaps.iter().sum::<usize>();
+    let gap_differences = debt.covered();
     let accepted = scenarios - conformant - gap_differences;
     vibe_core::parity::figures::assert_figures(
-        "voice parity:",
+        HEADING,
         "crates/vibe-voice/tests/voice/corpus.json",
         vibe_core::parity::figures::Figures {
             conformant,
@@ -1659,7 +1635,7 @@ fn the_committed_corpus_replays_against_this_port() {
             gap_differences,
             prose_differences: 0,
         },
-        serde_json::json!({ "entries": DIVERGENCES.len(), "gaps": GAPS.len() }),
+        serde_json::json!({ "entries": DIVERGENCES.len(), "gaps": debt.groups() }),
     );
 }
 
@@ -1699,4 +1675,14 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate it \
          with `{CAPTURE_SCRIPT}`"
     );
+}
+
+/// A debt that covers nothing, for a test of the audit alone.
+fn no_debt() -> Debt {
+    Debt::of(CORPUS_RELATIVE, HEADING, BTreeMap::new())
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

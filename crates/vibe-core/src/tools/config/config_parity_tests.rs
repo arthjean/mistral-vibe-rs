@@ -30,12 +30,15 @@ use serde::Deserialize;
 use serde_json::{Map, Value as JsonValue};
 
 use super::*;
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Class, PatternDivergence, Tally, differences, entries};
+use crate::parity::replay::{Tally, differences};
 use crate::parity::{is_pin_commit, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_config.py";
 const CORPUS_RELATIVE: &str = "tests/tool-config/defaults.json";
+/// The corpus as the manifest lists it.
+const LISTED: &str = "crates/vibe-core/tests/tool-config/defaults.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
 const CORPUS_SCHEMA_VERSION: u32 = 1;
@@ -46,72 +49,49 @@ const SHELL_TIMEOUTS_KEPT: &str = "v3 leaves `default_timeout` and `max_timeout_
      (vibe/core/tools/builtins/bash.py and vibe/core/config/shell_timeouts.py at c96a6dbb34d3), \
      and this port still publishes a default for each";
 
-/// The differences this port keeps from the reference, each a gap of row 4,
-/// one unit per `(tool, key)` pair named `<tool>/<key>`.
-const LEDGER: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "exit_plan_mode/*",
-        pointer: "/declaration/default",
-        count: 4,
-        row: "4",
-        class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["exit_plan_mode/*"],
+        pointers: &["/declaration/default"],
         reason: "v3 removed the `exit_plan_mode` tool (vibe/core/tools/builtins/exit_plan_mode.py \
                  is gone at c96a6dbb34d3), and this port still declares its configuration",
     },
-    PatternDivergence {
-        scenario: "bash/default_timeout",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["bash/default_timeout"],
+        pointers: &["/declaration/default"],
         reason: SHELL_TIMEOUTS_KEPT,
     },
-    PatternDivergence {
-        scenario: "bash/max_timeout_seconds",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["bash/max_timeout_seconds"],
+        pointers: &["/declaration/default"],
         reason: SHELL_TIMEOUTS_KEPT,
     },
-    PatternDivergence {
-        scenario: "git_bash/default_timeout",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["git_bash/default_timeout"],
+        pointers: &["/declaration/default"],
         reason: SHELL_TIMEOUTS_KEPT,
     },
-    PatternDivergence {
-        scenario: "git_bash/max_timeout_seconds",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["git_bash/max_timeout_seconds"],
+        pointers: &["/declaration/default"],
         reason: SHELL_TIMEOUTS_KEPT,
     },
-    PatternDivergence {
-        scenario: "powershell/default_timeout",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["powershell/default_timeout"],
+        pointers: &["/declaration/default"],
         reason: SHELL_TIMEOUTS_KEPT,
     },
-    PatternDivergence {
-        scenario: "powershell/max_timeout_seconds",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["powershell/max_timeout_seconds"],
+        pointers: &["/declaration/default"],
         reason: SHELL_TIMEOUTS_KEPT,
     },
-    PatternDivergence {
-        scenario: "read_file/max_read_bytes",
-        pointer: "/declaration/default",
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+    Note {
+        scenarios: &["read_file/max_read_bytes"],
+        pointers: &["/declaration/default"],
         reason: "v3 raised the `read_file` default byte budget (vibe/core/tools/builtins/\
                  read_file.py at c96a6dbb34d3), and this port still declares the v2 value",
     },
@@ -221,7 +201,7 @@ fn the_declared_tool_configuration_matches_the_reference_enumeration() {
     }
 
     let empty = Map::new();
-    let mut tally = Tally::new(&text, entries(LEDGER));
+    let mut tally = Tally::new(&text, []);
     let mut pairs = 0;
     let tools: BTreeSet<&String> = corpus.tools.keys().chain(port.keys()).collect();
     for tool in tools {
@@ -314,7 +294,7 @@ fn every_reference_configuration_pair_reaches_the_view_its_tool_reads() {
     );
     assert_figures(
         "tool configuration parity (readers):",
-        "crates/vibe-core/tests/tool-config/defaults.json",
+        LISTED,
         Figures::decided(pairs, pairs, 0),
         serde_json::json!({}),
     );
@@ -386,4 +366,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         committed.replace("\r\n", "\n"),
         "the committed corpus no longer matches the pinned reference; rerun {CAPTURE_SCRIPT}"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
 }

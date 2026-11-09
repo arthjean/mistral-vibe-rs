@@ -24,7 +24,8 @@ Usage::
     python3 scripts/parity/repin.py check [<corpus>...] [--unprobed] [--records <dir>]
     python3 scripts/parity/repin.py accepted
     python3 scripts/parity/repin.py census [--check] [--url <upstream>]
-    python3 scripts/parity/repin.py shingles <sha>
+    python3 scripts/parity/repin.py shingles [<sha>] [--check]
+    python3 scripts/parity/repin.py debt (<corpus>... | --all) [--runs <n>]
 
 ``<corpus>`` is a manifest path or a suffix of exactly one, such as
 ``acp-parity/corpus.json``. ``capture`` runs the entry's driver (and refreshes
@@ -66,12 +67,27 @@ of ``docs/parity.md``; with ``--check`` it records nothing and exits non-zero
 when the pin is behind, which is what the daily sentinel runs.
 
 ``shingles`` writes the digests of every 8-word run of the reference's prose
-at ``<sha>`` (``scripts/parity/shingles.py``), read from the pristine tree of
-its attested environment, to ``crates/vibe-core/tests/licensing/``, refusing a
-set above 4 MB. The clean-room guard
-``crates/vibe-core/src/parity/licensing_tests.rs`` fails on any tracked run
-that shares one outside its baseline, and writes the baseline it measured to
+at ``<sha>`` (the pin by default; ``scripts/parity/shingles.py``), read from
+the pristine tree of its attested environment, to
+``crates/vibe-core/tests/licensing/``, refusing a set above 4 MB, and beside
+it the third-party layer: the digests a locked third-party distribution of
+that environment also ships, with the distributions that do. ``--check``
+recomputes both and fails on any difference, writing nothing, which the
+weekly live run does. The clean-room guard
+``crates/vibe-core/src/parity/licensing_tests.rs`` subtracts the layer from
+the set, fails on any tracked run that shares what remains outside its
+baseline, and writes the baseline it measured to
 ``target/parity/licensing/baseline.txt``.
+
+``debt`` measures the debt of corpora (``scripts/parity/debt.py``): the gaps
+of the row a corpus measures that no ledger entry may keep, counted per
+replay heading, exact scenario and generalized pointer. It runs the tests that
+replay them in measure mode ``--runs`` times (at least twice) and refuses a
+measurement that moved; while a corpus is unchanged since its debt was
+measured, it refuses a group that grew or appeared, so the debt of an
+unchanged corpus only shrinks. It records each debt's SHA-256 and the corpus
+SHA-256 it was measured against in the manifest, then runs the replays once
+more as they run in CI.
 
 The Rust meta-test ``crates/vibe-core/src/parity/manifest_tests.rs`` checks the
 same rules as ``verify`` without running Python.
@@ -90,6 +106,7 @@ import subprocess
 import sys
 from typing import Any
 
+import debt
 import materialize
 import provenance
 import sentinel
@@ -208,6 +225,22 @@ def scorecard_rows() -> set[str]:
     return rows
 
 
+def figures_headings() -> set[str]:
+    """The replay headings the "Measured figures" table of the scorecard
+    carries."""
+
+    headings = set()
+    inside = False
+    for line in SCORECARD.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            inside = line == "## Measured figures"
+            continue
+        match = re.match(r"^\| `([^`]+)` \|", line) if inside else None
+        if match:
+            headings.add(match.group(1))
+    return headings
+
+
 def resolves_to_test(test: str) -> bool:
     """Whether ``<file>::<function>`` names a function under ``#[test]`` (or
     an async test attribute) in that file."""
@@ -289,8 +322,12 @@ def verify(manifest: dict[str, Any]) -> list[str]:
             )
     tracked = tracked_files()
     rows = scorecard_rows()
+    headings = figures_headings()
     for entry in entries:
         problems.extend(verify_entry(entry, accepted_for(manifest, entry["corpus"]), tracked, rows))
+        if (REPOSITORY / entry["corpus"]).is_file():
+            problems.extend(debt.verify(entry, provenance.sha256(REPOSITORY / entry["corpus"]), headings))
+    problems.extend(debt.orphans(listed))
     return problems
 
 
@@ -737,8 +774,151 @@ def remove(arguments: argparse.Namespace) -> str:
     if corpus in manifest.get("transition", []):
         manifest["transition"] = [name for name in manifest["transition"] if name != corpus]
     (REPOSITORY / corpus).unlink(missing_ok=True)
+    debt.path_of(corpus).unlink(missing_ok=True)
     write_manifest(manifest)
     return corpus
+
+
+def measure_debts(names: list[str], every: bool, runs: int) -> int:
+    """Measures and records the debt of the corpora ``names`` (every corpus a
+    replay reads with ``every``), as ``scripts/parity/debt.py`` states."""
+
+    if not sys.platform.startswith("linux"):
+        raise RepinError(
+            "a debt is measured on Linux, where the corpora are captured and every replay compares "
+            "every scenario; a host that replays a subset would record a smaller debt"
+        )
+    manifest = provenance.load_manifest()
+    if every:
+        entries = [entry for entry in manifest["entries"] if entry["kind"] != "fixture"]
+    elif names:
+        entries = [find_entry(manifest, name) for name in dict.fromkeys(names)]
+    else:
+        raise RepinError("name the corpora whose debt to measure, or pass `--all`")
+    for entry in entries:
+        corpus = entry["corpus"]
+        if entry["kind"] == "fixture":
+            raise RepinError(f"{corpus} is a hand-owned fixture, whose differences its ledger decides")
+        if provenance.sha256(REPOSITORY / corpus) != entry.get("sha256"):
+            raise RepinError(
+                f"{corpus} changed outside the capture tool; `{REPIN} capture {corpus}` first, so the debt "
+                "is measured against a corpus the manifest records"
+            )
+    records = default_records()
+    log = records / "debt.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.write_text("", encoding="utf-8")
+    test_files = sorted(
+        {reader for entry in entries for reader in debt.readers(entry["corpus"], entry["test"].partition("::")[0])}
+    )
+    print(f"measuring the debt of {len(entries)} corpora, {runs} runs of {len(test_files)} test files; log: {log}")
+    for test_file in test_files:
+        print(f"  {test_file}")
+    measured = debt.measure(test_files, records, runs, log)
+    outcomes = {}
+    for entry in entries:
+        corpus = entry["corpus"]
+        record = entry.get("debt")
+        path = debt.path_of(corpus)
+        previous = json.loads(path.read_text(encoding="utf-8")).get("tallies") if record and path.is_file() else None
+        unchanged = bool(record) and record.get("measuredAgainst") == entry["sha256"]
+        grown, shrunk = debt.ratchet(previous, measured.get(corpus, {}), unchanged)
+        if unchanged and grown:
+            raise RepinError(
+                f"{corpus} has not changed since its debt was measured, so these differences are "
+                "regressions of the port to fix, not debt to record; nothing was written:\n  " + "\n  ".join(grown)
+            )
+        outcomes[corpus] = (grown, shrunk)
+    for entry in entries:
+        corpus = entry["corpus"]
+        debt.write(entry, entry["sha256"], measured.get(corpus, {}))
+        grown, shrunk = outcomes[corpus]
+        tallies = measured.get(corpus, {})
+        print(f"{corpus}: {debt.summary(tallies) if tallies else 'no debt'} ({len(grown)} groups added or raised, {len(shrunk)} lowered or paid)")
+        for line in grown:
+            print(f"  + {line}")
+    write_manifest(manifest)
+    status = debt.run_tests(test_files, records, measure=False, log=log)
+    if status:
+        print(
+            f"the debts are recorded, and the replays fail as CI runs them (exit {status}): a figures line "
+            f"to restate after a recapture, or a replay to fix; read {log}",
+            file=sys.stderr,
+        )
+        return 1
+    print("the replays pass over the recorded debts")
+    return 0
+
+
+def write_shingles(commit: str, check: bool) -> int:
+    """Writes the digest set of ``commit`` and its third-party layer
+    (``scripts/parity/shingles.py``), or with ``check`` recomputes both and
+    compares them with the committed files, writing nothing.
+
+    The digest set is a function of the reference tree and is compared
+    byte for byte. The layer names the distributions that ship each digest,
+    and a platform installs a few distributions of its own (`pywin32` on
+    Windows), so a check on another platform than the one the layer was
+    measured on compares its digests and lockfile only.
+    """
+
+    root = materialize.environment_root(commit)
+    attestation = materialize.verify(root, commit)
+    values, files = shingles.digests(root / materialize.SOURCE)
+    subtracted, read, scanned = shingles.third_party(root, values)
+    content = shingles.layer(commit, attestation, subtracted, read)
+    summary = (
+        f"{len(values)} shingle digests from {files} reference files, {len(subtracted)} of them "
+        f"shipped by {len(read)} locked third-party distributions ({scanned} files read), "
+        f"measured on {attestation['platform']}"
+    )
+    digest_path = shingles.digest_file(commit)
+    layer_path = shingles.layer_file(commit)
+    if not check:
+        shingles.write(commit, values)
+        shingles.write_layer(commit, content)
+        print(
+            f"{digest_path.relative_to(REPOSITORY).as_posix()} ({digest_path.stat().st_size} bytes) "
+            f"and {layer_path.relative_to(REPOSITORY).as_posix()}: {summary}"
+        )
+        return 0
+    problems = []
+    if not digest_path.is_file() or digest_path.read_bytes() != shingles.encode(values):
+        problems.append(
+            f"{digest_path.relative_to(REPOSITORY).as_posix()} no longer matches the reference "
+            f"tree at {commit[:12]}"
+        )
+    try:
+        committed = json.loads(layer_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        committed = None
+        problems.append(f"{layer_path.relative_to(REPOSITORY).as_posix()} is unreadable: {error}")
+    if committed is not None:
+        name = layer_path.relative_to(REPOSITORY).as_posix()
+        if committed.get("uvLockSha256") != content["uvLockSha256"]:
+            problems.append(f"{name} was measured on another uv.lock than {commit[:12]} holds")
+        ours, theirs = set(content["digests"]), set(committed.get("digests") or {})
+        if ours != theirs:
+            problems.append(
+                f"{name} subtracts {len(theirs - ours)} digests no locked distribution ships here "
+                f"and misses {len(ours - theirs)} that one does: "
+                f"{sorted(theirs ^ ours)[:5]}"
+            )
+        if committed.get("measuredOn") == content["measuredOn"]:
+            if shingles.render_layer(committed) != shingles.render_layer(content):
+                problems.append(f"{name} attributes its digests to other distributions than this environment")
+        else:
+            print(
+                f"{name} was measured on {committed.get('measuredOn')}; this host is "
+                f"{content['measuredOn']}, so only its digests and lockfile were compared"
+            )
+    for problem in problems:
+        print(problem, file=sys.stderr)
+    if problems:
+        print(f"regenerate both with `python3 scripts/parity/repin.py shingles {commit}`", file=sys.stderr)
+        return 1
+    print(f"the committed digest set and third-party layer match: {summary}")
+    return 0
 
 
 # --------------------------------------------------------------------------
@@ -807,7 +987,26 @@ def parse_arguments() -> argparse.Namespace:
     shingling = commands.add_parser(
         "shingles", help="write the digests of the reference's 8-word prose runs at a commit"
     )
-    shingling.add_argument("commit", help="a commit with an attested environment")
+    shingling.add_argument(
+        "commit",
+        nargs="?",
+        default=EXPECTED_COMMIT,
+        help="a commit with an attested environment (the pin by default)",
+    )
+    shingling.add_argument(
+        "--check",
+        action="store_true",
+        help="recompute both files and compare them with the committed ones, writing nothing",
+    )
+    owing = commands.add_parser("debt", help="measure and record the debt of corpora")
+    owing.add_argument("corpora", nargs="*")
+    owing.add_argument("--all", action="store_true", help="every corpus a replay reads")
+    owing.add_argument(
+        "--runs",
+        type=int,
+        default=debt.MINIMUM_RUNS,
+        help=f"how many measurements must agree (at least {debt.MINIMUM_RUNS})",
+    )
     capturing = commands.add_parser("capture", help="regenerate one entry through its driver")
     capturing.add_argument("corpus")
     capturing.add_argument(
@@ -921,16 +1120,9 @@ def main() -> int:
             )
             return 0
         if arguments.command == "shingles":
-            commit = arguments.commit
-            root = materialize.environment_root(commit)
-            materialize.verify(root, commit)
-            values, files = shingles.digests(root / materialize.SOURCE)
-            target = shingles.write(commit, values)
-            print(
-                f"{target.relative_to(REPOSITORY).as_posix()}: {len(values)} shingle digests "
-                f"from {files} files, {target.stat().st_size} bytes"
-            )
-            return 0
+            return write_shingles(arguments.commit, arguments.check)
+        if arguments.command == "debt":
+            return measure_debts(arguments.corpora, arguments.all, arguments.runs)
         if arguments.command == "verify":
             manifest = provenance.load_manifest()
             problems = verify(manifest)
@@ -944,8 +1136,11 @@ def main() -> int:
             refreshed = capture(
                 arguments.corpus, arguments.commit, arguments.accept_shrink, arguments.hand_assembled
             )
+            manifest = provenance.load_manifest()
             for corpus in refreshed:
                 print(f"captured {corpus}")
+                if find_entry(manifest, corpus).get("debt"):
+                    print(f"  its debt was measured against the corpus it replaced: `{REPIN} debt {corpus}`")
             return 0
         if arguments.command == "remove":
             print(f"removed {remove(arguments)}")
@@ -956,6 +1151,9 @@ def main() -> int:
         print(f"repin: {error}", file=sys.stderr)
         return 1
     except shingles.ShingleError as error:
+        print(f"repin: {error}", file=sys.stderr)
+        return 1
+    except debt.DebtError as error:
         print(f"repin: {error}", file=sys.stderr)
         return 1
     except sentinel.SentinelError as error:

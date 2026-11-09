@@ -1,0 +1,559 @@
+{
+  "corpus": "crates/vibe-core/tests/config-surface/corpus.json",
+  "measuredAgainst": "32af5fa438e89ed4daf8c5faf40a099ba71c8da7b068a8275fadaca1efa041e6",
+  "schemaVersion": 1,
+  "tallies": {
+    "config MCP entries parity:": {
+      "explicit-header-wins-over-token": {
+        "/samplingEnabled": 1
+      },
+      "legacy-auth-promotion": {
+        "/samplingEnabled": 1
+      },
+      "legacy-http-transport": {
+        "/samplingEnabled": 1
+      },
+      "name-normalized-on-read": {
+        "/samplingEnabled": 1
+      },
+      "oauth-block": {
+        "/samplingEnabled": 1
+      },
+      "static-auth-block": {
+        "/samplingEnabled": 1
+      },
+      "static-auth-token-format-spec": {
+        "/samplingEnabled": 1
+      },
+      "stdio-list-command": {
+        "/samplingEnabled": 1
+      },
+      "stdio-string-command": {
+        "/samplingEnabled": 1
+      },
+      "streamable-http-bare": {
+        "/samplingEnabled": 1
+      }
+    },
+    "config layers parity (stacks):": {
+      "write-keeps-the-file-order-and-appends-new-keys": {
+        "/afterWrites/active_model": 1
+      }
+    },
+    "config surface parity (defaults):": {
+      "defaults": {
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/providers/*/preserve_api_base": 2,
+        "/show_thinking_nodes": 1
+      }
+    },
+    "config surface parity (merges):": {
+      "concat-every-path-list": {
+        "/droppedKeys/tool_paths": 1,
+        "/tool_paths": 1
+      }
+    },
+    "config surface parity (migrations):": {
+      "renamed-field-keeps-the-new-name-when-both-are-set": {
+        "/changed": 1,
+        "/migrated/experimental_worktree_copy_on_write": 1
+      },
+      "renamed-field-moves-its-value": {
+        "/changed": 1,
+        "/migrated/experimental_worktree_copy_on_write": 1,
+        "/migrated/worktree_copy_on_write": 1
+      },
+      "withdrawn-path-list-is-dropped": {
+        "/changed": 1,
+        "/migrated/tool_paths": 1
+      }
+    },
+    "config surface parity (models):": {
+      "models-a-hand-written-unset-threshold-is-unset": {
+        "/rejected": 1
+      },
+      "models-a-model-aliased-active-wins-over-the-selector": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/active/auto_compact_threshold": 1,
+        "/models/active/supports_images": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-active-model-selects-an-added-entry": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/auto_compact_threshold": 1
+      },
+      "models-active-model-threshold-and-window-are-its-own-rows": {
+        "/available_models": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/supports_images": 1
+      },
+      "models-added-entry-inherits-the-global-threshold": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/supports_images": 1
+      },
+      "models-admin-allowlist-narrows-by-name": {
+        "/rejected": 1
+      },
+      "models-admin-threshold-keeps-the-global-row": {
+        "/active_model": 1,
+        "/active_model_alias": 1,
+        "/available_models": 1,
+        "/compaction_model_alias": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/path": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/validation_warnings": 1
+      },
+      "models-admin-threshold-overrides-a-window": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/windowed/supports_images": 1
+      },
+      "models-admin-threshold-overrides-every-model": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/supports_images": 1
+      },
+      "models-alias-map-form": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/validation_warnings": 1
+      },
+      "models-allowed-models-excluding-the-default": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-allowed-models-excluding-the-pin-falls-back": {
+        "/active_model": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-allowed-models-glob-narrows-the-available-set": {
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-allowed-models-match-the-model-name": {
+        "/active_model": 1,
+        "/active_model_alias": 1,
+        "/available_models/*": 1,
+        "/compaction_model_alias": 1,
+        "/default_model_alias": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/path": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/validation_warnings": 1
+      },
+      "models-allowed-models-matching-nothing-warns-and-admits-all": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-allowed-models-regex-is-case-insensitive": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-cap-the-window-cannot-reach-is-ignored": {
+        "/rejected": 1
+      },
+      "models-compaction-model-follows-the-active-provider": {
+        "/active_model": 1,
+        "/active_model_alias": 1,
+        "/available_models": 1,
+        "/compaction_model/auto_compact_threshold": 1,
+        "/compaction_model/supports_images": 1,
+        "/compaction_model_alias": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/path": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/validation_warnings": 1
+      },
+      "models-compaction-model-ignores-the-global-threshold": {
+        "/available_models": 1,
+        "/compaction_model/auto_compact_threshold": 1,
+        "/compaction_model/supports_images": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-compaction-model-keeps-the-alias-it-declares": {
+        "/available_models": 1,
+        "/compaction_model/auto_compact_threshold": 1,
+        "/compaction_model/supports_images": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-compaction-model-on-another-provider-warns": {
+        "/available_models": 1,
+        "/compaction_model/auto_compact_threshold": 1,
+        "/compaction_model/supports_images": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-compaction-model-without-an-alias-borrows-its-name": {
+        "/available_models": 1,
+        "/compaction_model/auto_compact_threshold": 1,
+        "/compaction_model/supports_images": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-defaults-only": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-entry-keeps-its-own-threshold": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/supports_images": 1
+      },
+      "models-entry-without-an-alias-borrows-its-name": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/auto_compact_threshold": 1,
+        "/models/scratch/supports_images": 1
+      },
+      "models-global-cap-at-the-window-falls-back-to-the-ratio": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/windowed/auto_compact_threshold": 1,
+        "/models/windowed/supports_images": 1
+      },
+      "models-global-threshold-of-zero-disables-every-model": {
+        "/rejected": 1
+      },
+      "models-routed-default-reaches-a-pinned-installation": {
+        "/active_model": 1,
+        "/active_model_alias": 1,
+        "/available_models": 1,
+        "/compaction_model_alias": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/path": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/routed/auto_compact_threshold": 1,
+        "/models/routed/supports_images": 1,
+        "/routed_model_config/auto_compact_threshold": 1,
+        "/routed_model_config/supports_images": 1,
+        "/validation_warnings": 1
+      },
+      "models-routed-definition-keeps-the-operator-overrides": {
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/models/local/auto_compact_threshold": 1,
+        "/models/local/display_name": 1,
+        "/models/local/name": 1,
+        "/models/local/supports_images": 1,
+        "/models/local/temperature": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/routed_model_config/auto_compact_threshold": 1,
+        "/validation_warnings": 1
+      },
+      "models-routed-definition-keeps-the-unset-threshold": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/routed/auto_compact_threshold": 1,
+        "/models/routed/supports_images": 1,
+        "/routed_model_config/auto_compact_threshold": 1,
+        "/routed_model_config/supports_images": 1
+      },
+      "models-routed-extra-models-from-json-text": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/extra/auto_compact_threshold": 1,
+        "/models/extra/supports_images": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/routed_extra_models/*/auto_compact_threshold": 2,
+        "/routed_extra_models/*/supports_images": 2
+      },
+      "models-routed-extra-models-keep-what-the-operator-wrote": {
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/fresh/supports_images": 1,
+        "/models/local/display_name": 1,
+        "/models/local/name": 1,
+        "/models/local/supports_images": 1,
+        "/models/local/temperature": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/routed_extra_models/*/auto_compact_threshold": 2,
+        "/routed_extra_models/*/supports_images": 1,
+        "/validation_warnings": 1
+      },
+      "models-routed-extra-models-not-a-list": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-sparse-override-of-a-default-model": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/validation_warnings": 1
+      },
+      "models-two-layers-deep-merge-one-entry": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/validation_warnings": 1
+      },
+      "models-unknown-active-model-falls-back": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-unknown-active-model-resolves-to-the-routed-default": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/routed/auto_compact_threshold": 1,
+        "/models/routed/supports_images": 1,
+        "/routed_model_config/auto_compact_threshold": 1,
+        "/routed_model_config/supports_images": 1
+      },
+      "models-user-threshold-keeps-a-model-threshold": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/scratch/supports_images": 1
+      },
+      "models-utility-model-naming-nothing-warns": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-utility-model-the-allowlist-excludes-warns": {
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1
+      },
+      "models-utility-models-resolve-an-alias-and-the-active-selector": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/utility_models/title": 1,
+        "/validation_warnings": 1
+      },
+      "models-vision-model-is-completed-like-a-model": {
+        "/available_models": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/vision_model/auto_compact_threshold": 1
+      },
+      "models-window-derives-the-threshold": {
+        "/available_models": 1,
+        "/fields/auto_compact_threshold/layerValues/*": 1,
+        "/fields/auto_compact_threshold/value": 1,
+        "/fields/max_context_length/layerValues/*": 1,
+        "/fields/max_context_length/value": 1,
+        "/models/local": 1,
+        "/models/mistral-medium-3.5/auto_compact_threshold": 1,
+        "/models/mistral-medium-3.5/max_context_length": 1,
+        "/models/mistral-medium-3.5/thinking_levels": 1,
+        "/models/odd-window/auto_compact_threshold": 1,
+        "/models/odd-window/supports_images": 1,
+        "/models/windowed/auto_compact_threshold": 1,
+        "/models/windowed/supports_images": 1
+      }
+    },
+    "config surface parity (settings order):": {
+      "settingsOrder": {
+        "/api_connect_timeout": 1,
+        "/api_pool_timeout": 1,
+        "/api_write_timeout": 1,
+        "/context_warnings": 1,
+        "/displayed_workdir": 1,
+        "/include_model_info": 1,
+        "/include_prompt_detail": 1,
+        "/raise_on_compaction_failure": 1
+      }
+    }
+  }
+}

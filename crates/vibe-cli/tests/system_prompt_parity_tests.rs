@@ -10,13 +10,15 @@
 //! The replay runs this crate's `vibe` through the script's `--live-binary`
 //! and records the same.
 //!
-//! The port writes its own prose on purpose (`NOTICE`): two digests that
-//! differ are a difference unless a `PROSE` entry names their pointer, holds
-//! the count of digests it covers, and finds the port's length within its band
-//! of the reference's; everything else is compared exactly. A difference has
-//! to fall under a ledger entry, and every entry has to still reproduce, so
-//! row 19 of `docs/parity.md` is a reading of the summary this file prints.
-//! Only the live probe at the end needs the reference checkout.
+//! The port writes its own prose on purpose (`NOTICE`): two digests that differ
+//! are a difference unless a `PROSE` entry names their pointer, holds the count
+//! of digests it covers, and finds the port's length within its band of the
+//! reference's; everything else is compared exactly. A difference has to fall
+//! under a ledger entry or the corpus's measured debt
+//! (`vibe_core::parity::debt`), and every entry and every debt group has to
+//! still reproduce, so row 19 of `docs/parity.md` is a reading of the summary
+//! this file prints. Only the live probe at the end needs the reference
+//! checkout.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -25,8 +27,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, Class, OwnProse, PatternDivergence, Tally, assert_ledger, differences, entries,
-    scenarios,
+    Band, Capture, OwnProse, Tally, assert_ledger, differences, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -37,8 +38,6 @@ const CAPTURE: Capture = Capture {
     family: &[],
     arguments: &[],
 };
-
-const LEDGER: &[PatternDivergence] = &[];
 
 /// The accepted divergence the prose below stands on.
 const PROMPT_TEXT: &str = "System prompt text";
@@ -62,55 +61,6 @@ const PROSE: &[OwnProse] = &[OwnProse {
 
 /// The corpus as `scripts/parity/manifest.json` lists it.
 const LISTED: &str = "crates/vibe-cli/tests/system-prompt-parity/corpus.json";
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 composes the prompt otherwise across its app server and harness core, which this port does not reproduce yet";
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/exit",
-        count: 3,
-        row: "19",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/requests/*",
-        count: 1,
-        row: "19",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/requests/*/carries/*",
-        count: 47,
-        row: "19",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/requests/*/carries/*/data",
-        count: 264,
-        row: "19",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/requests/*/carries/*/occurrences",
-        count: 39,
-        row: "19",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
-
 /// The port's requests, captured by the script driving this crate's `vibe`.
 fn replay_live() -> BTreeMap<String, Value> {
     let captured = CAPTURE.port(
@@ -129,12 +79,7 @@ fn replay_live() -> BTreeMap<String, Value> {
     ignore = "windows by design: the corpus was captured on Linux, and the reference prompt names the Windows platform and spells paths with backslashes"
 )]
 fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_the_ledger_names() {
-    let mut tally = Tally::new(
-        CORPUS,
-        entries(PROSE)
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    let mut tally = Tally::new(CORPUS, entries(PROSE));
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     let live = replay_live();
@@ -152,13 +97,7 @@ fn the_port_composes_every_system_prompt_scenario_as_the_corpus_records_or_as_th
 #[test]
 fn every_ledger_entry_states_a_pointer_and_a_reason() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    assert_ledger(
-        LISTED,
-        &scenarios(&corpus),
-        entries(PROSE)
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

@@ -1,0 +1,681 @@
+{
+  "schemaVersion": 1,
+  "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+  "uvLockSha256": "083e7cd0434f7183b3c00117cd849a31f4166cbee2a649e2d6b7cc0087de1572",
+  "measuredOn": {
+    "platform": "linux-x86_64",
+    "python": "3.12.15"
+  },
+  "distributions": [
+    "Authlib==1.9.1",
+    "GitPython==3.2.1",
+    "PyJWT==2.15.1",
+    "PyYAML==6.0.3",
+    "SecretStorage==3.5.0",
+    "agent-client-protocol==0.11.0",
+    "annotated-types==0.7.0",
+    "anyio==4.15.1",
+    "attrs==26.1.0",
+    "beautifulsoup4==4.14.3",
+    "cachetools==7.0.6",
+    "certifi==2026.10.19",
+    "cffi==2.0.0",
+    "charset-normalizer==3.4.7",
+    "click==8.3.3",
+    "croniter==6.2.4",
+    "cryptography==50.0.0",
+    "eval_type_backport==0.3.1",
+    "gitdb==4.0.12",
+    "giturlparse==0.15.0",
+    "google-auth==2.62.0",
+    "googleapis-common-protos==1.74.0",
+    "h11==0.16.0",
+    "httpcore2==2.16.0",
+    "httpx2==2.16.0",
+    "humanize==4.16.0",
+    "idna==3.18",
+    "jaraco.classes==3.4.0",
+    "jaraco.context==6.1.2",
+    "jaraco.functools==4.4.0",
+    "jeepney==0.9.0",
+    "joserfc==1.7.7",
+    "jsonpatch==1.33",
+    "jsonpath-python==1.1.5",
+    "jsonpointer==3.1.1",
+    "jsonschema-specifications==2025.9.1",
+    "jsonschema==4.26.0",
+    "keyring==25.7.0",
+    "markdownify==1.2.3",
+    "mcp-types==2.3.0",
+    "mcp==2.3.0",
+    "miniaudio==1.71",
+    "mistralai==3.5.0",
+    "more-itertools==11.0.2",
+    "opentelemetry-api==1.45.1",
+    "opentelemetry-exporter-http-transport==0.66b1",
+    "opentelemetry-exporter-otlp-common==0.66b1",
+    "opentelemetry-exporter-otlp-proto-common==1.45.1",
+    "opentelemetry-exporter-otlp-proto-http==1.45.1",
+    "opentelemetry-proto==1.45.1",
+    "opentelemetry-sdk==1.45.1",
+    "opentelemetry-semantic-conventions==0.66b1",
+    "packaging==26.3",
+    "pexpect==4.9.0",
+    "protobuf==6.33.6",
+    "ptyprocess==0.7.0",
+    "pyasn1==0.6.5",
+    "pyasn1_modules==0.4.2",
+    "pycparser==3.0",
+    "pydantic-settings==2.14.2",
+    "pydantic==2.13.4",
+    "pydantic_core==2.46.4",
+    "python-dateutil==2.9.0.post0",
+    "python-dotenv==1.2.2",
+    "python-multipart==0.0.32",
+    "referencing==0.37.0",
+    "requests==2.34.2",
+    "rfc8785==0.1.4",
+    "rpds-py==0.30.0",
+    "sentry-sdk==2.73.0",
+    "setproctitle==1.3.7",
+    "six==1.17.0",
+    "smmap==5.0.3",
+    "socksio==1.0.0",
+    "soupsieve==2.9.2",
+    "sse-starlette==3.4.1",
+    "starlette==1.3.1",
+    "tomli_w==1.2.0",
+    "tree-sitter-bash==0.25.1",
+    "tree-sitter==0.26.0",
+    "truststore==0.10.4",
+    "typing-inspection==0.4.2",
+    "typing_extensions==4.16.0",
+    "urllib3==2.8.0",
+    "uuid_utils==1.0.0",
+    "uvicorn==0.46.0",
+    "watchfiles==1.2.0",
+    "websockets==16.0",
+    "zstandard==0.25.0"
+  ],
+  "digests": {
+    "00f28df1693360a2": [
+      "pydantic==2.13.4"
+    ],
+    "03bdad865c745335": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "03fc2f063108b0eb": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "04154ca1653ade66": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "0795e3b277031689": [
+      "httpx2==2.16.0"
+    ],
+    "0a64304481c6d52d": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "12e73fe2adc65214": [
+      "PyYAML==6.0.3",
+      "httpx2==2.16.0"
+    ],
+    "1498d7a7510e9d82": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "1a938ab09de2dbd8": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "1cb570151186e0d4": [
+      "anyio==4.15.1"
+    ],
+    "20207b9ef57cb951": [
+      "GitPython==3.2.1",
+      "anyio==4.15.1",
+      "beautifulsoup4==4.14.3",
+      "httpx2==2.16.0",
+      "mistralai==3.5.0",
+      "tree-sitter-bash==0.25.1",
+      "websockets==16.0"
+    ],
+    "214724a4195a93a3": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "229d5774cf020660": [
+      "httpx2==2.16.0"
+    ],
+    "27fb2a097ce2284a": [
+      "anyio==4.15.1"
+    ],
+    "28de6b6f31af692f": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32",
+      "rfc8785==0.1.4"
+    ],
+    "2911b7f66c4c5222": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "29d1a8e009aa0d92": [
+      "PyJWT==2.15.1"
+    ],
+    "2bcc404cecb30c50": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "2bd08e992de99c58": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "2ff1b9c548869503": [
+      "pydantic==2.13.4"
+    ],
+    "31ad82b37d2122e1": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "320ba2a1c0cb2312": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "34297782b3f2fa71": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "36c3b9ed4e4a276e": [
+      "jsonschema==4.26.0"
+    ],
+    "3b5ddde18d45f9d7": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "4095435a2a721862": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "4259e7a85ba8ba81": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "445166f7a37ba78f": [
+      "packaging==26.3"
+    ],
+    "46ab32ef8d4e45d9": [
+      "anyio==4.15.1"
+    ],
+    "48a8924f0331ea60": [
+      "pydantic==2.13.4"
+    ],
+    "4e07168fe5d38288": [
+      "anyio==4.15.1"
+    ],
+    "53a81e98db90f4df": [
+      "anyio==4.15.1"
+    ],
+    "559f7255c7ef2e3b": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "560ec6a82aee1aa5": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "575d2ac4d0bfd439": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "589186f17ad1c1af": [
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "60c91e962d5707f7": [
+      "websockets==16.0"
+    ],
+    "6169032518223d89": [
+      "packaging==26.3"
+    ],
+    "64537a35bb493698": [
+      "anyio==4.15.1"
+    ],
+    "645557768d4b4b7c": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "65941edf9f44148a": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "66dd437e50832ec4": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "6a9662188b252d77": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "6b63c68458e49087": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "726ae35bb63ce1ce": [
+      "pydantic==2.13.4"
+    ],
+    "747d554c19e76f04": [
+      "anyio==4.15.1"
+    ],
+    "7b758291c675b1e4": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "7d19a33048d5b446": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "80ecee7115898986": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "830478f4849f30b7": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "83c3e79f691cc00a": [
+      "Authlib==1.9.1"
+    ],
+    "854582f6ac6d1c7a": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "87d54649cf81f972": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "899cdbc5a4be9d6d": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "8bb1b9831ef2a900": [
+      "GitPython==3.2.1",
+      "jeepney==0.9.0",
+      "mcp==2.3.0",
+      "mistralai==3.5.0",
+      "packaging==26.3",
+      "pydantic==2.13.4",
+      "sentry-sdk==2.73.0",
+      "watchfiles==1.2.0"
+    ],
+    "8cd2d3b747fbbed4": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "8e3fb81271267dab": [
+      "httpx2==2.16.0"
+    ],
+    "94147f90a3e70a6f": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "974ce1be48b3897f": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "9be5fd9b4a9efc61": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "9cb8a511ed5d5759": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "9f681ab76e78f936": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "a1d8a20a7d33b6d7": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "a4afb8f4600d833b": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "a54843e8613b3c60": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "a73c0618688ffb0e": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "adc947d08c08952a": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "af73e8c0bd7ea888": [
+      "pydantic==2.13.4"
+    ],
+    "b36de5bc6625c98f": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "b9f5fba918ff62ae": [
+      "packaging==26.3"
+    ],
+    "bc7eda65477cf0c5": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "be9100e03e70b954": [
+      "httpx2==2.16.0"
+    ],
+    "c0610ca4550f70a4": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "c1bcd843ae817298": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "c255b1fd895f3f85": [
+      "PyYAML==6.0.3"
+    ],
+    "c295f57509778400": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "c3b40f047813307e": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "c4723c0aad32c20a": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "c651be14ab4c9894": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "cbd97ad5dbf25441": [
+      "cryptography==50.0.0"
+    ],
+    "cd76e1384743daaa": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "d100178abc9cd325": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "d2b15a7b0a90f523": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "d396448748db7f77": [
+      "pydantic==2.13.4"
+    ],
+    "d84c438fdf6f2aa1": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1"
+    ],
+    "d888da720ca42a4d": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "d938b8c6618bc99a": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "d9bec61c1f550067": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "e6f7ffc1bbac5ccc": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "e87b016e58c05c61": [
+      "Authlib==1.9.1"
+    ],
+    "eeea3d58474ed382": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "f2d1e50f735f223c": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "f5aed373f52b7953": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "f5ec11d135da80c2": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "f6a9850a8a6ea323": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "f6dfd5e150a80108": [
+      "pydantic==2.13.4"
+    ],
+    "f82c6e8ab7c3f443": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "f88cb91ed1393055": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "fd98fd641adc7baa": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ],
+    "fdbf0c1b775cff5c": [
+      "google-auth==2.62.0",
+      "googleapis-common-protos==1.74.0",
+      "opentelemetry-proto==1.45.1",
+      "opentelemetry-sdk==1.45.1",
+      "python-multipart==0.0.32"
+    ]
+  }
+}

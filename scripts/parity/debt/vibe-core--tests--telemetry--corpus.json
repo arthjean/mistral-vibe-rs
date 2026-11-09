@@ -1,0 +1,75 @@
+{
+  "corpus": "crates/vibe-core/tests/telemetry/corpus.json",
+  "measuredAgainst": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94",
+  "schemaVersion": 1,
+  "tallies": {
+    "telemetry parity:": {
+      "model-call-span-raising-a-backend-error": {
+        "/spans/statusDescription": 1
+      },
+      "model-call-span-raising-a-backend-error-without-a-status": {
+        "/spans/statusDescription": 1
+      },
+      "model-call-span-wrapping-a-backend-error": {
+        "/spans/statusDescription": 1
+      },
+      "vibe.artifact_created": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.artifact_detected": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.artifact_detection_failed": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.artifact_mark_viewed": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.artifact_sync_failed": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.artifact_synced": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.new_session": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventPayloads/propertyTypes": 1
+      },
+      "vibe.onboarding_sign_in.done": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.onboarding_sign_in.started": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.session_branched": {
+        "/eventPayloads/propertyKeys": 1
+      },
+      "vibe.tool_call.detected": {
+        "/eventPayloads/correlated": 1,
+        "/eventPayloads/propertyKeys": 1,
+        "/eventPayloads/propertyTypes": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.tool_call_finished": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventPayloads/propertyTypes": 1
+      },
+      "vibe.tool_classification": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      },
+      "vibe.worktree.created": {
+        "/eventPayloads/propertyKeys": 1,
+        "/eventVocabulary/published": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "corpus": "crates/vibe-app-server/tests/review-parity/corpus.json",
+  "measuredAgainst": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4",
+  "schemaVersion": 1,
+  "tallies": {
+    "review parity:": {
+      "compaction/decisions-across-the-boundary": {
+        "/*/context/*": 6,
+        "/*/context/*/content": 1,
+        "/*/files/notes.txt": 2,
+        "/*/response/error": 6,
+        "/*/response/result": 6
+      },
+      "compaction/reads-across-the-boundary": {
+        "/*/context/*": 6,
+        "/*/context/*/content": 1,
+        "/*/response/error": 9,
+        "/*/response/result": 9
+      },
+      "decide/all-approve": {
+        "/*/response/error": 4,
+        "/*/response/result": 4
+      },
+      "decide/all-revert": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 3,
+        "/*/response/result": 3
+      },
+      "decide/file": {
+        "/*/response/error": 4,
+        "/*/response/result": 4
+      },
+      "decide/last-turns": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 7,
+        "/*/response/result": 7
+      },
+      "decide/path-spellings": {
+        "/*/files/notes.txt": 2,
+        "/*/response/error": 4,
+        "/*/response/result": 4
+      },
+      "decide/region": {
+        "/*/response/error": 4,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 4
+      },
+      "decide/regions": {
+        "/*/response/error": 2,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 2
+      },
+      "decide/scope": {
+        "/*/files/notes.txt": 2,
+        "/*/response/error": 5,
+        "/*/response/result": 5
+      },
+      "decide/scope-file": {
+        "/*/response/error": 9,
+        "/*/response/result": 9
+      },
+      "encoding/hand-edits": {
+        "/*/response/error": 16,
+        "/*/response/result": 16
+      },
+      "manual/before-a-decision": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "manual/between-turns": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 10,
+        "/*/response/result": 10
+      },
+      "manual/reading-an-untracked-file": {
+        "/*/files/other.txt": 1,
+        "/*/response/error": 8,
+        "/*/response/result": 8
+      },
+      "opaque/hand-written-bytes": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 9,
+        "/*/response/result": 9
+      },
+      "paths/outside-the-workspace": {
+        "/*/response/error": 5,
+        "/*/response/result": 5
+      },
+      "paths/through-a-symlink": {
+        "/*/files/real.txt": 1,
+        "/*/response/error": 9,
+        "/*/response/result": 9
+      },
+      "read/after-three-turns": {
+        "/*/response/error": 13,
+        "/*/response/result": 13
+      },
+      "read/before-any-turn": {
+        "/*/response/error": 4,
+        "/*/response/result": 4
+      },
+      "read/path-spellings": {
+        "/*/response/error": 7,
+        "/*/response/result": 7
+      },
+      "refuse/decision-parameters": {
+        "/*/response/error": 8,
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3,
+        "/*/response/result": 8
+      },
+      "refuse/read-parameters": {
+        "/*/response/error": 5,
+        "/*/response/result": 5
+      },
+      "rewind/fork-restoring-files": {
+        "/*/files/notes.txt": 1,
+        "/*/notifications/*": 1,
+        "/*/response/error": 4,
+        "/*/response/result": 4,
+        "/*/response/result/state/history/*/outcome": 2,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "rewind/in-place": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 9,
+        "/*/response/result": 9,
+        "/*/response/result/state/history/*/detail/input/changes": 1,
+        "/*/response/result/state/history/*/detail/input/newString": 1,
+        "/*/response/result/state/history/*/detail/input/oldString": 1,
+        "/*/response/result/state/history/*/detail/input/replaceAll": 1,
+        "/*/response/result/state/history/*/detail/toolName": 1,
+        "/*/response/result/state/history/*/outcome": 2,
+        "/*/response/result/state/history/*/state/display/message": 1,
+        "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine": 1,
+        "/*/response/result/state/history/*/state/output/previousContent": 1,
+        "/*/response/result/state/history/*/title": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
+        "/*/response/result/state/session/loops": 1,
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+      },
+      "shell/deletion": {
+        "/*/files/notes.txt": 1,
+        "/*/response/error": 9,
+        "/*/response/result": 9
+      },
+      "shell/revert-into-a-removed-directory": {
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "turn/reads-and-decisions-while-it-runs": {
+        "/*/response/error": 11,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 11
+      }
+    }
+  }
+}

@@ -27,7 +27,11 @@ vendored, linked, or shipped. This binds every change:
 - The clean-room guard, `crates/vibe-core/src/parity/licensing_tests.rs`, fails
   on any tracked run of 8 or more words of prose shared with the pinned
   reference, against the digests `python3 scripts/parity/repin.py shingles
-  <sha>` writes under `crates/vibe-core/tests/licensing/`. Its baseline lists
+  <sha>` writes under `crates/vibe-core/tests/licensing/`, less the
+  third-party layer it writes beside them: the digests a distribution the
+  reference's `uv.lock` resolves from an index, a Git repository or a URL
+  also ships, which the reference only quotes. A run a library authored passes
+  through that layer, never through a hand-kept exemption. Its baseline lists
   the runs known when it landed and only shrinks: fix a new run by rewriting
   it, never by adding a line. During a rolling re-pin the baseline stays cut
   at `PREVIOUS_COMMIT`, and a run the target finds passes only when it re-cuts
@@ -95,10 +99,15 @@ documentation use the Linux form; read them relative to the local checkout.
   differences it covers, matches pointers on segment boundaries, names a
   scorecard row and what it stands on (`Class::Accepted` with the name of an
   "Accepted divergences" row, or `Class::Gap`), and fails the replay when its
-  count moves. A gap of the row its corpus measures is one to close, except
-  for a corpus recaptured at the target of an open re-pin, where the figures
-  count it against the row; an entry over a whole top-level observation lists the
-  sub-pointers it may cover. Each replay, `Tally` or hand-rolled, ends with
+  count moves. A `Class::Gap` entry names another row: a gap of the row its
+  corpus measures is a measurement, never an entry. It lives in the corpus's
+  measured debt under `scripts/parity/debt/`, which only
+  `python3 scripts/parity/repin.py debt <corpus>` writes (on Linux, from runs
+  that agree) and the manifest records against the corpus SHA-256. A
+  difference outside the debt fails the replay, and so does a debt group that
+  moves, so an unchanged corpus's debt only shrinks; a `Note` explains a debt
+  group and counts nothing. An entry over a whole top-level observation lists
+  the sub-pointers it may cover. Each replay, `Tally` or hand-rolled, ends with
   `vibe_core::parity::figures::assert_figures` against its line of the
   "Measured figures" table in `docs/parity.md`; a run appends what it counted
   to `target/parity/figures.jsonl`, the line to restate when one moves.

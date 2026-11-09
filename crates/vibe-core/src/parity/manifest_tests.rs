@@ -242,6 +242,7 @@ fn entry(text: &str) -> ManifestEntry {
             .map(|(family, count)| (family, minimum_floor(count)))
             .collect(),
         note: None,
+        debt: None,
     }
 }
 
@@ -534,5 +535,33 @@ fn the_python_verifier_agrees_with_the_meta_test() {
         output.status.success(),
         "`{REPIN} verify` disagrees with the meta-test: {}",
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A measured debt is part of its corpus's provenance: written by
+/// `repin.py debt` against the committed corpus, recorded in its manifest
+/// entry, and kept only for a heading a replay reads.
+#[test]
+fn every_measured_debt_is_the_one_its_manifest_entry_records() {
+    let manifest = load();
+    let headings: BTreeSet<String> = super::figures::lines(&super::figures::scorecard())
+        .into_iter()
+        .map(|line| line.heading)
+        .collect();
+    let mut problems: Vec<String> = manifest
+        .entries
+        .iter()
+        .flat_map(|entry| super::debt::entry_problems(entry, &headings))
+        .collect();
+    let listed: Vec<&str> = manifest
+        .entries
+        .iter()
+        .map(|entry| entry.corpus.as_str())
+        .collect();
+    problems.extend(super::debt::orphans(&listed));
+    assert!(
+        problems.is_empty(),
+        "the measured debts and the manifest disagree:\n{}",
+        problems.join("\n")
     );
 }

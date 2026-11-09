@@ -1,0 +1,296 @@
+{
+  "corpus": "crates/vibe-core/tests/llm-backends/corpus.json",
+  "measuredAgainst": "5b9a3e5c17dd59cfd28059ef5437dfaa7493079e66b4e209ac720f43453d976d",
+  "schemaVersion": 1,
+  "tallies": {
+    "fast-model probe parity:": {
+      "availabilityProbes/active-on-mistral": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/allowlist-second-only": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/array-file": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/cached-unavailable": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/disabled": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/external-write-within-a-minute": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/keyless": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/keyless-client-environment-key": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/keyless-refused": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/malformed-entry": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/malformed-file": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/one-of-two-features-overridden": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/prune-on-write": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/rate-limited": {
+        "/*/file": 1,
+        "/*/requests/*/body/model": 1,
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2,
+        "/*/selection/alias": 1,
+        "/*/selection/model": 1
+      },
+      "availabilityProbes/refused-both": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/refused-first-served-second": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/remembered-in-process": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/request-timeout-status": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/second-cached-available": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/served-first": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/server-errors": {
+        "/*/file": 3,
+        "/*/requests/*": 1,
+        "/*/requests/*/body/model": 1,
+        "/*/requests/*/body/reasoning_effort": 3,
+        "/*/requests/*/body/stream": 3,
+        "/*/requests/*/body/tools": 3,
+        "/*/requests/*/headers/accept": 3,
+        "/*/requests/*/headers/user-agent": 3,
+        "/*/selection/alias": 3,
+        "/*/selection/fast": 2,
+        "/*/selection/model": 3,
+        "/*/selection/provider": 2
+      },
+      "availabilityProbes/slow-first": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/smart-approve-overridden": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/stale-available": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/stale-unavailable": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/title-overridden-to-missing": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/unauthorized": {
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      },
+      "availabilityProbes/unknown-active-model": {
+        "/*/requests/*/body/reasoning_effort": 1,
+        "/*/requests/*/body/stream": 1,
+        "/*/requests/*/body/tools": 1,
+        "/*/requests/*/headers/accept": 1,
+        "/*/requests/*/headers/user-agent": 1
+      },
+      "availabilityProbes/unprocessable": {
+        "/*/file": 1,
+        "/*/requests/*/body/reasoning_effort": 2,
+        "/*/requests/*/body/stream": 2,
+        "/*/requests/*/body/tools": 2,
+        "/*/requests/*/headers/accept": 2,
+        "/*/requests/*/headers/user-agent": 2
+      }
+    },
+    "utility completion parity:": {
+      "utilityCompletions/empty-answer": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/keyless-not-skipped": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/smart-approve": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/title-attributed": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/title-override": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/title-unattributed": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/title-without-terminal": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/unlabeled": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/worktree-title": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      },
+      "utilityCompletions/worktree-title-reported": {
+        "/requests/*/body/reasoning_effort": 1,
+        "/requests/*/body/stream": 1,
+        "/requests/*/body/tools": 1,
+        "/requests/*/headers/accept": 1,
+        "/requests/*/headers/user-agent": 1
+      }
+    }
+  }
+}

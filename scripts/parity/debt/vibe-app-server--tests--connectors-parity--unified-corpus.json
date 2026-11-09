@@ -1,0 +1,71 @@
+{
+  "corpus": "crates/vibe-app-server/tests/connectors-parity/unified-corpus.json",
+  "measuredAgainst": "ca73173c9f7f2d9af6f8b975fe9e53013b1ae480ba890361ad6c26236d925c8c",
+  "schemaVersion": 1,
+  "tallies": {
+    "unified connectors parity:": {
+      "unified/ask-approval": {
+        "/callbacks/*/effect/mcpApp": 1,
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/disabled-tool": {
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/gateway-401": {
+        "/authUrls/*": 1,
+        "/steps/*/turn/*": 3,
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/method": 3,
+        "/steps/*/turn/*/params": 2,
+        "/steps/*/turn/*/patch": 1,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/sessionId": 1,
+        "/steps/*/turn/*/status": 1
+      },
+      "unified/gateway-500": {
+        "/requests/*/conversation/*/content": 1,
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/implicit": {
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/inventory": {
+        "/requests/*/conversation/*/content": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/entry/detail/mcpApp": 2,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/structured": {
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/success": {
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "unified/tool-error": {
+        "/requests/*/conversation/*/content": 1,
+        "/steps/*/turn/*/entry/detail/mcpApp": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/patch/*/value/error/message": 1,
+        "/steps/*/turn/*/patch/*/value/message": 2,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      }
+    }
+  }
+}

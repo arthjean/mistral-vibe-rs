@@ -23,8 +23,9 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Class, PatternDivergence, Tally, differences, entries};
+use crate::parity::replay::{Tally, differences};
 
 use super::context::extract_summary;
 
@@ -38,15 +39,12 @@ const CORPUS_SCHEMA_VERSION: u32 = 4;
 /// clean but empty run.
 const MINIMUM_SCENARIOS: usize = 16;
 
-/// The differences this replay accepts. Every other case is compared exactly:
-/// the parser answers with a substring of the case's own text, so there is no
-/// prose to ledger.
-const LEDGER: &[PatternDivergence] = &[PatternDivergence {
-    scenario: "summaryExtractions/separators-*",
-    pointer: "/summary",
-    count: 2,
-    row: "26",
-    class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[Note {
+    scenarios: &["summaryExtractions/separators-*"],
+    pointers: &["/summary"],
     reason: "the reference trims the summary with Python's `str.strip`, which counts \
              U+001C..U+001F as whitespace; this port trims with `str::trim`, which keeps them",
 }];
@@ -114,7 +112,7 @@ fn corpus(raw: &str) -> Corpus {
 #[test]
 fn the_committed_corpus_replays_every_family_the_reference_answered() {
     let raw = corpus_text();
-    let mut tally = Tally::new(&raw, entries(LEDGER));
+    let mut tally = Tally::new(&raw, []);
     let corpus = corpus(&raw);
 
     let total = corpus.summary_extractions.len();
@@ -174,4 +172,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate it \
          with `{CAPTURE_SCRIPT} --corpus`"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

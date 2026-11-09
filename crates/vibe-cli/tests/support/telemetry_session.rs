@@ -19,7 +19,7 @@ use vibe_core::parity::replay::{
 const CORPUS: &str = include_str!("../telemetry-session/corpus.json");
 
 /// The corpus as `scripts/parity/manifest.json` lists it.
-const LISTED: &str = "crates/vibe-cli/tests/telemetry-session/corpus.json";
+pub const LISTED: &str = "crates/vibe-cli/tests/telemetry-session/corpus.json";
 
 const CAPTURE: Capture = Capture {
     script: "scripts/parity/telemetry_session.py",
@@ -84,6 +84,10 @@ impl Surfaces {
 
     /// Asserts every entry of `ledger` names a scenario the corpus records on
     /// the served surfaces, a pointer and a reason.
+    #[allow(
+        dead_code,
+        reason = "the editor surface keeps no ledger entry, so only `vibe`'s replay calls this"
+    )]
     pub fn assert_ledger(&self, ledger: &[PatternDivergence]) {
         let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
         let served = on_surfaces(&corpus, self.served);

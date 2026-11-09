@@ -28,7 +28,7 @@ use std::sync::Arc;
 use serde_json::{Map, Value};
 use vibe_core::experiments::{EVAL_CACHE_FILE_NAME, hash_api_key};
 use vibe_core::identity::{IdentityFuture, IdentityResolver, IdentityResult};
-use vibe_core::parity::replay::{Class, Entry as _, PatternDivergence, assert_ledger, entries};
+use vibe_core::parity::debt::{Debt, Note, assert_notes};
 use vibe_core::parity::{REFERENCE_COMMIT, is_pin_commit};
 use vibe_core::telemetry::ExperimentExposures;
 use vibe_core::whoami::{WhoAmIResolver, WhoAmIResult};
@@ -37,6 +37,8 @@ use super::SessionExperiments;
 use super::tests::{EvalStub, credentials, service};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-app-server/tests/experiments/corpus.json";
+/// The replay's line of the "Measured figures" table.
+const HEADING: &str = "experiments startup parity:";
 const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the capture
 /// script.
@@ -72,16 +74,13 @@ const MINIMUM_COMPARISONS: usize = 75;
 /// whose divergence stopped reproducing.
 const DIVERGENCES: &[(&str, &str)] = &[];
 
-/// Differences the v3.1.0 re-pin revealed, each a gap of row 32, which this
-/// corpus measures: an entry names the case as its scenario and the answer
-/// field as its pointer, and declares how many comparisons it covers.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/awaitingExperimentModel",
-        count: 13,
-        row: "32",
-        class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["*"],
+        pointers: &["/awaitingExperimentModel"],
         reason: "since v3.0.0 the reference delays a session's opening turn on the eval \
                  under four conditions together: evaluation is enabled at all (telemetry on, \
                  opted into A/B testing, a Mistral key present), the configuration pins no \
@@ -91,20 +90,14 @@ const V3_GAPS: &[PatternDivergence] = &[
                  document pins `oracle`, so the reference never waits, while this port still \
                  waits whenever no cached eval loaded",
     },
-    PatternDivergence {
-        scenario: "mistral-active/cached",
-        pointer: "/afterLookup",
-        count: 1,
-        row: "32",
-        class: Class::Gap,
+    Note {
+        scenarios: &["mistral-active/cached"],
+        pointers: &["/afterLookup"],
         reason: LIVE_VARIANTS_APPLY,
     },
-    PatternDivergence {
-        scenario: "mistral-active/cached-at-the-baseline",
-        pointer: "/afterLookup",
-        count: 1,
-        row: "32",
-        class: Class::Gap,
+    Note {
+        scenarios: &["mistral-active/cached-at-the-baseline"],
+        pointers: &["/afterLookup"],
         reason: LIVE_VARIANTS_APPLY,
     },
 ];
@@ -332,7 +325,7 @@ async fn the_committed_corpus_replays_against_this_port() {
     let mut comparisons = 0;
     let mut divergences = Vec::new();
     let mut observed = Vec::new();
-    let mut covered = vec![0_usize; V3_GAPS.len()];
+    let mut debt = Debt::load(CORPUS_RELATIVE, HEADING);
     for case in cases {
         let case = case.as_object().expect("a case is an object");
         let identifier = case.get("id").and_then(Value::as_str).unwrap_or_default();
@@ -358,19 +351,14 @@ async fn the_committed_corpus_replays_against_this_port() {
                 let pointer = format!("/{field}");
                 if DIVERGENCES.iter().any(|(entry, _)| *entry == key) {
                     observed.push(key);
-                } else if let Some(index) = V3_GAPS
-                    .iter()
-                    .position(|entry| entry.covers(identifier, &pointer))
-                {
-                    covered[index] += 1;
-                } else {
+                } else if !debt.absorb(identifier, &pointer) {
                     divergences.push(format!("{key}: reference {expected}, port {actual}"));
                     observed.push(key);
                 }
             }
         }
     }
-    let gaps = covered.iter().sum::<usize>();
+    let gaps = debt.covered();
     println!(
         "experiments startup: {}/{comparisons} conform across {} cases ({} ledgered, {gaps} \
          gaps) at {}",
@@ -398,28 +386,11 @@ async fn the_committed_corpus_replays_against_this_port() {
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
     );
-    let miscounted = V3_GAPS
-        .iter()
-        .zip(&covered)
-        .filter(|(entry, found)| entry.count != **found)
-        .map(|(entry, found)| {
-            format!(
-                "{} declares {} differences and covered {found}",
-                entry.label(),
-                entry.count
-            )
-        })
-        .collect::<Vec<_>>();
-    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
-    let recorded = cases
-        .iter()
-        .filter_map(|case| Some((case.get("id")?.as_str()?.to_owned(), case)))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    assert_ledger(CORPUS_RELATIVE, &recorded, entries(V3_GAPS));
+    debt.assert_settled();
     // A comparison that differs is either decided in `DIVERGENCES` or a gap
-    // in `V3_GAPS`; any other has failed above.
+    // of the measured debt; any other has failed above.
     vibe_core::parity::figures::assert_figures(
-        "experiments startup parity:",
+        HEADING,
         "crates/vibe-app-server/tests/experiments/corpus.json",
         vibe_core::parity::figures::Figures {
             conformant: comparisons - observed.len() - gaps,
@@ -473,4 +444,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate it \
          with `{CAPTURE_SCRIPT}`"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

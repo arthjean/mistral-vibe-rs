@@ -1,0 +1,247 @@
+{
+  "corpus": "crates/vibe-app-server/tests/mcp-oauth/corpus.json",
+  "measuredAgainst": "843d9b4660e7aba97a15362e8cf7781eebcbdb3f8a9536070bbdb7e45ed0e814",
+  "schemaVersion": 1,
+  "tallies": {
+    "MCP OAuth parity:": {
+      "login/already-authorized": {
+        "/wire/*/body/params/protocolVersion": 1
+      },
+      "login/callback-empty-request": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/callback-without-code": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/callback-wrong-state": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/challenge-scope": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/client-id": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 2,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/client-metadata-document": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/client-metadata-unsupported": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/client-secret-basic": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/client-secret-post": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/configured-scopes-dropped": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/dcr": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 2,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 2,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 2,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/discovery-fallbacks": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 4
+      },
+      "login/empty-scopes-supported": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/forbidden": {
+        "/wire": 1
+      },
+      "login/insufficient-scope": {
+        "/steps/*/descriptor": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/access_token": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/refresh_token": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/steps/*/outcome": 1,
+        "/steps/*/urls/*/endpoint": 1,
+        "/steps/*/urls/*/parameters": 1,
+        "/wire": 1
+      },
+      "login/invalid-metadata": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 4
+      },
+      "login/legacy-authorization-server": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 3
+      },
+      "login/metadata-server-error": {
+        "/pkce": 1,
+        "/steps/*/browser": 1,
+        "/steps/*/descriptor": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:fingerprint": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens": 1,
+        "/steps/*/outcome": 1,
+        "/steps/*/urls": 1,
+        "/wire": 1
+      },
+      "login/no-challenge": {
+        "/wire/*/body/params/protocolVersion": 1
+      },
+      "login/no-metadata": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 3
+      },
+      "login/port-in-use": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/refresh-invalid-grant": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/refresh-transient": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/refreshes-first": {
+        "/wire/*/body/params/protocolVersion": 1
+      },
+      "login/registration-refused": {
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/resource-mismatch": {
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 1
+      },
+      "login/server-scopes": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/token-refused": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/token-type-refused": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 1,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "login/token-without-lifetime": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 2,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 2,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/scope": 2,
+        "/wire/*/body/application_type": 1,
+        "/wire/*/body/params/protocolVersion": 2,
+        "/wire/*/headers/mcp-protocol-version": 2
+      },
+      "resolve/expired-invalid-grant": {
+        "/wire": 1
+      },
+      "resolve/expired-refresh-unreadable": {
+        "/wire": 1
+      },
+      "resolve/expired-refreshed": {
+        "/wire": 1
+      },
+      "resolve/expired-then-challenged": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/access_token": 2,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/expires_in": 2,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:tokens/refresh_token": 2,
+        "/steps/*/result/snapshot/headers/Authorization": 1,
+        "/wire": 1
+      },
+      "resolve/expired-transient": {
+        "/wire": 1
+      },
+      "resolve/expired-without-refresh": {
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/application_type": 1,
+        "/steps/*/keyring/ai.mistral.vibe|mcp-oauth:demo:client_info/issuer": 1,
+        "/wire": 1
+      },
+      "resolve/lifetime-without-deadline": {
+        "/wire": 1
+      }
+    }
+  }
+}

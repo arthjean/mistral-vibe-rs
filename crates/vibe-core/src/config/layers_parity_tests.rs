@@ -19,24 +19,23 @@ use serde_json::{Map, Value as JsonValue};
 use toml::Value;
 
 use super::*;
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Class, PatternDivergence, valued_differences};
+use crate::parity::replay::valued_differences;
 
-use super::surface_parity_tests::{Observed, ROW, reconcile};
+use super::surface_parity_tests::{LISTED, Observed, reconcile};
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// What the capture writes for the per-scenario temporary root.
 const ROOT_PLACEHOLDER: &str = "{root}";
 
-/// Pointers at which a stack or write case diverges. A comparison descends
-/// into tables, so an entry names the one key that moved.
-const STACK_DIVERGENCES: &[PatternDivergence] = &[PatternDivergence {
-    scenario: "write-keeps-the-file-order-and-appends-new-keys",
-    pointer: "/afterWrites/active_model",
-    count: 1,
-    row: ROW,
-    class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[Note {
+    scenarios: &["write-keeps-the-file-order-and-appends-new-keys"],
+    pointers: &["/afterWrites/active_model"],
     reason: "the case writes `active_model = \"local\"`; v3.0.0 withdrew the `local` default \
              model, so the reference reads the unavailable alias back as unpinned while this \
              port, which still ships `local`, keeps it",
@@ -338,7 +337,12 @@ fn every_layer_stack_composes_and_writes_as_the_reference_does() {
             port,
         })
         .collect::<Vec<_>>();
-    let settled = reconcile("the layer stacks", &observed, STACK_DIVERGENCES);
+    let settled = reconcile(
+        "the layer stacks",
+        "config layers parity (stacks):",
+        &observed,
+        &[],
+    );
     let diverging = cases
         .iter()
         .filter(|case| observed.iter().any(|found| found.case == case.name))
@@ -467,4 +471,9 @@ fn every_document_is_written_back_as_the_reference_writes_it() {
         Figures::decided(corpus.encoding.len(), corpus.encoding.len(), 0),
         serde_json::json!({}),
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
 }

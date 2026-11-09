@@ -12,8 +12,9 @@
 //!
 //! A replay compares the two observations of every scenario as JSON pointers
 //! ([`differences`]). Every difference has to fall under an [`Entry`] of the
-//! test's ledger, and every entry has to still reproduce, so the summary line
-//! a [`Tally`] prints is what a row of `docs/parity.md` reads.
+//! test's ledger or under the corpus's measured debt ([`super::debt`]), and
+//! every entry and every debt group has to still reproduce, so the summary
+//! line a [`Tally`] prints is what a row of `docs/parity.md` reads.
 
 #![allow(
     clippy::expect_used,
@@ -825,23 +826,14 @@ impl Entry for OwnProse {
 /// `parity_tests` allows in two places only.
 pub const AUDIT_ABBREVIATION: usize = 12;
 
-/// Whether a ledger may keep a gap of the row its corpus measures: only for a
-/// corpus at the target, `commit`, while a rolling re-pin that left
-/// `previous` is open. That gap is what the new pin revealed, and the figures
-/// count it against the row. Outside a transition, and for a corpus still at
-/// `previous`, it is a gap to close.
-#[must_use]
-pub fn own_row_gap_admitted(previous: &str, commit: &str) -> bool {
-    !previous.is_empty() && commit == super::REFERENCE_COMMIT
-}
-
 /// Asserts every entry of a ledger over the corpus `listed` (a
 /// workspace-relative path the manifest lists, as [`manifest::assert_replayed`]
 /// returns it), whose scenarios are `recorded`, is declared soundly: its own
 /// shape, a row `docs/parity.md` carries, a decided divergence the scorecard
 /// accepts when its class names one, recorded scenarios, an audit commit that
-/// is the corpus's, and no gap of the row the corpus measures, which the
-/// replay has to close rather than ledger, unless [`own_row_gap_admitted`].
+/// is the corpus's, and no gap of the row the corpus measures: that gap is a
+/// measurement, kept in the corpus's measured debt ([`super::debt`]), never a
+/// decision a ledger writes.
 ///
 /// [`Tally::conclude`] runs this; a test may also run it on its own, which
 /// checks a ledger on a host where its replay is ignored.
@@ -875,14 +867,12 @@ pub fn assert_ledger<'l>(
                 "the ledger entry for {label} stands on `{name}`, which docs/parity.md \
                  \"Accepted divergences\" does not carry"
             )),
-            Class::Gap
-                if entry.row() == listing.row
-                    && !own_row_gap_admitted(super::PREVIOUS_COMMIT, commit) =>
-            {
+            Class::Gap if entry.row() == listing.row => {
                 problems.push(format!(
                     "row {} is what this corpus measures, so a difference it keeps is a gap to \
-                     close, not a ledger entry: {label}",
-                    listing.row
+                     close or measured debt (`{} debt {listed}`), not a ledger entry: {label}",
+                    listing.row,
+                    super::manifest::REPIN
                 ));
             }
             _ => {}
@@ -925,8 +915,20 @@ pub struct Tally<'l> {
     /// For every entry, the pointers it covered, numbers generalized to `*`,
     /// which is what narrowing a broad entry starts from.
     covered: Vec<BTreeSet<String>>,
-    unexplained: Vec<String>,
+    /// The differences no entry admitted, which the corpus's measured debt
+    /// covers or the replay reports.
+    uncovered: Vec<Uncovered>,
+    /// The scenarios this run compared, whose debt it owes.
+    compared: BTreeSet<String>,
     figures: super::figures::Figures,
+}
+
+/// A difference no ledger entry admitted.
+struct Uncovered {
+    scenario: String,
+    pointer: String,
+    /// How a report quotes it, with what each side holds.
+    report: String,
 }
 
 impl<'l> Tally<'l> {
@@ -955,7 +957,8 @@ impl<'l> Tally<'l> {
             reproduced: vec![BTreeMap::new(); entries.len()],
             covered: vec![BTreeSet::new(); entries.len()],
             entries,
-            unexplained: Vec::new(),
+            uncovered: Vec::new(),
+            compared: BTreeSet::new(),
             figures: super::figures::Figures::default(),
         }
     }
@@ -970,6 +973,7 @@ impl<'l> Tally<'l> {
     /// `scenario`, which an unexplained difference quotes.
     pub fn record(&mut self, scenario: &str, reference: &Value, port: &Value, found: Vec<String>) {
         self.figures.total += 1;
+        self.compared.insert(scenario.to_owned());
         if found.is_empty() {
             self.figures.conformant += 1;
             return;
@@ -989,7 +993,7 @@ impl<'l> Tally<'l> {
                     *self.reproduced[index]
                         .entry(scenario.to_owned())
                         .or_default() += 1;
-                    self.covered[index].insert(generalize(&pointer));
+                    self.covered[index].insert(super::debt::generalize(&pointer));
                     match (entry.is_prose(), entry.class()) {
                         (true, _) => self.figures.prose_differences += 1,
                         (false, Class::Accepted(_)) => self.figures.accepted_differences += 1,
@@ -1001,20 +1005,28 @@ impl<'l> Tally<'l> {
                 }
                 Some((index, Err(why))) => {
                     decided = false;
-                    self.unexplained.push(format!(
-                        "{scenario} {pointer} ({}: {why})\n  reference: {}\n  port:      {}",
-                        self.entries[index].label(),
-                        quote(left),
-                        quote(right)
-                    ));
+                    self.uncovered.push(Uncovered {
+                        report: format!(
+                            "{scenario} {pointer} ({}: {why})\n  reference: {}\n  port:      {}",
+                            self.entries[index].label(),
+                            quote(left),
+                            quote(right)
+                        ),
+                        scenario: scenario.to_owned(),
+                        pointer,
+                    });
                 }
                 None => {
                     decided = false;
-                    self.unexplained.push(format!(
-                        "{scenario} {pointer}\n  reference: {}\n  port:      {}",
-                        quote(left),
-                        quote(right)
-                    ));
+                    self.uncovered.push(Uncovered {
+                        report: format!(
+                            "{scenario} {pointer}\n  reference: {}\n  port:      {}",
+                            quote(left),
+                            quote(right)
+                        ),
+                        scenario: scenario.to_owned(),
+                        pointer,
+                    });
                 }
             }
         }
@@ -1056,10 +1068,20 @@ impl<'l> Tally<'l> {
 
     /// Prints the summary line a scorecard row reads, opening with `heading`,
     /// then asserts the ledger is sound, every difference fell under an
-    /// entry, every entry covered exactly the differences it declares, and
-    /// the counts equal the line of `docs/parity.md` "Measured figures" that
-    /// `heading` keys.
-    pub fn conclude(self, heading: &str) {
+    /// entry or the corpus's measured debt, every entry and every debt group
+    /// covered exactly the differences it declares, and the counts equal the
+    /// line of `docs/parity.md` "Measured figures" that `heading` keys.
+    pub fn conclude(mut self, heading: &str) {
+        let mut debt = super::debt::Debt::load(&self.listed, heading);
+        debt.retain_compared(|scenario| self.compared.contains(scenario));
+        let mut unexplained = Vec::new();
+        for difference in std::mem::take(&mut self.uncovered) {
+            if debt.absorb(&difference.scenario, &difference.pointer) {
+                self.figures.gap_differences += 1;
+            } else {
+                unexplained.push(difference.report);
+            }
+        }
         let (stale, miscounted) = count_problems(&self.entries, &self.reproduced);
         let detail: Vec<Value> = self
             .entries
@@ -1078,15 +1100,18 @@ impl<'l> Tally<'l> {
         let figures = self.figures;
         println!(
             "{heading} {}/{} scenarios conformant, {} more at parity, {} ledgered differences \
-             across {} entries ({} accepted, {} gaps, {} own words)",
+             across {} entries and {} debt groups ({} accepted, {} gaps, {} own words; {} of \
+             the gaps measured debt)",
             figures.conformant,
             figures.total,
             figures.accepted,
             figures.accepted_differences + figures.gap_differences + figures.prose_differences,
             self.entries.len(),
+            debt.groups(),
             figures.accepted_differences,
             figures.gap_differences,
             figures.prose_differences,
+            debt.covered(),
         );
         let recorded: BTreeMap<String, &Value> = self
             .recorded
@@ -1095,7 +1120,8 @@ impl<'l> Tally<'l> {
             .collect();
         let figures_detail = json!({
             "entries": detail,
-            "unexplained": self.unexplained,
+            "debt": {"groups": debt.groups(), "covered": debt.covered()},
+            "unexplained": unexplained,
             "stale": stale,
             "miscounted": miscounted,
         });
@@ -1104,9 +1130,10 @@ impl<'l> Tally<'l> {
         let measured = super::figures::record(heading, &self.listed, figures, figures_detail);
         assert_ledger(&self.listed, &recorded, self.entries.iter().copied());
         assert!(
-            self.unexplained.is_empty(),
-            "the port departs from the corpus where no ledger entry says it may:\n{}",
-            self.unexplained.join("\n")
+            unexplained.is_empty(),
+            "the port departs from the corpus where no ledger entry or measured debt says it \
+             may:\n{}",
+            unexplained.join("\n")
         );
         assert!(
             stale.is_empty(),
@@ -1118,6 +1145,7 @@ impl<'l> Tally<'l> {
              count that grew is a regression inside a ledgered area:\n  {}",
             miscounted.join("\n  ")
         );
+        debt.assert_settled();
         super::figures::check(&measured);
     }
 }
@@ -1170,21 +1198,6 @@ fn count_problems(
         }
     }
     (stale, miscounted)
-}
-
-/// `pointer` with every array index written `*`.
-fn generalize(pointer: &str) -> String {
-    pointer
-        .split('/')
-        .map(|segment| {
-            if !segment.is_empty() && segment.bytes().all(|byte| byte.is_ascii_digit()) {
-                "*"
-            } else {
-                segment
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 fn quote(value: Option<&Value>) -> String {

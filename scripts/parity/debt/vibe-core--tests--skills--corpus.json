@@ -1,0 +1,180 @@
+{
+  "corpus": "crates/vibe-core/tests/skills/corpus.json",
+  "measuredAgainst": "f1bf103ab3b8102c48d7614a3fcc2e05a1f879b63f35f85d085576fd739a2da8",
+  "schemaVersion": 1,
+  "tallies": {
+    "skills parity:": {
+      "builtins/count": {
+        "/count": 1
+      },
+      "builtins/vibe:create-plugin": {
+        "/present": 1
+      },
+      "builtins/vibe:skill-creator": {
+        "/present": 1
+      },
+      "builtins/vibe:vibe": {
+        "/present": 1
+      },
+      "builtins/vibe:worktree": {
+        "/present": 1
+      },
+      "discovery/builtin-name-reserved": {
+        "/catalog": 1
+      },
+      "discovery/clutter-ignored": {
+        "/catalog": 1
+      },
+      "discovery/configured-beats-project-beats-user": {
+        "/catalog": 1
+      },
+      "discovery/configured-path": {
+        "/catalog": 1
+      },
+      "discovery/configured-path-is-a-file": {
+        "/catalog": 1
+      },
+      "discovery/configured-project-root-stays-global": {
+        "/catalog": 1
+      },
+      "discovery/duplicate-name-within-one-root": {
+        "/catalog": 1
+      },
+      "discovery/empty-everywhere": {
+        "/catalog": 1
+      },
+      "discovery/frontmatter-name-wins-over-directory": {
+        "/catalog": 1
+      },
+      "discovery/legacy-extensions-root-unread": {
+        "/catalog": 1
+      },
+      "discovery/malformed-skill-becomes-issue": {
+        "/catalog": 1
+      },
+      "discovery/missing-description-becomes-issue": {
+        "/catalog": 1
+      },
+      "discovery/nonexistent-configured-path": {
+        "/catalog": 1
+      },
+      "discovery/project-agents-skills": {
+        "/catalog": 1
+      },
+      "discovery/project-beats-user": {
+        "/catalog": 1
+      },
+      "discovery/project-both-roots": {
+        "/catalog": 1
+      },
+      "discovery/project-vibe-beats-agents": {
+        "/catalog": 1
+      },
+      "discovery/project-vibe-skills": {
+        "/catalog": 1
+      },
+      "discovery/relative-configured-path": {
+        "/catalog": 1
+      },
+      "discovery/session-in-home-stays-global": {
+        "/catalog": 1
+      },
+      "discovery/symlinked-root-walked-once": {
+        "/catalog": 1
+      },
+      "discovery/three-issues-accumulate": {
+        "/catalog": 1
+      },
+      "discovery/tilde-configured-path": {
+        "/catalog": 1
+      },
+      "discovery/two-configured-paths-in-order": {
+        "/catalog": 1
+      },
+      "discovery/untrusted-project-not-walked": {
+        "/catalog": 1
+      },
+      "discovery/user-agents-skills": {
+        "/catalog": 1
+      },
+      "discovery/user-vibe-beats-agents": {
+        "/catalog": 1
+      },
+      "discovery/user-vibe-skills": {
+        "/catalog": 1
+      },
+      "filtering/blank-patterns-ignored": {
+        "/kept": 1
+      },
+      "filtering/disabled-only": {
+        "/kept": 1
+      },
+      "filtering/enabled-can-select-a-builtin": {
+        "/kept": 1
+      },
+      "filtering/invalid-regex-disables-nothing": {
+        "/kept": 1
+      },
+      "filtering/no-filters": {
+        "/kept": 1
+      },
+      "lifecycle/builtin-name-wins-over-pin": {
+        "/session": 1
+      },
+      "lifecycle/custom-alias-loads-recorded-version": {
+        "/session": 1
+      },
+      "lifecycle/custom-alias-recorded-but-missing-falls-back": {
+        "/session": 1
+      },
+      "lifecycle/custom-alias-unrecorded-falls-back": {
+        "/session": 1
+      },
+      "lifecycle/disabled-pin-hidden-but-installed": {
+        "/session": 1
+      },
+      "lifecycle/experiment-off-loads-no-pin": {
+        "/session": 1
+      },
+      "lifecycle/frozen-pin-loads": {
+        "/session": 1
+      },
+      "lifecycle/frozen-pin-not-materialized-skipped": {
+        "/session": 1
+      },
+      "lifecycle/installed-keeps-shadowed-rows": {
+        "/session": 1
+      },
+      "lifecycle/latest-pin-loads-newest-on-disk": {
+        "/session": 1
+      },
+      "lifecycle/latest-pin-nothing-on-disk-skipped": {
+        "/session": 1
+      },
+      "lifecycle/local-skill-wins-over-pin": {
+        "/session": 1
+      },
+      "lifecycle/pin-keeps-disabled-invocation": {
+        "/session": 1
+      },
+      "lifecycle/project-pin-wins-over-global": {
+        "/session": 1
+      },
+      "lifecycle/same-pin-in-both-scopes": {
+        "/session": 1
+      },
+      "lifecycle/unsafe-id-skipped": {
+        "/session": 1
+      },
+      "lifecycle/untrusted-project-manifest-unread": {
+        "/session": 1
+      },
+      "loading/invalid-policy-on-reserved-name": {
+        "/published": 1
+      },
+      "metadata/compatibility-501-chars": {
+        "/verdict": 1
+      }
+    }
+  }
+}

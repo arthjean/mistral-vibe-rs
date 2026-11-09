@@ -125,6 +125,20 @@ pub struct ManifestEntry {
     /// What a capture of this entry needs to know.
     #[serde(default)]
     pub note: Option<String>,
+    /// The measured debt of the corpus ([`super::debt`]), when it keeps one.
+    #[serde(default)]
+    pub debt: Option<DebtRecord>,
+}
+
+/// Where a corpus's measured debt came from: what `repin.py debt` wrote.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DebtRecord {
+    /// The SHA-256 of the debt file.
+    pub sha256: String,
+    /// The SHA-256 of the corpus the debt was measured against, which has to
+    /// be the corpus's own: a recapture re-measures the debt.
+    pub measured_against: String,
 }
 
 impl Manifest {

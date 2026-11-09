@@ -1,0 +1,350 @@
+{
+  "corpus": "crates/vibe-app-server/tests/agents-parity/corpus.json",
+  "measuredAgainst": "d49701d568cf1b1291e34b88efa21ced39188f2e686f052c38e3314d9860fd39",
+  "schemaVersion": 1,
+  "tallies": {
+    "agents parity:": {
+      "delegation/ask-parent": {
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 2,
+        "/steps/*/turn/*/id": 4,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "delegation/child-approval": {
+        "/requests/*/conversation/*/content": 1,
+        "/requests/*/tools/*": 6,
+        "/steps/*/response/agent": 1,
+        "/steps/*/tree/*": 15,
+        "/steps/*/tree/*/agent": 1,
+        "/steps/*/tree/*/children": 1,
+        "/steps/*/tree/*/dir": 33,
+        "/steps/*/tree/*/file": 31,
+        "/steps/*/tree/*/meta": 1,
+        "/steps/*/tree/*/parent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 4,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/detail": 2,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/id": 6,
+        "/steps/*/turn/*/method": 4,
+        "/steps/*/turn/*/patch": 2,
+        "/steps/*/turn/*/role": 5,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 4,
+        "/steps/*/turn/*/state": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 5
+      },
+      "delegation/child-denied": {
+        "/requests/*/conversation/*/content": 1,
+        "/requests/*/tools/*": 6,
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 4,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/detail": 2,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/id": 6,
+        "/steps/*/turn/*/method": 4,
+        "/steps/*/turn/*/patch": 2,
+        "/steps/*/turn/*/role": 5,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 4,
+        "/steps/*/turn/*/state": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 5
+      },
+      "delegation/child-error": {
+        "/steps/*/response/agent": 1,
+        "/steps/*/tree/*": 15,
+        "/steps/*/tree/*/agent": 1,
+        "/steps/*/tree/*/children": 1,
+        "/steps/*/tree/*/dir": 33,
+        "/steps/*/tree/*/file": 31,
+        "/steps/*/tree/*/meta": 1,
+        "/steps/*/tree/*/parent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "delegation/depth": {
+        "/requests/*/tools/*": 6,
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "delegation/disabled-subagent": {
+        "/requests/*/tools/*": 4,
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "delegation/explore": {
+        "/requests/*/tools/*": 6,
+        "/steps/*/response/agent": 1,
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/tree/*": 15,
+        "/steps/*/tree/*/agent": 1,
+        "/steps/*/tree/*/children": 1,
+        "/steps/*/tree/*/dir": 33,
+        "/steps/*/tree/*/file": 31,
+        "/steps/*/tree/*/meta": 1,
+        "/steps/*/tree/*/parent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 2,
+        "/steps/*/turn/*/id": 4,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "delegation/primary-agent": {
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "delegation/unknown-agent": {
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "profile/builtin-tools": {
+        "/requests/*/tools/*": 6,
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "profile/custom-model": {
+        "/requests/*/tools/*": 2,
+        "/steps/*/response/agent": 1,
+        "/steps/*/response/result/runtime/activeModel/autoCompactThreshold": 1,
+        "/steps/*/response/result/runtime/activeModel/source": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "profile/custom-tools": {
+        "/requests/*/tools/*": 2,
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "profile/switch-model": {
+        "/steps/*/turn/*": 2,
+        "/steps/*/turn/*/content": 4,
+        "/steps/*/turn/*/content/*/text": 2,
+        "/steps/*/turn/*/id": 6,
+        "/steps/*/turn/*/method": 4,
+        "/steps/*/turn/*/role": 6,
+        "/steps/*/turn/*/runtime": 2,
+        "/steps/*/turn/*/sessionId": 4,
+        "/steps/*/turn/*/status": 2,
+        "/steps/*/turn/*/type": 4
+      },
+      "registry/builtins": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "registry/custom-files": {
+        "/requests/*/tools/*": 2,
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/response/result/runtime/agents/*": 1,
+        "/steps/*/response/result/runtime/agents/*/agentType": 2,
+        "/steps/*/response/result/runtime/agents/*/description": 2,
+        "/steps/*/response/result/runtime/agents/*/displayName": 3,
+        "/steps/*/response/result/runtime/agents/*/name": 3,
+        "/steps/*/response/result/runtime/agents/*/safety": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "registry/custom-lean": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "registry/lean-installed": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "registry/legacy-only": {
+        "/requests/*/tools/*": 2,
+        "/steps/*/response/agent": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/content": 2,
+        "/steps/*/turn/*/content/*/text": 1,
+        "/steps/*/turn/*/id": 3,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/role": 3,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 2,
+        "/steps/*/turn/*/status": 1,
+        "/steps/*/turn/*/type": 2
+      },
+      "registry/precedence": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "registry/untrusted-project": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "selection/default-agent": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "selection/disabled": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/error/code": 2,
+        "/steps/*/response/error/names/*": 2,
+        "/steps/*/response/result": 1
+      },
+      "selection/enabled": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/error/code": 1,
+        "/steps/*/response/result": 1
+      },
+      "selection/enabled-default-excluded": {
+        "/steps/*/response/error/code": 1
+      },
+      "selection/install": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/response/result/active/description": 1,
+        "/steps/*/response/result/active/displayName": 1,
+        "/steps/*/response/result/active/name": 1,
+        "/steps/*/response/result/active/safety": 1
+      },
+      "selection/renamed-default": {
+        "/steps/*/response/error/code": 1
+      },
+      "selection/smart-approve-available": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "selection/smart-approve-default": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/response/result/runtime/activeAgent/description": 1,
+        "/steps/*/response/result/runtime/activeAgent/displayName": 1,
+        "/steps/*/response/result/runtime/activeAgent/name": 1,
+        "/steps/*/response/result/runtime/activeAgent/safety": 1,
+        "/steps/*/response/result/runtime/agents/*": 1,
+        "/steps/*/response/result/runtime/agents/*/agentType": 1,
+        "/steps/*/response/result/runtime/agents/*/description": 2,
+        "/steps/*/response/result/runtime/agents/*/displayName": 2,
+        "/steps/*/response/result/runtime/agents/*/name": 2,
+        "/steps/*/response/result/runtime/agents/*/safety": 2
+      },
+      "selection/smart-approve-forced": {
+        "/requests/*": 1,
+        "/steps/*/response/agent": 1,
+        "/steps/*/response/error": 3,
+        "/steps/*/response/result": 3,
+        "/steps/*/response/result/runtime/activeAgent/description": 1,
+        "/steps/*/response/result/runtime/activeAgent/displayName": 1,
+        "/steps/*/response/result/runtime/activeAgent/name": 1,
+        "/steps/*/response/result/runtime/activeAgent/safety": 1
+      },
+      "selection/smart-approve-hidden": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/error/code": 3,
+        "/steps/*/response/result": 1
+      },
+      "selection/start-disabled": {
+        "/steps/*/response/error/code": 1,
+        "/steps/*/response/error/names/*": 2
+      },
+      "selection/start-lean-uninstalled": {
+        "/steps/*/response/error/code": 1
+      },
+      "selection/start-subagent": {
+        "/steps/*/response/error/code": 1
+      },
+      "selection/start-unknown": {
+        "/steps/*/response/error/code": 1
+      }
+    }
+  }
+}

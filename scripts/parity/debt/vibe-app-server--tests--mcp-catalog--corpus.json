@@ -1,0 +1,82 @@
+{
+  "corpus": "crates/vibe-app-server/tests/mcp-catalog/corpus.json",
+  "measuredAgainst": "d71b93ec037bb64f5ca47c52f2605d02c1585b0a6409545ecffe208aa5b5c4c3",
+  "schemaVersion": 1,
+  "tallies": {
+    "MCP catalog parity:": {
+      "session/add-and-remove": {
+        "/*/notifications/*": 1,
+        "/*/notifications/*/mcp": 4,
+        "/*/notifications/*/mcp/connectorError": 3,
+        "/*/notifications/*/mcp/privateConnectorsHidden": 3,
+        "/*/notifications/*/method": 4,
+        "/*/notifications/*/params": 4,
+        "/*/response/error": 1,
+        "/*/response/result": 1,
+        "/*/response/result/runtime/mcp/connectorError": 3,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 3
+      },
+      "session/auth-required-then-login": {
+        "/*/keyring/mcp-oauth:secure:client_info/application_type": 1,
+        "/*/keyring/mcp-oauth:secure:client_info/issuer": 1,
+        "/*/notifications/*/mcp": 2,
+        "/*/notifications/*/mcp/connectorError": 2,
+        "/*/notifications/*/mcp/privateConnectorsHidden": 2,
+        "/*/notifications/*/mcp/sources/*/tools/*": 2,
+        "/*/notifications/*/method": 2,
+        "/*/notifications/*/params": 2,
+        "/*/response/result/mcp/connectorError": 1,
+        "/*/response/result/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/runtime/mcp/connectorError": 2,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
+        "/*/response/result/runtime/mcp/sources/*/tools/*": 2
+      },
+      "session/credentials-without-fingerprint-are-dropped": {
+        "/*/response/result/mcp/connectorError": 1,
+        "/*/response/result/mcp/privateConnectorsHidden": 1
+      },
+      "session/read": {
+        "/*/response/result/mcp/connectorError": 2,
+        "/*/response/result/mcp/privateConnectorsHidden": 2,
+        "/*/response/result/mcp/sources/*/tools/*/description": 4,
+        "/*/response/result/mcp/sources/*/tools/*/name": 4
+      },
+      "session/refresh": {
+        "/*/notifications/*/mcp/connectorError": 2,
+        "/*/notifications/*/mcp/privateConnectorsHidden": 2,
+        "/*/response/result/runtime/mcp/connectorError": 2,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 2
+      },
+      "session/stored-credentials-connect": {
+        "/*/notifications/*/mcp": 4,
+        "/*/notifications/*/mcp/connectorError": 2,
+        "/*/notifications/*/mcp/privateConnectorsHidden": 2,
+        "/*/notifications/*/mcp/sources/*/tools/*": 2,
+        "/*/notifications/*/method": 4,
+        "/*/notifications/*/params": 4,
+        "/*/response/result/mcp/connectorError": 1,
+        "/*/response/result/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/mcp/sources/*/tools/*/description": 2,
+        "/*/response/result/mcp/sources/*/tools/*/name": 2,
+        "/*/response/result/runtime/mcp/connectorError": 2,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
+        "/*/response/result/runtime/mcp/sources/*/tools/*": 2
+      },
+      "session/toggle": {
+        "/*/notifications/*/mcp/connectorError": 4,
+        "/*/notifications/*/mcp/privateConnectorsHidden": 4,
+        "/*/notifications/*/mcp/sources/*/tools/*": 2,
+        "/*/response/result/runtime/mcp/connectorError": 4,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 4,
+        "/*/response/result/runtime/mcp/sources/*/tools/*": 2
+      },
+      "sessionless/add-refusals": {
+        "/*/response/error/data": 3
+      },
+      "sessionless/login-publishes-nothing": {
+        "/*/keyring/mcp-oauth:secure:client_info/application_type": 1,
+        "/*/keyring/mcp-oauth:secure:client_info/issuer": 1
+      }
+    }
+  }
+}

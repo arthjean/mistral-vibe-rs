@@ -1,0 +1,18 @@
+{
+  "corpus": "crates/vibe-app-server/tests/tool-execution/corpus.json",
+  "measuredAgainst": "d101c68671cd46e7d426a3529588f641a35047e40f9e3cb06af16b5d54491229",
+  "schemaVersion": 1,
+  "tallies": {
+    "tool execution parity:": {
+      "todo/read-empty": {
+        "/modelText": 1
+      },
+      "todo/write-empty-list": {
+        "/modelText": 1
+      },
+      "todo/write-two": {
+        "/modelText": 1
+      }
+    }
+  }
+}

@@ -61,6 +61,7 @@ impl World {
             "sentinel.py",
             "census.py",
             "shingles.py",
+            "debt.py",
         ] {
             std::fs::copy(
                 repository().join("scripts/parity").join(module),

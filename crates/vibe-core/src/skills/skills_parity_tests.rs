@@ -41,6 +41,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::is_pin_commit;
 use crate::parity::replay::{Capture, Class, PatternDivergence, Tally, entries, pinned_reference};
 use crate::skills::builtins::builtin_skills;
@@ -70,6 +71,50 @@ const BUILTINS_SEEDED: &str = "v3 ships its builtin skills as the packaged `vibe
      and `SkillManager` seeds and reserves none, while this port still seeds `vibe` and \
      `skill-creator` under bare names into every catalog it discovers";
 
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["metadata/compatibility-501-chars"],
+        pointers: &["/verdict"],
+        reason: "v3 dropped the 500-character bound on `compatibility` \
+                 (vibe/core/skills/models.py), and this port still refuses a longer value",
+    },
+    Note {
+        scenarios: &["discovery/*"],
+        pointers: &["/catalog"],
+        reason: BUILTINS_SEEDED,
+    },
+    Note {
+        scenarios: &["filtering/*"],
+        pointers: &["/kept"],
+        reason: BUILTINS_SEEDED,
+    },
+    Note {
+        scenarios: &["loading/invalid-policy-on-reserved-name"],
+        pointers: &["/published"],
+        reason: "v3 reserves no builtin name, so a configured skill named `vibe` loads \
+                 (vibe/core/skills/manager.py), and this port still withholds it behind its \
+                 seeded builtin",
+    },
+    Note {
+        scenarios: &["lifecycle/*"],
+        pointers: &["/session"],
+        reason: BUILTINS_SEEDED,
+    },
+    Note {
+        scenarios: &["builtins/count"],
+        pointers: &["/count"],
+        reason: BUILTINS_SEEDED,
+    },
+    Note {
+        scenarios: &["builtins/vibe:*"],
+        pointers: &["/present"],
+        reason: BUILTINS_SEEDED,
+    },
+];
+
 /// Every comparison this port answers otherwise, typed and counted across the
 /// replay. A scenario is named `<family>/<case>`, a pointer `/<field>`.
 ///
@@ -77,78 +122,17 @@ const BUILTINS_SEEDED: &str = "v3 ships its builtin skills as the packaged `vibe
 /// root "A deprecated user skills root" decides; the builtin gap covers the
 /// whole catalog comparison until it closes, and the decided entry returns
 /// with it.
-const LEDGER: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "store/fallbackDescription",
-        pointer: "/digest",
-        count: 1,
-        row: "28",
-        class: Class::Accepted("The registry store's fallback description"),
-        reason: "the store's fallback description is reference-authored prose, so \
+const LEDGER: &[PatternDivergence] = &[PatternDivergence {
+    scenario: "store/fallbackDescription",
+    pointer: "/digest",
+    count: 1,
+    row: "28",
+    class: Class::Accepted("The registry store's fallback description"),
+    reason: "the store's fallback description is reference-authored prose, so \
                  `vibe_core::skills::registry::store::fallback_description` is this port's own \
                  sentence for the same purpose; the recorded trees mask it as \
                  `{fallbackDescription}` on both sides, and the two digests stay unequal",
-    },
-    PatternDivergence {
-        scenario: "metadata/compatibility-501-chars",
-        pointer: "/verdict",
-        count: 1,
-        row: "28",
-        class: Class::Gap,
-        reason: "v3 dropped the 500-character bound on `compatibility` \
-                 (vibe/core/skills/models.py), and this port still refuses a longer value",
-    },
-    PatternDivergence {
-        scenario: "discovery/*",
-        pointer: "/catalog",
-        count: 28,
-        row: "28",
-        class: Class::Gap,
-        reason: BUILTINS_SEEDED,
-    },
-    PatternDivergence {
-        scenario: "filtering/*",
-        pointer: "/kept",
-        count: 5,
-        row: "28",
-        class: Class::Gap,
-        reason: BUILTINS_SEEDED,
-    },
-    PatternDivergence {
-        scenario: "loading/invalid-policy-on-reserved-name",
-        pointer: "/published",
-        count: 1,
-        row: "28",
-        class: Class::Gap,
-        reason: "v3 reserves no builtin name, so a configured skill named `vibe` loads \
-                 (vibe/core/skills/manager.py), and this port still withholds it behind its \
-                 seeded builtin",
-    },
-    PatternDivergence {
-        scenario: "lifecycle/*",
-        pointer: "/session",
-        count: 17,
-        row: "28",
-        class: Class::Gap,
-        reason: BUILTINS_SEEDED,
-    },
-    PatternDivergence {
-        scenario: "builtins/count",
-        pointer: "/count",
-        count: 1,
-        row: "28",
-        class: Class::Gap,
-        reason: BUILTINS_SEEDED,
-    },
-    PatternDivergence {
-        scenario: "builtins/vibe:*",
-        pointer: "/present",
-        count: 4,
-        row: "28",
-        class: Class::Gap,
-        reason: BUILTINS_SEEDED,
-    },
-];
+}];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -1703,4 +1687,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         &recaptured,
         &repo_root().join(CORPUS_RELATIVE),
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

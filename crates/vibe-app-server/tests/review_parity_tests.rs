@@ -18,8 +18,9 @@
 //! of the reference's; file content, paths,
 //! identities, codes and issue paths are compared exactly.
 //!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 15 of `docs/parity.md` is a
+//! Every difference the replay finds has to fall under a `LEDGER` entry or the
+//! corpus's measured debt (`vibe_core::parity::debt`), and every entry and
+//! every debt group has to still reproduce, so row 15 of `docs/parity.md` is a
 //! reading of the summary this file prints. No entry may name row 15, and a
 //! field another row owns that stops matching is ledgered under that row.
 
@@ -28,10 +29,7 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{
-    Capture, Class, FieldDivergence, OwnProse, PatternDivergence, Replay, assert_ledger, entries,
-    scenarios,
-};
+use vibe_core::parity::replay::{Capture, OwnProse, Replay, assert_ledger, entries, scenarios};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("review-parity/corpus.json");
@@ -47,262 +45,6 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-const LEDGER: &[FieldDivergence] = &[];
-
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 reviews this otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
-
-/// Differences an own-words entry covers but whose length v3.1.0 moved out of
-/// its band, one by one; chained first, so they are decided before it.
-const V3_REFUSED: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "compaction/decisions-across-the-boundary",
-        pointer: "/0/context/0/content",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "compaction/reads-across-the-boundary",
-        pointer: "/0/context/0/content",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "refuse/decision-parameters",
-        pointer: "/4/response/error/message",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "refuse/decision-parameters",
-        pointer: "/5/response/error/message",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "refuse/decision-parameters",
-        pointer: "/6/response/error/message",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/files/notes.txt",
-        count: 14,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/files/other.txt",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/files/real.txt",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error",
-        count: 188,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error/code",
-        count: 6,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error/data",
-        count: 3,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error/message",
-        count: 3,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result",
-        count: 188,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/session/agent",
-        count: 2,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/session/bumpedAt",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/session/contextUsage/cachedInputTokens",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/session/loops",
-        count: 2,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/session/tokenUsage/cachedInputTokens",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/context/*",
-        count: 12,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/detail/input/changes",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/detail/input/newString",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/detail/input/oldString",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/detail/input/replaceAll",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/detail/toolName",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/outcome",
-        count: 4,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/state/display/message",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/state/output/previousContent",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/title",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine",
-        count: 1,
-        row: "15",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
-
 const PROSE: &[OwnProse] = &[];
 
 #[test]
@@ -317,25 +59,13 @@ fn the_port_reviews_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("review-parity-port.json"),
     }
-    .run(
-        entries(V3_REFUSED)
-            .chain(entries(PROSE))
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_is_declared_soundly() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    assert_ledger(
-        LISTED,
-        &scenarios(&corpus),
-        entries(V3_REFUSED)
-            .chain(entries(PROSE))
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

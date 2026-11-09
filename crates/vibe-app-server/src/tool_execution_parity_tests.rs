@@ -34,8 +34,9 @@ use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
+use vibe_core::parity::debt::{Note, assert_notes};
 use vibe_core::parity::is_pin_commit;
-use vibe_core::parity::replay::{Class, PatternDivergence, Tally, differences, entries};
+use vibe_core::parity::replay::{Tally, differences};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
 };
@@ -80,15 +81,12 @@ const TODO_MODEL_TEXT: &str = "since v3.0 the reference hands the model the prov
      structured result as one JSON object (`vibe/app_server/_provided_tools.py`); this port still \
      renders one `field: value` line per field, the v2 legacy loop's form";
 
-/// The differences this port keeps. A gap of row 3 is admitted only while the
-/// corpus sits at the target of an open re-pin; the replay fails once the
-/// transition closes with one still listed.
-const LEDGER: &[PatternDivergence] = &[PatternDivergence {
-    scenario: "todo/*",
-    pointer: "/modelText",
-    count: 3,
-    row: "3",
-    class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[Note {
+    scenarios: &["todo/*"],
+    pointers: &["/modelText"],
     reason: TODO_MODEL_TEXT,
 }];
 
@@ -397,7 +395,7 @@ async fn tool_execution_matches_the_reference_except_for_the_recorded_gap() {
     }
 
     let scratch = tempfile::tempdir().expect("tempdir");
-    let mut tally = Tally::new(&text, entries(LEDGER));
+    let mut tally = Tally::new(&text, []);
     for (index, case) in corpus.cases.iter().enumerate() {
         // A fresh session per case, so one case cannot read another's state.
         // The capture script isolates the same way.
@@ -508,4 +506,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate it \
          with `{CAPTURE_SCRIPT} --corpus`"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

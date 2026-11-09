@@ -1,0 +1,46 @@
+{
+  "corpus": "crates/vibe-app-server/tests/project-links-parity/corpus.json",
+  "measuredAgainst": "d0d4947668aa925d02bf90530951ac408e922b12070acb592b591ff0e90489e2",
+  "schemaVersion": 1,
+  "tallies": {
+    "project links parity:": {
+      "create/store-fails": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/store/text/*": 7
+      },
+      "link/store-fails": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/store/text/*": 7
+      },
+      "picker/stale-clear-fails": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/store/text/*": 8
+      },
+      "resolve/inspect-stale-clear-fails": {
+        "/steps/*/response/result/staleLinkClearFailed": 1,
+        "/steps/*/response/result/staleLinkCleared": 1,
+        "/steps/*/store/text/*": 8
+      },
+      "save/read-only-store": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "store/read-only-store": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/response/result/staleLinkClearFailed": 1,
+        "/steps/*/response/result/staleLinkCleared": 1,
+        "/steps/*/store/text/*": 14
+      },
+      "unlink/stale-store-fails": {
+        "/steps/*/store/text/*": 7
+      },
+      "unlink/store-fails": {
+        "/steps/*/store/text/*": 7
+      }
+    }
+  }
+}

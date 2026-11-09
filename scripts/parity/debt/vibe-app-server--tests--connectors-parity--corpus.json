@@ -1,0 +1,376 @@
+{
+  "corpus": "crates/vibe-app-server/tests/connectors-parity/corpus.json",
+  "measuredAgainst": "6d38f106f321de568ce18d8c0a2ace10345657029ec1abfa1e95d3a45d444da5",
+  "schemaVersion": 1,
+  "tallies": {
+    "connectors parity:": {
+      "cache/corrupt": {
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "cache/diagnostics-roundtrip": {
+        "/bootstraps/*": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1
+      },
+      "cache/fresh": {
+        "/bootstraps/*": 1,
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 3,
+        "/steps/*/response/result/catalog/connectors/*": 3,
+        "/steps/*/response/result/catalog/connectors/*/alias": 3,
+        "/steps/*/response/result/catalog/connectors/*/displayName": 3,
+        "/steps/*/response/result/catalog/connectors/*/tools/*": 3,
+        "/steps/*/response/result/catalog/connectors/*/tools/*/description": 3,
+        "/steps/*/response/result/catalog/connectors/*/tools/*/name": 3,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 4,
+        "/steps/*/response/result/selectionRevision": 1,
+        "/steps/*/response/result/session/acceptedCatalogRevision": 1,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*": 1,
+        "/steps/*/response/result/session/sources/*/alias": 1,
+        "/steps/*/response/result/session/sources/*/displayName": 1,
+        "/steps/*/response/result/session/sources/*/tools/*": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/name": 1
+      },
+      "cache/legacy-entry": {
+        "/bootstraps/*": 1,
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": 2,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 1,
+        "/steps/*/response/result/catalog/connectors/*/alias": 1,
+        "/steps/*/response/result/catalog/connectors/*/displayName": 1,
+        "/steps/*/response/result/catalog/connectors/*/tools/*": 1,
+        "/steps/*/response/result/catalog/connectors/*/tools/*/description": 1,
+        "/steps/*/response/result/catalog/connectors/*/tools/*/name": 1,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/siblings/*": 1
+      },
+      "cache/stale-and-future": {
+        "/bootstraps/*": 1,
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description": 1,
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name": 1,
+        "/steps/*/cacheFile/other-stale": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 1,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/selectionRevision": 1
+      },
+      "call/ask-approval": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/disabled-tool": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/gateway-401": {
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/gateway-404": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/gateway-500": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/not-ready": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/structured": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/success": {
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "call/tool-error": {
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "catalog/disabled": {
+        "/steps/*/response/result/privateConnectorsHidden": 2,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/patch": 2,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 1,
+        "/steps/*/turn/*/status": 1
+      },
+      "catalog/empty": {
+        "/bootstraps/*": 1,
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 2
+      },
+      "catalog/http-errors": {
+        "/bootstraps/*": 1,
+        "/steps/*/response/error": 2,
+        "/steps/*/response/error/message": 1,
+        "/steps/*/response/result": 2,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 2,
+        "/steps/*/response/result/selectionRevision": 1
+      },
+      "catalog/malformed": {
+        "/bootstraps/*": 1,
+        "/steps/*/response/error/message": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1
+      },
+      "catalog/manage-url": {
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 2,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1
+      },
+      "catalog/manage-url-partial": {
+        "/bootstraps/*": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1
+      },
+      "catalog/no-mistral-key": {
+        "/steps/*/response/result/privateConnectorsHidden": 2,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1
+      },
+      "catalog/selections": {
+        "/bootstraps/*": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 2,
+        "/steps/*/response/result/selections/*/state": 2
+      },
+      "catalog/sessionless-refresh": {
+        "/bootstraps/*": 1,
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>": 1,
+        "/steps/*/response/result/catalog/catalogRevision": 1,
+        "/steps/*/response/result/catalog/connectors/*": 2,
+        "/steps/*/response/result/catalog/disposition": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 2,
+        "/steps/*/response/result/selectionRevision": 1
+      },
+      "catalog/shapes": {
+        "/bootstraps/*": 1,
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/selectionRevision": 1
+      },
+      "lifecycle/refresh-changed-catalog": {
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 2,
+        "/steps/*/response/result/routeRevision": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 3,
+        "/steps/*/turn/*/patch/*": 2,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "lifecycle/sessionless-methods": {
+        "/bootstraps/*": 1
+      },
+      "lifecycle/stale-session-catalog": {
+        "/steps/*/notifications/*": 1,
+        "/steps/*/notifications/*/runtime/connectors/connected": 1,
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 2,
+        "/steps/*/notifications/*/runtime/mcp/sources/*/status": 1,
+        "/steps/*/notifications/*/runtime/mcp/sources/*/tools/*/enabled": 2,
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/response/result/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/routeRevision": 2,
+        "/steps/*/response/result/runtime/connectors/connected": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
+        "/steps/*/response/result/runtime/mcp/sources/*/status": 1,
+        "/steps/*/response/result/runtime/mcp/sources/*/tools/*/enabled": 2,
+        "/steps/*/response/result/selectionRevision": 2,
+        "/steps/*/response/result/selections/*/disabled": 1,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/status": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 3
+      },
+      "lifecycle/toggle-during-turn": {
+        "/steps/*/notifications/*": 2,
+        "/steps/*/response/error": 2,
+        "/steps/*/response/result": 2,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/patch/*": 2,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "lifecycle/toggle-new-entry": {
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 2,
+        "/steps/*/response/result/routeRevision": 2,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 3,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "lifecycle/toggle-refusals": {
+        "/steps/*/response/result/catalogRevision": 1,
+        "/steps/*/response/result/pendingSelection": 1,
+        "/steps/*/response/result/selectionRevision": 1
+      },
+      "lifecycle/toggle-session": {
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 4,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/routeRevision": 4,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 4,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1,
+        "/steps/*/turn/*/patch/*": 3,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/bootstrap-failure": {
+        "/bootstraps/*": 1,
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/patch": 2,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 1,
+        "/steps/*/turn/*/status": 1
+      },
+      "publish/bootstrap-recovers": {
+        "/bootstraps/*": 1,
+        "/steps/*/notifications/*": 1,
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/routeRevision": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
+        "/steps/*/turn/*": 1,
+        "/steps/*/turn/*/entryId": 2,
+        "/steps/*/turn/*/method": 2,
+        "/steps/*/turn/*/patch": 2,
+        "/steps/*/turn/*/runtime": 1,
+        "/steps/*/turn/*/sessionId": 1,
+        "/steps/*/turn/*/status": 1
+      },
+      "publish/enabled-tools": {
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/entry-filters": {
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 2,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/global-filters": {
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 2,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/no-entries": {
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/opt-in": {
+        "/steps/*/cacheFile/<cache-key-1>": 1,
+        "/steps/*/cacheFile/<fingerprint>": 1,
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/shapes": {
+        "/steps/*/response/result/counts/connected": 1,
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag": 1,
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag_text": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag": 1,
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag_text": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      },
+      "publish/wide": {
+        "/steps/*/response/result/privateConnectorsHidden": 1,
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/steps/*/response/result/session/routeRevision": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": 2,
+        "/steps/*/turn/*/patch/*": 1,
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+      }
+    }
+  }
+}

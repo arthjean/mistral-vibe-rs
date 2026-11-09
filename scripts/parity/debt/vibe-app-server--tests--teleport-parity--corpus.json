@@ -1,0 +1,86 @@
+{
+  "corpus": "crates/vibe-app-server/tests/teleport-parity/corpus.json",
+  "measuredAgainst": "1a309270e0321e637073928a2b68af06f1330b11d85558bde9dc13c29283d6d7",
+  "schemaVersion": 1,
+  "tallies": {
+    "teleport parity:": {
+      "gate/history-without-prompt": {
+        "/code/*": 1,
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1
+      },
+      "lifecycle/second-start": {
+        "/steps/*/sequence/*/response/error/data": 1,
+        "/steps/*/sequence/*/response/error/message": 1
+      },
+      "lifecycle/turn-during-teleport": {
+        "/steps/*/response/error": 1,
+        "/steps/*/response/error/data": 1,
+        "/steps/*/response/error/message": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/sequence/*/event/operationId": 3,
+        "/steps/*/sequence/*/response/result/operationId": 1
+      },
+      "summary/empty-answer": {
+        "/code/*": 1,
+        "/requests/*": 1,
+        "/steps/*/response/result/pickerId": 2,
+        "/steps/*/sequence/*": 1,
+        "/steps/*/sequence/*/event/error": 1,
+        "/steps/*/sequence/*/event/kind": 2,
+        "/steps/*/sequence/*/event/operationId": 2,
+        "/steps/*/sequence/*/response/result/operationId": 1
+      },
+      "summary/history-with-prompt": {
+        "/code/*/body/context/messageContext": 1,
+        "/requests/*": 1,
+        "/steps/*/sequence/*": 1,
+        "/steps/*/sequence/*/event/kind": 3,
+        "/steps/*/sequence/*/event/url": 1
+      },
+      "summary/history-without-prompt": {
+        "/code/*": 1,
+        "/requests/*": 1,
+        "/steps/*/response/error": 1,
+        "/steps/*/response/result": 1,
+        "/steps/*/response/result/pickerId": 1,
+        "/steps/*/sequence/*": 4,
+        "/steps/*/sequence/*/response/error": 1,
+        "/steps/*/sequence/*/response/result": 1
+      },
+      "summary/model-failure": {
+        "/code/*": 1,
+        "/requests/*": 1,
+        "/steps/*/response/result/pickerId": 2,
+        "/steps/*/sequence/*": 1,
+        "/steps/*/sequence/*/event/error": 1,
+        "/steps/*/sequence/*/event/kind": 2,
+        "/steps/*/sequence/*/event/operationId": 2,
+        "/steps/*/sequence/*/response/result/operationId": 1
+      },
+      "summary/plain-answer": {
+        "/code/*/body/context/messageContext": 1,
+        "/requests/*": 1,
+        "/steps/*/sequence/*": 1,
+        "/steps/*/sequence/*/event/kind": 3,
+        "/steps/*/sequence/*/event/url": 1
+      },
+      "summary/too-long": {
+        "/requests/*": 1,
+        "/steps/*/sequence/*": 1,
+        "/steps/*/sequence/*/event/kind": 3,
+        "/steps/*/sequence/*/event/url": 1
+      },
+      "telemetry/summary": {
+        "/code/*/body/context/messageContext": 1,
+        "/requests/*": 1,
+        "/steps/*/sequence/*": 1,
+        "/steps/*/sequence/*/event/kind": 3,
+        "/steps/*/sequence/*/event/url": 1,
+        "/telemetry/*/properties/context_summary": 1,
+        "/telemetry/*/properties/context_summary_chars": 1,
+        "/telemetry/*/properties/nb_session_messages": 1
+      }
+    }
+  }
+}

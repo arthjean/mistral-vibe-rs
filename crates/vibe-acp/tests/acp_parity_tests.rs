@@ -20,8 +20,9 @@
 //! From v3.0.0 the reference runs one backend, the Unified Harness, so one
 //! corpus records it; the legacy backend's corpus went with the escape hatch.
 //!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 8 of `docs/parity.md` is a
+//! Every difference the replay finds has to fall under a `LEDGER` entry or the
+//! corpus's measured debt (`vibe_core::parity::debt`), and every entry and
+//! every debt group has to still reproduce, so row 8 of `docs/parity.md` is a
 //! reading of the summaries this file prints.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -29,9 +30,10 @@
 use std::path::Path;
 
 use serde_json::Value;
+use vibe_core::parity::debt::{Note, assert_notes};
 use vibe_core::parity::replay::{
-    Band, Capture, Class, Divergence, OwnProse, PatternDivergence, Tally, assert_ledger,
-    differences, entries, pinned_reference, scenarios,
+    Band, Capture, Class, Divergence, OwnProse, Tally, assert_ledger, differences, entries,
+    pinned_reference, scenarios,
 };
 
 /// The corpora, compiled in so a moved file fails the build rather than the run.
@@ -238,72 +240,16 @@ const PROSE: &[OwnProse] = &[
 /// left the band, so the vectors' differences are the gaps below.
 const ARGV_PROSE: &[OwnProse] = &[];
 
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const ARGV_V3_REASON: &str = "v3.1.0 parses the editor binary's arguments otherwise, with the backend flags removed, which this port does not reproduce yet";
-
-/// Differences an own-words entry covers but whose length v3.1.0 moved out of
-/// its band, one by one; chained first, so they are decided before it.
-const ARGV_V3_REFUSED: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "argv/10",
-        pointer: "/stdout",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: ARGV_V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "argv/11",
-        pointer: "/stdout",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: ARGV_V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "argv/3",
-        pointer: "/stdout",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: ARGV_V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "argv/4",
-        pointer: "/stdout",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: ARGV_V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "argv/5",
-        pointer: "/stdout",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: ARGV_V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "argv/6",
-        pointer: "/stdout",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: ARGV_V3_REASON,
-    },
-];
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const ARGV_V3_GAPS: &[PatternDivergence] = &[PatternDivergence {
-    scenario: "*",
-    pointer: "/stderr",
-    count: 12,
-    row: "8",
-    class: Class::Gap,
-    reason: ARGV_V3_REASON,
+/// Why the argument vectors differ: the Open divergences row of the ACP part
+/// (`docs/parity.md`), measured in the corpus's debt.
+const ARGV_NOTES: &[Note] = &[Note {
+    scenarios: &["argv/*"],
+    pointers: &["/stdout", "/stderr"],
+    reason: "v3.0.0 dropped the backend flags from `vibe-acp`, which refuses \
+             `--legacy-harness` and `--experimental-harness` as unknown arguments \
+             (vibe/acp/entrypoint.py); this port still declares both, so a bare flag starts \
+             a session here, and the vectors that pair or misuse them are refused with this \
+             port's own error rather than the unknown-argument one",
 }];
 
 const CAPTURE: Capture = Capture {
@@ -315,284 +261,6 @@ const CAPTURE: Capture = Capture {
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and agent process.
 const JOBS: &[&str] = &["--jobs", "6"];
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 answers the editor protocol otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
-
-/// Differences an own-words entry covers but whose length v3.1.0 moved out of
-/// its band, one by one; chained first, so they are decided before it.
-const V3_REFUSED: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "command/retry",
-        pointer: "/4/stream/1/message/params/update/content/text",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "session/fork",
-        pointer: "/3/stream/1/message/params/update/content/text",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "session/fork-at-message",
-        pointer: "/3/stream/1/message/params/update/content/text",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "session/fork-at-message",
-        pointer: "/6/stream/0/message/params/update/title",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "session/fork-at-message",
-        pointer: "/6/stream/4/message/params/update/content/text",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "session/load",
-        pointer: "/5/stream/0/message/params/update/title",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error",
-        count: 7,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result",
-        count: 7,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/apiKey",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/budget",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/customDomainLocked",
-        count: 3,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/error",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/planOffer/url",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/usage",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/detached/*",
-        count: 2,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/detached/*/params/update/size",
-        count: 229,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/configOptions/*/currentValue",
-        count: 2,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/sessions/*/title",
-        count: 2,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*",
-        count: 40,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/_meta/tool_name",
-        count: 12,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/rawInput/changes",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/rawInput/newString",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/rawInput/oldString",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/rawInput/replaceAll",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/rawOutput/previousContent",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/title",
-        count: 2,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/configOptions/*/options/*",
-        count: 290,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/configOptions/*/options/*/name",
-        count: 73,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/configOptions/*/options/*/value",
-        count: 73,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/rawOutput/occurrences/*/newStartLine",
-        count: 1,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/configOptions/*/options/*",
-        count: 8,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/configOptions/*/options/*/name",
-        count: 2,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/stream/*/message/params/update/configOptions/*/options/*/value",
-        count: 2,
-        row: "8",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
-
 const LEDGER: &[Divergence] = &[
     Divergence {
         scenarios: &["initialize/terminal-auth"],
@@ -629,11 +297,9 @@ fn replay(corpus: &str, capture: &Capture) {
     let corpus_text = corpus;
     let mut tally = Tally::new(
         corpus,
-        entries(V3_REFUSED)
-            .chain(entries(COMMON_PROSE))
+        entries(COMMON_PROSE)
             .chain(entries(PROSE))
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
+            .chain(entries(LEDGER)),
     );
     let corpus: Value = serde_json::from_str(corpus).expect("the corpus parses");
     let recorded = scenarios(&corpus);
@@ -656,12 +322,7 @@ fn replay(corpus: &str, capture: &Capture) {
         replayed_argv.len(),
         "the capture script declares other argument vectors than the corpus records"
     );
-    let mut vectors = Tally::new(
-        corpus_text,
-        entries(ARGV_V3_REFUSED)
-            .chain(entries(ARGV_PROSE))
-            .chain(entries(ARGV_V3_GAPS)),
-    );
+    let mut vectors = Tally::new(corpus_text, entries(ARGV_PROSE));
     for (index, (reference, port)) in argv.iter().zip(replayed_argv).enumerate() {
         let found = differences(reference, port);
         vectors.record(&format!("argv/{index}"), reference, port, found);
@@ -678,14 +339,10 @@ fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
     assert_ledger(
         LISTED,
         &scenarios(&corpus),
-        entries(V3_REFUSED)
-            .chain(entries(COMMON_PROSE))
+        entries(COMMON_PROSE)
             .chain(entries(PROSE))
             .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS))
-            .chain(entries(ARGV_V3_REFUSED))
-            .chain(entries(ARGV_PROSE))
-            .chain(entries(ARGV_V3_GAPS)),
+            .chain(entries(ARGV_PROSE)),
     );
 }
 
@@ -697,4 +354,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     if let Some(root) = pinned_reference("ACP") {
         CAPTURE.check(&root, &[]);
     }
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, ARGV_NOTES);
 }

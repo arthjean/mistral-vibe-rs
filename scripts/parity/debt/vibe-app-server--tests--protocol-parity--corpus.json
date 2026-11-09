@@ -1,0 +1,994 @@
+{
+  "corpus": "crates/vibe-app-server/tests/protocol-parity/corpus.json",
+  "measuredAgainst": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36",
+  "schemaVersion": 1,
+  "tallies": {
+    "protocol parity:": {
+      "flows/callback-approval": {
+        "/*/notifications/*": 1,
+        "/*/notifications/*/method": 15,
+        "/*/notifications/*/params/contextWindow": 10,
+        "/*/notifications/*/params/emittedAt": 1,
+        "/*/notifications/*/params/entry": 6,
+        "/*/notifications/*/params/entryId": 4,
+        "/*/notifications/*/params/eventId": 1,
+        "/*/notifications/*/params/patch": 6,
+        "/*/notifications/*/params/patch/*": 6,
+        "/*/notifications/*/params/patch/*/path": 2,
+        "/*/notifications/*/params/patch/*/value": 2,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/stats": 10,
+        "/*/notifications/*/params/turn": 3,
+        "/*/notifications/*/params/turnId": 10
+      },
+      "flows/callback-refused-delivery": {
+        "/*/notifications/*": 1,
+        "/*/notifications/*/method": 15,
+        "/*/notifications/*/params/contextWindow": 10,
+        "/*/notifications/*/params/emittedAt": 1,
+        "/*/notifications/*/params/entry": 6,
+        "/*/notifications/*/params/entryId": 4,
+        "/*/notifications/*/params/eventId": 1,
+        "/*/notifications/*/params/patch": 6,
+        "/*/notifications/*/params/patch/*": 6,
+        "/*/notifications/*/params/patch/*/path": 2,
+        "/*/notifications/*/params/patch/*/value": 2,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/stats": 10,
+        "/*/notifications/*/params/turn": 3,
+        "/*/notifications/*/params/turnId": 10
+      },
+      "flows/callback-reject": {
+        "/*/notifications/*": 1,
+        "/*/notifications/*/method": 15,
+        "/*/notifications/*/params/contextWindow": 10,
+        "/*/notifications/*/params/emittedAt": 1,
+        "/*/notifications/*/params/entry": 6,
+        "/*/notifications/*/params/entryId": 4,
+        "/*/notifications/*/params/eventId": 1,
+        "/*/notifications/*/params/patch": 6,
+        "/*/notifications/*/params/patch/*": 6,
+        "/*/notifications/*/params/patch/*/path": 2,
+        "/*/notifications/*/params/patch/*/value": 2,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/stats": 10,
+        "/*/notifications/*/params/turn": 3,
+        "/*/notifications/*/params/turnId": 10
+      },
+      "flows/config-writes": {
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 4,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 4,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 4,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 4,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 4,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 4,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 4,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 4,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 4,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 4,
+        "/*/notifications/*/params/runtime/experimentalHarness": 4,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 4,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 4,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 4,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 4,
+        "/*/response/error/message": 1,
+        "/*/response/result/reason": 4,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 5,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 5,
+        "/*/response/result/runtime/config/activeModel/source": 5,
+        "/*/response/result/runtime/config/cursorBlink": 5,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 5,
+        "/*/response/result/runtime/config/enableMouseCapture": 5,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 5,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 5,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 5,
+        "/*/response/result/runtime/config/models/<list>/source": 5,
+        "/*/response/result/runtime/experimentalHarness": 5,
+        "/*/response/result/runtime/mcp/connectorError": 5,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 5,
+        "/*/response/result/runtime/stats/modelCalls": 5,
+        "/*/response/result/runtime/tools/<list>/isCustom": 5
+      },
+      "flows/connector-catalog": {
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 3,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 3,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 3,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 3,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 3,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 3,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 3,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 3,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 3,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 3,
+        "/*/notifications/*/params/runtime/experimentalHarness": 3,
+        "/*/notifications/*/params/runtime/mcp/discoveryErrors/Mail_box": 3,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 3,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 3,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 3,
+        "/*/response/result/catalog/catalogRevision": 1,
+        "/*/response/result/catalog/connectors/<list>": 1,
+        "/*/response/result/privateConnectorsHidden": 5,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 3,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 3,
+        "/*/response/result/runtime/config/activeModel/source": 3,
+        "/*/response/result/runtime/config/cursorBlink": 3,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 3,
+        "/*/response/result/runtime/config/enableMouseCapture": 3,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 3,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 3,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 3,
+        "/*/response/result/runtime/config/models/<list>/source": 3,
+        "/*/response/result/runtime/experimentalHarness": 3,
+        "/*/response/result/runtime/mcp/discoveryErrors/Mail_box": 3,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 3,
+        "/*/response/result/runtime/stats/modelCalls": 3,
+        "/*/response/result/runtime/tools/<list>/isCustom": 3,
+        "/*/response/result/session/sources/<list>/tools/<list>/description": 3
+      },
+      "flows/context-inject": {
+        "/*/notifications/*": 2,
+        "/*/notifications/*/method": 2,
+        "/*/notifications/*/params/contextWindow": 1,
+        "/*/notifications/*/params/entry": 2,
+        "/*/notifications/*/params/entry/outcome": 1,
+        "/*/notifications/*/params/patch": 1,
+        "/*/notifications/*/params/stats": 1,
+        "/*/notifications/*/params/stats/modelCalls": 1,
+        "/*/notifications/*/params/turnId": 2,
+        "/*/response/result/entries/<list>/outcome": 2
+      },
+      "flows/session-mutations": {
+        "/*/notifications/*": 2,
+        "/*/notifications/*/params/patch/*": 1,
+        "/*/notifications/*/params/patch/*/path": 1,
+        "/*/notifications/*/params/patch/*/value": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 2,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 2,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 2,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 2,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 2,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 2,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 2,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 2,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 2,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 2,
+        "/*/notifications/*/params/runtime/experimentalHarness": 2,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 2,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 2,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 2,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 2,
+        "/*/response/error": 2,
+        "/*/response/error/code": 1,
+        "/*/response/result": 2
+      },
+      "flows/session-start": {
+        "/*/notifications/*/method": 1,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/sessionId": 1,
+        "/*/notifications/*/params/warning": 1,
+        "/*/response/error": 1,
+        "/*/response/result": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "flows/session-start-refusals": {
+        "/*/notifications/*/method": 1,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/sessionId": 1,
+        "/*/notifications/*/params/warning": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "flows/setup": {
+        "/*/response/result/activeCredentialSource": 5,
+        "/*/response/result/mistralActiveCredentialSource": 5,
+        "/*/response/result/mistralProvider": 5,
+        "/*/response/result/pinnedConsoleUrl": 5
+      },
+      "flows/shell-command": {
+        "/*/notifications/*": 1,
+        "/*/response/error/message": 1
+      },
+      "flows/skills-registry": {
+        "/*/notifications/*": 6,
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 13,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 13,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 13,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 13,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 13,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 13,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 13,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 13,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 13,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 13,
+        "/*/notifications/*/params/runtime/experimentalHarness": 13,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 13,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 13,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 13,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 13,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 13,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 13,
+        "/*/response/result/runtime/config/activeModel/source": 13,
+        "/*/response/result/runtime/config/cursorBlink": 13,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 13,
+        "/*/response/result/runtime/config/enableMouseCapture": 13,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 13,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 13,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 13,
+        "/*/response/result/runtime/config/models/<list>/source": 13,
+        "/*/response/result/runtime/experimentalHarness": 13,
+        "/*/response/result/runtime/mcp/connectorError": 13,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 13,
+        "/*/response/result/runtime/stats/modelCalls": 13,
+        "/*/response/result/runtime/tools/<list>/isCustom": 13,
+        "/*/response/result/skills/<list>": 1
+      },
+      "flows/turn-lifecycle": {
+        "/*/notifications/*": 2,
+        "/*/notifications/*/method": 11,
+        "/*/notifications/*/params/contextWindow": 7,
+        "/*/notifications/*/params/emittedAt": 1,
+        "/*/notifications/*/params/entry": 4,
+        "/*/notifications/*/params/entryId": 2,
+        "/*/notifications/*/params/eventId": 1,
+        "/*/notifications/*/params/patch": 4,
+        "/*/notifications/*/params/patch/*": 4,
+        "/*/notifications/*/params/patch/*/path": 1,
+        "/*/notifications/*/params/patch/*/value": 1,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/stats": 7,
+        "/*/notifications/*/params/turn": 4,
+        "/*/notifications/*/params/turnId": 6,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 2
+      },
+      "flows/turn-queue-busy": {
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result/waits": 2
+      },
+      "flows/turn-queue-idle": {
+        "/*/notifications/*/params/entry/outcome": 2,
+        "/*/notifications/*/params/patch/*": 2,
+        "/*/notifications/*/params/patch/*/op": 2,
+        "/*/notifications/*/params/patch/*/path": 3,
+        "/*/notifications/*/params/patch/*/value": 1,
+        "/*/notifications/*/params/patch/*/value/cachedInputTokens": 2,
+        "/*/notifications/*/params/stats/modelCalls": 3
+      },
+      "flows/turn-queue-interrupt": {
+        "/*/notifications/*": 1,
+        "/*/notifications/*/method": 2,
+        "/*/notifications/*/params/contextWindow": 1,
+        "/*/notifications/*/params/entry/outcome": 2,
+        "/*/notifications/*/params/patch/*": 1,
+        "/*/notifications/*/params/patch/*/value/cachedInputTokens": 2,
+        "/*/notifications/*/params/queue": 1,
+        "/*/notifications/*/params/stats": 1,
+        "/*/notifications/*/params/stats/modelCalls": 3,
+        "/*/notifications/*/params/turn": 2,
+        "/*/response/result/waits": 1
+      },
+      "flows/turn-queue-refusals": {
+        "/*/notifications/*": 10,
+        "/*/notifications/*/params/entry/outcome": 2,
+        "/*/notifications/*/params/patch/*": 2,
+        "/*/notifications/*/params/patch/*/op": 2,
+        "/*/notifications/*/params/patch/*/path": 3,
+        "/*/notifications/*/params/patch/*/value": 1,
+        "/*/notifications/*/params/patch/*/value/cachedInputTokens": 2,
+        "/*/notifications/*/params/stats/modelCalls": 3
+      },
+      "flows/turn-tools": {
+        "/*/notifications/*": 1,
+        "/*/notifications/*/method": 15,
+        "/*/notifications/*/params/contextWindow": 10,
+        "/*/notifications/*/params/emittedAt": 1,
+        "/*/notifications/*/params/entry": 6,
+        "/*/notifications/*/params/entryId": 4,
+        "/*/notifications/*/params/eventId": 1,
+        "/*/notifications/*/params/patch": 6,
+        "/*/notifications/*/params/patch/*": 6,
+        "/*/notifications/*/params/patch/*/path": 2,
+        "/*/notifications/*/params/patch/*/value": 2,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/stats": 10,
+        "/*/notifications/*/params/turn": 3,
+        "/*/notifications/*/params/turnId": 10
+      },
+      "flows/workspace-prompt": {
+        "/*/response/result/prompt/images/<list>/source/data": 1,
+        "/*/response/result/prompt/images/<list>/source/path": 1
+      },
+      "flows/worktree-reap": {
+        "/*/response/error": 6,
+        "/*/response/result": 6
+      },
+      "flows/worktree-reap-dirty": {
+        "/*/response/error": 4,
+        "/*/response/result": 4
+      },
+      "flows/worktree-reap-idle": {
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "frames/initialize-invalid": {
+        "/*/response/result/processId": 1
+      },
+      "frames/initialize-twice": {
+        "/*/response/result/processId": 1
+      },
+      "frames/initialize-with-capabilities": {
+        "/*/response/result/continueSessionId": 1,
+        "/*/response/result/processId": 1
+      },
+      "frames/request-before-initialize": {
+        "/*/response/result/continueSessionId": 1,
+        "/*/response/result/processId": 1
+      },
+      "frames/request-before-initialized": {
+        "/*/response/result/processId": 1
+      },
+      "frames/string-id": {
+        "/*/response/result/continueSessionId": 1
+      },
+      "probe/account/read/rooted": {
+        "/*/response/result/account/apiKey": 1,
+        "/*/response/result/account/budget": 1
+      },
+      "probe/agents/list/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/artifacts/list/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/artifacts/list/rooted": {
+        "/*/response/error": 2,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 2
+      },
+      "probe/artifacts/markViewed/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/artifacts/markViewed/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/artifacts/subscribe/bare": {
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "probe/artifacts/subscribe/rooted": {
+        "/*/response/error": 3,
+        "/*/response/result": 3
+      },
+      "probe/artifacts/sync/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/artifacts/sync/rooted": {
+        "/*/response/error": 2,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 2
+      },
+      "probe/config/effective/read/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/config/effective/read/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/config/model/write/rooted": {
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
+        "/*/notifications/*/params/runtime/experimentalHarness": 1,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
+        "/*/response/result/reason": 1,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
+        "/*/response/result/runtime/config/activeModel/source": 1,
+        "/*/response/result/runtime/config/cursorBlink": 1,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
+        "/*/response/result/runtime/config/enableMouseCapture": 1,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/response/result/runtime/config/models/<list>/source": 1,
+        "/*/response/result/runtime/experimentalHarness": 1,
+        "/*/response/result/runtime/mcp/connectorError": 1,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/runtime/stats/modelCalls": 1,
+        "/*/response/result/runtime/tools/<list>/isCustom": 1
+      },
+      "probe/config/read/bare": {
+        "/*/response/result/config/activeModel/autoCompactThreshold": 1,
+        "/*/response/result/config/activeModel/maxContextLength": 1,
+        "/*/response/result/config/activeModel/source": 1,
+        "/*/response/result/config/cursorBlink": 1,
+        "/*/response/result/config/enableFileAutocomplete": 1,
+        "/*/response/result/config/enableMouseCapture": 1,
+        "/*/response/result/config/experimentalEnableLocalProjects": 1,
+        "/*/response/result/config/models/<list>/autoCompactThreshold": 1,
+        "/*/response/result/config/models/<list>/maxContextLength": 1,
+        "/*/response/result/config/models/<list>/source": 1,
+        "/*/response/result/harnessSelectionSource": 1,
+        "/*/response/result/startupIssue": 1
+      },
+      "probe/config/read/rooted": {
+        "/*/response/result/config/activeModel/autoCompactThreshold": 2,
+        "/*/response/result/config/activeModel/maxContextLength": 2,
+        "/*/response/result/config/activeModel/source": 2,
+        "/*/response/result/config/cursorBlink": 2,
+        "/*/response/result/config/enableFileAutocomplete": 2,
+        "/*/response/result/config/enableMouseCapture": 2,
+        "/*/response/result/config/experimentalEnableLocalProjects": 2,
+        "/*/response/result/config/models/<list>/autoCompactThreshold": 2,
+        "/*/response/result/config/models/<list>/maxContextLength": 2,
+        "/*/response/result/config/models/<list>/source": 2,
+        "/*/response/result/harnessSelectionSource": 2,
+        "/*/response/result/startupIssue": 2
+      },
+      "probe/config/reload/rooted": {
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
+        "/*/notifications/*/params/runtime/experimentalHarness": 1,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
+        "/*/response/result/runtime/config/activeModel/source": 1,
+        "/*/response/result/runtime/config/cursorBlink": 1,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
+        "/*/response/result/runtime/config/enableMouseCapture": 1,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/response/result/runtime/config/models/<list>/source": 1,
+        "/*/response/result/runtime/experimentalHarness": 1,
+        "/*/response/result/runtime/mcp/connectorError": 1,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/runtime/stats/modelCalls": 1,
+        "/*/response/result/runtime/tools/<list>/isCustom": 1
+      },
+      "probe/connector_catalog/connect/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/connector_catalog/connect/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/connector_catalog/read/bare": {
+        "/*/response/result/catalog/catalogRevision": 1,
+        "/*/response/result/privateConnectorsHidden": 1
+      },
+      "probe/connector_catalog/read/rooted": {
+        "/*/response/result/catalog/catalogRevision": 2,
+        "/*/response/result/privateConnectorsHidden": 2
+      },
+      "probe/connector_catalog/refresh/bare": {
+        "/*/response/error": 1,
+        "/*/response/result": 1
+      },
+      "probe/connector_catalog/refresh/rooted": {
+        "/*/notifications/*": 1,
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "probe/imports/discover/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/imports/discover/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/imports/read/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/imports/read/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/imports/start/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/imports/start/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/mcp/add/bare": {
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1
+      },
+      "probe/mcp/add/rooted": {
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/mcp/read/rooted": {
+        "/*/response/result/mcp/connectorError": 1,
+        "/*/response/result/mcp/privateConnectorsHidden": 1
+      },
+      "probe/mcp/refresh/rooted": {
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
+        "/*/notifications/*/params/runtime/experimentalHarness": 1,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
+        "/*/response/result/runtime/config/activeModel/source": 1,
+        "/*/response/result/runtime/config/cursorBlink": 1,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
+        "/*/response/result/runtime/config/enableMouseCapture": 1,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/response/result/runtime/config/models/<list>/source": 1,
+        "/*/response/result/runtime/experimentalHarness": 1,
+        "/*/response/result/runtime/mcp/connectorError": 1,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/runtime/stats/modelCalls": 1,
+        "/*/response/result/runtime/tools/<list>/isCustom": 1
+      },
+      "probe/mcp_catalog/add/bare": {
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1
+      },
+      "probe/mcp_catalog/add/rooted": {
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/mcp_catalog/read/rooted": {
+        "/*/response/result/mcp/connectorError": 1,
+        "/*/response/result/mcp/privateConnectorsHidden": 1
+      },
+      "probe/mcp_catalog/refresh/rooted": {
+        "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/activeModel/source": 1,
+        "/*/notifications/*/params/runtime/config/cursorBlink": 1,
+        "/*/notifications/*/params/runtime/config/enableFileAutocomplete": 1,
+        "/*/notifications/*/params/runtime/config/enableMouseCapture": 1,
+        "/*/notifications/*/params/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/notifications/*/params/runtime/config/models/<list>/source": 1,
+        "/*/notifications/*/params/runtime/experimentalHarness": 1,
+        "/*/notifications/*/params/runtime/mcp/connectorError": 1,
+        "/*/notifications/*/params/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/notifications/*/params/runtime/stats/modelCalls": 1,
+        "/*/notifications/*/params/runtime/tools/<list>/isCustom": 1,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
+        "/*/response/result/runtime/config/activeModel/source": 1,
+        "/*/response/result/runtime/config/cursorBlink": 1,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
+        "/*/response/result/runtime/config/enableMouseCapture": 1,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/response/result/runtime/config/models/<list>/source": 1,
+        "/*/response/result/runtime/experimentalHarness": 1,
+        "/*/response/result/runtime/mcp/connectorError": 1,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/runtime/stats/modelCalls": 1,
+        "/*/response/result/runtime/tools/<list>/isCustom": 1
+      },
+      "probe/platformCredentials/headers/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/platformCredentials/headers/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/plugin/reload/rooted": {
+        "/*/notifications/*": 1
+      },
+      "probe/projects/create/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/projects/create/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/projects/list/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/projects/list/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/projects/remove/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/projects/remove/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/projects/rename/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/projects/rename/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/providerAuth/read/rooted": {
+        "/*/response/result/auth/apiKeyEnvVar": 1,
+        "/*/response/result/auth/authKind": 1,
+        "/*/response/result/auth/envFilePath": 1,
+        "/*/response/result/auth/sources": 1
+      },
+      "probe/review/state/rooted": {
+        "/*/response/error": 1,
+        "/*/response/result": 1
+      },
+      "probe/runtime/read/rooted": {
+        "/*/response/error": 1,
+        "/*/response/result": 1,
+        "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/activeModel/maxContextLength": 1,
+        "/*/response/result/runtime/config/activeModel/source": 1,
+        "/*/response/result/runtime/config/cursorBlink": 1,
+        "/*/response/result/runtime/config/enableFileAutocomplete": 1,
+        "/*/response/result/runtime/config/enableMouseCapture": 1,
+        "/*/response/result/runtime/config/experimentalEnableLocalProjects": 1,
+        "/*/response/result/runtime/config/models/<list>/autoCompactThreshold": 1,
+        "/*/response/result/runtime/config/models/<list>/maxContextLength": 1,
+        "/*/response/result/runtime/config/models/<list>/source": 1,
+        "/*/response/result/runtime/experimentalHarness": 1,
+        "/*/response/result/runtime/mcp/connectorError": 1,
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
+        "/*/response/result/runtime/stats/modelCalls": 1,
+        "/*/response/result/runtime/tools/<list>/isCustom": 1
+      },
+      "probe/session/compact/rooted": {
+        "/*/notifications/*": 4,
+        "/*/response/error": 1,
+        "/*/response/result": 1
+      },
+      "probe/session/context/read/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/context/read/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/session/continue/bare": {
+        "/*/response/error/data": 1
+      },
+      "probe/session/continue/rooted": {
+        "/*/response/error/data": 1
+      },
+      "probe/session/history/clear/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/history/clear/rooted": {
+        "/*/notifications/*": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "probe/session/lease/subscribe/bare": {
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "probe/session/lease/subscribe/rooted": {
+        "/*/response/error": 3,
+        "/*/response/result": 3
+      },
+      "probe/session/list/bare": {
+        "/*/response/result/continueSessionId": 1
+      },
+      "probe/session/list/rooted": {
+        "/*/response/result/continueSessionId": 1
+      },
+      "probe/session/read/rooted": {
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "probe/session/ready/read/rooted": {
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "probe/session/ready/wait/rooted": {
+        "/*/response/error": 2,
+        "/*/response/result": 2
+      },
+      "probe/session/resume/rooted": {
+        "/*/notifications/*": 1,
+        "/*/response/result/lastEventId": 1,
+        "/*/response/result/state/eventId": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "probe/session/start/bare": {
+        "/*/notifications/*/method": 1,
+        "/*/notifications/*/params/runtime": 1,
+        "/*/notifications/*/params/sessionId": 1,
+        "/*/notifications/*/params/warning": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "probe/session/start/rooted": {
+        "/*/response/error": 1,
+        "/*/response/result": 1
+      },
+      "probe/session/subagents/interrupt/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/subagents/interrupt/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/session/subagents/read/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/subagents/read/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/data": 1,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/session/subagents/wait/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/subagents/wait/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/session/turn/queue/edit/abandon/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/turn/queue/edit/abandon/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/session/turn/queue/edit/cancel/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/turn/queue/edit/cancel/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/session/turn/queue/edit/save/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/turn/queue/edit/save/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/session/turn/queue/edit/start/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/session/turn/queue/edit/start/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/data": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/session/turn/queue/read/rooted": {
+        "/*/response/error/code": 1
+      },
+      "probe/session/turn/queue/resume/rooted": {
+        "/*/response/error/code": 1
+      },
+      "probe/setup/oidc-cancel/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/setup/oidc-cancel/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/setup/oidc-clear/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/setup/oidc-clear/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/setup/oidc-poll/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/setup/oidc-poll/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/setup/oidc-probe/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/setup/oidc-probe/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/setup/oidc-start/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/setup/oidc-start/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/setup/status/bare": {
+        "/*/response/result/activeCredentialSource": 1,
+        "/*/response/result/mistralActiveCredentialSource": 1,
+        "/*/response/result/mistralProvider": 1,
+        "/*/response/result/pinnedConsoleUrl": 1
+      },
+      "probe/setup/status/rooted": {
+        "/*/response/result/activeCredentialSource": 1,
+        "/*/response/result/mistralActiveCredentialSource": 1,
+        "/*/response/result/mistralProvider": 1,
+        "/*/response/result/pinnedConsoleUrl": 1
+      },
+      "probe/skills/installed/rooted": {
+        "/*/response/result/skills/<list>": 1
+      },
+      "probe/skills/list/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/skills/local/delete/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/skills/local/delete/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/skills/local/list/bare": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 1,
+        "/*/response/error/message": 1,
+        "/*/response/result": 1
+      },
+      "probe/skills/local/list/rooted": {
+        "/*/response/error": 1,
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2,
+        "/*/response/result": 1
+      },
+      "probe/skills/local/read/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/skills/local/read/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/skills/local/setEnabled/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/skills/local/setEnabled/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      },
+      "probe/skills/local/write/bare": {
+        "/*/response/error/code": 2,
+        "/*/response/error/message": 2
+      },
+      "probe/skills/local/write/rooted": {
+        "/*/response/error/code": 3,
+        "/*/response/error/message": 3
+      }
+    }
+  }
+}

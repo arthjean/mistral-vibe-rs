@@ -1,0 +1,15 @@
+{
+  "corpus": "crates/vibe-voice/tests/voice/corpus.json",
+  "measuredAgainst": "451067b3a609b3669a097b889bb9f661a027ebc00b4102edb0764786e2164e75",
+  "schemaVersion": 1,
+  "tallies": {
+    "voice parity:": {
+      "speech-provider-without-credential": {
+        "/wireFrames/speech.refused": 1
+      },
+      "transcribe-provider-without-credential": {
+        "/wireFrames/transcription.refused": 1
+      }
+    }
+  }
+}

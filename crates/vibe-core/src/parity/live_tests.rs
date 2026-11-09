@@ -358,6 +358,7 @@ fn listed(corpus: &str, test: &str, commit: &str) -> ManifestEntry {
         count: None,
         floors: std::collections::BTreeMap::new(),
         note: None,
+        debt: None,
     }
 }
 

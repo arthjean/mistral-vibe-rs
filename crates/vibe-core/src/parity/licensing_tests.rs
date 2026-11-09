@@ -27,6 +27,19 @@
 //! A run counts when at least half of its tokens, and at least
 //! [`PROSE_WORDS`] of them, are plain words.
 //!
+//! **The third-party layer.** The reference's tree also quotes text it did
+//! not author, such as a library's error message in a test that asserts it,
+//! or a license header. `repin.py shingles` writes beside the digest set the
+//! digests a locked third-party distribution of the attested environment
+//! also ships (`third-party-<sha12>.json`, with the distributions that ship
+//! each, the lockfile digest and the platform it was measured on), and the
+//! guard subtracts them, so a run that reproduces `pydantic`'s or `httpx2`'s
+//! own words is not the reference's to claim. The layer holds no text, is
+//! refused when it names another commit or a digest the set does not hold,
+//! and `repin.py shingles --check` recomputes it on the weekly live run. The
+//! digest set of `PREVIOUS_COMMIT` is read as committed, since the baseline
+//! was cut against it.
+//!
 //! **The baseline.** `crates/vibe-core/tests/licensing/baseline.txt` lists the
 //! runs known when the guard landed, each as its file, the digest of its first
 //! shingle and its length in words, so it holds no text. A run it does not list
@@ -69,25 +82,6 @@ const LICENSING: &str = "crates/vibe-core/tests/licensing";
 /// Files that carry a standard text both trees ship verbatim on purpose, which
 /// the reference did not author: the Apache License 2.0.
 const STANDARD_TEXTS: [&str; 1] = ["LICENSE"];
-
-/// Runs that reproduce a third-party library's own message, which a pin's
-/// reference quotes only in a test asserting that library's output: the file,
-/// the digest of the run's first shingle, its length in words, and the author.
-/// They stand where `STANDARD_TEXTS` stands, for one run rather than a file.
-const THIRD_PARTY_RUNS: [(&str, u64, usize, &str); 2] = [
-    (
-        "crates/vibe-core/src/pycompat/pydantic.rs",
-        0x726a_e35b_b63c_e1ce,
-        13,
-        "pydantic-core's `int_parsing` message",
-    ),
-    (
-        "crates/vibe-harness/src/engine/provider_errors.rs",
-        0x8e3f_b812_7126_7dab,
-        8,
-        "httpx's `raise_for_status` message",
-    ),
-];
 
 /// One word of a scanned file: where it starts and ends, and its line.
 struct Word {
@@ -362,6 +356,113 @@ fn digest_set(root: &Path, commit: &str) -> Vec<u64> {
     set
 }
 
+/// The digests of `reference` that the third-party layer of `commit` says a
+/// locked third-party distribution also ships, sorted.
+///
+/// The layer is generated with the digest set and holds no text: the
+/// lockfile digest and the environment it was measured on, the distributions
+/// it read, and for each digest the distributions that ship it. A layer that
+/// names another commit, attributes a digest to no distribution it read, or
+/// subtracts a digest the set does not hold was generated against something
+/// else, and the guard refuses it rather than subtract it.
+fn third_party_layer(root: &Path, commit: &str, reference: &[u64]) -> Vec<u64> {
+    let short = &commit[..12];
+    let path = root
+        .join(LICENSING)
+        .join(format!("third-party-{short}.json"));
+    let regenerate =
+        format!("regenerate it with `python3 scripts/parity/repin.py shingles {commit}`");
+    let text = std::fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("{} is unreadable ({error}); {regenerate}", path.display()));
+    let layer: serde_json::Value = serde_json::from_str(&text)
+        .unwrap_or_else(|error| panic!("{} is not JSON ({error}); {regenerate}", path.display()));
+    let problems = layer_problems(&layer, commit, reference);
+    assert!(
+        problems.is_empty(),
+        "{} is not the third-party layer of {short}; {regenerate}:\n{}",
+        path.display(),
+        problems.join("\n")
+    );
+    third_party_digests(&layer)
+}
+
+/// The digests a third-party layer subtracts, sorted.
+fn third_party_digests(layer: &serde_json::Value) -> Vec<u64> {
+    let mut values: Vec<u64> = layer["digests"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(digest, _)| u64::from_str_radix(digest, 16).ok())
+        .collect();
+    values.sort_unstable();
+    values
+}
+
+/// What makes `layer` something other than the third-party layer of `commit`
+/// over the digest set `reference`.
+fn layer_problems(layer: &serde_json::Value, commit: &str, reference: &[u64]) -> Vec<String> {
+    let mut problems = Vec::new();
+    if layer["schemaVersion"] != 1 {
+        problems.push("its schemaVersion is not 1".to_owned());
+    }
+    if layer["commit"] != commit {
+        problems.push(format!("it names the commit {}", layer["commit"]));
+    }
+    let lock = layer["uvLockSha256"].as_str().unwrap_or_default();
+    if lock.len() != 64 || !lock.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        problems.push("it names no uv.lock digest".to_owned());
+    }
+    if layer["measuredOn"]["platform"]
+        .as_str()
+        .is_none_or(str::is_empty)
+    {
+        problems.push("it names no platform it was measured on".to_owned());
+    }
+    let read: Vec<&str> = layer["distributions"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    let Some(digests) = layer["digests"].as_object() else {
+        problems.push("it holds no digests object".to_owned());
+        return problems;
+    };
+    for (digest, labels) in digests {
+        let value = (digest.len() == 16)
+            .then(|| u64::from_str_radix(digest, 16).ok())
+            .flatten();
+        let Some(value) = value else {
+            problems.push(format!("`{digest}` is not a 64-bit digest in hexadecimal"));
+            continue;
+        };
+        if reference.binary_search(&value).is_err() {
+            problems.push(format!("{digest} is not a digest of the reference's prose"));
+        }
+        let labels: Vec<&str> = labels
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .collect();
+        if labels.is_empty() || labels.iter().any(|label| !read.contains(label)) {
+            problems.push(format!(
+                "{digest} is attributed to {labels:?}, not to distributions the layer read"
+            ));
+        }
+    }
+    problems
+}
+
+/// `reference` without the digests of `layer`, both sorted.
+fn subtract(reference: &[u64], layer: &[u64]) -> Vec<u64> {
+    reference
+        .iter()
+        .copied()
+        .filter(|value| layer.binary_search(value).is_err())
+        .collect()
+}
+
 /// Every file git tracks, and every untracked file it does not ignore (what
 /// the next commit can hold), workspace-relative.
 fn tracked(root: &Path) -> Vec<String> {
@@ -466,28 +567,11 @@ fn render(runs: &[Run]) -> String {
 fn no_tracked_file_shares_prose_with_the_reference_outside_the_baseline() {
     let started = Instant::now();
     let root = repository();
-    let set = digest_set(&root, REFERENCE_COMMIT);
+    let reference = digest_set(&root, REFERENCE_COMMIT);
+    let layer = third_party_layer(&root, REFERENCE_COMMIT, &reference);
+    let set = subtract(&reference, &layer);
     let files = tracked(&root);
-    let third_party = |run: &Run| {
-        THIRD_PARTY_RUNS
-            .iter()
-            .any(|(file, first, words, _)| run.key() == ((*file).to_owned(), *first, *words))
-    };
-    let (quoted, found): (Vec<Run>, Vec<Run>) =
-        scan(&root, &files, &set).into_iter().partition(third_party);
-    let gone: Vec<&str> = THIRD_PARTY_RUNS
-        .iter()
-        .filter(|(file, first, words, _)| {
-            !quoted
-                .iter()
-                .any(|run| run.key() == ((*file).to_owned(), *first, *words))
-        })
-        .map(|(_, _, _, author)| *author)
-        .collect();
-    assert!(
-        gone.is_empty(),
-        "these third-party runs no longer occur; remove them from THIRD_PARTY_RUNS: {gone:?}"
-    );
+    let found = scan(&root, &files, &set);
 
     let measured = records().join("licensing");
     if std::fs::create_dir_all(&measured).is_ok() {
@@ -500,10 +584,11 @@ fn no_tracked_file_shares_prose_with_the_reference_outside_the_baseline() {
     let (unlisted, stale) = judge(&found, prior.as_deref(), &listed);
 
     println!(
-        "licensing guard: {} tracked files, {} reference shingles, {} shared runs, {} unlisted, \
-         {} stale, in {:.1?}",
+        "licensing guard: {} tracked files, {} reference shingles less {} a locked third-party \
+         distribution ships, {} shared runs, {} unlisted, {} stale, in {:.1?}",
         files.len(),
-        set.len(),
+        reference.len(),
+        layer.len(),
         found.len(),
         unlisted.len(),
         stale.len(),
@@ -650,4 +735,60 @@ fn outside_a_transition_only_a_listed_run_is_admitted() {
     let (unlisted, stale) = judge(std::slice::from_ref(&recut), None, &listed);
     assert_eq!(unlisted, [&recut]);
     assert_eq!(stale, ["a.rs\t0000000000000001\t10"]);
+}
+
+fn sample_layer(digests: serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "schemaVersion": 1,
+        "commit": REFERENCE_COMMIT,
+        "uvLockSha256": "0".repeat(64),
+        "measuredOn": {"platform": "linux-x86_64", "python": "3.12.15"},
+        "distributions": ["httpx2==2.16.0", "pydantic==2.13.4"],
+        "digests": digests,
+    })
+}
+
+#[test]
+fn a_run_a_locked_distribution_also_ships_is_not_the_reference_s() {
+    let text = "every lantern along the quiet harbor glowed until dawn returned";
+    let all = words(text);
+    let mut buffer = String::new();
+    let shingles: Vec<u64> = (0..=all.len() - WIDTH)
+        .map(|start| digest(text, &all[start..start + WIDTH], &mut buffer))
+        .collect();
+    let mut reference = shingles.clone();
+    reference.sort_unstable();
+    // A library ships the middle shingle: the 10-word run splits into the
+    // two shingles the reference alone holds.
+    let shipped = shingles[1];
+    let layer = sample_layer(serde_json::json!({ format!("{shipped:016x}"): ["httpx2==2.16.0"] }));
+    assert!(layer_problems(&layer, REFERENCE_COMMIT, &reference).is_empty());
+    let set = subtract(&reference, &third_party_digests(&layer));
+    let found: Vec<(usize, usize)> = runs("sample.md", text, &set)
+        .iter()
+        .map(|run| (run.start, run.words))
+        .collect();
+    assert_eq!(found, [(0, 8), (2, 8)]);
+    assert!(runs("sample.md", text, &subtract(&reference, &reference)).is_empty());
+}
+
+#[test]
+fn a_layer_generated_against_something_else_is_refused() {
+    let reference = [1_u64, 2, 3];
+    let foreign = sample_layer(serde_json::json!({ format!("{:016x}", 9): ["httpx2==2.16.0"] }));
+    let unread = sample_layer(serde_json::json!({ format!("{:016x}", 2): ["requests==2.0"] }));
+    let mut moved = sample_layer(serde_json::json!({}));
+    moved["commit"] = serde_json::json!(PREVIOUS_COMMIT);
+    moved["uvLockSha256"] = serde_json::json!("");
+    for (layer, expected) in [
+        (foreign, "is not a digest of the reference's prose"),
+        (unread, "not to distributions the layer read"),
+        (moved, "it names the commit"),
+    ] {
+        let problems = layer_problems(&layer, REFERENCE_COMMIT, &reference);
+        assert!(
+            problems.iter().any(|problem| problem.contains(expected)),
+            "{problems:?}"
+        );
+    }
 }

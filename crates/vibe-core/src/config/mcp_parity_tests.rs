@@ -23,22 +23,20 @@ use super::mcp::{
 };
 use super::*;
 use crate::mcp::{McpAuthConfig, McpServerConfig, McpTransportConfig};
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::figures::assert_figures;
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Class, PatternDivergence};
 
-use super::surface_parity_tests::{Observed, ROW, reconcile};
+use super::surface_parity_tests::{LISTED, Observed, reconcile};
 
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 
-/// Decoded values at which an entry scenario diverges, each at
-/// `/<camelCase field>`. Every other decoded value is asserted equal.
-const ENTRY_DIVERGENCES: &[PatternDivergence] = &[PatternDivergence {
-    scenario: "*",
-    pointer: "/samplingEnabled",
-    count: 10,
-    row: ROW,
-    class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[Note {
+    scenarios: &["*"],
+    pointers: &["/samplingEnabled"],
     reason: "v3.0.0 turned MCP sampling off for an entry that does not ask for it \
              (`vibe/core/config/models.py` at `c96a6db`); this port still enables it by \
              default",
@@ -305,7 +303,12 @@ fn every_recorded_entry_decodes_to_the_reference_values_or_the_same_refusal() {
             &mut observed,
         );
     }
-    let settled = reconcile("the MCP entries", &observed, ENTRY_DIVERGENCES);
+    let settled = reconcile(
+        "the MCP entries",
+        "config MCP entries parity:",
+        &observed,
+        &[],
+    );
     let conformant = corpus
         .mcp
         .entries
@@ -491,4 +494,9 @@ fn transport_name(transport: &McpTransportConfig) -> &'static str {
         McpTransportConfig::StreamableHttp { .. } => "streamable-http",
         McpTransportConfig::Stdio { .. } => "stdio",
     }
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
 }

@@ -1,0 +1,229 @@
+{
+  "corpus": "crates/vibe-cli/tests/system-prompt-parity/corpus.json",
+  "measuredAgainst": "b5f68d8e4ee92800dfe21a5ee600b3c89fe8e5433ba4f31a222b0ea2f03f1f53",
+  "schemaVersion": 1,
+  "tallies": {
+    "system prompt parity:": {
+      "compose/add-dir": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/add-dir-contains-cwd": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/add-dir-is-cwd": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/add-dir-untrusted-cwd": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/blank-agents": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 5,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/commit-count-one": {
+        "/requests/*/carries/*/data": 3,
+        "/requests/*/carries/*/occurrences": 2
+      },
+      "compose/commit-count-zero": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 5
+      },
+      "compose/cwd-is-documents": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 2
+      },
+      "compose/cwd-is-home": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 2
+      },
+      "compose/default": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/detached-head": {
+        "/requests/*/carries/*": 2,
+        "/requests/*/carries/*/data": 6
+      },
+      "compose/nested-agents-below-cwd": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/no-project-context": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 1
+      },
+      "compose/no-prompt-detail": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/no-signature-no-model": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/not-a-repository": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 4
+      },
+      "compose/project-agents-only": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/project-skill": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-bundled-utility": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-explore": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-file-overrides-builtin": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-lean": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-minimal": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-project-file": {
+        "/exit": 1,
+        "/requests/*": 1
+      },
+      "compose/prompt-project-file-untrusted": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-project-over-user": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-suffix-replaced": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-tests": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-upper-case": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-user-file": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-v2": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/prompt-v3": {
+        "/requests/*/carries/*/data": 1,
+        "/requests/*/carries/*/occurrences": 2
+      },
+      "compose/repository-without-commits": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 4
+      },
+      "compose/sections-off": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 1
+      },
+      "compose/shell-unset": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/skills-none": {
+        "/requests/*/carries/*": 2,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/skills-only-model-invocable": {
+        "/requests/*/carries/*": 2,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/skills-only-user-invocable": {
+        "/requests/*/carries/*": 2,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/skills-user-and-model-only": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/subagent-custom": {
+        "/exit": 1
+      },
+      "compose/subagent-explore": {
+        "/exit": 1
+      },
+      "compose/subagents-none": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/trust-root-above": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/untrusted": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "compose/user-agents-only": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 6,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "live/programmatic": {
+        "/requests/*/carries/*": 1,
+        "/requests/*/carries/*/data": 7,
+        "/requests/*/carries/*/occurrences": 1
+      },
+      "live/subagent": {
+        "/requests/*/carries/*": 2,
+        "/requests/*/carries/*/data": 14,
+        "/requests/*/carries/*/occurrences": 2
+      }
+    }
+  }
+}

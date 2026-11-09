@@ -1,0 +1,86 @@
+{
+  "corpus": "crates/vibe-core/tests/shell-policy/policy.json",
+  "measuredAgainst": "cca3de77eea73bf45b3bc5f179945d8200e56ab35c31fd8f4faed9bd7addaf79",
+  "schemaVersion": 1,
+  "tallies": {
+    "shell policy parity (resolutions):": {
+      "git diff --no-index /etc/passwd /dev/null": {
+        "/requirements/*": 1,
+        "/requirements/*/invocationPattern": 1,
+        "/requirements/*/label": 1,
+        "/requirements/*/sessionPattern": 1
+      }
+    },
+    "shell policy parity (windows grammar):": {
+      "commands/(Get-Item a).Name": {
+        "/parts/*/commandName": 1,
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/@{a=1}; ${x}": {
+        "/parts/*": 1
+      },
+      "commands/Get-Content x *>&1": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 1
+      },
+      "commands/Invoke-Command { Remove-Item x; ls }": {
+        "/parts/*/tokens/*": 5
+      },
+      "commands/cmd 2>&1 | more": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 1
+      },
+      "commands/echo `& not a separator": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 1
+      },
+      "commands/echo a 2> 'err log.txt'": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/echo a > $null": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/echo a > NUL": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/echo a >&2": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 1
+      },
+      "commands/echo a >> C:\\logs\\x.txt": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/echo a >`\"q`\" x": {
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/echo a ^& b": {
+        "/parts/*": 1,
+        "/parts/*/forms/*": 1,
+        "/parts/*/formsWithoutBasename/*": 1,
+        "/parts/*/part": 1,
+        "/parts/*/tokens/*": 2
+      },
+      "commands/type > out.txt": {
+        "/parts/*/forms/*": 2,
+        "/parts/*/formsWithoutBasename/*": 2,
+        "/parts/*/tokens/*": 2
+      }
+    }
+  }
+}

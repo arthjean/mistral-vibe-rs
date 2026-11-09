@@ -150,6 +150,12 @@ jobs:
             echo "timed_out=true" >> "${GITHUB_OUTPUT}"
           fi
           exit "${status}"
+      # The clean-room guard reads a digest set and a third-party layer that
+      # `repin.py shingles` generated; both are recomputed here from the
+      # attested environment of the pin, so a hand edit to either fails.
+      - name: Check the clean-room digest sets
+        if: always() && steps.materialize.outcome == 'success'
+        run: python3 scripts/parity/repin.py shingles --check
       - name: Summarize the live measurement
         if: always()
         run: |

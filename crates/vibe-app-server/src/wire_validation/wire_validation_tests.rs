@@ -4,12 +4,10 @@
 //! the reference declares, inputs and what pydantic answered: the location and
 //! type of each issue in order, or the value it produced.
 
-use std::collections::BTreeMap;
-
 use serde::Deserialize;
 use serde_json::Value;
+use vibe_core::parity::debt::{Debt, Note, assert_notes};
 use vibe_core::parity::figures::Figures;
-use vibe_core::parity::replay::{Class, Entry as _, PatternDivergence, assert_ledger, entries};
 use vibe_protocol::PathSegment;
 
 use super::{SCHEMA, custom, ordered_params, validate_method, validate_model_named};
@@ -78,35 +76,28 @@ fn every_validator_the_schema_names_is_implemented() {
 
 /// The corpus as the manifest lists it.
 const LISTED: &str = "crates/vibe-app-server/tests/wire-validation/cases.json";
+/// The replay's line of the "Measured figures" table.
+const HEADING: &str = "wire validation parity:";
 
-/// What this port still answers differently, by model and by the field the
-/// reference locates its first issue at. Row 17 is what the corpus measures:
-/// these are gaps the v3.1.0 re-pin revealed.
-const LEDGER: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "MCPAddParams",
-        pointer: "/errors/transport",
-        count: 15,
-        row: "17",
-        class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["MCPAddParams"],
+        pointers: &["/errors/transport"],
         reason: "v3.0.0 made `transport` a union of literals, which pydantic refuses once per \
              choice; the reduced schema records one literal over their joint values \
              (scripts/parity/app_server_params.py), so this port refuses once",
     },
-    PatternDivergence {
-        scenario: "SessionArchiveParams",
-        pointer: "/value/root",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["SessionArchiveParams"],
+        pointers: &["/value/root"],
         reason: DEFAULTS_DROPPED,
     },
-    PatternDivergence {
-        scenario: "SessionListParams",
-        pointer: "/value/root",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["SessionListParams"],
+        pointers: &["/value/root"],
         reason: DEFAULTS_DROPPED,
     },
 ];
@@ -117,8 +108,9 @@ const DEFAULTS_DROPPED: &str = "v3.0.0 leaves out of what it validates a field t
                                 `sessionIds`), which the reduced schema does not record, so this \
                                 port keeps it";
 
-/// Where a differing case is ledgered: its model, and the field of the
-/// reference's first issue (`/value` when the reference accepted it).
+/// Where a differing case falls in the measured debt: its model, and the
+/// field of the reference's first issue (`/value` when the reference accepted
+/// it).
 fn ledger_pointer(case: &Case) -> String {
     match case.errors.as_deref().and_then(<[_]>::first) {
         Some((loc, _)) => match loc.first() {
@@ -135,7 +127,7 @@ fn validation_answers_as_the_reference_does() {
     vibe_core::parity::manifest::assert_corpus(LISTED);
     let corpus: Corpus = serde_json::from_str(CASES).unwrap();
     let mut unexplained = Vec::new();
-    let mut covered = vec![0_usize; LEDGER.len()];
+    let mut debt = Debt::load(LISTED, HEADING);
     let mut conformant = 0;
     for case in &corpus.cases {
         let outcome = validate_model_named(&case.model, &case.input);
@@ -169,20 +161,16 @@ fn validation_answers_as_the_reference_does() {
             continue;
         }
         let pointer = ledger_pointer(case);
-        match LEDGER
-            .iter()
-            .position(|entry| entry.covers(&case.model, &pointer))
-        {
-            Some(index) => covered[index] += 1,
-            None => unexplained.push(format!(
+        if !debt.absorb(&case.model, &pointer) {
+            unexplained.push(format!(
                 "{} {} ({pointer})\n  expected {expected}\n  observed {observed}",
                 case.model, case.input
-            )),
+            ));
         }
     }
     assert!(
         unexplained.is_empty(),
-        "{} of {} cases differ where no ledger entry says they may:\n{}",
+        "{} of {} cases differ outside the measured debt:\n{}",
         unexplained.len(),
         corpus.cases.len(),
         unexplained
@@ -192,34 +180,16 @@ fn validation_answers_as_the_reference_does() {
             .collect::<Vec<_>>()
             .join("\n")
     );
-    let miscounted: Vec<String> = LEDGER
-        .iter()
-        .zip(&covered)
-        .filter(|(entry, found)| entry.count != **found)
-        .map(|(entry, found)| {
-            format!(
-                "{} declares {} differences and covered {found}",
-                entry.label(),
-                entry.count
-            )
-        })
-        .collect();
-    assert!(miscounted.is_empty(), "{}", miscounted.join("\n"));
-    let recorded: BTreeMap<String, &Value> = corpus
-        .cases
-        .iter()
-        .map(|case| (case.model.clone(), &case.input))
-        .collect();
-    assert_ledger(LISTED, &recorded, entries(LEDGER));
+    debt.assert_settled();
     vibe_core::parity::figures::assert_figures(
-        "wire validation parity:",
+        HEADING,
         LISTED,
         Figures {
             conformant,
             accepted: 0,
             total: corpus.cases.len(),
             accepted_differences: 0,
-            gap_differences: covered.iter().sum(),
+            gap_differences: debt.covered(),
             prose_differences: 0,
         },
         serde_json::json!({}),
@@ -277,4 +247,9 @@ fn raw_frame_parameters_keep_the_written_key_order() {
             (vec![Value::from("alpha")], "extra_forbidden"),
         ]
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
 }

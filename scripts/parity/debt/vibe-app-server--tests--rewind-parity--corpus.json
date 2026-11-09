@@ -1,0 +1,106 @@
+{
+  "corpus": "crates/vibe-app-server/tests/rewind-parity/corpus.json",
+  "measuredAgainst": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d",
+  "schemaVersion": 1,
+  "tallies": {
+    "rewind parity:": {
+      "rewind/across-a-compaction": {
+        "/*/context/*": 7,
+        "/*/context/*/content": 2,
+        "/*/files/notes.txt": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
+        "/*/response/result/state/session/contextUsage/inputTokens": 1,
+        "/*/response/result/state/session/contextUsage/outputTokens": 1,
+        "/*/response/result/state/session/contextUsage/totalTokens": 1,
+        "/*/response/result/state/session/loops": 1,
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1,
+        "/*/response/result/state/session/tokenUsage/inputTokens": 1,
+        "/*/response/result/state/session/tokenUsage/outputTokens": 1,
+        "/*/response/result/state/session/tokenUsage/totalTokens": 1
+      },
+      "rewind/after-a-compaction": {
+        "/*/context/*": 7,
+        "/*/context/*/content": 5,
+        "/*/context/*/role": 3,
+        "/*/context/*/toolCalls": 1,
+        "/*/files/notes.txt": 1,
+        "/*/notifications/*": 1,
+        "/*/response/result/state/history/*": 3,
+        "/*/response/result/state/history/*/content": 1,
+        "/*/response/result/state/history/*/content/*/text": 1,
+        "/*/response/result/state/history/*/details": 1,
+        "/*/response/result/state/history/*/id": 1,
+        "/*/response/result/state/history/*/kind": 1,
+        "/*/response/result/state/history/*/message": 1,
+        "/*/response/result/state/history/*/outcome": 1,
+        "/*/response/result/state/history/*/role": 1,
+        "/*/response/result/state/history/*/source": 1,
+        "/*/response/result/state/history/*/type": 1,
+        "/*/response/result/state/history/*/userDisplayContent": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1,
+        "/*/response/result/state/session/preview": 1
+      },
+      "rewind/fork-keeping-files": {
+        "/*/notifications/*": 1,
+        "/*/response/result/state/history/*/outcome": 2,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "rewind/fork-restoring-files": {
+        "/*/notifications/*": 1,
+        "/*/response/result/state/history/*/outcome": 2,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "rewind/fork-to-the-first-message": {
+        "/*/files/notes.txt": 1,
+        "/*/notifications/*": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "rewind/inplace-restoring-files": {
+        "/*/response/result/state/history/*/detail/input/changes": 1,
+        "/*/response/result/state/history/*/detail/input/newString": 1,
+        "/*/response/result/state/history/*/detail/input/oldString": 1,
+        "/*/response/result/state/history/*/detail/input/replaceAll": 1,
+        "/*/response/result/state/history/*/detail/toolName": 1,
+        "/*/response/result/state/history/*/outcome": 2,
+        "/*/response/result/state/history/*/state/display/message": 1,
+        "/*/response/result/state/history/*/state/output/occurrences/*/newStartLine": 1,
+        "/*/response/result/state/history/*/state/output/previousContent": 1,
+        "/*/response/result/state/history/*/title": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
+        "/*/response/result/state/session/loops": 1,
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+      },
+      "rewind/inplace-to-the-first-message": {
+        "/*/files/notes.txt": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
+        "/*/response/result/state/session/loops": 1,
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+      },
+      "rewind/refusals": {
+        "/*/files/notes.txt": 1,
+        "/*/notifications/*": 1,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      },
+      "rewind/twice": {
+        "/*/notifications/*": 1,
+        "/*/response/result/state/history/*/outcome": 4,
+        "/*/response/result/state/session/agent": 1,
+        "/*/response/result/state/session/bumpedAt": 1,
+        "/*/response/result/state/session/loops": 1
+      }
+    }
+  }
+}

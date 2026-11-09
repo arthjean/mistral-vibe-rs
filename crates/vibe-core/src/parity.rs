@@ -99,6 +99,8 @@ pub fn pinned_interpreter(root: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(any(test, feature = "parity-replay"))]
+pub mod debt;
+#[cfg(any(test, feature = "parity-replay"))]
 pub mod figures;
 #[cfg(any(test, feature = "parity-replay"))]
 pub mod live;

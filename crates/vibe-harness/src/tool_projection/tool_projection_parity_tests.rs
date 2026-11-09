@@ -27,8 +27,9 @@ use std::process::Command;
 
 use serde::Deserialize;
 use serde_json::{Value, json};
+use vibe_core::parity::debt::{Note, assert_notes};
 use vibe_core::parity::is_pin_commit;
-use vibe_core::parity::replay::{Class, Divergence, Tally, differences, entries};
+use vibe_core::parity::replay::{Tally, differences};
 
 use super::{project_callback_effect, project_effect};
 
@@ -82,10 +83,11 @@ const DISPLAY_ROOTS: &str = "the reference shows a path relative to the first se
 const V3_LABELS: &str = "v3 labels `self.wait` and the `agents.*` tools that replaced `subagent.*`; \
      this port knows only the v2 labels, so these calls keep the raw key";
 
-/// The differences this port keeps, each a gap of row 4, grouped by cause and
-/// by how many differences the cause leaves in each scenario.
-const LEDGER: &[Divergence] = &[
-    Divergence {
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
         scenarios: &[
             "call-edit",
             "call-file_system.edit",
@@ -97,31 +99,27 @@ const LEDGER: &[Divergence] = &[
             "path-edit-the-root",
             "result-edit",
         ],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/settledVerb",
-            "/display/statusText",
-            "/display/summary",
-            "/display/verb",
-            "/input/filePath",
-            "/input/file_path",
-            "/input/newString",
-            "/input/new_string",
-            "/input/oldString",
-            "/input/old_string",
-            "/input/replaceAll",
-            "/input/replace_all",
-            "/kind",
-            "/mcpApp",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/settledVerb",
+            "/detail/display/statusText",
+            "/detail/display/summary",
+            "/detail/display/verb",
+            "/detail/input/filePath",
+            "/detail/input/file_path",
+            "/detail/input/newString",
+            "/detail/input/new_string",
+            "/detail/input/oldString",
+            "/detail/input/old_string",
+            "/detail/input/replaceAll",
+            "/detail/input/replace_all",
+            "/detail/kind",
+            "/detail/mcpApp",
         ],
-        count: 16,
-        row: "4",
-        class: Class::Gap,
         reason: EDIT_RENAMED,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "path-edit-dotted",
             "path-edit-inside",
@@ -130,119 +128,95 @@ const LEDGER: &[Divergence] = &[
             "path-edit-sibling-prefix",
             "path-edit-the-root",
         ],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/display/verb",
-            "/output/_meta",
-            "/output/content",
-            "/output/file",
-            "/output/newString",
-            "/output/occurrences",
-            "/output/oldString",
-            "/output/previousContent",
-            "/output/structured_content",
+        pointers: &[
+            "/state/display/message",
+            "/state/display/verb",
+            "/state/output/_meta",
+            "/state/output/content",
+            "/state/output/file",
+            "/state/output/newString",
+            "/state/output/occurrences",
+            "/state/output/oldString",
+            "/state/output/previousContent",
+            "/state/output/structured_content",
         ],
-        count: 10,
-        row: "4",
-        class: Class::Gap,
         reason: EDIT_RENAMED,
     },
-    Divergence {
+    Note {
         scenarios: &["result-edit"],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/display/verb",
-            "/display/warnings/*",
-            "/output/_meta",
-            "/output/content",
-            "/output/file",
-            "/output/newString",
-            "/output/occurrences",
-            "/output/oldString",
-            "/output/previousContent",
-            "/output/structured_content",
+        pointers: &[
+            "/state/display/message",
+            "/state/display/verb",
+            "/state/display/warnings/*",
+            "/state/output/_meta",
+            "/state/output/content",
+            "/state/output/file",
+            "/state/output/newString",
+            "/state/output/occurrences",
+            "/state/output/oldString",
+            "/state/output/previousContent",
+            "/state/output/structured_content",
         ],
-        count: 11,
-        row: "4",
-        class: Class::Gap,
         reason: EDIT_RENAMED,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "call-connector_web_search.web_search",
             "result-connector_web_search.web_search",
         ],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/summary",
-            "/kind",
-            "/mcpApp",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/summary",
+            "/detail/kind",
+            "/detail/mcpApp",
         ],
-        count: 5,
-        row: "4",
-        class: Class::Gap,
         reason: CONNECTOR_SEARCH,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "call-connector_web_search.open_url",
             "result-connector_web_search.open_url",
         ],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/settledVerb",
-            "/display/statusText",
-            "/display/summary",
-            "/display/verb",
-            "/input/timeout",
-            "/kind",
-            "/mcpApp",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/settledVerb",
+            "/detail/display/statusText",
+            "/detail/display/summary",
+            "/detail/display/verb",
+            "/detail/input/timeout",
+            "/detail/kind",
+            "/detail/mcpApp",
         ],
-        count: 9,
-        row: "4",
-        class: Class::Gap,
         reason: CONNECTOR_SEARCH,
     },
-    Divergence {
+    Note {
         scenarios: &["result-connector_web_search.web_search"],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/output/answer",
-            "/output/content",
-            "/output/query",
-            "/output/sources",
-            "/output/structured_content",
+        pointers: &[
+            "/state/display/message",
+            "/state/output/answer",
+            "/state/output/content",
+            "/state/output/query",
+            "/state/output/sources",
+            "/state/output/structured_content",
         ],
-        count: 6,
-        row: "4",
-        class: Class::Gap,
         reason: CONNECTOR_SEARCH,
     },
-    Divergence {
+    Note {
         scenarios: &["result-connector_web_search.open_url"],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/display/verb",
-            "/output/content",
-            "/output/contentType",
-            "/output/structured_content",
-            "/output/url",
-            "/output/wasTruncated",
+        pointers: &[
+            "/state/display/message",
+            "/state/display/verb",
+            "/state/output/content",
+            "/state/output/contentType",
+            "/state/output/structured_content",
+            "/state/output/url",
+            "/state/output/wasTruncated",
         ],
-        count: 7,
-        row: "4",
-        class: Class::Gap,
         reason: CONNECTOR_SEARCH,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "call-vibe.cron-cancel",
             "call-vibe.cron-clear",
@@ -253,111 +227,73 @@ const LEDGER: &[Divergence] = &[
             "result-vibe.cron-clear",
             "result-vibe.cron-list-empty",
         ],
-        pointer: "/detail",
-        within: &["/mcpApp"],
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+        pointers: &["/detail/mcpApp"],
         reason: CRON_GENERIC,
     },
-    Divergence {
+    Note {
         scenarios: &["result-process.start"],
-        pointer: "/state",
-        within: &["/output/processId"],
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+        pointers: &["/state/output/processId"],
         reason: PROCESS_ENVELOPE,
     },
-    Divergence {
+    Note {
         scenarios: &["result-process.stop", "result-process.write"],
-        pointer: "/state",
-        within: &[
-            "/output/bytesWritten",
-            "/output/exitCode",
-            "/output/processId",
+        pointers: &[
+            "/state/output/bytesWritten",
+            "/state/output/exitCode",
+            "/state/output/processId",
         ],
-        count: 2,
-        row: "4",
-        class: Class::Gap,
         reason: PROCESS_ENVELOPE,
     },
-    Divergence {
+    Note {
         scenarios: &["result-process.output"],
-        pointer: "/state",
-        within: &[
-            "/output/bytesAvailable",
-            "/output/hasMore",
-            "/output/processId",
+        pointers: &[
+            "/state/output/bytesAvailable",
+            "/state/output/hasMore",
+            "/state/output/processId",
         ],
-        count: 3,
-        row: "4",
-        class: Class::Gap,
         reason: PROCESS_ENVELOPE,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "result-vibe.unified_harness_scratchpad-list",
             "result-vibe.unified_harness_scratchpad-write",
         ],
-        pointer: "/state",
-        within: &[
-            "/output/content",
-            "/output/files",
-            "/output/path",
-            "/output/structured_content",
+        pointers: &[
+            "/state/output/content",
+            "/state/output/files",
+            "/state/output/path",
+            "/state/output/structured_content",
         ],
-        count: 4,
-        row: "4",
-        class: Class::Gap,
         reason: SCRATCHPAD_RESULT,
     },
-    Divergence {
+    Note {
         scenarios: &["result-read_file-image"],
-        pointer: "/state",
-        within: &["/display/message"],
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+        pointers: &["/state/display/message"],
         reason: READ_IMAGE,
     },
-    Divergence {
+    Note {
         scenarios: &["result-read_file-receipt"],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/settledVerb",
-            "/display/statusText",
-            "/display/summary",
-            "/display/verb",
-            "/input/filePath",
-            "/input/offset",
-            "/input/path",
-            "/kind",
-            "/mcpApp",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/settledVerb",
+            "/detail/display/statusText",
+            "/detail/display/summary",
+            "/detail/display/verb",
+            "/detail/input/filePath",
+            "/detail/input/offset",
+            "/detail/input/path",
+            "/detail/kind",
+            "/detail/mcpApp",
+            "/state/display/message",
+            "/state/display/suffix",
+            "/state/display/verb",
+            "/state/output",
+            "/state/outputText",
         ],
-        count: 11,
-        row: "4",
-        class: Class::Gap,
         reason: LARGE_OUTPUT_RECEIPT,
     },
-    Divergence {
-        scenarios: &["result-read_file-receipt"],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/display/suffix",
-            "/display/verb",
-            "/output",
-            "/outputText",
-        ],
-        count: 5,
-        row: "4",
-        class: Class::Gap,
-        reason: LARGE_OUTPUT_RECEIPT,
-    },
-    Divergence {
+    Note {
         scenarios: &[
             "shell-grep-no-match-result",
             "shell-grep-pattern-flag",
@@ -366,68 +302,56 @@ const LEDGER: &[Divergence] = &[
             "shell-grep-rg-directory",
             "shell-grep-rg-file-prefixed",
         ],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/settledVerb",
-            "/display/statusText",
-            "/display/summary",
-            "/display/verb",
-            "/input/command",
-            "/input/maxMatches",
-            "/input/path",
-            "/input/pattern",
-            "/kind",
-            "/toolName",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/settledVerb",
+            "/detail/display/statusText",
+            "/detail/display/summary",
+            "/detail/display/verb",
+            "/detail/input/command",
+            "/detail/input/maxMatches",
+            "/detail/input/path",
+            "/detail/input/pattern",
+            "/detail/kind",
+            "/detail/toolName",
         ],
-        count: 12,
-        row: "4",
-        class: Class::Gap,
         reason: SHELL_GREP,
     },
-    Divergence {
+    Note {
         scenarios: &["shell-grep-recursive-result"],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/display/verb",
-            "/output/matchCount",
-            "/output/matches",
-            "/output/output",
-            "/output/parsedMatches",
-            "/output/stderr",
-            "/output/stdout",
-            "/output/truncated",
-            "/output/wasTruncated",
+        pointers: &[
+            "/state/display/message",
+            "/state/display/verb",
+            "/state/output/matchCount",
+            "/state/output/matches",
+            "/state/output/output",
+            "/state/output/parsedMatches",
+            "/state/output/stderr",
+            "/state/output/stdout",
+            "/state/output/truncated",
+            "/state/output/wasTruncated",
         ],
-        count: 10,
-        row: "4",
-        class: Class::Gap,
         reason: SHELL_GREP,
     },
-    Divergence {
+    Note {
         scenarios: &["shell-grep-no-match-result"],
-        pointer: "/state",
-        within: &[
-            "/display/message",
-            "/display/success",
-            "/display/verb",
-            "/output/matchCount",
-            "/output/matches",
-            "/output/output",
-            "/output/parsedMatches",
-            "/output/stderr",
-            "/output/stdout",
-            "/output/truncated",
-            "/output/wasTruncated",
+        pointers: &[
+            "/state/display/message",
+            "/state/display/success",
+            "/state/display/verb",
+            "/state/output/matchCount",
+            "/state/output/matches",
+            "/state/output/output",
+            "/state/output/parsedMatches",
+            "/state/output/stderr",
+            "/state/output/stdout",
+            "/state/output/truncated",
+            "/state/output/wasTruncated",
         ],
-        count: 11,
-        row: "4",
-        class: Class::Gap,
         reason: SHELL_GREP,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "path-grep-dotted",
             "path-grep-inside",
@@ -440,18 +364,14 @@ const LEDGER: &[Divergence] = &[
             "path-write_file-inside",
             "path-write_file-the-root",
         ],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/summary",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/summary",
         ],
-        count: 3,
-        row: "4",
-        class: Class::Gap,
         reason: DISPLAY_ROOTS,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "path-read_file-dotted",
             "path-read_file-inside",
@@ -460,14 +380,10 @@ const LEDGER: &[Divergence] = &[
             "path-write_file-inside",
             "path-write_file-the-root",
         ],
-        pointer: "/state",
-        within: &["/display/message"],
-        count: 1,
-        row: "4",
-        class: Class::Gap,
+        pointers: &["/state/display/message"],
         reason: DISPLAY_ROOTS,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "callback-agents.list",
             "label-agents.list",
@@ -478,37 +394,29 @@ const LEDGER: &[Divergence] = &[
             "label-self.wait",
             "label-self.wait-result",
         ],
-        pointer: "/detail",
-        within: &[
-            "/display/message",
-            "/display/settledMessage",
-            "/display/settledVerb",
-            "/display/statusText",
-            "/display/summary",
-            "/display/verb",
-            "/effect/display/message",
-            "/effect/display/settledMessage",
-            "/effect/display/settledVerb",
-            "/effect/display/statusText",
-            "/effect/display/summary",
-            "/effect/display/verb",
+        pointers: &[
+            "/detail/display/message",
+            "/detail/display/settledMessage",
+            "/detail/display/settledVerb",
+            "/detail/display/statusText",
+            "/detail/display/summary",
+            "/detail/display/verb",
+            "/detail/effect/display/message",
+            "/detail/effect/display/settledMessage",
+            "/detail/effect/display/settledVerb",
+            "/detail/effect/display/statusText",
+            "/detail/effect/display/summary",
+            "/detail/effect/display/verb",
         ],
-        count: 6,
-        row: "4",
-        class: Class::Gap,
         reason: V3_LABELS,
     },
-    Divergence {
+    Note {
         scenarios: &[
             "label-agents.list-result",
             "label-agents.send_message-result",
             "label-self.wait-result",
         ],
-        pointer: "/state",
-        within: &["/display/message", "/display/verb"],
-        count: 2,
-        row: "4",
-        class: Class::Gap,
+        pointers: &["/state/display/message", "/state/display/verb"],
         reason: V3_LABELS,
     },
 ];
@@ -772,7 +680,7 @@ fn the_projection_agrees_with_the_capture_script() {
 fn the_tool_projection_matches_the_reference() {
     let text = corpus_text();
     let corpus = corpus();
-    let mut tally = Tally::new(&text, entries(LEDGER));
+    let mut tally = Tally::new(&text, []);
     for scenario in &corpus.scenarios {
         let port = port_observation(&scenario.scenario);
         let found = differences(&scenario.observed, &port);
@@ -821,4 +729,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         "the pinned reference no longer answers what the committed corpus records; regenerate it \
          with `{CAPTURE_SCRIPT} --corpus`"
     );
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(CORPUS_RELATIVE, DEBT_NOTES);
 }

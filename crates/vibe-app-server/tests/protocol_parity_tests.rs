@@ -19,8 +19,9 @@
 //! the count of digests it covers, and finds the port's length within its band
 //! of the reference's; everything else is compared exactly.
 //!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 17 of `docs/parity.md` is a
+//! Every difference the replay finds has to fall under a `LEDGER` entry or the
+//! corpus's measured debt (`vibe_core::parity::debt`), and every entry and
+//! every debt group has to still reproduce, so row 17 of `docs/parity.md` is a
 //! reading of the summary this file prints.
 
 #![cfg(feature = "test-fixtures")]
@@ -28,6 +29,7 @@
 use std::path::Path;
 
 use serde_json::Value;
+use vibe_core::parity::debt::{Note, assert_notes};
 use vibe_core::parity::replay::{
     Band, Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
 };
@@ -46,986 +48,494 @@ const CAPTURE: Capture = Capture {
     arguments: &["--jobs", "4"],
 };
 
-/// What the port still answers differently. The v2.26.0 re-pin (`376f6a3`)
-/// opened eleven fields the reference's public models gained and seven
-/// methods this port neither declared nor routed, and the protocol pass closed
-/// all of them.
-///
-/// The v3.1.0 re-pin (`c96a6db`) measures both servers on their Unified
-/// Harness only and opened the gaps below, every one of row 17: the fields
-/// v3.0.0 added to the configuration and runtime views and the ones it
-/// removed with the harness selection, matched wherever they appear; the 33
-/// methods it added, which this port answers as unknown; and, scenario by
-/// scenario, the turn notifications it reshaped and the answers it changed.
-/// A protocol follow-on closes them; each count moves only when the port or
-/// the corpus does.
-const LEDGER: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/activeModel/autoCompactThreshold",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[
+    Note {
+        scenarios: &["*"],
+        pointers: &[
+            "/**/activeModel/autoCompactThreshold",
+            "/**/activeModel/source",
+            "/**/activeModel/maxContextLength",
+            "/**/models/<list>/autoCompactThreshold",
+            "/**/models/<list>/source",
+            "/**/models/<list>/maxContextLength",
+            "/**/config/cursorBlink",
+            "/**/config/enableFileAutocomplete",
+            "/**/config/enableMouseCapture",
+            "/**/config/experimentalEnableLocalProjects",
+            "/**/stats/modelCalls",
+            "/**/mcp/privateConnectorsHidden",
+            "/**/result/privateConnectorsHidden",
+            "/**/result/activeCredentialSource",
+            "/**/result/mistralActiveCredentialSource",
+            "/**/result/mistralProvider",
+            "/**/result/pinnedConsoleUrl",
+            "/**/auth/apiKeyEnvVar",
+            "/**/account/apiKey",
+            "/**/result/reason",
+            "/**/result/waits",
+            "/**/<list>/outcome",
+            "/**/entry/outcome",
+            "/**/result/processId",
+            "/**/params/warning",
+            "/**/session/loops",
+            "/**/catalog/catalogRevision",
+            "/**/session/bumpedAt",
+            "/**/session/agent",
+            "/**/result/lastEventId",
+            "/**/discoveryErrors/*",
+        ],
         reason: "v3.0.0 added this field to the configuration and runtime views the app server \
                  publishes (`vibe/app_server/config.py`), which this port does not publish yet",
     },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/activeModel/source",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/activeModel/maxContextLength",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/models/<list>/autoCompactThreshold",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/models/<list>/source",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/models/<list>/maxContextLength",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/config/cursorBlink",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/config/enableFileAutocomplete",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/config/enableMouseCapture",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/config/experimentalEnableLocalProjects",
-        count: 55,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/stats/modelCalls",
-        count: 62,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/mcp/privateConnectorsHidden",
-        count: 54,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/privateConnectorsHidden",
-        count: 8,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/runtime/experimentalHarness",
-        count: 52,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["*"],
+        pointers: &[
+            "/**/runtime/experimentalHarness",
+            "/**/tools/<list>/isCustom",
+            "/**/result/harnessSelectionSource",
+            "/**/result/startupIssue",
+            "/**/result/continueSessionId",
+        ],
         reason: "v3.0.0 removed this field with the legacy backend's harness selection or the \
                  tool rows' custom flag; this port still publishes it because it keeps \
                  `--legacy-harness` (an open divergence of row 8)",
     },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/tools/<list>/isCustom",
-        count: 52,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 removed this field with the legacy backend's harness selection or the \
-                 tool rows' custom flag; this port still publishes it because it keeps \
-                 `--legacy-harness` (an open divergence of row 8)",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/harnessSelectionSource",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 removed this field with the legacy backend's harness selection or the \
-                 tool rows' custom flag; this port still publishes it because it keeps \
-                 `--legacy-harness` (an open divergence of row 8)",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/startupIssue",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 removed this field with the legacy backend's harness selection or the \
-                 tool rows' custom flag; this port still publishes it because it keeps \
-                 `--legacy-harness` (an open divergence of row 8)",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/continueSessionId",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 removed this field with the legacy backend's harness selection or the \
-                 tool rows' custom flag; this port still publishes it because it keeps \
-                 `--legacy-harness` (an open divergence of row 8)",
-    },
-    PatternDivergence {
-        scenario: "probe/artifacts/*",
-        pointer: "/*/response/**",
-        count: 49,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/artifacts/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/projects/*",
-        pointer: "/*/response/**",
-        count: 58,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/projects/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/setup/oidc-*",
-        pointer: "/*/response/**",
-        count: 50,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/setup/oidc-*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/imports/*",
-        pointer: "/*/response/**",
-        count: 41,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/imports/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/skills/local/*",
-        pointer: "/*/response/**",
-        count: 50,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/skills/local/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/session/subagents/*",
-        pointer: "/*/response/**",
-        count: 37,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/subagents/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/session/turn/queue/edit/*",
-        pointer: "/*/response/**",
-        count: 52,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/turn/queue/edit/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/session/context/read/*",
-        pointer: "/*/response/**",
-        count: 11,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/context/read/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/session/lease/subscribe/*",
-        pointer: "/*/response/**",
-        count: 10,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/lease/subscribe/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/config/effective/read/*",
-        pointer: "/*/response/**",
-        count: 11,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/config/effective/read/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/connector_catalog/connect/*",
-        pointer: "/*/response/**",
-        count: 15,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/connector_catalog/connect/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "probe/platformCredentials/headers/*",
-        pointer: "/*/response/**",
-        count: 15,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/platformCredentials/headers/*"],
+        pointers: &["/*/response/**"],
         reason: "a method v3.0.0 added (UNDECLARED_METHODS of the app-server surface replay), \
                  which this port answers as an unknown method",
     },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/activeCredentialSource",
-        count: 7,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/mistralActiveCredentialSource",
-        count: 7,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/mistralProvider",
-        count: 7,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/pinnedConsoleUrl",
-        count: 7,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/auth/apiKeyEnvVar",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/account/apiKey",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/reason",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/waits",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/<list>/outcome",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/entry/outcome",
-        count: 7,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/processId",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/params/warning",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/session/loops",
-        count: 6,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/catalog/catalogRevision",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/session/bumpedAt",
-        count: 6,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/session/agent",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/result/lastEventId",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/discoveryErrors/*",
-        count: 6,
-        row: "17",
-        class: Class::Gap,
-        reason: "v3.0.0 added this field to the configuration and runtime views the app server \
-                 publishes (`vibe/app_server/config.py`), which this port does not publish yet",
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/**/mcp/connectorError",
-        count: 48,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["*"],
+        pointers: &["/**/mcp/connectorError"],
         reason: "v3.0.0 reports no connector error for a provider that cannot list connectors, \
                  where this port publishes the transport failure it met",
     },
-    PatternDivergence {
-        scenario: "flows/callback-approval",
-        pointer: "/*/notifications/**",
-        count: 78,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/callback-approval"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/callback-refused-delivery",
-        pointer: "/*/notifications/**",
-        count: 78,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/callback-refused-delivery"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/callback-reject",
-        pointer: "/*/notifications/**",
-        count: 78,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/callback-reject"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/context-inject",
-        pointer: "/*/notifications/**",
-        count: 11,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/context-inject"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/session-mutations",
-        pointer: "/*/notifications/**",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/session-mutations"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/session-start",
-        pointer: "/*/notifications/**",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/session-start"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/session-start-refusals",
-        pointer: "/*/notifications/**",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/session-start-refusals"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/shell-command",
-        pointer: "/*/notifications/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/shell-command"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/skills-registry",
-        pointer: "/*/notifications/**",
-        count: 6,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/skills-registry"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/turn-lifecycle",
-        pointer: "/*/notifications/**",
-        count: 56,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-lifecycle"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/turn-queue-idle",
-        pointer: "/*/notifications/**",
-        count: 10,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-queue-idle"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/turn-queue-interrupt",
-        pointer: "/*/notifications/**",
-        count: 11,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-queue-interrupt"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/turn-queue-refusals",
-        pointer: "/*/notifications/**",
-        count: 20,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-queue-refusals"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "flows/turn-tools",
-        pointer: "/*/notifications/**",
-        count: 78,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-tools"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 reshaped the notifications that open, carry and close a turn: \
                  `runtime/updated` and a session patch on `/agent` lead it, \
                  `session/statsUpdated` precedes the end and the history entries land in another \
                  order; this port publishes the v2.26.0 Unified sequence",
     },
-    PatternDivergence {
-        scenario: "probe/connector_catalog/refresh/rooted",
-        pointer: "/*/notifications/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/connector_catalog/refresh/rooted"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 answers this method with another set of notifications (a `warning` at \
                  session start, no session patch after a compaction)",
     },
-    PatternDivergence {
-        scenario: "probe/plugin/reload/rooted",
-        pointer: "/*/notifications/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/plugin/reload/rooted"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 answers this method with another set of notifications (a `warning` at \
                  session start, no session patch after a compaction)",
     },
-    PatternDivergence {
-        scenario: "probe/session/compact/rooted",
-        pointer: "/*/notifications/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/compact/rooted"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 answers this method with another set of notifications (a `warning` at \
                  session start, no session patch after a compaction)",
     },
-    PatternDivergence {
-        scenario: "probe/session/history/clear/rooted",
-        pointer: "/*/notifications/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/history/clear/rooted"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 answers this method with another set of notifications (a `warning` at \
                  session start, no session patch after a compaction)",
     },
-    PatternDivergence {
-        scenario: "probe/session/resume/rooted",
-        pointer: "/*/notifications/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/resume/rooted"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 answers this method with another set of notifications (a `warning` at \
                  session start, no session patch after a compaction)",
     },
-    PatternDivergence {
-        scenario: "probe/session/start/bare",
-        pointer: "/*/notifications/**",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/start/bare"],
+        pointers: &["/*/notifications/**"],
         reason: "v3.0.0 answers this method with another set of notifications (a `warning` at \
                  session start, no session patch after a compaction)",
     },
-    PatternDivergence {
-        scenario: "flows/worktree-reap",
-        pointer: "/*/response/**",
-        count: 12,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/worktree-reap"],
+        pointers: &["/*/response/**"],
         reason: "the reap methods were removed at v3.0.0 and this port still serves them \
                  (PORT_ONLY_METHODS of the app-server surface replay)",
     },
-    PatternDivergence {
-        scenario: "flows/worktree-reap-dirty",
-        pointer: "/*/response/**",
-        count: 8,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/worktree-reap-dirty"],
+        pointers: &["/*/response/**"],
         reason: "the reap methods were removed at v3.0.0 and this port still serves them \
                  (PORT_ONLY_METHODS of the app-server surface replay)",
     },
-    PatternDivergence {
-        scenario: "flows/worktree-reap-idle",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/worktree-reap-idle"],
+        pointers: &["/*/response/**"],
         reason: "the reap methods were removed at v3.0.0 and this port still serves them \
                  (PORT_ONLY_METHODS of the app-server surface replay)",
     },
-    PatternDivergence {
-        scenario: "flows/config-writes",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/config-writes"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/connector-catalog",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/connector-catalog"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/session-mutations",
-        pointer: "/*/response/**",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/session-mutations"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/session-start",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/session-start"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/shell-command",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/shell-command"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/skills-registry",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/skills-registry"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/turn-lifecycle",
-        pointer: "/*/response/**",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-lifecycle"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/turn-queue-busy",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/turn-queue-busy"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "flows/workspace-prompt",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["flows/workspace-prompt"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/account/read/rooted",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/account/read/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/agents/list/rooted",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/agents/list/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/connector_catalog/refresh/bare",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/connector_catalog/refresh/bare"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/connector_catalog/refresh/rooted",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/connector_catalog/refresh/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/mcp/add/bare",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/mcp/add/bare"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/mcp/add/rooted",
-        pointer: "/*/response/**",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/mcp/add/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/mcp_catalog/add/bare",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/mcp_catalog/add/bare"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/mcp_catalog/add/rooted",
-        pointer: "/*/response/**",
-        count: 5,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/mcp_catalog/add/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/providerAuth/read/rooted",
-        pointer: "/*/response/**",
-        count: 3,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/providerAuth/read/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/review/state/rooted",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/review/state/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/runtime/read/rooted",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/runtime/read/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/compact/rooted",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/compact/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/continue/bare",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/continue/bare"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/continue/rooted",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/continue/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/history/clear/bare",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/history/clear/bare"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/ready/read/rooted",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/ready/read/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/ready/wait/rooted",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/ready/wait/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/resume/rooted",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/resume/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/start/rooted",
-        pointer: "/*/response/**",
-        count: 2,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/start/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/turn/queue/read/rooted",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/turn/queue/read/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/session/turn/queue/resume/rooted",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/session/turn/queue/resume/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/skills/installed/rooted",
-        pointer: "/*/response/**",
-        count: 1,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/skills/installed/rooted"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
-    PatternDivergence {
-        scenario: "probe/skills/list/bare",
-        pointer: "/*/response/**",
-        count: 4,
-        row: "17",
-        class: Class::Gap,
+    Note {
+        scenarios: &["probe/skills/list/bare"],
+        pointers: &["/*/response/**"],
         reason: "v3.0.0 changed how this method answers or refuses (error code, refusal data, \
                  result shape) and this port answers as v2.26.0 did",
     },
@@ -1091,11 +601,7 @@ fn the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledg
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("protocol-parity-port.json"),
     }
-    .run(
-        entries(PROSE)
-            .chain(entries(PLATFORM))
-            .chain(entries(LEDGER)),
-    );
+    .run(entries(PROSE).chain(entries(PLATFORM)));
 }
 
 #[test]
@@ -1104,9 +610,7 @@ fn every_ledger_entry_is_declared_soundly() {
     assert_ledger(
         LISTED,
         &scenarios(&corpus),
-        entries(PROSE)
-            .chain(entries(PLATFORM))
-            .chain(entries(LEDGER)),
+        entries(PROSE).chain(entries(PLATFORM)),
     );
 }
 
@@ -1116,4 +620,9 @@ fn every_ledger_entry_is_declared_soundly() {
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
     CAPTURE.probe("protocol");
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
 }

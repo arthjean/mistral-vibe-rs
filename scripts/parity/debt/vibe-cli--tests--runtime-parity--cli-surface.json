@@ -1,0 +1,282 @@
+{
+  "corpus": "crates/vibe-cli/tests/runtime-parity/cli-surface.json",
+  "measuredAgainst": "8c88d9408d8e69dcb1c70576ff16781ce904184955431aba607b5624788b67d3",
+  "schemaVersion": 1,
+  "tallies": {
+    "cli surface parity (startup failures at the process boundary):": {
+      "case/startup/add-dir-missing": {
+        "/stderr": 1,
+        "/stdout": 1
+      },
+      "case/startup/add-dir-second-missing": {
+        "/stderr": 1,
+        "/stdout": 1
+      },
+      "case/startup/check-upgrade-workdir-missing": {
+        "/stderr": 1,
+        "/stdout": 1
+      },
+      "case/startup/update-add-dir-missing": {
+        "/exit": 1
+      },
+      "case/startup/workdir-missing": {
+        "/stderr": 1,
+        "/stdout": 1
+      },
+      "case/startup/working-directory-deleted": {
+        "/stderr": 1,
+        "/stdout": 1
+      }
+    },
+    "cli surface parity:": {
+      "case/config-schema/unknown--no-such-flag": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/config/no-subcommand": {
+        "/exit": 1,
+        "/stderr": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/config/unknown--no-such-flag": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/config/unknown-subcommand": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-argument": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--api-key-env": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--api-key-format": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--api-key-header": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--arg": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--command": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--env": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--header": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--name": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--scope": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--startup-timeout-sec": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--tool-timeout-sec": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--transport": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/missing-value--url": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/not-a-choice--transport": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-add/unknown--no-such-flag": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-remove/missing-argument": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp-remove/unknown--no-such-flag": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp/no-subcommand": {
+        "/exit": 1,
+        "/stderr": 1,
+        "/stderrFirstLine": 1,
+        "/stdout": 1,
+        "/stdoutFirstLine": 1
+      },
+      "case/mcp/unknown--no-such-flag": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/mcp/unknown-subcommand": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--add-dir": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--agent": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--disabled-tools": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--enabled-tools": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--max-price": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--max-tokens": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--max-turns": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--model": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--output": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--output-dir": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--prompt-file": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--system-prompt-file": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--time-limit": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/missing-value--workdir": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/not-a-choice--output": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/root/unknown--no-such-flag": {
+        "/exit": 1,
+        "/stderrFirstLine": 1
+      },
+      "case/version-long": {
+        "/stdoutFirstLine": 1
+      },
+      "case/version-short": {
+        "/stdoutFirstLine": 1
+      },
+      "help/config": {
+        "/absent": 1,
+        "/arguments": 1,
+        "/commands": 1,
+        "/description": 1,
+        "/options": 1,
+        "/sections": 1,
+        "/trailingCommands": 1,
+        "/usage": 1
+      },
+      "help/config schema": {
+        "/absent": 1,
+        "/arguments": 1,
+        "/commands": 1,
+        "/description": 1,
+        "/options": 1,
+        "/sections": 1,
+        "/trailingCommands": 1,
+        "/usage": 1
+      },
+      "help/mcp": {
+        "/commands/help": 1,
+        "/options/--help/description": 1,
+        "/usage": 1
+      },
+      "help/mcp add": {
+        "/arguments/<NAME>": 1,
+        "/arguments/<NAME_OR_URL>": 1,
+        "/options/--api-key-env/aliases": 1,
+        "/options/--api-key-env/description": 1,
+        "/options/--help/description": 1,
+        "/options/--name": 1,
+        "/options/--scope": 1,
+        "/options/--transport/value": 1,
+        "/usage": 1
+      },
+      "help/mcp remove": {
+        "/arguments/<NAME>/description": 1,
+        "/options/--help/description": 1
+      },
+      "help/vibe": {
+        "/arguments/[INITIAL_PROMPT]": 1,
+        "/arguments/[PROMPT]": 1,
+        "/commands/config": 1,
+        "/commands/help": 1,
+        "/commands/mcp": 1,
+        "/options/--add-dir/value": 1,
+        "/options/--agent/description": 1,
+        "/options/--auto-approve/aliases": 1,
+        "/options/--auto-approve/description": 1,
+        "/options/--disabled-tools/value": 1,
+        "/options/--enabled-tools/value": 1,
+        "/options/--experimental-harness": 1,
+        "/options/--help/description": 1,
+        "/options/--legacy-harness": 1,
+        "/options/--max-price/value": 1,
+        "/options/--max-tokens/value": 1,
+        "/options/--max-turns/value": 1,
+        "/options/--model": 1,
+        "/options/--output-dir": 1,
+        "/options/--output/description": 1,
+        "/options/--output/value": 1,
+        "/options/--prompt-file": 1,
+        "/options/--prompt/value": 1,
+        "/options/--resume/value": 1,
+        "/options/--system-prompt-file": 1,
+        "/options/--time-limit": 1,
+        "/options/--workdir/env": 1,
+        "/options/--workdir/value": 1,
+        "/options/--worktree/value": 1,
+        "/sections/*": 3,
+        "/trailingCommands/update": 1,
+        "/usage": 1
+      }
+    }
+  }
+}

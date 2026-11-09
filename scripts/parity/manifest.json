@@ -130,6 +130,10 @@
       "floors": {
         "argv": 22,
         "scenarios": 77
+      },
+      "debt": {
+        "sha256": "73ff18294ecdae916fa9cc64ebc9b17c47321a9562649f3b972012f30da8fea0",
+        "measuredAgainst": "386e4521f7949c544a7177ff756193c04df2afa13ca4d5f14ddb389c6a4262f8"
       }
     },
     {
@@ -167,6 +171,10 @@
       "count": 31,
       "floors": {
         "scenarios": 30
+      },
+      "debt": {
+        "sha256": "5bcc7104113224c40d052b8be33366814e09bacf1a7e8302cbd8852354563f81",
+        "measuredAgainst": "b41b27bac1272f72941f2f81e0d712221937668d3a2710605413c9a2efd603d5"
       }
     },
     {
@@ -183,6 +191,10 @@
       "count": 34,
       "floors": {
         "scenarios": 33
+      },
+      "debt": {
+        "sha256": "5da5a403965802554dd71b2cebef9890da0aa4efbcefdefec2b9b80139d454ed",
+        "measuredAgainst": "d49701d568cf1b1291e34b88efa21ced39188f2e686f052c38e3314d9860fd39"
       }
     },
     {
@@ -223,6 +235,10 @@
       "count": 43,
       "floors": {
         "scenarios": 41
+      },
+      "debt": {
+        "sha256": "66a868987a03d40c5551da3ce2d497e207eb1dbcb2cf52779c79c8fe69552940",
+        "measuredAgainst": "6d38f106f321de568ce18d8c0a2ace10345657029ec1abfa1e95d3a45d444da5"
       }
     },
     {
@@ -241,6 +257,10 @@
       "count": 9,
       "floors": {
         "scenarios": 9
+      },
+      "debt": {
+        "sha256": "bbc8f85daa3872b7d42a9adb109897aff04808eb4f73eec848395bab095102e5",
+        "measuredAgainst": "ca73173c9f7f2d9af6f8b975fe9e53013b1ae480ba890361ad6c26236d925c8c"
       }
     },
     {
@@ -257,6 +277,10 @@
       "count": 15,
       "floors": {
         "startup": 15
+      },
+      "debt": {
+        "sha256": "d03f6689d5b2613b2fdf013a8cc0cce480c0ccbdb3a8374d309006c4b106ab68",
+        "measuredAgainst": "ef37073778e02fb7442b25970f7c321bd77ebff894e3cd65f48eba21b9514911"
       }
     },
     {
@@ -273,6 +297,10 @@
       "count": 39,
       "floors": {
         "scenarios": 38
+      },
+      "debt": {
+        "sha256": "8471109bf6576781eeb31d481a9384c444bc13f6f06ac48fd3000cb755291dbf",
+        "measuredAgainst": "86f518a047ddf19726df0d47129bd543136de9402115405e8f820edec441d54d"
       }
     },
     {
@@ -289,6 +317,10 @@
       "count": 15,
       "floors": {
         "scenarios": 15
+      },
+      "debt": {
+        "sha256": "b026e279de18ad4d4ba9c68eb84e2ae75fdf331fe6bb43aed5bf4c99760f42a0",
+        "measuredAgainst": "d71b93ec037bb64f5ca47c52f2605d02c1585b0a6409545ecffe208aa5b5c4c3"
       }
     },
     {
@@ -305,6 +337,10 @@
       "count": 49,
       "floors": {
         "scenarios": 47
+      },
+      "debt": {
+        "sha256": "50c54a6aa9403b2cc20ca83457c4f90da17a69c87368c2da4d76796d89f35b3f",
+        "measuredAgainst": "843d9b4660e7aba97a15362e8cf7781eebcbdb3f8a9536070bbdb7e45ed0e814"
       }
     },
     {
@@ -324,7 +360,11 @@
       "floors": {
         "scenarios": 9
       },
-      "note": "needs `cargo build -p vibe-app-server --features test-fixtures --bin vibe-mcp-stdio-fixture` first"
+      "note": "needs `cargo build -p vibe-app-server --features test-fixtures --bin vibe-mcp-stdio-fixture` first",
+      "debt": {
+        "sha256": "73cc11fd4a3b24c4d175f17ce636e7a7f56e1cdca8b7dac16624fbd639da8ab7",
+        "measuredAgainst": "df4d2a70480c89c41ea95a38ffc95f9523b6ce915f0b570c4925ef653e82ebff"
+      }
     },
     {
       "corpus": "crates/vibe-app-server/tests/project-links-parity/corpus.json",
@@ -340,6 +380,10 @@
       "count": 120,
       "floors": {
         "scenarios": 114
+      },
+      "debt": {
+        "sha256": "f7435b421c46f1a0659c94957829bba7dab2b5cfba23c1bfbf862d733c278b66",
+        "measuredAgainst": "d0d4947668aa925d02bf90530951ac408e922b12070acb592b591ff0e90489e2"
       }
     },
     {
@@ -356,6 +400,10 @@
       "count": 400,
       "floors": {
         "scenarios": 380
+      },
+      "debt": {
+        "sha256": "fe83e5ae7dd0f93c0148a6c49bee03447c52563fc847b310e241789dc82311a8",
+        "measuredAgainst": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36"
       }
     },
     {
@@ -372,6 +420,10 @@
       "count": 29,
       "floors": {
         "scenarios": 28
+      },
+      "debt": {
+        "sha256": "bc4ede75a96e77606eb12fdd634621a38937a1abcdc4840eb6e072d2b605956c",
+        "measuredAgainst": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4"
       }
     },
     {
@@ -388,6 +440,10 @@
       "count": 12,
       "floors": {
         "scenarios": 12
+      },
+      "debt": {
+        "sha256": "b5f5c472897875b2066a8df4c53fa951fa3cf4f8290e35672884201e24a5548e",
+        "measuredAgainst": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d"
       }
     },
     {
@@ -404,6 +460,10 @@
       "count": 25,
       "floors": {
         "scenarios": 24
+      },
+      "debt": {
+        "sha256": "bb416e935ceb51accd3c8ccb3f6ad1b607e6b86985d82ce589416f574e85f664",
+        "measuredAgainst": "cad5f4d21d89dc8c9992f8220d4abdc79dffa692bb3034f06611525e70de7ff8"
       }
     },
     {
@@ -420,6 +480,10 @@
       "count": 104,
       "floors": {
         "scenarios": 99
+      },
+      "debt": {
+        "sha256": "b6b31e3347a25f5be819046ba68c5a73b6f5b9172e0c611b3c1b1525767c5b00",
+        "measuredAgainst": "1a309270e0321e637073928a2b68af06f1330b11d85558bde9dc13c29283d6d7"
       }
     },
     {
@@ -437,7 +501,11 @@
       "floors": {
         "cases": 4
       },
-      "note": "records the host platform: capture on Linux"
+      "note": "records the host platform: capture on Linux",
+      "debt": {
+        "sha256": "01ea2787643a0f402ac7e9b165a84a6a24f68a651061ec8bc6cacb4531fb3534",
+        "measuredAgainst": "d101c68671cd46e7d426a3529588f641a35047e40f9e3cb06af16b5d54491229"
+      }
     },
     {
       "corpus": "crates/vibe-app-server/tests/tool-surface/baseline.json",
@@ -527,10 +595,14 @@
       "test": "crates/vibe-app-server/tests/unified_harness_parity_tests.rs::the_port_runs_every_unified_scenario_as_the_corpus_records_or_as_the_ledger_names",
       "row": "36",
       "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
-      "sha256": "8840141379ecde5f4b3e1e2347c563977076e8969a10f71878ad8361ae03fd57",
+      "sha256": "56db1abc34952cd0943e49c4cb37cb674defc967cf8595be23db231f2a0aecd5",
       "count": 89,
       "floors": {
         "scenarios": 85
+      },
+      "debt": {
+        "sha256": "7e8da07beae53aae2633380ea82d4746eb7c728d430ff1e9e8ef473761bf79df",
+        "measuredAgainst": "56db1abc34952cd0943e49c4cb37cb674defc967cf8595be23db231f2a0aecd5"
       }
     },
     {
@@ -548,7 +620,11 @@
       "floors": {
         "cases": 7635
       },
-      "note": "the same run captures crates/vibe-app-server/src/wire_validation/schema.json, listed as its own entry"
+      "note": "the same run captures crates/vibe-app-server/src/wire_validation/schema.json, listed as its own entry",
+      "debt": {
+        "sha256": "d4320ea30980685782e04050ee34c931ead61f2a252b21af49b8e0aa6ddb35fa",
+        "measuredAgainst": "b66c6446d753da9657101569e482e0d8ed4acb772f5cf936f28d767e82112627"
+      }
     },
     {
       "corpus": "crates/vibe-app-server/tests/workspace-trust/corpus.json",
@@ -2784,6 +2860,10 @@
       "count": 57,
       "floors": {
         "scenarios": 55
+      },
+      "debt": {
+        "sha256": "efa2cfba6033587a00cc1088dc1bf70be26099a29d70d5e473fb0a2bf69f1c68",
+        "measuredAgainst": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e"
       }
     },
     {
@@ -2817,6 +2897,10 @@
       "count": 67,
       "floors": {
         "scenarios": 64
+      },
+      "debt": {
+        "sha256": "b894c6d1f1060c4becb07cbc0d9827f1b8528aa482eba710a7ccbfc2f42ab1a8",
+        "measuredAgainst": "8c88d9408d8e69dcb1c70576ff16781ce904184955431aba607b5624788b67d3"
       }
     },
     {
@@ -2966,6 +3050,10 @@
       "count": 49,
       "floors": {
         "scenarios": 47
+      },
+      "debt": {
+        "sha256": "5ee5b739b145cf12073e5b02cef9eebf2c3df4f8fd33d1fcafbb43e8fb491ef6",
+        "measuredAgainst": "b5f68d8e4ee92800dfe21a5ee600b3c89fe8e5433ba4f31a222b0ea2f03f1f53"
       }
     },
     {
@@ -2983,7 +3071,11 @@
       "floors": {
         "scenarios": 39
       },
-      "note": "the tui surface needs a POSIX pseudo-terminal: capture on Linux"
+      "note": "the tui surface needs a POSIX pseudo-terminal: capture on Linux",
+      "debt": {
+        "sha256": "3b4e182f086a9c8a7706f00b36e6f560061beec04b8aeef8f6df16352f48bda5",
+        "measuredAgainst": "232ac5cb5fc2eed836caef4bed418832a9c435ad75ca20b579203739e09c153a"
+      }
     },
     {
       "corpus": "crates/vibe-core/tests/checkpoints/engine.json",
@@ -3032,6 +3124,10 @@
       "count": 16,
       "floors": {
         "summaryExtractions": 16
+      },
+      "debt": {
+        "sha256": "31eecfb0136c923b402b53cc62beb3e2905882ebfe3d0ecabce9aaffd90a61f4",
+        "measuredAgainst": "b068759fa04bb9da2efa4f4a58f7342a11eec6895de8be473341be3a2f6298e5"
       }
     },
     {
@@ -3061,6 +3157,10 @@
         "settingsOrder": 85,
         "stack": 2,
         "strategies": 3
+      },
+      "debt": {
+        "sha256": "683af1febbb2e42ffb269c51a406656fbd62dc4288e03980b748d17bbe80daf0",
+        "measuredAgainst": "32af5fa438e89ed4daf8c5faf40a099ba71c8da7b068a8275fadaca1efa041e6"
       }
     },
     {
@@ -3093,6 +3193,10 @@
         "typedVariants": 7,
         "variantLabels": 9,
         "variantResolution": 11
+      },
+      "debt": {
+        "sha256": "05d9d810def8f5853a4155d9eebdbe8ac8fee68dceafef68a8f636e48ff16004",
+        "measuredAgainst": "f31f980df63b6c0a384e86cf0559d36a829b874b8fa86d698438229f2ccd42cd"
       }
     },
     {
@@ -3113,6 +3217,10 @@
         "retryDelays": 31,
         "utilityCompletions": 11,
         "utilitySelections": 47
+      },
+      "debt": {
+        "sha256": "a6859fbfbf8174b902f7900935c41f34c4bb9078a4d424be2ae3a14f020efd6f",
+        "measuredAgainst": "5b9a3e5c17dd59cfd28059ef5437dfaa7493079e66b4e209ac720f43453d976d"
       }
     },
     {
@@ -3160,6 +3268,10 @@
       "count": 12,
       "floors": {
         "cases": 12
+      },
+      "debt": {
+        "sha256": "5e5c7899c62dcaf2ca7a26c6a9e424a3de433801d9c641340ad28ebec75f54cb",
+        "measuredAgainst": "194db6bf4f612ef9b3251a4b252926c6adc9bcfc091f85e7dd8112ae2f076ccc"
       }
     },
     {
@@ -3219,6 +3331,10 @@
         "repositoryResolutions": 38,
         "resolutions": 126,
         "windowsGrammar": 4
+      },
+      "debt": {
+        "sha256": "8b5e717f20baa2f617118eef09b5b2ad3c80d065c433c25238f114f0a75471bd",
+        "measuredAgainst": "cca3de77eea73bf45b3bc5f179945d8200e56ab35c31fd8f4faed9bd7addaf79"
       }
     },
     {
@@ -3248,6 +3364,10 @@
         "service": 29,
         "store": 2,
         "sync": 24
+      },
+      "debt": {
+        "sha256": "bc2647102ec7cd893bfb5de73e9d750d18435513ec1ca25cf572b51e2b728ed3",
+        "measuredAgainst": "f1bf103ab3b8102c48d7614a3fcc2e05a1f879b63f35f85d085576fd739a2da8"
       }
     },
     {
@@ -3279,6 +3399,10 @@
         "providerNames": 17,
         "redaction": 6,
         "spans": 17
+      },
+      "debt": {
+        "sha256": "bb962a843fce6869dc11b7f9c328d537141e43febdbff70b6ae2a384708bfd83",
+        "measuredAgainst": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94"
       }
     },
     {
@@ -3298,6 +3422,10 @@
         "keys": 20,
         "shellLists": 2,
         "tools": 24
+      },
+      "debt": {
+        "sha256": "054c8ddae2e55ce555528ce47cf0399390d15fd7121e6ae53f7a458eeed0729a",
+        "measuredAgainst": "45ab7b4defbf7678fcddedf5676c2158c919aa1de67cad85d3faaf10219d29c5"
       }
     },
     {
@@ -3316,6 +3444,10 @@
         "redescribable": 5,
         "scenarios": 7,
         "tree": 3
+      },
+      "debt": {
+        "sha256": "2f82f7f6cb58cb1fc5af55891ec96ab6f285294073a32e5195f7ea9b25674127",
+        "measuredAgainst": "e4e7682e632762096089cd689010f097159661bd8e5de5aaaa40709ce46e1087"
       }
     },
     {
@@ -3350,6 +3482,10 @@
       "count": 133,
       "floors": {
         "scenarios": 127
+      },
+      "debt": {
+        "sha256": "1d56987bd54b699524dd938be1d8dc7f82fafc240ae30f73eab6591d13d8735b",
+        "measuredAgainst": "7fa3b30357703ac503d246f13dbb2f0cbe549efca98972ddd9ec0737739ba97d"
       }
     },
     {
@@ -3378,6 +3514,10 @@
         "transcriptionResolution": 31,
         "voiceManager": 19,
         "wireFrames": 26
+      },
+      "debt": {
+        "sha256": "b70819981d734b8161f7f30a67a215d9629541ae2e54bab0c79e7ded53b2c543",
+        "measuredAgainst": "451067b3a609b3669a097b889bb9f661a027ebc00b4102edb0764786e2164e75"
       }
     }
   ]

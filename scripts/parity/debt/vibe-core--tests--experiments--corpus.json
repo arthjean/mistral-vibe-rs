@@ -1,0 +1,78 @@
+{
+  "corpus": "crates/vibe-core/tests/experiments/corpus.json",
+  "measuredAgainst": "f31f980df63b6c0a384e86cf0559d36a829b874b8fa86d698438229f2ccd42cd",
+  "schemaVersion": 1,
+  "tallies": {
+    "experiments parity:": {
+      "constants": {
+        "/value/configuredFields": 1,
+        "/value/defaultVariants": 1,
+        "/value/experimentNames": 1
+      },
+      "evalFailures": {
+        "/variants/body-fails-validation": 1,
+        "/variants/connection-error": 1,
+        "/variants/non-json-body": 1,
+        "/variants/status-400": 1,
+        "/variants/status-404": 1,
+        "/variants/status-500": 1,
+        "/variants/status-503": 1,
+        "/variants/timeout": 1,
+        "/variants/url-unset": 1
+      },
+      "layerPrecedence": {
+        "/effective/routing-variant-for-an-unpinned-user": 1
+      },
+      "surfaces": {
+        "/eligible/vibe_cli_default_agent": 1,
+        "/eligible/vibe_cli_local_runtime_session_api_migration": 1,
+        "/eligible/vibe_cli_mistral_mcp_connector": 1,
+        "/eligible/vibe_cli_pr_monitoring": 1,
+        "/surfaces/vibe_cli_default_agent": 1,
+        "/surfaces/vibe_cli_local_runtime_session_api_migration": 1,
+        "/surfaces/vibe_cli_mistral_mcp_connector": 1,
+        "/surfaces/vibe_cli_pr_monitoring": 1
+      },
+      "typedVariants": {
+        "/variants/booleans-spelled-as-strings": 1,
+        "/variants/default-value-off-its-baseline": 1,
+        "/variants/empty-collections": 1,
+        "/variants/every-name-at-its-typed-default": 1,
+        "/variants/every-name-forced-off-its-default": 1,
+        "/variants/exposure-labels-of-typed-values": 1,
+        "/variants/python-numeric-equality": 1,
+        "/variantsOrNone/booleans-spelled-as-strings": 1,
+        "/variantsOrNone/default-value-off-its-baseline": 1,
+        "/variantsOrNone/empty-collections": 1,
+        "/variantsOrNone/every-name-at-its-typed-default": 1,
+        "/variantsOrNone/every-name-forced-off-its-default": 1,
+        "/variantsOrNone/exposure-labels-of-typed-values": 1,
+        "/variantsOrNone/python-numeric-equality": 1
+      },
+      "variantResolution": {
+        "/variants/array-value": 1,
+        "/variants/boolean-value": 1,
+        "/variants/default-value-without-a-force": 1,
+        "/variants/empty-features": 1,
+        "/variants/every-known-feature": 1,
+        "/variants/numeric-value": 1,
+        "/variants/object-value": 1,
+        "/variants/resolved-null": 1,
+        "/variants/string-value": 1,
+        "/variants/uninitialized": 1,
+        "/variants/unknown-feature-key": 1,
+        "/variantsOrNone/array-value": 1,
+        "/variantsOrNone/boolean-value": 1,
+        "/variantsOrNone/default-value-without-a-force": 1,
+        "/variantsOrNone/empty-features": 1,
+        "/variantsOrNone/every-known-feature": 1,
+        "/variantsOrNone/numeric-value": 1,
+        "/variantsOrNone/object-value": 1,
+        "/variantsOrNone/resolved-null": 1,
+        "/variantsOrNone/string-value": 1,
+        "/variantsOrNone/uninitialized": 1,
+        "/variantsOrNone/unknown-feature-key": 1
+      }
+    }
+  }
+}

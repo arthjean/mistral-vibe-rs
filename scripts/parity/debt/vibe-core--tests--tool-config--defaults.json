@@ -1,0 +1,42 @@
+{
+  "corpus": "crates/vibe-core/tests/tool-config/defaults.json",
+  "measuredAgainst": "45ab7b4defbf7678fcddedf5676c2158c919aa1de67cad85d3faaf10219d29c5",
+  "schemaVersion": 1,
+  "tallies": {
+    "tool configuration parity:": {
+      "bash/default_timeout": {
+        "/declaration/default": 1
+      },
+      "bash/max_timeout_seconds": {
+        "/declaration/default": 1
+      },
+      "exit_plan_mode/allowlist": {
+        "/declaration/default": 1
+      },
+      "exit_plan_mode/denylist": {
+        "/declaration/default": 1
+      },
+      "exit_plan_mode/permission": {
+        "/declaration/default": 1
+      },
+      "exit_plan_mode/sensitive_patterns": {
+        "/declaration/default": 1
+      },
+      "git_bash/default_timeout": {
+        "/declaration/default": 1
+      },
+      "git_bash/max_timeout_seconds": {
+        "/declaration/default": 1
+      },
+      "powershell/default_timeout": {
+        "/declaration/default": 1
+      },
+      "powershell/max_timeout_seconds": {
+        "/declaration/default": 1
+      },
+      "read_file/max_read_bytes": {
+        "/declaration/default": 1
+      }
+    }
+  }
+}

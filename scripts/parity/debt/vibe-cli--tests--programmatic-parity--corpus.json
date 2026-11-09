@@ -1,0 +1,258 @@
+{
+  "corpus": "crates/vibe-cli/tests/programmatic-parity/corpus.json",
+  "measuredAgainst": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e",
+  "schemaVersion": 1,
+  "tallies": {
+    "programmatic parity:": {
+      "approval/auto-approve-over-an-agent": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "approval/auto-approve-selects-its-agent": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "approval/default-agent-applies-edits": {
+        "/*/requests/*/tools/*": 16
+      },
+      "approval/denied": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/lines/*/json/outcome": 2,
+        "/*/stdout/lines/*/layout/*": 2,
+        "/*/stdout/lines/*/pythonRendering": 2
+      },
+      "budget/max-price": {
+        "/*/exit": 1,
+        "/*/requests/*": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2,
+        "/*/stdout": 1
+      },
+      "budget/max-price-configured-model": {
+        "/*/exit": 1,
+        "/*/requests/*": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2,
+        "/*/stdout": 1
+      },
+      "budget/max-tokens": {
+        "/*/exit": 1,
+        "/*/requests/*": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2,
+        "/*/stdout": 1
+      },
+      "budget/max-tokens-large": {
+        "/*/requests/*/tools/*": 8
+      },
+      "budget/max-turns": {
+        "/*/exit": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2,
+        "/*/stdout/lines/*/json/outcome": 1,
+        "/*/stdout/lines/*/layout/*": 1,
+        "/*/stdout/lines/*/pythonRendering": 1
+      },
+      "budget/max-turns-json": {
+        "/*/exit": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2,
+        "/*/stdout/json/*/outcome": 1,
+        "/*/stdout/layout/*/*": 1
+      },
+      "budget/max-turns-zero": {
+        "/*/exit": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2
+      },
+      "budget/negative-price": {
+        "/*/exit": 1,
+        "/*/requests/*": 1,
+        "/*/stderr": 1,
+        "/*/stdout": 1
+      },
+      "budget/negative-tokens": {
+        "/*/exit": 1,
+        "/*/requests/*": 1,
+        "/*/stderr": 1,
+        "/*/stdout": 1
+      },
+      "budget/none-is-unbounded": {
+        "/*/requests/*/tools/*": 184
+      },
+      "budget/time-limit": {
+        "/*/exit": 1,
+        "/*/stderr": 1
+      },
+      "config/active-provider": {
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2
+      },
+      "config/active-provider-missing-key": {
+        "/*/stderr/*/message": 1
+      },
+      "failure/bad-request-json": {
+        "/*/exit": 1,
+        "/*/requests/*/tools/*": 8
+      },
+      "failure/bad-request-streaming": {
+        "/*/exit": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stdout/lines/*/json/outcome": 1,
+        "/*/stdout/lines/*/layout/*": 1,
+        "/*/stdout/lines/*/pythonRendering": 1
+      },
+      "failure/key-in-dotenv": {
+        "/*/requests/*/tools/*": 8
+      },
+      "failure/missing-key": {
+        "/*/stderr/*": 3
+      },
+      "failure/missing-key-before-empty-prompt": {
+        "/*/stderr/*/message": 1
+      },
+      "failure/unauthorized": {
+        "/*/requests/*/tools/*": 8
+      },
+      "interrupt/during-a-turn": {
+        "/*/exit": 1,
+        "/*/requests/*/tools/*": 8,
+        "/*/stderr/*": 2,
+        "/*/stdout/lines/*": 2,
+        "/*/stdout/lines/*/json/outcome": 1,
+        "/*/stdout/lines/*/layout/*": 1,
+        "/*/stdout/lines/*/pythonRendering": 1
+      },
+      "output/json": {
+        "/*/requests/*/tools/*": 8,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "output/json-tool-call": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "output/json-unicode": {
+        "/*/requests/*/tools/*": 8,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "output/ndjson-is-no-format": {
+        "/*/exit": 1,
+        "/*/stderr": 1
+      },
+      "output/streaming": {
+        "/*/requests/*/tools/*": 8,
+        "/*/stdout/lines/*/json/outcome": 2,
+        "/*/stdout/lines/*/layout/*": 2,
+        "/*/stdout/lines/*/pythonRendering": 2
+      },
+      "output/streaming-tool-call": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/lines/*/json/outcome": 2,
+        "/*/stdout/lines/*/layout/*": 2,
+        "/*/stdout/lines/*/pythonRendering": 2
+      },
+      "output/text": {
+        "/*/requests/*/tools/*": 8
+      },
+      "output/text-no-answer": {
+        "/*/requests/*/tools/*": 8
+      },
+      "output/text-unicode": {
+        "/*/requests/*/tools/*": 8
+      },
+      "prompt/argument-wins-over-stdin": {
+        "/*/requests/*/tools/*": 8
+      },
+      "prompt/blank": {
+        "/*/requests/*/tools/*": 8
+      },
+      "prompt/stdin": {
+        "/*/requests/*/tools/*": 8
+      },
+      "session/continue-json": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 4,
+        "/*/stdout/layout/*/*": 4
+      },
+      "session/continue-streaming": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/lines/*": 2,
+        "/*/stdout/lines/*/json/content/*/text": 2,
+        "/*/stdout/lines/*/json/outcome": 2,
+        "/*/stdout/lines/*/layout/*": 2,
+        "/*/stdout/lines/*/pythonRendering": 2
+      },
+      "session/continue-text-without-answer": {
+        "/*/requests/*/tools/*": 16
+      },
+      "session/resume-by-id": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "teleport/codestral-key": {
+        "/*/stderr": 1
+      },
+      "teleport/non-mistral-model": {
+        "/*/stderr": 1
+      },
+      "teleport/outside-a-repository": {
+        "/*/stderr": 1
+      },
+      "teleport/unverified-key": {
+        "/*/stderr": 1
+      },
+      "tools/disabled": {
+        "/*/requests/*/tools/*": 8
+      },
+      "tools/edit": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/detail/input/changes": 1,
+        "/*/stdout/json/*/detail/input/newString": 1,
+        "/*/stdout/json/*/detail/input/oldString": 1,
+        "/*/stdout/json/*/detail/input/replaceAll": 1,
+        "/*/stdout/json/*/detail/toolName": 1,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/json/*/state/display/message": 1,
+        "/*/stdout/json/*/state/output/occurrences/*/newStartLine": 1,
+        "/*/stdout/json/*/state/output/previousContent": 1,
+        "/*/stdout/json/*/title": 1,
+        "/*/stdout/layout/*/*": 2,
+        "/*/stdout/layout/*/*/*/*/*/*": 3,
+        "/*/stdout/layout/*/*/*/*/*/*/*": 2,
+        "/*/stdout/layout/*/*/*/*/*/*/*/*/*": 1,
+        "/*/stdout/layout/*/*/*/*/*/*/*/*/*/*": 2
+      },
+      "tools/enabled-only": {
+        "/*/requests/*/tools/*": 2
+      },
+      "tools/failed-read": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "tools/todo": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/lines/*/json/outcome": 2,
+        "/*/stdout/lines/*/layout/*": 2,
+        "/*/stdout/lines/*/pythonRendering": 3
+      },
+      "tools/withheld-question": {
+        "/*/requests/*/tools/*": 16,
+        "/*/stdout/json/*/outcome": 2,
+        "/*/stdout/layout/*/*": 2
+      },
+      "trust/trusted-for-the-run": {
+        "/*/requests/*/tools/*": 8
+      },
+      "trust/untrusted-project-config": {
+        "/*/requests/*/tools/*": 8
+      }
+    }
+  }
+}

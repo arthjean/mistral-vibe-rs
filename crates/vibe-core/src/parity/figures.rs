@@ -311,6 +311,12 @@ pub fn record(heading: &str, corpus: &str, figures: Figures, detail: Value) -> L
 /// declares under its heading for this host: the line marked `all`, or the
 /// one marked with the host's platform.
 pub fn check(measured: &Line) {
+    // A run that measures debts records its figures and judges none: after a
+    // recapture they move with the debt, and `repin.py debt` checks them in
+    // the run it makes after recording the debt.
+    if super::debt::measuring() {
+        return;
+    }
     let heading = &measured.heading;
     let host = &measured.platform;
     let document = scorecard();

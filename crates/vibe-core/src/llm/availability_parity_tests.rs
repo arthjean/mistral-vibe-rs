@@ -29,71 +29,14 @@ use super::retry::{Clock, SleepFuture, SleepKind};
 use super::utility;
 use super::{BackendContext, Credentials, MapCredentials};
 use crate::credential_cache::read_entries;
+use crate::parity::debt::Debt;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Class, Entry, PatternDivergence, Tally, entries};
+use crate::parity::replay::Tally;
 use crate::provider::config::{
     ApiSettings, BackendKind, ModelConfig, ModelRouting, ProviderConfig, UtilityFeature,
     UtilityModels,
 };
 use crate::telemetry::{ClientTelemetry, LaunchContext, TelemetryCallType, TelemetryRecord};
-
-/// Why v3.1.0's utility calls and probes leave the requests and verdicts this
-/// port gives.
-const V3_REASON: &str = "v3.1.0 runs its utility calls and fast-model probes on the harness \
-                         provider adapters: it asks for a streamed answer under the provider \
-                         SDK's own user agent, leaves the empty tool and reasoning fields out of \
-                         the body, moves on to the next fast candidate after a rate limit or a \
-                         server error instead of retrying, and remembers a 422 as a refusal, none \
-                         of which this port reproduces yet";
-
-/// The probe departures v3.1.0 opened, by pointer with its indices
-/// generalized; each declares exactly how many it covers.
-const PROBE_V3_GAPS: &[PatternDivergence] = &[
-    probe_gap("/*/requests/*/body/stream", 41),
-    probe_gap("/*/requests/*/body/tools", 41),
-    probe_gap("/*/requests/*/body/reasoning_effort", 41),
-    probe_gap("/*/requests/*/headers/accept", 41),
-    probe_gap("/*/requests/*/headers/user-agent", 41),
-    probe_gap("/*/requests/*/body/model", 2),
-    probe_gap("/*/requests/*", 1),
-    probe_gap("/*/file", 5),
-    probe_gap("/*/selection/alias", 4),
-    probe_gap("/*/selection/model", 4),
-    probe_gap("/*/selection/provider", 2),
-    probe_gap("/*/selection/fast", 2),
-];
-
-/// The utility completion departures v3.1.0 opened, the same five fields in
-/// every request a case sent.
-const COMPLETION_V3_GAPS: &[PatternDivergence] = &[
-    completion_gap("/requests/*/body/stream", 10),
-    completion_gap("/requests/*/body/tools", 10),
-    completion_gap("/requests/*/body/reasoning_effort", 10),
-    completion_gap("/requests/*/headers/accept", 10),
-    completion_gap("/requests/*/headers/user-agent", 10),
-];
-
-const fn probe_gap(pointer: &'static str, count: usize) -> PatternDivergence {
-    PatternDivergence {
-        scenario: "availabilityProbes/*",
-        pointer,
-        count,
-        row: "10",
-        class: Class::Gap,
-        reason: V3_REASON,
-    }
-}
-
-const fn completion_gap(pointer: &'static str, count: usize) -> PatternDivergence {
-    PatternDivergence {
-        scenario: "utilityCompletions/*",
-        pointer,
-        count,
-        row: "10",
-        class: Class::Gap,
-        reason: V3_REASON,
-    }
-}
 
 /// The departures between two observations, through the comparison the corpus
 /// family shares.
@@ -517,7 +460,7 @@ fn the_fast_model_probe_answers_every_case_as_the_corpus_records() {
         }
         results
     });
-    let mut tally = Tally::new(CORPUS, entries(PROBE_V3_GAPS));
+    let mut tally = Tally::new(CORPUS, []);
     for (name, reference, port) in &results {
         tally.record(name, reference, port, departures(reference, port));
     }
@@ -662,7 +605,7 @@ fn every_utility_completion_is_labeled_and_attributed_as_the_corpus_records() {
         .enable_all()
         .build()
         .expect("a runtime starts");
-    let mut tally = Tally::new(CORPUS, entries(COMPLETION_V3_GAPS));
+    let mut tally = Tally::new(CORPUS, []);
     for (index, case) in cases.iter().enumerate() {
         let home = scratch.path().join(format!("completion-{index}"));
         let port = runtime.block_on(run_completion_case(case, &home));
@@ -679,8 +622,9 @@ fn every_utility_completion_is_labeled_and_attributed_as_the_corpus_records() {
 /// Worktree naming reaches the backend through the completion provider rather
 /// than [`utility::complete`]; what it sends is held to the request the
 /// `worktree-title` case recorded, apart from the prompt each side authors.
-/// A departure stands only where [`COMPLETION_V3_GAPS`] names it for that
-/// case's request, and exactly the two header gaps have to reproduce.
+/// A departure stands only where the measured debt of the completion replay
+/// holds it for that case's request, and exactly the two header gaps have to
+/// reproduce.
 #[test]
 fn a_worktree_name_request_is_labeled_and_attributed_as_the_corpus_records() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
@@ -748,6 +692,10 @@ fn a_worktree_name_request_is_labeled_and_attributed_as_the_corpus_records() {
     let sent = &port[0];
     let mut unexplained = Vec::new();
     let mut gaps = Vec::new();
+    let mut debt = Debt::load(
+        "crates/vibe-core/tests/llm-backends/corpus.json",
+        "utility completion parity:",
+    );
     for pointer in [
         "/method",
         "/path",
@@ -767,10 +715,7 @@ fn a_worktree_name_request_is_labeled_and_attributed_as_the_corpus_records() {
         for departure in found {
             // Read under the pointer the completion replay records it at.
             let observed = format!("/requests/0{departure}");
-            if COMPLETION_V3_GAPS
-                .iter()
-                .any(|gap| gap.covers("utilityCompletions/worktree-title", &observed))
-            {
+            if debt.absorb("utilityCompletions/worktree-title", &observed) {
                 gaps.push(departure);
             } else {
                 unexplained.push(format!(

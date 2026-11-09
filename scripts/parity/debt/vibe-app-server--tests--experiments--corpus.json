@@ -1,0 +1,54 @@
+{
+  "corpus": "crates/vibe-app-server/tests/experiments/corpus.json",
+  "measuredAgainst": "ef37073778e02fb7442b25970f7c321bd77ebff894e3cd65f48eba21b9514911",
+  "schemaVersion": 1,
+  "tallies": {
+    "experiments startup parity:": {
+      "experiments-disabled/cached": {
+        "/awaitingExperimentModel": 1
+      },
+      "experiments-disabled/cached-at-the-baseline": {
+        "/awaitingExperimentModel": 1
+      },
+      "experiments-disabled/cached-for-another-key": {
+        "/awaitingExperimentModel": 1
+      },
+      "experiments-disabled/cached-past-the-bound": {
+        "/awaitingExperimentModel": 1
+      },
+      "experiments-disabled/nothing-cached": {
+        "/awaitingExperimentModel": 1
+      },
+      "mistral-active/cached": {
+        "/afterLookup": 1
+      },
+      "mistral-active/cached-at-the-baseline": {
+        "/afterLookup": 1
+      },
+      "mistral-active/cached-for-another-key": {
+        "/awaitingExperimentModel": 1
+      },
+      "mistral-active/cached-past-the-bound": {
+        "/awaitingExperimentModel": 1
+      },
+      "mistral-active/nothing-cached": {
+        "/awaitingExperimentModel": 1
+      },
+      "telemetry-disabled/cached": {
+        "/awaitingExperimentModel": 1
+      },
+      "telemetry-disabled/cached-at-the-baseline": {
+        "/awaitingExperimentModel": 1
+      },
+      "telemetry-disabled/cached-for-another-key": {
+        "/awaitingExperimentModel": 1
+      },
+      "telemetry-disabled/cached-past-the-bound": {
+        "/awaitingExperimentModel": 1
+      },
+      "telemetry-disabled/nothing-cached": {
+        "/awaitingExperimentModel": 1
+      }
+    }
+  }
+}

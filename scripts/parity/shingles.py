@@ -30,18 +30,39 @@ spaces; its digest is the first eight bytes of the SHA-256 of that UTF-8
 text, read as a big-endian 64-bit integer. The digest file holds the sorted
 distinct digests as consecutive big-endian 8-byte values.
 
+**The third-party layer.** The reference's tree also quotes text it did not
+write: a test that asserts a library's error message holds that library's
+words, and a license header holds its license's. The guard asks who authored
+a run, so a shingle a locked third-party distribution also ships is not the
+reference's to claim. :func:`third_party` reads the attested environment the
+lockfile built: every installed distribution whose ``uv.lock`` source is an
+index, a Git repository or a URL (:data:`THIRD_PARTY_SOURCES`), never the
+project or a member of its workspace, and in it every Python source and stub
+its ``RECORD`` lists, through the same extractor as the reference side. The
+reference digests those files also produce form the layer, written beside the
+digest set as ``third-party-<sha12>.json`` with the distributions that ship
+each one, the lockfile digest and the environment it was measured on. The
+guard subtracts the layer from the set, so the digest file itself stays a
+function of the reference tree alone. Native modules are not read: their
+strings are builds of sources the same distributions publish, and the
+Python sources and stubs are what every platform installs alike, which keeps
+the layer the same on Linux and Windows.
+
 A shared module, not a driver: ``repin.py`` imports it, it imports no driver.
 """
 
 from __future__ import annotations
 
+import csv
 import hashlib
 import io
+import json
 from pathlib import Path
 import re
 import struct
 import tokenize
-from typing import Iterable, Iterator
+import tomllib
+from typing import Any, Iterable, Iterator
 
 #: How many words a shingle holds.
 WIDTH = 8
@@ -58,6 +79,17 @@ _PREFIX = re.compile(r"^[rRbBuUfFtT]{0,2}")
 
 #: Directories of the reference tree that hold no authored source.
 _SKIPPED = {".git", ".venv", "node_modules", "target", "__pycache__", "dist", "build"}
+
+#: The ``uv.lock`` source kinds whose distributions come from outside the
+#: reference tree. ``editable``, ``virtual``, ``directory`` and ``path`` name
+#: the tree itself or a file beside it, whose prose stays the reference's.
+THIRD_PARTY_SOURCES = frozenset({"registry", "git", "url"})
+
+#: The files of a third-party distribution read as prose.
+THIRD_PARTY_SUFFIXES = frozenset({".py", ".pyi"})
+
+#: The schema of the third-party layer this module writes and the guard reads.
+LAYER_SCHEMA = 1
 
 
 class ShingleError(RuntimeError):
@@ -269,6 +301,134 @@ def digests(root: Path) -> tuple[list[int], int]:
         for unit in pieces:
             found.update(shingles(words(unit)))
     return sorted(found), len(files)
+
+
+def normalized_name(name: str) -> str:
+    """A distribution name as PEP 503 compares it."""
+
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def site_packages(venv: Path) -> Path:
+    """The ``site-packages`` directory of an environment, in its Windows layout
+    or its POSIX one."""
+
+    candidates = [venv / "Lib" / "site-packages", *sorted(venv.glob("lib/python*/site-packages"))]
+    found = [candidate for candidate in candidates if candidate.is_dir()]
+    if len(found) != 1:
+        raise ShingleError(f"{venv} holds {len(found)} site-packages directories, not one")
+    return found[0]
+
+
+def locked_sources(lock: dict[str, Any]) -> dict[str, str]:
+    """The source kind ``uv.lock`` records for each package, by normalized name."""
+
+    kinds = {}
+    for package in lock.get("package", []):
+        source = package.get("source") or {}
+        if len(source) != 1:
+            raise ShingleError(f"uv.lock records {package.get('name')!r} with the source {source!r}")
+        kinds[normalized_name(package["name"])] = next(iter(source))
+    return kinds
+
+
+def _metadata(info: Path) -> tuple[str, str]:
+    name = version = None
+    for line in (info / "METADATA").read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("Name: "):
+            name = line[len("Name: ") :].strip()
+        elif line.startswith("Version: "):
+            version = line[len("Version: ") :].strip()
+        elif not line:
+            break
+    if not name or not version:
+        raise ShingleError(f"{info.name}/METADATA names no distribution and version")
+    return name, version
+
+
+def third_party(
+    root: Path, reference: Iterable[int]
+) -> tuple[dict[int, list[str]], list[str], int]:
+    """The digests of ``reference`` that a locked third-party distribution of
+    the environment at ``root`` also ships, each with the distributions
+    (``name==version``) that do; the distributions read; and how many files.
+
+    ``root`` is an attested environment: its ``source/uv.lock`` says where
+    each package comes from, and its ``.venv`` holds what the lockfile
+    installed. A distribution the lockfile does not name is refused, since
+    nothing then says who authored it.
+    """
+
+    wanted = set(reference)
+    kinds = locked_sources(tomllib.loads((root / "source" / "uv.lock").read_text(encoding="utf-8")))
+    site = site_packages(root / ".venv")
+    found: dict[int, set[str]] = {}
+    read: list[str] = []
+    files = 0
+    for info in sorted(site.glob("*.dist-info")):
+        name, version = _metadata(info)
+        kind = kinds.get(normalized_name(name))
+        if kind is None:
+            raise ShingleError(
+                f"{info.name} is installed but uv.lock does not name {name}, so nothing says "
+                "who authored it; rebuild the environment with `repin.py materialize`"
+            )
+        if kind not in THIRD_PARTY_SOURCES:
+            continue
+        label = f"{name}=={version}"
+        read.append(label)
+        with (info / "RECORD").open(encoding="utf-8", newline="") as handle:
+            listed = [row[0] for row in csv.reader(handle) if row]
+        for relative in sorted(listed):
+            path = site / relative
+            if path.suffix not in THIRD_PARTY_SUFFIXES:
+                continue
+            if not path.is_file():
+                raise ShingleError(f"{label} lists {relative} in its RECORD, which is missing")
+            try:
+                pieces = python_units(path.read_text(encoding="utf-8", errors="replace"))
+            except ShingleError as error:
+                raise ShingleError(f"{label} {relative}: {error}") from error
+            files += 1
+            for unit in pieces:
+                for value in shingles(words(unit)):
+                    if value in wanted:
+                        found.setdefault(value, set()).add(label)
+    return {value: sorted(labels) for value, labels in sorted(found.items())}, sorted(read), files
+
+
+def layer_file(commit: str) -> Path:
+    """Where the third-party layer of ``commit`` is committed."""
+
+    return LICENSING / f"third-party-{commit[:12]}.json"
+
+
+def layer(
+    commit: str, attestation: dict[str, Any], subtracted: dict[int, list[str]], read: list[str]
+) -> dict[str, Any]:
+    """The third-party layer of ``commit``, as the guard reads it."""
+
+    return {
+        "schemaVersion": LAYER_SCHEMA,
+        "commit": commit,
+        "uvLockSha256": attestation["uvLockSha256"],
+        "measuredOn": {"platform": attestation["platform"], "python": attestation["python"]},
+        "distributions": read,
+        "digests": {f"{value:016x}": labels for value, labels in subtracted.items()},
+    }
+
+
+def render_layer(content: dict[str, Any]) -> str:
+    return json.dumps(content, indent=2) + "\n"
+
+
+def write_layer(commit: str, content: dict[str, Any]) -> Path:
+    target = layer_file(commit)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staged = target.with_suffix(".json.tmp")
+    staged.write_text(render_layer(content), encoding="utf-8", newline="\n")
+    staged.replace(target)
+    return target
 
 
 def digest_file(commit: str) -> Path:

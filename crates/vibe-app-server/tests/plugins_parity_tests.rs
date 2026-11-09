@@ -15,8 +15,9 @@
 //! compares the two scenario by scenario. It needs no reference checkout; only
 //! the live probe at the end, which recaptures the reference, does.
 //!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 35 of `docs/parity.md` is a
+//! Every difference the replay finds has to fall under a `LEDGER` entry or the
+//! corpus's measured debt (`vibe_core::parity::debt`), and every entry and
+//! every debt group has to still reproduce, so row 35 of `docs/parity.md` is a
 //! reading of the summary this file prints.
 
 #![cfg(feature = "test-fixtures")]
@@ -24,9 +25,7 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{
-    Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
-};
+use vibe_core::parity::replay::{Capture, OwnProse, Replay, assert_ledger, entries, scenarios};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("plugins-parity/corpus.json");
@@ -42,112 +41,6 @@ const CAPTURE: Capture = Capture {
         env!("CARGO_BIN_EXE_vibe-mcp-stdio-fixture"),
     ],
 };
-
-const LEDGER: &[PatternDivergence] = &[];
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 serves plugins otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/experimentalHarness",
-        count: 5,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/mcp/connectorError",
-        count: 8,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/mcp/privateConnectorsHidden",
-        count: 8,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/plugins/plugins/*/installedRoot",
-        count: 11,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*",
-        count: 1,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/description",
-        count: 2,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/name",
-        count: 5,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/prompt",
-        count: 1,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/prompt/len",
-        count: 1,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/prompt/sha256",
-        count: 1,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/scope",
-        count: 1,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/answer/skills/*/userInvocable",
-        count: 2,
-        row: "35",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
 
 /// Every text this port words its own way, digest by digest.
 const PROSE: &[OwnProse] = &[];
@@ -168,23 +61,13 @@ fn the_port_serves_every_plugin_scenario_as_the_corpus_records_or_as_the_ledger_
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("plugins-parity-port.json"),
     }
-    .run(
-        entries(PROSE)
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_is_declared_soundly() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    assert_ledger(
-        LISTED,
-        &scenarios(&corpus),
-        entries(PROSE)
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

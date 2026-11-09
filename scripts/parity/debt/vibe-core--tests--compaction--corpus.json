@@ -1,0 +1,15 @@
+{
+  "corpus": "crates/vibe-core/tests/compaction/corpus.json",
+  "measuredAgainst": "b068759fa04bb9da2efa4f4a58f7342a11eec6895de8be473341be3a2f6298e5",
+  "schemaVersion": 1,
+  "tallies": {
+    "compaction parity:": {
+      "summaryExtractions/separators-around-text": {
+        "/summary": 1
+      },
+      "summaryExtractions/separators-only": {
+        "/summary": 1
+      }
+    }
+  }
+}

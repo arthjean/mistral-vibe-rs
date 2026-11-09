@@ -109,6 +109,9 @@ TOUCH = [{"toolCalls": [call("bash", {"command": "touch made.txt"}, "call_b2")]}
 #: redelivery it refuses, which no model produces.
 TOUCH_AGAIN = [{"toolCalls": [call("bash", {"command": "touch made.txt"}, "call_b3")]},
                {"text": "Finished."}]
+#: A command that runs until the workspace holds `steered`, for at most ten
+#: seconds, in a syntax both a POSIX shell and Git Bash read.
+STEER_BARRIER = "for i in $(seq 100); do [ -e steered ] && break; sleep 0.1; done"
 #: One question in the shape the unified catalog declares: its keys are the
 #: camel-cased ones `ui.ask_user_question` takes.
 QUESTION = {"questions": [{
@@ -678,11 +681,18 @@ def scenarios() -> list[dict[str, Any]]:
                       {"interrupt": True}, PERSISTED],
         },
         {
+            # The call holds until the steer was answered, which a clock
+            # cannot promise: the drain after `settle` lasts at least the
+            # driver's quiet period, so a call that sleeps a fixed time can
+            # end first, and the steer then lands after the last model call
+            # or before it depending on host load. The bound only keeps a
+            # driver that dies before the release from leaving a call behind.
             "name": "turn/steer",
-            "backend": [{"toolCalls": [call("bash", {"command": "sleep 1"}, "call_s1")]},
+            "backend": [{"toolCalls": [call("bash", {"command": STEER_BARRIER}, "call_s1")]},
                         {"text": "Steered."}],
             "steps": [START, {"turn": "Work", "background": True, "settle": 0.5},
-                      {"steer": "Also this"}, {"wait": True}, PERSISTED],
+                      {"steer": "Also this"}, {"write": {"steered": ""}}, {"wait": True},
+                      PERSISTED],
         },
         {
             "name": "turn/steer-applied",

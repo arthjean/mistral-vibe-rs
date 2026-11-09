@@ -1,0 +1,37 @@
+{
+  "corpus": "crates/vibe-core/tests/tool-descriptions/corpus.json",
+  "measuredAgainst": "e4e7682e632762096089cd689010f097159661bd8e5de5aaaa40709ce46e1087",
+  "schemaVersion": 1,
+  "tallies": {
+    "tool descriptions parity:": {
+      "a-directory-named-twice-keeps-its-first-position": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 3
+      },
+      "a-relative-entry-anchors-on-the-working-directory": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 3
+      },
+      "an-entry-naming-nothing-is-skipped": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 3
+      },
+      "an-untrusted-workspace": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 2
+      },
+      "configured-paths-precede-the-discovered-ones": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 3
+      },
+      "no-configured-paths": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 3
+      },
+      "the-user-source-disabled": {
+        "/descriptionsUnchanged": 1,
+        "/ignored/*": 1
+      }
+    }
+  }
+}

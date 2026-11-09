@@ -11,7 +11,8 @@
 //! Diagnostic messages are left out on both sides, being this port's own
 //! prose, and so is the prompt of a skill that declares tools, whose guidance
 //! preamble is reworded. Every other difference has to fall under a `LEDGER`
-//! entry, and every entry has to still reproduce.
+//! entry or the corpus's measured debt (`crate::parity::debt`), and every
+//! entry and every debt group has to still reproduce.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -19,6 +20,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
+use crate::parity::debt::{Debt, Note, assert_notes};
 use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::replay::{Capture, differences};
 use crate::plugins::compatibility::PluginMcpServer;
@@ -42,37 +44,31 @@ struct Divergence {
 
 const LEDGER: &[Divergence] = &[];
 
-/// Why the gaps below exist: what the v3.1.0 re-pin revealed, kept against
-/// row 35 until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 refuses the user plugin of the `native-namespaces` tree named \
-                         `agent` with an error issue that carries no diagnostic code, so its \
-                         skill never loads and the issues after it shift by one; this port \
-                         resolves that plugin and loads `agent:ask`";
+/// The corpus as `scripts/parity/manifest.json` lists it.
+const LISTED: &str = "crates/vibe-core/tests/plugins-parity/corpus.json";
 
-/// Differences no `LEDGER` entry explains, matched after it and counted as
-/// gaps in the figures.
-const V3_GAPS: &[Divergence] = &[
-    Divergence {
-        case: "native-namespaces",
-        pointer: "/issues",
-        reason: V3_REASON,
-    },
-    Divergence {
-        case: "native-namespaces",
-        pointer: "/materialized/issues",
-        reason: V3_REASON,
-    },
-    Divergence {
-        case: "native-namespaces",
-        pointer: "/plugins",
-        reason: V3_REASON,
-    },
-    Divergence {
-        case: "native-namespaces",
-        pointer: "/skills",
-        reason: V3_REASON,
-    },
-];
+/// The replay's line of the "Measured figures" table.
+const HEADING: &str = "plugins resolve parity:";
+
+/// What the re-pin's measured gaps of this corpus are known to stand on:
+/// each note explains groups of its measured debt
+/// (`vibe_core::parity::debt`) and counts nothing.
+const DEBT_NOTES: &[Note] = &[Note {
+    scenarios: &["native-namespaces"],
+    pointers: &[
+        "/issues",
+        "/issues/**",
+        "/materialized/issues",
+        "/materialized/issues/**",
+        "/plugins",
+        "/plugins/**",
+        "/skills",
+        "/skills/**",
+    ],
+    reason: "v3.1.0 refuses the user plugin of the `native-namespaces` tree named `agent` with \
+             an error issue that carries no diagnostic code, so its skill never loads and the \
+             issues after it shift by one; this port resolves that plugin and loads `agent:ask`",
+}];
 
 const SKILL_PATH_METADATA: &str = "unified-harness.runtime-skill-path";
 
@@ -437,7 +433,7 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
     );
     let mut unexplained = Vec::new();
     let mut reproduced = vec![0_usize; LEDGER.len()];
-    let mut gapped = vec![0_usize; V3_GAPS.len()];
+    let mut debt = Debt::load(LISTED, HEADING);
     let mut gapped_cases = BTreeSet::new();
     let mut conformant = 0;
     for (name, reference) in recorded {
@@ -451,30 +447,23 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
                 entry.case == name && crate::parity::replay::pointer_within(entry.pointer, &pointer)
             }) {
                 Some(index) => reproduced[index] += 1,
-                None => match V3_GAPS.iter().position(|entry| {
-                    entry.case == name
-                        && crate::parity::replay::pointer_within(entry.pointer, &pointer)
-                }) {
-                    Some(index) => {
-                        gapped[index] += 1;
-                        gapped_cases.insert(name.clone());
-                    }
-                    None => unexplained.push(format!(
-                        "{name} {pointer}\n  reference: {}\n  port:      {}",
-                        reference
-                            .pointer(&pointer)
-                            .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                        port.pointer(&pointer)
-                            .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                    )),
-                },
+                None if debt.absorb(name, &pointer) => {
+                    gapped_cases.insert(name.clone());
+                }
+                None => unexplained.push(format!(
+                    "{name} {pointer}\n  reference: {}\n  port:      {}",
+                    reference
+                        .pointer(&pointer)
+                        .map_or_else(|| "<absent>".to_owned(), Value::to_string),
+                    port.pointer(&pointer)
+                        .map_or_else(|| "<absent>".to_owned(), Value::to_string),
+                )),
             }
         }
     }
     let stale: Vec<String> = LEDGER
         .iter()
         .zip(&reproduced)
-        .chain(V3_GAPS.iter().zip(&gapped))
         .filter(|(_, count)| **count == 0)
         .map(|(entry, _)| format!("{} {} ({})", entry.case, entry.pointer, entry.reason))
         .collect();
@@ -483,11 +472,12 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
          {} gap differences",
         recorded.len(),
         reproduced.iter().sum::<usize>(),
-        gapped.iter().sum::<usize>()
+        debt.covered()
     );
     assert!(
         unexplained.is_empty(),
-        "the port departs from the corpus where no ledger entry says it may:\n{}",
+        "the port departs from the corpus where neither a ledger entry nor the measured debt \
+         says it may:\n{}",
         unexplained.join("\n")
     );
     assert!(
@@ -497,15 +487,16 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
 
     // A case with a gap difference is not at parity; every other case that
     // is not conformant differs only where `LEDGER` says it may.
+    debt.assert_settled();
     assert_figures(
-        "plugins resolve parity:",
-        "crates/vibe-core/tests/plugins-parity/corpus.json",
+        HEADING,
+        LISTED,
         Figures {
             conformant,
             accepted: recorded.len() - conformant - gapped_cases.len(),
             total: recorded.len(),
             accepted_differences: reproduced.iter().sum(),
-            gap_differences: gapped.iter().sum(),
+            gap_differences: debt.covered(),
             prose_differences: 0,
         },
         json!({}),
@@ -523,4 +514,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         arguments: &[],
     }
     .probe("plugins resolve");
+}
+
+#[test]
+fn every_debt_note_explains_a_measured_difference() {
+    assert_notes(LISTED, DEBT_NOTES);
 }

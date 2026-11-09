@@ -13,14 +13,15 @@
 //! compares the two scenario by scenario. It needs no reference checkout; only
 //! the live probe at the end, which recaptures the reference, does.
 //!
-//! Both sides reduce a string their server authored to a length and a
-//! SHA-256. This port writes its own prose on purpose (`NOTICE`): two digests that
+//! Both sides reduce a string their server authored to a length and a SHA-256.
+//! This port writes its own prose on purpose (`NOTICE`): two digests that
 //! differ are a difference unless a `PROSE` entry names their pointer, holds
 //! the count of digests it covers, and finds the port's length within its band
-//! of the reference's; everything else is
-//! compared exactly. Every other difference has to fall under a `LEDGER`
-//! entry, and every entry has to still reproduce, so row 11 of
-//! `docs/parity.md` is a reading of the summary this file prints.
+//! of the reference's; everything else is compared exactly. Every other
+//! difference has to fall under a `LEDGER` entry or the corpus's measured debt
+//! (`vibe_core::parity::debt`), and every entry and every debt group has to
+//! still reproduce, so row 11 of `docs/parity.md` is a reading of the summary
+//! this file prints.
 
 #![cfg(feature = "test-fixtures")]
 
@@ -28,7 +29,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Band, Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -42,168 +43,6 @@ const CAPTURE: Capture = Capture {
     family: &[],
     arguments: &["--fixture", env!("CARGO_BIN_EXE_vibe-oauth-script-fixture")],
 };
-
-const LEDGER: &[PatternDivergence] = &[];
-/// Why the entries below are gaps: what the v3.1.0 re-pin revealed, kept
-/// against the row this corpus measures until a follow-on closes it.
-const V3_REASON: &str = "v3.1.0 serves the MCP catalog otherwise on the Unified Harness the reference now runs on alone, which this port does not reproduce yet";
-
-/// Differences no entry above covers, by pointer with its indices
-/// generalized, most specific first; chained last.
-const V3_GAPS: &[PatternDivergence] = &[
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/keyring/mcp-oauth:secure:client_info/application_type",
-        count: 2,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/keyring/mcp-oauth:secure:client_info/issuer",
-        count: 2,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error",
-        count: 1,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/error/data",
-        count: 3,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result",
-        count: 1,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/mcp/connectorError",
-        count: 5,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/mcp/privateConnectorsHidden",
-        count: 5,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/runtime/mcp/connectorError",
-        count: 13,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/runtime/mcp/privateConnectorsHidden",
-        count: 13,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*",
-        count: 1,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*/mcp",
-        count: 10,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*/mcp/connectorError",
-        count: 13,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*/mcp/privateConnectorsHidden",
-        count: 13,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*/method",
-        count: 10,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*/params",
-        count: 10,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/mcp/sources/*/tools/*/description",
-        count: 6,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/mcp/sources/*/tools/*/name",
-        count: 6,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/response/result/runtime/mcp/sources/*/tools/*",
-        count: 6,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-    PatternDivergence {
-        scenario: "*",
-        pointer: "/*/notifications/*/mcp/sources/*/tools/*",
-        count: 6,
-        row: "11",
-        class: Class::Gap,
-        reason: V3_REASON,
-    },
-];
 
 /// Every text this port words its own way, digest by digest.
 /// The accepted divergences the prose below stands on.
@@ -239,23 +78,13 @@ fn the_port_serves_every_catalog_scenario_as_the_corpus_records_or_as_the_ledger
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("mcp-catalog-port.json"),
     }
-    .run(
-        entries(PROSE)
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_is_declared_soundly() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    assert_ledger(
-        LISTED,
-        &scenarios(&corpus),
-        entries(PROSE)
-            .chain(entries(LEDGER))
-            .chain(entries(V3_GAPS)),
-    );
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still
