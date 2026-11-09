@@ -41,10 +41,10 @@
     {
       "id": "EP-005",
       "title": "v3 Terminal Client and Scorecard Restatement",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 5,
-      "stories_done": 0
+      "stories_done": 5
     },
     {
       "id": "EP-006",
@@ -309,21 +309,21 @@
       "id": "US-019",
       "title": "Validate assumption: upstream's Rust TUI is drivable and deterministic under a pseudo-terminal",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-005"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-09",
+      "completed_at": "2026-11-09",
+      "reviewed_at": "2026-11-09"
     },
     {
       "id": "US-020",
       "title": "Black-box TUI differential runner with the startup family",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
@@ -331,29 +331,29 @@
         "US-009",
         "US-010"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-09",
+      "completed_at": "2026-11-09",
+      "reviewed_at": "2026-11-09"
     },
     {
       "id": "US-021",
       "title": "Composer and transcript TUI families; retire the Textual-pilot oracles",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-020"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-09",
+      "completed_at": "2026-11-09",
+      "reviewed_at": "2026-11-09"
     },
     {
       "id": "US-030",
       "title": "Measured debt replaces the gaps a transition admits",
       "epic": "EP-005",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
@@ -361,14 +361,14 @@
         "US-011"
       ],
       "started_at": "2026-11-08",
-      "completed_at": null,
-      "reviewed_at": null
+      "completed_at": "2026-11-09",
+      "reviewed_at": "2026-11-09"
     },
     {
       "id": "US-022",
       "title": "Scorecard restatement at v3.1.0",
       "epic": "EP-005",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
@@ -379,9 +379,9 @@
         "US-011",
         "US-030"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-11-09",
+      "completed_at": "2026-11-09",
+      "reviewed_at": "2026-11-09"
     },
     {
       "id": "US-023",
