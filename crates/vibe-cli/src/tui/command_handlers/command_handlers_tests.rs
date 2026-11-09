@@ -1,5 +1,5 @@
-//! The handlers' pure helpers. What each command emits is compared against the
-//! reference by the `handlers` family in `commands_parity_tests.rs`.
+//! The handlers' pure helpers. What a command shows is compared with the
+//! reference client by the black-box `tui commands parity:` replay.
 
 use vibe_core::observability::{LogLevel, LogLevelChain};
 use vibe_core::pycompat::thousands;

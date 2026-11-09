@@ -1,0 +1,938 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+    "version": "3.1.0"
+  },
+  "platform": "linux",
+  "note": "Normalized screens of the reference's terminal client, one script per scenario (crates/vibe-cli/tests/tui_blackbox_parity_tests.rs). A row keeps its text only when every letter on it was typed, seeded or answered by the scenario; any other row is its length and SHA-256. Masked cells and the world's directories are named in each scenario's masks.",
+  "unavailable": [
+    {
+      "name": "composer/external-editor",
+      "reason": "the reference starts the editor named by VISUAL or EDITOR on the same terminal, and no hermetic editor answers it there"
+    },
+    {
+      "name": "composer/clipboard-image",
+      "reason": "the reference reads the system clipboard, which a world cannot seed without touching the host's"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "composer/typing",
+      "heading": "tui composer parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "type": "a draft that is never sent"
+          },
+          {
+            "snapshot": "typed"
+          },
+          {
+            "keys": [
+              "backspace",
+              "backspace",
+              "left",
+              "left"
+            ]
+          },
+          {
+            "snapshot": "edited"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "typed",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "> a draft that is never sent"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "edited",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "> a draft that is never se"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "composer/history",
+      "heading": "tui composer parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "type": "first prompt"
+          },
+          "submit",
+          {
+            "waitFor": "First answer."
+          },
+          {
+            "snapshot": "answered"
+          },
+          {
+            "keys": [
+              "up"
+            ]
+          },
+          {
+            "snapshot": "recalled"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "answered",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "> first prompt"
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "  First answer."
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "295a7ea417faeba3fcb796e46e34c0fe3450b69a9537b513f35b80fa4c16ed50"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 7,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ],
+                    [
+                      2,
+                      12,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      106,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                ">> Vibe",
+                "Scripted session",
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "recalled",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "> first prompt"
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "  First answer."
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "> first prompt"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "295a7ea417faeba3fcb796e46e34c0fe3450b69a9537b513f35b80fa4c16ed50"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 7,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ],
+                    [
+                      2,
+                      12,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      106,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                ">> Vibe",
+                "Scripted session",
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

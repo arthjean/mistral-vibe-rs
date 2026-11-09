@@ -442,14 +442,19 @@ pub fn assert_replayed(text: &str) -> String {
     entry.corpus.clone()
 }
 
+/// Where the clean-room guard keeps its digest sets and third-party layers,
+/// which record the commit they were measured at without being corpora.
+pub const LICENSING_DATA: &str = "crates/vibe-core/tests/licensing/";
+
 /// Whether `corpus`, a workspace-relative path, is tracked JSON under a
-/// crate's `tests/` directory.
+/// crate's `tests/` directory, outside the guard's [`LICENSING_DATA`].
 #[must_use]
 pub fn is_corpus_location(corpus: &str) -> bool {
     let parts: Vec<&str> = corpus.split('/').collect();
     parts.len() >= 4
         && parts[0] == "crates"
         && parts[2] == "tests"
+        && !corpus.starts_with(LICENSING_DATA)
         && Path::new(corpus)
             .extension()
             .is_some_and(|extension| extension == "json")

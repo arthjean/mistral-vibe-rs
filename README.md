@@ -12,10 +12,10 @@ user-visible output.
 
 | | |
 |---|---|
-| Parity against Mistral Vibe v2.26.0 | **98.7/100**, weighted over 36 parts ([scorecard](docs/parity.md)) |
-| Parts at 100 | 35 of 36. The one gap is the VS Code extension promo, not ported |
-| Reference pin | [`376f6a3`](https://github.com/mistralai/mistral-vibe/commit/376f6a33413a3eec9b3795b0c0e004066c47b5c1), which matches upstream `HEAD` as of 2026-10-08 apart from two CI workflow files |
-| Default backend | The Unified Harness, as in the reference since v2.26.0. `--legacy-harness` selects the previous one |
+| Parity against Mistral Vibe v3.1.0 | **40.7/100** Parity and **38.2/100** Conformance, weighted over 43 parts ([scorecard](docs/parity.md)) |
+| Parts at 100 | 4 of 43: worktrees, trusted folders and permissions, checkpoints, and setup. The scorecard explains the drop from 98.7 at v2.26.0 ([what the re-pin moved](docs/parity.md#what-the-re-pin-moved-v2260-to-v310)) |
+| Reference pin | [`c96a6db`](https://github.com/mistralai/mistral-vibe/releases/tag/v3.1.0), the v3.1.0 tag, upstream's newest release as of 2026-11-08 |
+| Default backend | The Unified Harness, the reference's only backend since v3.0.0. `--legacy-harness` selects this port's previous one |
 | Platforms | Release targets for Linux (x86_64, aarch64), macOS (x86_64, aarch64), and Windows (x86_64). CI runs every gate on Linux and Windows |
 | Releases | None published yet. Build from source below |
 

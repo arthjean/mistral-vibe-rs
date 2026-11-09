@@ -116,6 +116,9 @@ from provenance import MANIFEST, REPOSITORY
 
 SCORECARD = REPOSITORY / "docs/parity.md"
 REPIN = "python3 scripts/parity/repin.py"
+# The clean-room guard's digest sets and third-party layers record the commit
+# they were measured at without being corpora.
+LICENSING_DATA = "crates/vibe-core/tests/licensing/"
 PLAN = REPOSITORY / "scripts/parity/repin_plan.json"
 
 
@@ -199,6 +202,8 @@ def tracked_corpora() -> list[str]:
     for name in listing.stdout.decode().split("\0"):
         parts = name.split("/")
         if len(parts) < 4 or parts[2] != "tests" or not name.endswith(".json"):
+            continue
+        if name.startswith(LICENSING_DATA):
             continue
         try:
             corpus = json.loads((REPOSITORY / name).read_text(encoding="utf-8"))

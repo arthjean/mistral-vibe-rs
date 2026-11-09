@@ -4,10 +4,9 @@
 //! each registry entry names. Every handler is written once, against
 //! [`CommandBackend`], and says what it does as a sequence of [`Effect`]s and
 //! backend calls. The terminal client runs them against the live session
-//! (`workflow/live_commands.rs`); the command corpus replays them against the
-//! fixtures the reference was driven with (`commands_parity_tests/replay.rs`),
-//! so what a handler does is compared with the reference rather than asserted
-//! about.
+//! (`workflow/live_commands.rs`), and the black-box TUI families
+//! (`crates/vibe-cli/tests/tui_blackbox_parity_tests.rs`) compare what the
+//! terminal then shows with the v3.1.0 reference client.
 //!
 //! The operator-facing lines are the command's contract and are reproduced as
 //! observed. The exceptions are prose `NOTICE` keeps out of this repository:
@@ -56,30 +55,6 @@ pub(super) enum Panel {
     Rewind,
     Theme,
     Todos,
-}
-
-impl Panel {
-    /// The name the command corpus records the panel under.
-    #[cfg(test)]
-    pub(super) const fn name(self) -> &'static str {
-        match self {
-            Self::Config => "config",
-            Self::Model => "model",
-            Self::Skills => "skills",
-            Self::Thinking => "thinking",
-            Self::LogLevel => "logLevel",
-            Self::DebugConsole => "debugConsole",
-            Self::RemoteProjects => "remoteProjects",
-            Self::ProxySetup => "proxySetup",
-            Self::Sessions => "sessions",
-            Self::Mcp => "mcp",
-            Self::ConnectorAuth => "connectorAuth",
-            Self::Voice => "voice",
-            Self::Rewind => "rewind",
-            Self::Theme => "theme",
-            Self::Todos => "todos",
-        }
-    }
 }
 
 /// How a transient notification presents. Reference `App.notify` severities.

@@ -27,8 +27,7 @@ use std::path::Path;
 #[test]
 fn official_textual_commands_are_all_registered_with_their_aliases() {
     // This port's default registry: the reference's under a context that opens
-    // neither the registry-skills nor the experimental-harness gate, which the
-    // commands corpus measures family by family.
+    // neither the registry-skills nor the experimental-harness gate.
     let aliases = command_aliases().collect::<Vec<_>>();
     let mut expected = vec![
         "/branch",

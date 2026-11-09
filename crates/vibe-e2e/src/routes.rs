@@ -99,6 +99,23 @@ pub(crate) fn resolve(method: &str, path: &str) -> Option<Route> {
         ("GET", ["pypi", _, "json"]) => route("release_pypi", |_, _| {
             RouteReply::json(200, &json!({"info": {"version": RELEASED}, "releases": {}}))
         }),
+        // The v3.1.0 harness reads the active model's card for its context
+        // window and vision (`harness/runtimes/python/.../completion_profile/
+        // catalogue.py`), and its client the account's billing. A card names
+        // the model asked for; a missing one shows a warning whose timing
+        // races the first screen.
+        ("GET", ["v1", "models", _]) => route("model_card", |path, _| {
+            let model = path.rsplit('/').next().unwrap_or_default();
+            RouteReply::json(
+                200,
+                &json!({"id": model, "object": "model", "max_context_length": 262_144,
+                        "capabilities": {"completion_chat": true, "function_calling": true,
+                                         "vision": false}}),
+            )
+        }),
+        ("GET", ["v1", "billing", "subscription" | "budget"]) => {
+            route("billing", |_, _| RouteReply::not_found())
+        }
         ("GET", ["v1", "connectors", "bootstrap"]) => route("connectors_bootstrap", |_, _| {
             RouteReply::json(200, &json!({"connectors": []}))
         }),

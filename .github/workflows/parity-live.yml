@@ -129,8 +129,8 @@ jobs:
           fi
           chmod -R u+w "${home}" && rm -rf "${home}"
           exit "${status}"
-      # A driver no live probe calls (an assembled runtime oracle, the
-      # composer trace oracle, the parameter schema driver) is recaptured here
+      # A driver no live probe calls (the parameter schema driver, among
+      # others) is recaptured here
       # and compared with its corpus, so every driver's reference side runs.
       - name: Check the drivers no live probe calls
         id: unprobed

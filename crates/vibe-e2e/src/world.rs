@@ -148,8 +148,10 @@ impl World {
     pub(crate) fn create(setup: Setup, binaries: Binaries) -> Outcome<Self> {
         let platform = Platform::start()?;
         let sentinel = Sentinel::start()?;
+        // Fixed width, so a client that pads around the working directory it
+        // shows lays a screen out the same in every world of every process.
         let name = format!(
-            "vibe-e2e-{}-{}",
+            "vibe-e2e-{:010}-{:04}",
             std::process::id(),
             NEXT_WORLD.fetch_add(1, Ordering::SeqCst)
         );
@@ -337,6 +339,11 @@ impl World {
         env.push(("NO_PROXY".to_owned(), "127.0.0.1,localhost".to_owned()));
         env.push(("no_proxy".to_owned(), "127.0.0.1,localhost".to_owned()));
         env.push((WORLD_VARIABLE.to_owned(), self.name().to_owned()));
+        if cfg!(windows) {
+            // Python's `Path.home()` reads `USERPROFILE` on Windows, never
+            // `HOME`, and fails without it.
+            env.push(("USERPROFILE".to_owned(), path(self.home())));
+        }
         env.extend(windows_base().map(|(k, v)| (k.to_owned(), v.to_string_lossy().into_owned())));
         env.extend(self.inner.env.iter().cloned());
         env

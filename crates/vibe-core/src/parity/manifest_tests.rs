@@ -479,6 +479,10 @@ fn an_unlisted_corpus_names_the_command_that_adds_it() {
         fixture.is_empty(),
         "a file that names no reference is not a corpus"
     );
+    assert!(
+        !is_corpus_location("crates/vibe-core/tests/licensing/third-party-c96a6dbb34d3.json"),
+        "the clean-room guard's third-party layer records a commit without being a corpus"
+    );
 }
 
 #[test]

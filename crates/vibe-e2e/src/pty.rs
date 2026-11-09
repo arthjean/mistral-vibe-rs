@@ -156,6 +156,16 @@ impl std::fmt::Debug for Screen {
 }
 
 impl Screen {
+    /// The screen a terminal of `cols` by `rows` shows after `bytes`, for
+    /// tests of what reads a screen.
+    #[cfg(test)]
+    pub(crate) fn parse(cols: u16, rows: u16, bytes: &[u8]) -> Self {
+        let (cols, rows) = size(cols, rows).unwrap_or((NonZeroU16::MIN, NonZeroU16::MIN));
+        let mut parser = vt100::Parser::new(rows, cols, 0);
+        parser.process(bytes);
+        Self(parser.screen().clone())
+    }
+
     /// The visible text, one line per row, trailing blanks trimmed.
     #[must_use]
     pub fn text(&self) -> String {
@@ -198,6 +208,12 @@ impl Screen {
     #[must_use]
     pub fn cursor(&self) -> (u16, u16) {
         self.0.cursor_position()
+    }
+
+    /// Whether the client left the terminal cursor shown.
+    #[must_use]
+    pub fn cursor_visible(&self) -> bool {
+        !self.0.hide_cursor()
     }
 
     /// Columns and rows.

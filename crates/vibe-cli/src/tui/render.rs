@@ -30,8 +30,6 @@ use super::transcript;
 use composer::draw_input;
 pub(crate) use composer::editor_mouse_cell;
 pub(in crate::tui) use entries::follows_tool_toggle;
-#[cfg(test)]
-pub(in crate::tui) use entries::group_label;
 use entries::{Folding, Painted, effect_block, fold_keys, semantic_lines, tool_group};
 use overlays::{draw_callback_overlay, draw_overlay};
 use rewind::draw_rewind;

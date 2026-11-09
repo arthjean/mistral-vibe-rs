@@ -70,6 +70,7 @@ mod process;
 mod pty;
 mod routes;
 mod rpc;
+pub mod screens;
 pub mod seams;
 mod sentinel;
 mod suite;

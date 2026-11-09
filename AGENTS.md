@@ -36,7 +36,9 @@ vendored, linked, or shipped. This binds every change:
   it, never by adding a line. During a rolling re-pin the baseline stays cut
   at `PREVIOUS_COMMIT`, and a run the target finds passes only when it re-cuts
   a listed run, covering some of the same words of the same file and fewer
-  than eight words outside them.
+  than eight words outside them. The change that clears `PREVIOUS_COMMIT`
+  re-cuts the baseline at the target from the measured one, once the guard
+  passes with the previous pin still named, and drops that pin's digest set.
 
 ## The behavioral oracle
 
@@ -62,7 +64,8 @@ documentation use the Linux form; read them relative to the local checkout.
   Windows the build needs short paths, which `.parity/` under this repository
   gives.
 - Read the reference before writing Rust that touches a public boundary. Open
-  the owning module first, then implement. `vibe/cli/` is the terminal client,
+  the owning module first, then implement. `vibe/cli-rust/src/` is the terminal
+  client (`vibe/cli/` keeps the voice stack and `launcher.py`, which runs it),
   `vibe/app_server/` the session methods, `vibe/acp/` the editor protocol, and
   under `vibe/core/`: `tools/` the tool surface (`base.py` for naming and schema
   emission, `manager.py` for availability and filtering, `builtins/` for the
@@ -73,8 +76,11 @@ documentation use the Linux form; read them relative to the local checkout.
   the reference does not replace reading the declaration it points at.
 - Capture behavior with the oracle that owns the surface: an entry point in
   `scripts/parity/`, which takes `--reference <path>` and re-executes itself
-  under the reference interpreter, or the `*-oracle.py` beside its corpus in
-  `crates/vibe-cli/tests/runtime-parity/`. `scripts/parity/reference.py` is
+  under the reference interpreter, the `*-oracle.py` beside its corpus in
+  `crates/vibe-cli/tests/runtime-parity/`, or, for the terminal client, the
+  ignored `capture` test of `crates/vibe-cli/tests/tui_blackbox_parity_tests.rs`,
+  which types each script of its families into the reference's `vibe` under a
+  pseudo-terminal (`vibe_e2e::screens`) and stores the normalized screens. `scripts/parity/reference.py` is
   the one place that resolves and checks the attested environment and
   re-executes a driver; a driver never
   imports another driver, only shared modules and its own `<driver>_cases.py`
@@ -152,7 +158,11 @@ before working on it. Work that moves a part's parity restates its figures
 lines, its row and the header's weighted total in the same change:
 `scorecard_tests` derives each row's Parity and Conformance from the
 "Measured figures" lines and recomputes the total, and a row no replay
-measures reads `structural` and stays at or below 50. A divergence kept on
+measures reads `structural` and stays at or below 50. On a host holding the
+materialized pin, it also fails on a Python module under `vibe/` or a
+top-level module of `vibe/cli-rust/src/` that no row's Reference cell claims
+and "Reference modules out of scope" does not list, and on a cited path the
+pin does not hold, so a re-pin that adds a module adds its claim. A divergence kept on
 purpose gets a ledger row naming what holds it in place (`ledger_tests`
 resolves every path and symbol the row names).
 
@@ -178,8 +188,10 @@ The test lines remove two workstation inputs CI never has. The in-process
 app-server tests read the ambient vibe home, so a real `~/.vibe/config.toml`
 fails them. The live parity probes spawn the reference with the inherited
 environment, so an exported `FORCE_COLOR` makes it emit ANSI that no corpus
-holds. The opposite leak hides failures: credentials resolve from
-`MISTRAL_API_KEY`, then the OS keyring. To reproduce a failure seen only on the
+holds. The black-box TUI replays also need the system temporary directory to
+be `/tmp`, as on the runner: the screens they compare pad against the world's
+path, so they refuse another `TMPDIR` by name. The opposite leak hides
+failures: credentials resolve from `MISTRAL_API_KEY`, then the OS keyring. To reproduce a failure seen only on the
 runner, add `env -u MISTRAL_API_KEY DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent
 CI=true`, which removes the key and the keyring as the runner lacks them. The
 runner also holds no materialized reference environment, so on a Linux

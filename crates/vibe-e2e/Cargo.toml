@@ -12,6 +12,7 @@ publish = false
 libtest-mimic.workspace = true
 portable-pty.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 vt100.workspace = true
 
 [target.'cfg(unix)'.dependencies]

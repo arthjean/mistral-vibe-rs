@@ -472,10 +472,9 @@ pub fn parse_command_in<'a>(input: &'a str, context: &CommandContext) -> Option<
     }
     // The reference resolves an alias through `user_input.lower()`, which is
     // Unicode-aware: `/THIN\u{212A}ING`, spelled with the Kelvin sign, folds
-    // onto `/thinking` there. An ASCII-only fold left that input unparsed here,
-    // which the `parse` family of `crates/vibe-cli/tests/commands/corpus.json`
-    // measures. Every declared alias is lowercase, which the capture asserts, so
-    // lowercasing the head word once is the whole comparison.
+    // onto `/thinking` there, as the retired v2.26.0 command corpus measured.
+    // Every declared alias is lowercase, so lowercasing the head word once is
+    // the whole comparison.
     let lowered = alias.to_lowercase();
     COMMANDS
         .iter()

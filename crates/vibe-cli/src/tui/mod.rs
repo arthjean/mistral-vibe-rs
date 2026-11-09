@@ -2,16 +2,12 @@ pub mod attachments;
 pub mod attention;
 mod callback;
 pub mod chat_input;
-#[cfg(test)]
-mod chat_input_parity_tests;
 pub mod click_chain;
 pub mod clipboard;
 mod clipboard_images;
 mod cloud_workflow;
 mod command_handlers;
 pub mod commands;
-#[cfg(test)]
-mod commands_parity_tests;
 pub mod completion;
 mod composer;
 mod composer_layout;
@@ -44,8 +40,6 @@ mod remote_project_workflow;
 pub mod render;
 pub mod rewind;
 mod runtime;
-#[cfg(test)]
-mod runtime_parity_tests;
 mod session;
 mod session_picker;
 pub mod setup;

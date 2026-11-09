@@ -56,7 +56,11 @@
 //! covering some of the same words of the same file and fewer than a
 //! shingle's worth outside them (a new pin moves the boundaries of a copy the
 //! baseline already names). A run over text no listed run covers fails, as it
-//! does outside a transition.
+//! does outside a transition. The change that clears `PREVIOUS_COMMIT` also
+//! re-cuts the baseline at the target, from the measured one, after the guard
+//! passed with the previous pin still named: every line it gains re-cuts a
+//! line it drops, so the re-cut never grows the baseline, and the previous
+//! digest set leaves with it.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;

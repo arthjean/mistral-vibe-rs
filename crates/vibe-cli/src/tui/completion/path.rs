@@ -434,8 +434,5 @@ fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {
 }
 
 #[cfg(test)]
-mod autocompletion_parity_tests;
-
-#[cfg(test)]
 #[path = "path/path_tests.rs"]
 mod path_tests;

@@ -1,0 +1,1900 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+    "version": "3.1.0"
+  },
+  "platform": "linux",
+  "note": "Normalized screens of the reference's terminal client, one script per scenario (crates/vibe-cli/tests/tui_blackbox_parity_tests.rs). A row keeps its text only when every letter on it was typed, seeded or answered by the scenario; any other row is its length and SHA-256. Masked cells and the world's directories are named in each scenario's masks.",
+  "unavailable": [],
+  "scenarios": [
+    {
+      "name": "commands/popup",
+      "heading": "tui commands parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "type": "/"
+          },
+          {
+            "snapshot": "opened"
+          },
+          {
+            "type": "co"
+          },
+          {
+            "snapshot": "filtered"
+          },
+          {
+            "keys": [
+              "down"
+            ]
+          },
+          {
+            "snapshot": "moved"
+          },
+          {
+            "keys": [
+              "esc"
+            ]
+          },
+          {
+            "snapshot": "closed"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "opened",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+                },
+                {
+                  "length": 120,
+                  "sha256": "e657fbd42f7d613ce89fbc2d0c75dc2e01a087d861639489271f23a416d794c3"
+                },
+                {
+                  "length": 120,
+                  "sha256": "8cc689a13fbf2c8ee34c51bbb22131cd18c37c6ea2a35a894d2718cb35ec672b"
+                },
+                {
+                  "length": 120,
+                  "sha256": "e3d5640ba4bce26282c2e82840a6aab3b2da813ec74687a3073077f0ebdad348"
+                },
+                {
+                  "length": 120,
+                  "sha256": "99078b81265320bb7d1c0c9476ea79d7ad37c411c2e36a22b6dd75ef2c136cf6"
+                },
+                {
+                  "length": 120,
+                  "sha256": "d958b2d29536dab822eb7678487fed2cdbeeaf9878809ae4b19b3c12cde463d1"
+                },
+                {
+                  "length": 120,
+                  "sha256": "df89700e35f3cc9a8a05b96f68939d2bab71c5589f9cd7d7dd959bb6e1cbcd21"
+                },
+                {
+                  "length": 120,
+                  "sha256": "aea3b57304948e6abe67ec02652b7f2268ab57e89ac7e6202ab327c01400d977"
+                },
+                {
+                  "length": 120,
+                  "sha256": "b9cf289cc8b289ee99564e065ee137fbf977e5155d75464f67b4f8ded98d5bad"
+                },
+                {
+                  "length": 120,
+                  "sha256": "c50fe6c59e95f1608edeb0f662abe8272b5fd35784022bd9bf474b5bd7e1c178"
+                },
+                {
+                  "length": 120,
+                  "sha256": "212b7b11bf39f4e5c91bc0557c0130d0a18e583e7598fb9b3faa731d732d19b9"
+                },
+                {
+                  "text": "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "/"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 23,
+                  "runs": [
+                    [
+                      2,
+                      5,
+                      "bold inverse"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 24,
+                  "runs": [
+                    [
+                      2,
+                      7,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 25,
+                  "runs": [
+                    [
+                      2,
+                      7,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 26,
+                  "runs": [
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 27,
+                  "runs": [
+                    [
+                      2,
+                      6,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 28,
+                  "runs": [
+                    [
+                      2,
+                      8,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 29,
+                  "runs": [
+                    [
+                      2,
+                      11,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 30,
+                  "runs": [
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 31,
+                  "runs": [
+                    [
+                      2,
+                      8,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 32,
+                  "runs": [
+                    [
+                      2,
+                      9,
+                      "bold"
+                    ],
+                    [
+                      117,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "filtered",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+                },
+                {
+                  "length": 120,
+                  "sha256": "8cc689a13fbf2c8ee34c51bbb22131cd18c37c6ea2a35a894d2718cb35ec672b"
+                },
+                {
+                  "length": 120,
+                  "sha256": "df89700e35f3cc9a8a05b96f68939d2bab71c5589f9cd7d7dd959bb6e1cbcd21"
+                },
+                {
+                  "length": 120,
+                  "sha256": "aea3b57304948e6abe67ec02652b7f2268ab57e89ac7e6202ab327c01400d977"
+                },
+                {
+                  "length": 120,
+                  "sha256": "b9cf289cc8b289ee99564e065ee137fbf977e5155d75464f67b4f8ded98d5bad"
+                },
+                {
+                  "length": 120,
+                  "sha256": "c50fe6c59e95f1608edeb0f662abe8272b5fd35784022bd9bf474b5bd7e1c178"
+                },
+                {
+                  "length": 120,
+                  "sha256": "212b7b11bf39f4e5c91bc0557c0130d0a18e583e7598fb9b3faa731d732d19b9"
+                },
+                {
+                  "length": 120,
+                  "sha256": "1b9a342a725048f754ba94ef4e353adafd00dc9db275a552224a6841d018fbed"
+                },
+                {
+                  "length": 120,
+                  "sha256": "03054c361d0e47b9be09ffb989c97d004cbc3cf30dd60f0f7377dd9dfa7f6b93"
+                },
+                {
+                  "length": 120,
+                  "sha256": "293804653852647e957d1c9f72d225ccb2747744d51768d23dc19be9a94406f0"
+                },
+                {
+                  "length": 120,
+                  "sha256": "aeb7f0dd78c7c944eff5ffdc24e3c37f41b76c74c6ba2d6316a82acac5a99f98"
+                },
+                {
+                  "text": "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "/ co"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 23,
+                  "runs": [
+                    [
+                      2,
+                      7,
+                      "bold inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 24,
+                  "runs": [
+                    [
+                      2,
+                      8,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 25,
+                  "runs": [
+                    [
+                      2,
+                      11,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 27,
+                  "runs": [
+                    [
+                      2,
+                      8,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 28,
+                  "runs": [
+                    [
+                      2,
+                      9,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 29,
+                  "runs": [
+                    [
+                      2,
+                      5,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 30,
+                  "runs": [
+                    [
+                      2,
+                      19,
+                      "bold"
+                    ],
+                    [
+                      23,
+                      4,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "moved",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+                },
+                {
+                  "length": 120,
+                  "sha256": "8cc689a13fbf2c8ee34c51bbb22131cd18c37c6ea2a35a894d2718cb35ec672b"
+                },
+                {
+                  "length": 120,
+                  "sha256": "df89700e35f3cc9a8a05b96f68939d2bab71c5589f9cd7d7dd959bb6e1cbcd21"
+                },
+                {
+                  "length": 120,
+                  "sha256": "aea3b57304948e6abe67ec02652b7f2268ab57e89ac7e6202ab327c01400d977"
+                },
+                {
+                  "length": 120,
+                  "sha256": "b9cf289cc8b289ee99564e065ee137fbf977e5155d75464f67b4f8ded98d5bad"
+                },
+                {
+                  "length": 120,
+                  "sha256": "c50fe6c59e95f1608edeb0f662abe8272b5fd35784022bd9bf474b5bd7e1c178"
+                },
+                {
+                  "length": 120,
+                  "sha256": "212b7b11bf39f4e5c91bc0557c0130d0a18e583e7598fb9b3faa731d732d19b9"
+                },
+                {
+                  "length": 120,
+                  "sha256": "1b9a342a725048f754ba94ef4e353adafd00dc9db275a552224a6841d018fbed"
+                },
+                {
+                  "length": 120,
+                  "sha256": "03054c361d0e47b9be09ffb989c97d004cbc3cf30dd60f0f7377dd9dfa7f6b93"
+                },
+                {
+                  "length": 120,
+                  "sha256": "293804653852647e957d1c9f72d225ccb2747744d51768d23dc19be9a94406f0"
+                },
+                {
+                  "length": 120,
+                  "sha256": "aeb7f0dd78c7c944eff5ffdc24e3c37f41b76c74c6ba2d6316a82acac5a99f98"
+                },
+                {
+                  "text": "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "/ co"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 23,
+                  "runs": [
+                    [
+                      2,
+                      7,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 24,
+                  "runs": [
+                    [
+                      2,
+                      8,
+                      "bold inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 25,
+                  "runs": [
+                    [
+                      2,
+                      11,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 27,
+                  "runs": [
+                    [
+                      2,
+                      8,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 28,
+                  "runs": [
+                    [
+                      2,
+                      9,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 29,
+                  "runs": [
+                    [
+                      2,
+                      5,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 30,
+                  "runs": [
+                    [
+                      2,
+                      19,
+                      "bold"
+                    ],
+                    [
+                      23,
+                      4,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "closed",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": "/ co"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "commands/completion",
+      "heading": "tui commands parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "type": "/he"
+          },
+          {
+            "snapshot": "typed"
+          },
+          {
+            "keys": [
+              "tab"
+            ]
+          },
+          {
+            "snapshot": "completed"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "typed",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐"
+                },
+                {
+                  "length": 120,
+                  "sha256": "e071900d3cfb62c043a5d39440bd6e6aea9e1583a66d7a7c2922cccdc6190c55"
+                },
+                {
+                  "length": 120,
+                  "sha256": "ab43f77b405260190160257996ceb25a0d7bd5be7387eac7166ea47bfd9840fa"
+                },
+                {
+                  "length": 120,
+                  "sha256": "a1a7412d9ba3867dbc1966b1e2b313b2c38dcaed788b3821048b0c2897fc6c90"
+                },
+                {
+                  "text": "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘"
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "length": 4,
+                  "sha256": "7ae8358f7231d8620fcbde6bd8860d43d99dbc32149f9f5fd0a986c7401f1b15"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 30,
+                  "runs": [
+                    [
+                      2,
+                      5,
+                      "bold inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 31,
+                  "runs": [
+                    [
+                      2,
+                      6,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 32,
+                  "runs": [
+                    [
+                      2,
+                      9,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "completed",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "length": 6,
+                  "sha256": "427e13a4c7ea4a40a95006aaf9bf7914cf8e9f57a393b31702aa0bc898c64c35"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "commands/unknown",
+      "heading": "tui commands parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "type": "/nosuchcommand"
+          },
+          "submit",
+          {
+            "snapshot": "submitted"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "submitted",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "> /nosuchcommand"
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "  Answered as a prompt."
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "295a7ea417faeba3fcb796e46e34c0fe3450b69a9537b513f35b80fa4c16ed50"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 7,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ],
+                    [
+                      2,
+                      14,
+                      "bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      106,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                ">> Vibe",
+                "Scripted session",
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

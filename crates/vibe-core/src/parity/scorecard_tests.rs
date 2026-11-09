@@ -2,8 +2,9 @@
 //! judgement.
 //!
 //! Every row of the parity table carries a score, and the header states a
-//! weighted total together with the raw sum, the weight and the axis lists the
-//! weighting comes from. That total is hand-written, so a pass that restates a
+//! weighted Parity and Conformance together with their raw sums, the weight,
+//! the axis lists the weighting comes from, the commit measured and the newest
+//! upstream tag the census recorded. That total is hand-written, so a pass that restates a
 //! row and forgets the header leaves the document contradicting itself: the
 //! table says one thing and the cell summarizing it says another. This module
 //! recomputes the total from the table, using the weights the same cell
@@ -84,15 +85,40 @@ fn the_weighted_total_is_the_sum_the_parity_table_produces() {
         .and_then(|(_, rest)| rest.split_once("/100**"))
         .map(|(score, _)| score.to_owned())
         .expect("the total is written as `**NN.N/100**`");
+    let stated_conformance = cell
+        .split_once("/100** Parity and **")
+        .and_then(|(_, rest)| rest.split_once("/100** Conformance"))
+        .map(|(score, _)| score.to_owned())
+        .expect("the total states its Conformance as `**NN.N/100** Conformance`");
     let stated_sum = cell
         .split_once(", from ")
         .and_then(|(_, rest)| rest.split_once(" over a weight of "))
-        .and_then(|(sum, rest)| {
-            let weight = rest.split(' ').next()?;
-            Some((number(sum)?, number(weight)?))
+        .and_then(|(sums, rest)| {
+            let (parity, conformance) = sums.split_once(" and ")?;
+            let weight = rest.split([' ', ',']).next()?;
+            Some((number(parity)?, number(conformance)?, number(weight)?))
         })
-        .expect("the total names its raw sum and its weight");
-    let (stated_raw, stated_weight) = stated_sum;
+        .expect("the total names its Parity and Conformance sums and its weight");
+    let (stated_raw, stated_conformant, stated_weight) = stated_sum;
+    let measured = format!(
+        "measured at `{}`",
+        super::figures::abbreviate(super::REFERENCE_COMMIT)
+    );
+    assert!(
+        cell.contains(&measured),
+        "the total does not say it was {measured}, the pin"
+    );
+    let census: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(repo_root().join(CENSUS)).expect("the upstream census is committed"),
+    )
+    .expect("the upstream census parses");
+    let newest = census["newest"]["tag"]
+        .as_str()
+        .expect("the census names the newest upstream tag");
+    assert!(
+        cell.contains(&format!("the newest upstream tag `{newest}`")),
+        "the total does not name `{newest}`, the newest upstream tag {CENSUS} records"
+    );
 
     let heavy = axes(cell, "weight 3 for");
     let light = axes(cell, "weight 1 for");
@@ -106,6 +132,7 @@ fn the_weighted_total_is_the_sum_the_parity_table_produces() {
         !scores.is_empty(),
         "no row of `{TABLE_SECTION}` parsed, so this guard would pass on an empty table"
     );
+    let conformance = stated_scores(&document);
     for axis in heavy.iter().chain(light.iter()) {
         assert!(
             scores.contains_key(axis),
@@ -114,6 +141,7 @@ fn the_weighted_total_is_the_sum_the_parity_table_produces() {
     }
 
     let mut raw = 0;
+    let mut conformant = 0;
     let mut weight = 0;
     let mut middling = 0;
     for (axis, score) in &scores {
@@ -126,8 +154,25 @@ fn the_weighted_total_is_the_sum_the_parity_table_produces() {
             2
         };
         raw += score * factor;
+        // A structural row measured nothing, so it conforms to nothing.
+        let measured = conformance
+            .get(axis)
+            .and_then(|(_, cell)| cell.parse::<u32>().ok())
+            .unwrap_or(0);
+        conformant += measured * factor;
         weight += factor;
     }
+    assert_eq!(
+        conformant, stated_conformant,
+        "the parity table's Conformance sums to {conformant} and the header says \
+         {stated_conformant}"
+    );
+    let computed_conformance = format!("{:.1}", f64::from(conformant) / f64::from(weight));
+    assert_eq!(
+        computed_conformance, stated_conformance,
+        "{conformant} over {weight} is {computed_conformance} and the header states \
+         {stated_conformance} Conformance"
+    );
 
     assert_eq!(
         raw, stated_raw,
@@ -321,5 +366,257 @@ fn every_row_states_the_parity_and_conformance_its_figures_derive() {
         mismatches.is_empty(),
         "the parity table disagrees with its figures:\n  {}",
         mismatches.join("\n  ")
+    );
+}
+
+/// The subsection of `## Parity by part` that lists the reference modules no
+/// row measures, one path and its reason per line.
+const OUT_OF_SCOPE: &str = "### Reference modules out of scope";
+
+/// Claims so wide they name a tree rather than a module, so they claim
+/// nothing: a row has to say which part of the tree it measures.
+const TOO_BROAD: [&str; 4] = [
+    "vibe/",
+    "vibe/core/",
+    "vibe/cli-rust/",
+    "vibe/cli-rust/src/",
+];
+
+/// Where the reference's terminal client keeps its top-level modules.
+const CLIENT_SOURCES: &str = "vibe/cli-rust/src/";
+
+/// What the scorecard says about the reference tree: every path a row's
+/// Reference cell cites, by row, and every path the out-of-scope list names,
+/// with its reason.
+struct Claims {
+    rows: BTreeMap<u32, Vec<String>>,
+    out_of_scope: Vec<(String, String)>,
+}
+
+fn claims(document: &str) -> Claims {
+    let mut rows = BTreeMap::new();
+    let mut out_of_scope = Vec::new();
+    let mut inside = false;
+    let mut listing = false;
+    for line in document.lines() {
+        if line.starts_with("## ") {
+            inside = line.trim() == TABLE_SECTION;
+            listing = false;
+            continue;
+        }
+        if line.starts_with("### ") {
+            listing = inside && line.trim() == OUT_OF_SCOPE;
+            continue;
+        }
+        if !inside || !line.starts_with("| ") {
+            continue;
+        }
+        let cells: Vec<&str> = line.trim_matches('|').split(" | ").map(str::trim).collect();
+        if listing {
+            let path = cells
+                .first()
+                .and_then(|cell| cell.strip_prefix('`'))
+                .and_then(|cell| cell.strip_suffix('`'));
+            if let (Some(path), Some(reason)) = (path, cells.get(1)) {
+                out_of_scope.push((path.to_owned(), (*reason).to_owned()));
+            }
+            continue;
+        }
+        let (Some(axis), Some(reference)) = (
+            cells.first().and_then(|cell| cell.parse::<u32>().ok()),
+            cells.get(4),
+        ) else {
+            continue;
+        };
+        let cited = reference
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            // `file.py:120-140` cites lines of the file the claim is on.
+            .map(|path| path.split(':').next().unwrap_or(path).to_owned())
+            .collect();
+        rows.insert(axis, cited);
+    }
+    Claims { rows, out_of_scope }
+}
+
+/// Whether `claim` names `path` or a directory `path` sits in.
+fn covers(claim: &str, path: &str) -> bool {
+    !TOO_BROAD.contains(&claim)
+        && (claim == path || (claim.ends_with('/') && path.starts_with(claim)))
+}
+
+/// The top-level module of the terminal client a reference path belongs to,
+/// as `ui` for both `vibe/cli-rust/src/ui.rs` and `vibe/cli-rust/src/ui/x.rs`.
+fn client_module(path: &str) -> Option<&str> {
+    let rest = path.strip_prefix(CLIENT_SOURCES)?;
+    let head = rest.split('/').next()?;
+    let module = head.strip_suffix(".rs").unwrap_or(head);
+    (!module.is_empty()).then_some(module)
+}
+
+/// The modules of `python` (paths of `.py` files under `vibe/`) and `client`
+/// (top-level module names of the terminal client) that no row and no
+/// out-of-scope line claims.
+fn unclaimed(claims: &Claims, python: &[String], client: &[String]) -> Vec<String> {
+    let named: Vec<&str> = claims
+        .rows
+        .values()
+        .flatten()
+        .map(String::as_str)
+        .chain(claims.out_of_scope.iter().map(|(path, _)| path.as_str()))
+        .collect();
+    let mut missing: Vec<String> = python
+        .iter()
+        .filter(|module| !named.iter().any(|claim| covers(claim, module)))
+        .cloned()
+        .collect();
+    missing.extend(
+        client
+            .iter()
+            .filter(|module| {
+                !named
+                    .iter()
+                    .any(|claim| client_module(claim) == Some(module.as_str()))
+            })
+            .map(|module| format!("{CLIENT_SOURCES}{module}")),
+    );
+    missing
+}
+
+/// Every `.py` file under `vibe/` outside the terminal client, and every
+/// top-level module of the terminal client, in the tree at `source`.
+fn reference_modules(source: &Path) -> (Vec<String>, Vec<String>) {
+    fn walk(source: &Path, directory: &Path, found: &mut Vec<String>) {
+        let Ok(entries) = fs::read_dir(directory) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(relative) = path.strip_prefix(source) else {
+                continue;
+            };
+            let relative = relative.to_string_lossy().replace('\\', "/");
+            if relative.starts_with("vibe/cli-rust") {
+                continue;
+            }
+            if path.is_dir() {
+                walk(source, &path, found);
+            } else if relative.ends_with(".py") {
+                found.push(relative);
+            }
+        }
+    }
+    let mut python = Vec::new();
+    walk(source, &source.join("vibe"), &mut python);
+    python.sort();
+    let mut client: Vec<String> = fs::read_dir(source.join(CLIENT_SOURCES))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let rust = Path::new(&name)
+                .extension()
+                .is_some_and(|extension| extension == "rs");
+            let module = name.strip_suffix(".rs").unwrap_or(&name).to_owned();
+            (entry.path().is_dir() || rust).then_some(module)
+        })
+        .collect();
+    client.sort();
+    client.dedup();
+    (python, client)
+}
+
+#[test]
+fn a_module_is_claimed_by_a_row_or_listed_out_of_scope() {
+    let document = "\
+## Parity by part
+
+| # | Part | Parity | Conformance | Reference | State |
+|---|---|---|---|---|---|
+| 1 | One | 0 | structural | `vibe/core/tools/`, `vibe/cli-rust/src/ui/mod.rs`, `vibe/core/types.py:12-40` | x |
+| 2 | Two | 0 | structural | `vibe/`, `vibe/cli-rust/src/` | x |
+
+### Reference modules out of scope
+
+| Reference path | Why no row measures it |
+|---|---|
+| `vibe/__init__.py` | A package marker |
+
+## Measured figures
+";
+    let claims = claims(document);
+    assert_eq!(claims.out_of_scope.len(), 1);
+    assert_eq!(claims.rows[&1][2], "vibe/core/types.py");
+    let python = [
+        "vibe/__init__.py",
+        "vibe/core/tools/base.py",
+        "vibe/core/types.py",
+        "vibe/core/loop.py",
+    ]
+    .map(str::to_owned);
+    let client = ["ui", "keymap"].map(str::to_owned);
+    assert_eq!(
+        unclaimed(&claims, &python, &client),
+        ["vibe/core/loop.py", "vibe/cli-rust/src/keymap"],
+        "a claim on `vibe/` or on the whole client tree claims nothing"
+    );
+}
+
+#[test]
+fn every_reference_module_is_claimed_and_every_cited_path_exists_at_the_pin() {
+    let Some(root) = super::live::gate_native("scorecard coverage of the reference tree") else {
+        return;
+    };
+    let source = super::live::source_tree(&root);
+    let document =
+        fs::read_to_string(repo_root().join(SCORECARD)).expect("the scorecard is committed");
+    let claims = claims(&document);
+    let (python, client) = reference_modules(&source);
+    assert!(
+        python.len() > 100 && client.len() > 50,
+        "the tree at {} holds {} Python modules and {} client modules, so this walk read the \
+         wrong directory",
+        source.display(),
+        python.len(),
+        client.len()
+    );
+
+    let missing = unclaimed(&claims, &python, &client);
+    assert!(
+        missing.is_empty(),
+        "no row of `{TABLE_SECTION}` claims these reference modules and `{OUT_OF_SCOPE}` does \
+         not list them with a reason:\n  {}",
+        missing.join("\n  ")
+    );
+
+    let mut absent = Vec::new();
+    for (row, cited) in &claims.rows {
+        for path in cited {
+            if !source.join(path.trim_end_matches('/')).exists() {
+                absent.push(format!("row {row} cites `{path}`"));
+            }
+        }
+    }
+    for (path, reason) in &claims.out_of_scope {
+        if !source.join(path.trim_end_matches('/')).exists() {
+            absent.push(format!("`{OUT_OF_SCOPE}` lists `{path}`"));
+        }
+        assert!(
+            !reason.is_empty(),
+            "`{path}` is out of scope without a reason"
+        );
+    }
+    assert!(
+        absent.is_empty(),
+        "these reference paths do not exist at {}:\n  {}",
+        &super::REFERENCE_COMMIT[..12],
+        absent.join("\n  ")
+    );
+    println!(
+        "scorecard coverage: {} Python modules and {} client modules, all claimed",
+        python.len(),
+        client.len()
     );
 }

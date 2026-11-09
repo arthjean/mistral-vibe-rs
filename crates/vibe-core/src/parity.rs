@@ -32,7 +32,7 @@ pub const REFERENCE_COMMIT: &str = "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616";
 /// `transition` list names, and empty outside a transition. A live probe whose
 /// corpora are at this commit gates on its attested environment
 /// ([`live::gate`]).
-pub const PREVIOUS_COMMIT: &str = "376f6a33413a3eec9b3795b0c0e004066c47b5c1";
+pub const PREVIOUS_COMMIT: &str = "";
 
 /// The pin's commits a corpus may record: [`REFERENCE_COMMIT`], then
 /// [`PREVIOUS_COMMIT`] during a transition.

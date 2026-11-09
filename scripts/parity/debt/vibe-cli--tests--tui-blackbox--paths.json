@@ -1,0 +1,35 @@
+{
+  "corpus": "crates/vibe-cli/tests/tui-blackbox/paths.json",
+  "measuredAgainst": "76e1a4dd6815cdb70fd68c7196c6cae3de05f9d24ec5a5513e3a748504167d19",
+  "schemaVersion": 1,
+  "tallies": {
+    "tui paths parity:": {
+      "paths/fuzzy": {
+        "/snapshots/*/screen/attributes/*": 15,
+        "/snapshots/*/screen/attributes/*/row": 11,
+        "/snapshots/*/screen/attributes/*/runs/*": 6,
+        "/snapshots/*/screen/attributes/*/runs/*/*": 25,
+        "/snapshots/*/screen/cursor/col": 2,
+        "/snapshots/*/screen/cursor/row": 2,
+        "/snapshots/*/screen/cursor/visible": 2,
+        "/snapshots/*/screen/rows/*/length": 16,
+        "/snapshots/*/screen/rows/*/sha256": 18,
+        "/snapshots/*/screen/rows/*/text": 23,
+        "/snapshots/*/screen/titles/*": 4
+      },
+      "paths/popup": {
+        "/snapshots/*/screen/attributes/*": 19,
+        "/snapshots/*/screen/attributes/*/row": 19,
+        "/snapshots/*/screen/attributes/*/runs/*": 13,
+        "/snapshots/*/screen/attributes/*/runs/*/*": 47,
+        "/snapshots/*/screen/cursor/col": 3,
+        "/snapshots/*/screen/cursor/row": 3,
+        "/snapshots/*/screen/cursor/visible": 3,
+        "/snapshots/*/screen/rows/*/length": 24,
+        "/snapshots/*/screen/rows/*/sha256": 27,
+        "/snapshots/*/screen/rows/*/text": 30,
+        "/snapshots/*/screen/titles/*": 6
+      }
+    }
+  }
+}

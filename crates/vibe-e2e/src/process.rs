@@ -70,6 +70,12 @@ impl Command {
         }
     }
 
+    /// The program the command starts.
+    #[must_use]
+    pub fn program(&self) -> &std::path::Path {
+        &self.program
+    }
+
     #[must_use]
     pub fn arg(mut self, argument: impl Into<OsString>) -> Self {
         self.args.push(argument.into());

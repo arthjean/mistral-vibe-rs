@@ -28,7 +28,7 @@ EXPECTED_COMMIT = "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616"
 #: The commit a re-pin leaves, still accepted for the corpora the manifest's
 #: ``transition`` list names; empty outside a transition. The Rust half is
 #: ``vibe_core::parity::PREVIOUS_COMMIT``.
-PREVIOUS_COMMIT = "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
+PREVIOUS_COMMIT = ""
 
 #: The package version :data:`EXPECTED_COMMIT` publishes.
 EXPECTED_VERSION = "3.1.0"

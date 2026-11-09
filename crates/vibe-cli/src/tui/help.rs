@@ -11,11 +11,11 @@
 //!
 //! The structure is the contract; the prose is not. Every heading, shortcut line
 //! and prefix line upstream is authored prose `NOTICE` forbids reproducing, so
-//! the lines below are this port's own, covering the same directives.
-//! `crates/vibe-cli/tests/commands/corpus.json` records the reference's as a
-//! byte length and a SHA-256, and
-//! `this_ports_help_prose_never_matches_a_reference_digest` holds the two
-//! permanently apart.
+//! the lines below are this port's own, covering the same directives, and the
+//! clean-room guard (`crates/vibe-core/src/parity/licensing_tests.rs`) keeps
+//! any run of them shared with the reference out of the repository. The
+//! `startup/help` script of the black-box `tui startup parity:` replay measures
+//! what `/help` renders.
 //!
 //! [`SHORTCUTS`] is not documentation about the key handler: it *is* the key
 //! handler's binding table, since [`super::shortcuts::chord_of`] resolves every
@@ -183,23 +183,6 @@ pub(super) const HEADINGS: [&str; 3] = [
     "### Input Prefixes",
     "### Available Commands",
 ];
-
-/// Every line this port authors, which is the set the licensing guard holds
-/// unequal to every reference digest.
-///
-/// The command lines are deliberately not among them: both halves of a command
-/// line are the registry's own contract rather than prose, and `helpCommands` is
-/// what compares them.
-#[cfg(test)]
-pub(super) fn authored_lines() -> Vec<String> {
-    HEADINGS
-        .iter()
-        .copied()
-        .map(str::to_owned)
-        .chain(SHORTCUTS.iter().map(Shortcut::line))
-        .chain(FEATURES.iter().copied().map(str::to_owned))
-        .collect()
-}
 
 /// One command's line: every alias as a code span, the canonical `/name` first
 /// and the rest sorted, then the description the registry publishes.

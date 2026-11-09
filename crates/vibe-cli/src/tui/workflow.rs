@@ -46,13 +46,9 @@ pub(in crate::tui) use keys::handle_overlay_key;
 // tests drive it directly.
 #[cfg(test)]
 pub(in crate::tui) use keys::handle_remote_project_create_key;
-#[cfg(test)]
-pub(in crate::tui) use live_commands::scheduled_loop;
 pub(in crate::tui) use live_commands::{FollowUp, LiveBackend, run_command, todos_overlay};
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
-#[cfg(test)]
-pub(in crate::tui) use mcp::{auth_panel_context, reduce_auth_action};
 
 /// How much of the saved transcript one page of the rewind picker reads,
 /// which is the most the store answers at once.

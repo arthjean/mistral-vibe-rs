@@ -1,0 +1,55 @@
+{
+  "corpus": "crates/vibe-cli/tests/tui-blackbox/startup.json",
+  "measuredAgainst": "21a8c7b8a899ff7542b169095daaa89e2bc3f52fbca48cb7b3036bd9805961bd",
+  "schemaVersion": 1,
+  "tallies": {
+    "tui startup parity:": {
+      "startup/first-screen": {
+        "/snapshots/*/screen/attributes/*": 5,
+        "/snapshots/*/screen/attributes/*/row": 5,
+        "/snapshots/*/screen/attributes/*/runs/*": 2,
+        "/snapshots/*/screen/attributes/*/runs/*/*": 11,
+        "/snapshots/*/screen/cursor/col": 1,
+        "/snapshots/*/screen/cursor/row": 1,
+        "/snapshots/*/screen/cursor/visible": 1,
+        "/snapshots/*/screen/rows/*/length": 8,
+        "/snapshots/*/screen/rows/*/sha256": 9,
+        "/snapshots/*/screen/rows/*/text": 10,
+        "/snapshots/*/screen/titles/*": 2
+      },
+      "startup/help": {
+        "/snapshots/*/screen/attributes/*": 10,
+        "/snapshots/*/screen/attributes/*/row": 6,
+        "/snapshots/*/screen/attributes/*/runs/*": 102,
+        "/snapshots/*/screen/attributes/*/runs/*/*": 374,
+        "/snapshots/*/screen/cursor/col": 2,
+        "/snapshots/*/screen/cursor/row": 2,
+        "/snapshots/*/screen/cursor/visible": 2,
+        "/snapshots/*/screen/rows/*/length": 70,
+        "/snapshots/*/screen/rows/*/sha256": 72,
+        "/snapshots/*/screen/rows/*/text": 4,
+        "/snapshots/*/screen/titles/*": 4
+      },
+      "startup/quit": {
+        "/snapshots/*/screen/cursor/row": 1,
+        "/snapshots/*/screen/rows/*/length": 3,
+        "/snapshots/*/screen/rows/*/sha256": 3,
+        "/snapshots/*/screen/rows/*/text": 3,
+        "/snapshots/*/screen/titles/*": 1
+      },
+      "startup/resize": {
+        "/snapshots/*/screen/attributes/*": 11,
+        "/snapshots/*/screen/attributes/*/row": 10,
+        "/snapshots/*/screen/attributes/*/runs/*": 5,
+        "/snapshots/*/screen/attributes/*/runs/*/*": 22,
+        "/snapshots/*/screen/cursor/col": 2,
+        "/snapshots/*/screen/cursor/row": 2,
+        "/snapshots/*/screen/cursor/visible": 2,
+        "/snapshots/*/screen/rows/*/length": 17,
+        "/snapshots/*/screen/rows/*/sha256": 19,
+        "/snapshots/*/screen/rows/*/text": 21,
+        "/snapshots/*/screen/titles/*": 4
+      }
+    }
+  }
+}

@@ -1,0 +1,2310 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "commit": "c96a6dbb34d34f8a868b3f67b279ecabbf1aa616",
+    "version": "3.1.0"
+  },
+  "platform": "linux",
+  "note": "Normalized screens of the reference's terminal client, one script per scenario (crates/vibe-cli/tests/tui_blackbox_parity_tests.rs). A row keeps its text only when every letter on it was typed, seeded or answered by the scenario; any other row is its length and SHA-256. Masked cells and the world's directories are named in each scenario's masks.",
+  "unavailable": [],
+  "scenarios": [
+    {
+      "name": "startup/first-screen",
+      "heading": "tui startup parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "snapshot": "ready"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "ready",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "startup/resize",
+      "heading": "tui startup parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          "settle",
+          {
+            "resize": [
+              80,
+              24
+            ]
+          },
+          {
+            "snapshot": "80x24"
+          },
+          {
+            "resize": [
+              120,
+              40
+            ]
+          },
+          {
+            "snapshot": "restored"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "80x24",
+            "screen": {
+              "size": [
+                80,
+                24
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 80,
+                  "sha256": "7be29c171a4407f9340d29d6402b53f8c53602e4f6161b9298de6f8568df4a47"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 52,
+                  "sha256": "0b8f211bdd36cb7580e2abed025668ea337e58c29821e4d3741a12da2db921bf"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 18,
+                  "runs": [
+                    [
+                      66,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 19,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 23,
+                  "runs": [
+                    [
+                      67,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "restored",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "length": 33,
+                  "sha256": "0a2a3daf0be5d28386c43f6f7475726d7c3309b44674881b478bdfdbdf87ed41"
+                },
+                {
+                  "length": 28,
+                  "sha256": "1e8592902a881e6ba45f1afdd801b7fabe310ea6e2f3caae255cbd77a409b8a3"
+                },
+                {
+                  "length": 45,
+                  "sha256": "b85129961fd3135cc417ade875d787841de7ea8733d70b6325a28ab41be54e79"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      14,
+                      12,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      19,
+                      5,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "startup/help",
+      "heading": "tui startup parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          {
+            "type": "/help"
+          },
+          "submit",
+          {
+            "snapshot": "help"
+          },
+          {
+            "keys": [
+              "esc"
+            ]
+          },
+          {
+            "snapshot": "dismissed"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "help",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "length": 33,
+                  "sha256": "e5c776f5f76bc75b05a7f54dc44390831326b24fdeaa569d198c833c3ef92980"
+                },
+                {
+                  "length": 86,
+                  "sha256": "da531b01d13aca81b9ea694df68ca427495018e261f5fc6ad36bf3bf80de8ea4"
+                },
+                {
+                  "length": 55,
+                  "sha256": "596d436fb606c6e2a2134bcb11ed79f315e7fb36cb29eea52d163702a3aee60c"
+                },
+                {
+                  "length": 52,
+                  "sha256": "7bfa02a86fc7d1376bef03c6ed782b9b1ca600f110a96b8fb1213d8a6db434a3"
+                },
+                {
+                  "length": 32,
+                  "sha256": "f4610807cdf101e4a4c167093429180dc96cc46f81381a2762668bf034498c08"
+                },
+                {
+                  "length": 54,
+                  "sha256": "d471b9d84455f5ca28e757807d6f6c491ced850560b2f0e2af547dbd93b087d6"
+                },
+                {
+                  "length": 28,
+                  "sha256": "7e6f8ebe832ab82438f643cc01c7f6e6f945dac3c5eac15052456c582afa6b03"
+                },
+                {
+                  "length": 52,
+                  "sha256": "daa4909e9d8290b98b53161d12a3dd321ee9eaac83aeeeaf73c7739452ca300c"
+                },
+                {
+                  "length": 83,
+                  "sha256": "54e776d74c19f8cf9d6989c7aba0358280ba6453d5b4a2ab3c9c52b575d214fe"
+                },
+                {
+                  "length": 51,
+                  "sha256": "0d3ab831d10da3cbad18473e97d8803c09e6473c313ac273efa2afb4be382433"
+                },
+                {
+                  "length": 65,
+                  "sha256": "c58fe1cba8ac080de374494bd6a8f0cd5c3ad903d6589d379ad5d22bdf8549b4"
+                },
+                {
+                  "length": 112,
+                  "sha256": "0ea12ec1bfb88adf5fbd5309c9565cd5716cab89e47a2ddbb5096607589aef97"
+                },
+                {
+                  "length": 62,
+                  "sha256": "34ceb4213754ca02e002e7fac8ea942577b87861d8bcac39466ff2ec3af7c2f7"
+                },
+                {
+                  "length": 31,
+                  "sha256": "bd4c95205388f62860d6e5bc48fa0e121963f6ea2c26a845bb68a42263fa5a49"
+                },
+                {
+                  "length": 120,
+                  "sha256": "be15030f5949d2537c19fb2cad829427780ae28e2f6c668d428db3959c68004f"
+                },
+                {
+                  "length": 62,
+                  "sha256": "8b59e1273d50315f0b9005ce1318549b260e9a50d1c7c5da3052112b72ca1bc7"
+                },
+                {
+                  "length": 77,
+                  "sha256": "bbb281249f497b6a98803b99f667c61246ae71a730a18c561bf81632650e867a"
+                },
+                {
+                  "length": 74,
+                  "sha256": "a2235f4e0b66b0e03b64525f170492881b0e41a8e21e70f71a3e4ee2efe955ab"
+                },
+                {
+                  "length": 75,
+                  "sha256": "9119cb3b9744c70265e28aba7d8a129ff694326d3a57bf1d1fbe0c278b9684e2"
+                },
+                {
+                  "length": 73,
+                  "sha256": "3789c3d70556d4629379e0240ba3ebba714ca6d150d45729fa8504c0ba486b09"
+                },
+                {
+                  "length": 39,
+                  "sha256": "a7ec19905bd9de0f42ca78906289b9af6d38d34928f4850a9f84a263fa57e3f8"
+                },
+                {
+                  "length": 64,
+                  "sha256": "d9d171027afe15a37361bd28c7d418a55ef3f2abbfed509812bd0e00409ae63d"
+                },
+                {
+                  "length": 91,
+                  "sha256": "88ec82d24ca0d80f07f4e027227553be7982eb01e263ee4b53229347caf7dd38"
+                },
+                {
+                  "length": 62,
+                  "sha256": "051474ed261a1d0c44caa8dfaa8e5143b33f032e9df15fa80eadbf7167ddb452"
+                },
+                {
+                  "length": 68,
+                  "sha256": "a151155f03e20cbf052c59fc83e6e68c16802329a4139d6f4c9bb0b8f53d0feb"
+                },
+                {
+                  "length": 107,
+                  "sha256": "5759e0fa3d86a61ddfd27affdbb63aa0f48845b3ff5a10126610e60a576e4d75"
+                },
+                {
+                  "length": 48,
+                  "sha256": "a38d27107a1b03f5cb4ced5c5229b14f0b049f7ddaef58a0c66d0ffc9eb9f2ee"
+                },
+                {
+                  "length": 24,
+                  "sha256": "8a2d5757ce6317ff58870ad1a2f0a2ce4e8baaa3be8d02d07fe17309510a1ec0"
+                },
+                {
+                  "length": 36,
+                  "sha256": "b9d19b5f3c3635088b695055269953ee56d346ed91948040db89e6a4c969d0ab"
+                },
+                {
+                  "length": 44,
+                  "sha256": "b50438eb559d371a13d78a505521e318ab4ea42615ed54e84af6750b6c9ba196"
+                },
+                {
+                  "length": 36,
+                  "sha256": "f89c5c5763edcb3004f16b6172888a48616c6f6fe85254ceed0ed7517c3087c1"
+                },
+                {
+                  "length": 68,
+                  "sha256": "929f10a16042cb7d00ed167d71a38720696102a300e6448f62bc6be613f29919"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 0,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      4,
+                      8,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 2,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      4,
+                      15,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 4,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 5,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      11,
+                      2,
+                      "fg:palette bold"
+                    ],
+                    [
+                      15,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      22,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      28,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 6,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 7,
+                  "runs": [
+                    [
+                      4,
+                      10,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 8,
+                  "runs": [
+                    [
+                      4,
+                      10,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 9,
+                  "runs": [
+                    [
+                      4,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 10,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 11,
+                  "runs": [
+                    [
+                      4,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      10,
+                      11,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 12,
+                  "runs": [
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 13,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 14,
+                  "runs": [
+                    [
+                      4,
+                      8,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 15,
+                  "runs": [
+                    [
+                      4,
+                      12,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 16,
+                  "runs": [
+                    [
+                      4,
+                      14,
+                      "fg:palette bold"
+                    ],
+                    [
+                      20,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 17,
+                  "runs": [
+                    [
+                      4,
+                      15,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 18,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 19,
+                  "runs": [
+                    [
+                      4,
+                      15,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 20,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 21,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      13,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 22,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 23,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 24,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 25,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 26,
+                  "runs": [
+                    [
+                      4,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 27,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 28,
+                  "runs": [
+                    [
+                      4,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 29,
+                  "runs": [
+                    [
+                      4,
+                      12,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 30,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 31,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          },
+          {
+            "name": "dismissed",
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": true,
+              "cursor": {
+                "visible": false
+              },
+              "rows": [
+                {
+                  "length": 33,
+                  "sha256": "e5c776f5f76bc75b05a7f54dc44390831326b24fdeaa569d198c833c3ef92980"
+                },
+                {
+                  "length": 86,
+                  "sha256": "da531b01d13aca81b9ea694df68ca427495018e261f5fc6ad36bf3bf80de8ea4"
+                },
+                {
+                  "length": 55,
+                  "sha256": "596d436fb606c6e2a2134bcb11ed79f315e7fb36cb29eea52d163702a3aee60c"
+                },
+                {
+                  "length": 52,
+                  "sha256": "7bfa02a86fc7d1376bef03c6ed782b9b1ca600f110a96b8fb1213d8a6db434a3"
+                },
+                {
+                  "length": 32,
+                  "sha256": "f4610807cdf101e4a4c167093429180dc96cc46f81381a2762668bf034498c08"
+                },
+                {
+                  "length": 54,
+                  "sha256": "d471b9d84455f5ca28e757807d6f6c491ced850560b2f0e2af547dbd93b087d6"
+                },
+                {
+                  "length": 28,
+                  "sha256": "7e6f8ebe832ab82438f643cc01c7f6e6f945dac3c5eac15052456c582afa6b03"
+                },
+                {
+                  "length": 52,
+                  "sha256": "daa4909e9d8290b98b53161d12a3dd321ee9eaac83aeeeaf73c7739452ca300c"
+                },
+                {
+                  "length": 83,
+                  "sha256": "54e776d74c19f8cf9d6989c7aba0358280ba6453d5b4a2ab3c9c52b575d214fe"
+                },
+                {
+                  "length": 51,
+                  "sha256": "0d3ab831d10da3cbad18473e97d8803c09e6473c313ac273efa2afb4be382433"
+                },
+                {
+                  "length": 65,
+                  "sha256": "c58fe1cba8ac080de374494bd6a8f0cd5c3ad903d6589d379ad5d22bdf8549b4"
+                },
+                {
+                  "length": 112,
+                  "sha256": "0ea12ec1bfb88adf5fbd5309c9565cd5716cab89e47a2ddbb5096607589aef97"
+                },
+                {
+                  "length": 62,
+                  "sha256": "34ceb4213754ca02e002e7fac8ea942577b87861d8bcac39466ff2ec3af7c2f7"
+                },
+                {
+                  "length": 31,
+                  "sha256": "bd4c95205388f62860d6e5bc48fa0e121963f6ea2c26a845bb68a42263fa5a49"
+                },
+                {
+                  "length": 120,
+                  "sha256": "be15030f5949d2537c19fb2cad829427780ae28e2f6c668d428db3959c68004f"
+                },
+                {
+                  "length": 62,
+                  "sha256": "8b59e1273d50315f0b9005ce1318549b260e9a50d1c7c5da3052112b72ca1bc7"
+                },
+                {
+                  "length": 77,
+                  "sha256": "bbb281249f497b6a98803b99f667c61246ae71a730a18c561bf81632650e867a"
+                },
+                {
+                  "length": 74,
+                  "sha256": "a2235f4e0b66b0e03b64525f170492881b0e41a8e21e70f71a3e4ee2efe955ab"
+                },
+                {
+                  "length": 75,
+                  "sha256": "9119cb3b9744c70265e28aba7d8a129ff694326d3a57bf1d1fbe0c278b9684e2"
+                },
+                {
+                  "length": 73,
+                  "sha256": "3789c3d70556d4629379e0240ba3ebba714ca6d150d45729fa8504c0ba486b09"
+                },
+                {
+                  "length": 39,
+                  "sha256": "a7ec19905bd9de0f42ca78906289b9af6d38d34928f4850a9f84a263fa57e3f8"
+                },
+                {
+                  "length": 64,
+                  "sha256": "d9d171027afe15a37361bd28c7d418a55ef3f2abbfed509812bd0e00409ae63d"
+                },
+                {
+                  "length": 91,
+                  "sha256": "88ec82d24ca0d80f07f4e027227553be7982eb01e263ee4b53229347caf7dd38"
+                },
+                {
+                  "length": 62,
+                  "sha256": "051474ed261a1d0c44caa8dfaa8e5143b33f032e9df15fa80eadbf7167ddb452"
+                },
+                {
+                  "length": 68,
+                  "sha256": "a151155f03e20cbf052c59fc83e6e68c16802329a4139d6f4c9bb0b8f53d0feb"
+                },
+                {
+                  "length": 107,
+                  "sha256": "5759e0fa3d86a61ddfd27affdbb63aa0f48845b3ff5a10126610e60a576e4d75"
+                },
+                {
+                  "length": 48,
+                  "sha256": "a38d27107a1b03f5cb4ced5c5229b14f0b049f7ddaef58a0c66d0ffc9eb9f2ee"
+                },
+                {
+                  "length": 24,
+                  "sha256": "8a2d5757ce6317ff58870ad1a2f0a2ce4e8baaa3be8d02d07fe17309510a1ec0"
+                },
+                {
+                  "length": 36,
+                  "sha256": "b9d19b5f3c3635088b695055269953ee56d346ed91948040db89e6a4c969d0ab"
+                },
+                {
+                  "length": 44,
+                  "sha256": "b50438eb559d371a13d78a505521e318ab4ea42615ed54e84af6750b6c9ba196"
+                },
+                {
+                  "length": 36,
+                  "sha256": "f89c5c5763edcb3004f16b6172888a48616c6f6fe85254ceed0ed7517c3087c1"
+                },
+                {
+                  "length": 68,
+                  "sha256": "929f10a16042cb7d00ed167d71a38720696102a300e6448f62bc6be613f29919"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "length": 120,
+                  "sha256": "a3f79ad34b4b968abea9125102b790df25b474a8a2e25dbc69580fbe428e21a2"
+                },
+                {
+                  "text": ">"
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
+                },
+                {
+                  "length": 92,
+                  "sha256": "ff0d0fdcd7738a204edd7f726a90a06f7201a55da37184fc8b2bee13665554df"
+                }
+              ],
+              "attributes": [
+                {
+                  "row": 0,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 1,
+                  "runs": [
+                    [
+                      4,
+                      8,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 2,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 3,
+                  "runs": [
+                    [
+                      4,
+                      15,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 4,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 5,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      11,
+                      2,
+                      "fg:palette bold"
+                    ],
+                    [
+                      15,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      22,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      28,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 6,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 7,
+                  "runs": [
+                    [
+                      4,
+                      10,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 8,
+                  "runs": [
+                    [
+                      4,
+                      10,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 9,
+                  "runs": [
+                    [
+                      4,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 10,
+                  "runs": [
+                    [
+                      4,
+                      5,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 11,
+                  "runs": [
+                    [
+                      4,
+                      4,
+                      "fg:palette bold"
+                    ],
+                    [
+                      10,
+                      11,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 12,
+                  "runs": [
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 13,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 14,
+                  "runs": [
+                    [
+                      4,
+                      8,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 15,
+                  "runs": [
+                    [
+                      4,
+                      12,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 16,
+                  "runs": [
+                    [
+                      4,
+                      14,
+                      "fg:palette bold"
+                    ],
+                    [
+                      20,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 17,
+                  "runs": [
+                    [
+                      4,
+                      15,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 18,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 19,
+                  "runs": [
+                    [
+                      4,
+                      15,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 20,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 21,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      13,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 22,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 23,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 24,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 25,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 26,
+                  "runs": [
+                    [
+                      4,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 27,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 28,
+                  "runs": [
+                    [
+                      4,
+                      9,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 29,
+                  "runs": [
+                    [
+                      4,
+                      12,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 30,
+                  "runs": [
+                    [
+                      4,
+                      6,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 31,
+                  "runs": [
+                    [
+                      4,
+                      7,
+                      "fg:palette bold"
+                    ],
+                    [
+                      119,
+                      1,
+                      "fg:palette inverse"
+                    ]
+                  ]
+                },
+                {
+                  "row": 34,
+                  "runs": [
+                    [
+                      106,
+                      13,
+                      "fg:palette"
+                    ]
+                  ]
+                },
+                {
+                  "row": 35,
+                  "runs": [
+                    [
+                      0,
+                      2,
+                      "fg:palette bold"
+                    ]
+                  ]
+                },
+                {
+                  "row": 39,
+                  "runs": [
+                    [
+                      107,
+                      6,
+                      "fg:palette bg:palette"
+                    ]
+                  ]
+                }
+              ],
+              "titles": [
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "startup/quit",
+      "heading": "tui startup parity:",
+      "scenario": {
+        "size": [
+          120,
+          40
+        ],
+        "arguments": [],
+        "steps": [
+          {
+            "waitFor": "/help"
+          },
+          {
+            "waitGone": "Initializing"
+          },
+          "settle",
+          {
+            "keys": [
+              "ctrl+c"
+            ]
+          },
+          {
+            "pause": 300
+          },
+          {
+            "keys": [
+              "ctrl+c"
+            ]
+          },
+          {
+            "exit": "exited"
+          }
+        ],
+        "masks": {
+          "ranges": [
+            {
+              "from": "U+2800",
+              "to": "U+28FF",
+              "reason": "braille cells animate: the startup logo never stops and spinners turn"
+            }
+          ],
+          "drawnCursor": "the composer blinks its own cursor by drawing a cell inverted over palette color 0, wherever the hidden terminal cursor is left",
+          "tokens": []
+        }
+      },
+      "observed": {
+        "snapshots": [
+          {
+            "name": "exited",
+            "exit": 0,
+            "screen": {
+              "size": [
+                120,
+                40
+              ],
+              "alternate": false,
+              "cursor": {
+                "row": 0,
+                "col": 0,
+                "visible": true
+              },
+              "rows": [
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                }
+              ],
+              "attributes": [],
+              "titles": [
+                "",
+                "Vibe"
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

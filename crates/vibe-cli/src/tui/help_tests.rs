@@ -20,8 +20,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::BTreeSet;
 use std::path::Path;
 
-/// The context `crates/vibe-cli/tests/commands/corpus.json` recorded the help
-/// families under: every command available, nothing excluded.
+/// The widest command context: every command available, nothing excluded.
 fn full_context() -> CommandContext {
     CommandContext::new(true, true).with_clipboard_image_supported(true)
 }

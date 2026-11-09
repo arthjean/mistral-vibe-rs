@@ -74,15 +74,8 @@
     },
     {
       "story": "US-021",
-      "title": "Terminal-client oracles, retired for the black-box TUI runner",
+      "title": "Terminal-client oracles: the black-box TUI runner",
       "drivers": [
-        "oracle.py",
-        "commands.py",
-        "autocompletion.py",
-        "active-turn-oracle.py",
-        "session-management-oracle.py",
-        "startup-oracle.py",
-        "tui-interactions-oracle.py",
         "cargo"
       ]
     }

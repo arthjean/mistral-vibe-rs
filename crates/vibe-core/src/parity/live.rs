@@ -384,7 +384,7 @@ pub fn probe_commit(manifest: &Manifest, file: &str, previous: &str) -> Result<S
             .map(|(owner, _)| owner.to_owned())
     };
     // The corpora the file's own tests replay, else those of the test modules
-    // it declares (`runtime_parity_tests.rs` owns `runtime_parity_tests/`).
+    // it declares (`foo_tests.rs` owns `foo_tests/`).
     let directory = format!("{}/", file.trim_end_matches(".rs"));
     let mut owned: Vec<&ManifestEntry> = manifest
         .entries
