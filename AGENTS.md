@@ -207,7 +207,10 @@ five minutes; see `.config/nextest.toml`) followed by `cargo test --doc`. A test
 defect a story of `tasks/prd-windows-native-support.md` owns carries
 `#[cfg_attr(windows, ignore = "windows: <cause> (US-NNN)")]`, and the job
 summary counts those tags; a test that cannot run on Windows at all says why
-in an ignore reason starting `windows by design:`. A test that clears the child
+in an ignore reason starting `windows by design:`. An e2e scenario carries
+either reason through `Scenario::windows_ignore` (`crates/vibe-e2e`), and a
+defect only that battery found names its `E2E-Dnn` register row and US-034 of
+`tasks/prd-e2e-test-battery.md`. A test that clears the child
 environment keeps the Windows base set (`SystemRoot` above all, without which
 Winsock fails to start), as `crates/vibe-cli/tests/support` and
 `scripts/parity/host_env.py` do.
