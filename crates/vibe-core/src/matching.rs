@@ -132,12 +132,8 @@ fn matches_glob(pattern: &[char], value: &[char]) -> bool {
                 None => candidate == Some('['),
             },
             Some(literal) => candidate == Some(*literal),
-            None => {
-                if value_index == value.len() {
-                    return true;
-                }
-                false
-            }
+            None if value_index == value.len() => return true,
+            None => false,
         };
         if matched {
             pattern_index = pattern_index.saturating_add(1);
