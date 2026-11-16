@@ -286,7 +286,12 @@ fn trust(ctx: &mut Ctx) -> Outcome {
     )?;
     let file = std::fs::read_to_string(world.vibe_home().join("trusted_folders.toml"))?;
     let work = world.work().to_string_lossy().into_owned();
-    ensure(file.contains(&work), || {
+    let table: toml::Table = toml::from_str(&file).map_err(|error| error.to_string())?;
+    let trusted = table
+        .get("trusted")
+        .and_then(toml::Value::as_array)
+        .is_some_and(|folders| folders.iter().any(|f| f.as_str() == Some(work.as_str())));
+    ensure(trusted, || {
         format!("trusted_folders.toml does not name the work tree: {file}")
     })?;
     rpc.hang_up().map(drop)

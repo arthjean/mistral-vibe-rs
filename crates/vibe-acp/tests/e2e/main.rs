@@ -13,6 +13,8 @@ mod permissions;
 mod routing;
 mod sessions;
 mod setup;
+mod telemetry;
+mod voice;
 
 use std::process::ExitCode;
 
@@ -37,6 +39,8 @@ fn main() -> ExitCode {
         .scenarios(permissions::scenarios())
         .scenarios(sessions::scenarios())
         .scenarios(setup::scenarios())
+        .scenarios(telemetry::scenarios())
+        .scenarios(voice::scenarios())
         .run()
 }
 
