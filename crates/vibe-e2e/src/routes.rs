@@ -84,6 +84,14 @@ pub(crate) fn resolve(method: &str, path: &str) -> Option<Route> {
         ("POST", ["v1", "datalake", "events"]) => {
             route("datalake", |_, _| RouteReply::json(200, &json!({})))
         }
+        // The speech API: a short silence, which the null sink plays.
+        ("POST", ["v1", "audio", "speech"]) => route("speech", |_, _| {
+            RouteReply::json(200, &crate::voice::speech_body())
+        }),
+        // An OTLP collector (`otel_endpoint`); the journal decodes the spans.
+        ("POST", ["v1", "traces"]) => route("traces", |_, _| {
+            RouteReply::raw(200, "application/x-protobuf", "")
+        }),
         ("POST", ["api", "eval", _]) => route("experiments", |_, _| {
             RouteReply::json(200, &json!({"features": {}}))
         }),

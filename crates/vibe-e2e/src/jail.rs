@@ -27,25 +27,41 @@ pub enum Jail {
     Unjailed,
 }
 
+/// The bubblewrap prefix: a network namespace of its own, and an empty
+/// `/dev/snd`, so no trial reaches a sound card whatever its ALSA
+/// configuration names ([`crate::voice`]).
+#[cfg(target_os = "linux")]
+fn bwrap() -> Vec<String> {
+    let mut prefix = vec!["bwrap", "--unshare-net", "--dev-bind", "/", "/"];
+    if std::path::Path::new(SOUND_DEVICES).is_dir() {
+        prefix.extend(["--tmpfs", SOUND_DEVICES]);
+    }
+    prefix.extend(["--die-with-parent", "--"]);
+    prefix.into_iter().map(str::to_owned).collect()
+}
+
+/// Where Linux exposes sound cards.
+pub const SOUND_DEVICES: &str = "/dev/snd";
+
+/// The sound devices a trial could open: none inside the bubblewrap jail.
+#[must_use]
+pub fn sound_devices() -> Vec<String> {
+    std::fs::read_dir(SOUND_DEVICES)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The wrapper prefixes, in order of preference.
 #[cfg(target_os = "linux")]
 fn wrappers() -> Vec<(&'static str, Vec<String>)> {
     let (uid, gid) = ids();
     vec![
-        (
-            "bwrap",
-            [
-                "bwrap",
-                "--unshare-net",
-                "--dev-bind",
-                "/",
-                "/",
-                "--die-with-parent",
-                "--",
-            ]
-            .map(str::to_owned)
-            .to_vec(),
-        ),
+        ("bwrap", bwrap()),
         (
             "unshare",
             vec![
