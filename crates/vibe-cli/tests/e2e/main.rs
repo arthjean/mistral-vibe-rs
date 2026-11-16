@@ -12,6 +12,7 @@ mod faults;
 mod hooks;
 mod hygiene;
 mod mcp;
+mod observability;
 mod permissions;
 mod programmatic;
 mod reference;
@@ -19,11 +20,13 @@ mod self_test;
 mod sessions;
 mod skills;
 mod surface;
+mod telemetry;
 mod tools;
 mod tui;
 mod tui_commands;
 mod tui_periphery;
 mod tui_turns;
+mod voice;
 #[cfg(feature = "test-fixtures")]
 mod wire;
 
@@ -54,9 +57,12 @@ fn main() -> ExitCode {
         .scenarios(mcp::scenarios())
         .scenarios(skills::scenarios())
         .scenarios(hygiene::scenarios())
+        .scenarios(telemetry::scenarios())
+        .scenarios(observability::scenarios())
         .scenarios(tui::scenarios())
         .scenarios(tui_turns::scenarios())
         .scenarios(tui_commands::scenarios())
         .scenarios(tui_periphery::scenarios())
+        .scenarios(voice::scenarios())
         .run()
 }

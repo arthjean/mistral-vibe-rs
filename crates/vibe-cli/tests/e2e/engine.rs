@@ -83,11 +83,13 @@ pub fn scenarios() -> Vec<Scenario> {
         Scenario::new(
             "engine::streaming::paced_output_streams_and_stops_on_sigint",
             paced,
-        ),
+        )
+        .windows_ignore(vibe_e2e::NO_CONSOLE_INTERRUPT),
         Scenario::new(
             "engine::streaming::an_interrupted_answer_is_not_printed",
             interrupted_answer,
         )
+        .windows_ignore(vibe_e2e::NO_CONSOLE_INTERRUPT)
         .known_defect(
             "E2E-D37",
             "SIGINT during `--output streaming` prints the partial answer as a completed entry",

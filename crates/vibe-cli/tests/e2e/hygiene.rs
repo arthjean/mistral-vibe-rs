@@ -50,6 +50,7 @@ pub fn scenarios() -> Vec<Scenario> {
             "hygiene::processes::a_background_command_leaves_no_process",
             |ctx| leftovers(ctx, &json!({"command": "sleep 300 > /dev/null 2>&1 &"})),
         )
+        .windows_ignore(vibe_e2e::NO_SURVIVOR_SCAN)
         .port_only(
             "the reference leaves a background `bash` job alive after `vibe -p` exits \
              (measured 2026-10-28)",
@@ -62,13 +63,15 @@ pub fn scenarios() -> Vec<Scenario> {
                     &json!({"command": "sleep 300; echo after", "timeout_seconds": 1}),
                 )
             },
-        ),
+        )
+        .windows_ignore(vibe_e2e::NO_SURVIVOR_SCAN),
     ]);
     scenarios.push(
         Scenario::new(
             "hygiene::processes::an_interrupted_turn_leaves_no_process",
             interrupted,
         )
+        .windows_ignore(vibe_e2e::NO_SURVIVOR_SCAN)
         .known_defect(
             "E2E-D21",
             "a `bash` command interrupted with its turn leaves its process alive",

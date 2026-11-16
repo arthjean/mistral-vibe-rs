@@ -201,14 +201,16 @@ pub fn scenarios() -> Vec<Scenario> {
                 command.trim_start_matches('-').replace('-', "_"),
                 choice.name()
             );
-            scenarios.push(
-                Scenario::new(name, move |ctx| update_prompt(ctx, command, choice))
-                    .port_only(
-                        "the reference's update host, pypi.org, is hardcoded; the prompt is read \
-                         from `_show_update_prompt` in vibe/cli/cli.py",
-                    )
-                    .tests_seam("VIBE_UPDATE_BASE_URL"),
-            );
+            let scenario = Scenario::new(name, move |ctx| update_prompt(ctx, command, choice))
+                .port_only(
+                    "the reference's update host, pypi.org, is hardcoded; the prompt is read \
+                     from `_show_update_prompt` in vibe/cli/cli.py",
+                )
+                .tests_seam("VIBE_UPDATE_BASE_URL");
+            scenarios.push(match choice {
+                Choice::Updated | Choice::Failed => scenario.windows_ignore(REAL_INSTALLER),
+                Choice::Cancel | Choice::Quit => scenario,
+            });
         }
     }
     scenarios
@@ -223,7 +225,8 @@ fn composer_keys(ctx: &mut Ctx) -> Outcome {
     let world = tui_world(ctx, Setup::mistral())?;
     world.platform().reply(Reply::text("received"));
     let mut tui = launch(&world, &[])?;
-    ensure(tui.screen().alternate(), || {
+    // ConPTY keeps the alternate screen to itself and never forwards the switch.
+    ensure(cfg!(windows) || tui.screen().alternate(), || {
         "the TUI did not take the alternate screen".to_owned()
     })?;
     tui.type_text("helo")?;
@@ -397,7 +400,9 @@ fn paced_answer(ctx: &mut Ctx) -> Outcome {
     // Events: the role chunk, then one per piece; the fifth piece is event 5.
     let gate = world.platform().gate_before(1, 5);
     let mut tui = launch(&world, &[])?;
-    let before = footer(&tui.screen());
+    // The footer can land after the first frame, so it is read once it shows.
+    let idle = tui.wait_screen("the idle token footer", |s| footer(s).is_some(), STEP)?;
+    let before = footer(&idle);
     prompt(&mut tui, "stream please")?;
     world.platform().await_events(1, 5, STEP)?;
     let partial = tui.wait_text("alpha bravo charlie delta", STEP)?;
@@ -583,6 +588,13 @@ impl Choice {
         }
     }
 }
+
+/// On Windows the update runs the published `install.ps1` through
+/// PowerShell's `irm` (`upgrade_commands` in crates/vibe-cli/src/distribution.rs),
+/// which takes the system proxy and ignores the proxy variables, so the
+/// sentinel cannot stop it and no `sh` on PATH stands in for it.
+const REAL_INSTALLER: &str = "windows by design: the update downloads and runs the published \
+     installer through PowerShell, which no proxy variable or PATH entry stops";
 
 /// A newer release on the release route opens the update prompt in the
 /// terminal; each choice ends as `_show_update_prompt` (vibe/cli/cli.py) ends
