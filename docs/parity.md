@@ -357,7 +357,7 @@ line to restate.
 | `session parity:` | linux | 16 | `c96a6db` | 1 | 1 | 25 | 0 | 1398 | 6 |
 | `app-server method inventory parity:` | all | 17 | `c96a6db` | 141 | 0 | 174 | 0 | 33 | 0 |
 | `protocol parity:` | linux | 17 | `c96a6db` | 181 | 83 | 400 | 0 | 1921 | 176 |
-| `protocol parity:` | windows | 17 | `c96a6db` | 262 | 3 | 400 | 0 | 1871 | 10 |
+| `protocol parity:` | windows | 17 | `c96a6db` | 181 | 83 | 400 | 0 | 1921 | 176 |
 | `wire validation parity:` | all | 17 | `c96a6db` | 8018 | 0 | 8036 | 0 | 18 | 0 |
 | `hooks parity:` | all | 18 | `c96a6db` | 1 | 0 | 39 | 0 | 1515 | 1 |
 | `system prompt parity:` | linux | 19 | `c96a6db` | 2 | 0 | 49 | 0 | 354 | 45 |
