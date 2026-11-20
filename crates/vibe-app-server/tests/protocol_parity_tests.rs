@@ -31,7 +31,7 @@ use std::path::Path;
 use serde_json::Value;
 use vibe_core::parity::debt::{Note, assert_notes};
 use vibe_core::parity::replay::{
-    Band, Capture, Class, OwnProse, PatternDivergence, Replay, assert_ledger, entries, scenarios,
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
 };
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
@@ -673,22 +673,6 @@ const PROSE: &[OwnProse] = &[
     },
 ];
 
-/// What only a Windows host answers otherwise: the corpus is captured on
-/// Linux.
-const PLATFORM: &[PatternDivergence] = if cfg!(windows) {
-    &[PatternDivergence {
-        scenario: "flows/shell-command",
-        pointer: "/9/response/error/message",
-        count: 1,
-        row: "6",
-        class: Class::Gap,
-        reason: "the refusal of a working directory outside the workspace spells the directory \
-                 with the host's own separators and drive, so its digest differs from the POSIX                  path the corpus records",
-    }]
-} else {
-    &[]
-};
-
 #[test]
 fn the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     Replay {
@@ -701,17 +685,13 @@ fn the_port_answers_every_protocol_scenario_as_the_corpus_records_or_as_the_ledg
         ],
         output: &Path::new(env!("CARGO_TARGET_TMPDIR")).join("protocol-parity-port.json"),
     }
-    .run(entries(PROSE).chain(entries(PLATFORM)));
+    .run(entries(PROSE));
 }
 
 #[test]
 fn every_ledger_entry_is_declared_soundly() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    assert_ledger(
-        LISTED,
-        &scenarios(&corpus),
-        entries(PROSE).chain(entries(PLATFORM)),
-    );
+    assert_ledger(LISTED, &scenarios(&corpus), entries(PROSE));
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still
