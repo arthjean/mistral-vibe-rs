@@ -221,7 +221,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [
@@ -806,7 +806,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [
@@ -1942,7 +1942,7 @@
                 "payload": {
                   "connectors": []
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [
@@ -3852,7 +3852,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               },
               "<fingerprint>": {
                 "format": 2,
@@ -3907,7 +3907,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [
@@ -4146,7 +4146,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               },
               "<fingerprint>": {
                 "payload": {
@@ -4200,7 +4200,7 @@
                     }
                   ]
                 },
-                "stored_at_timestamp": "<time>"
+                "stored_at_timestamp": "<time:int>"
               }
             },
             "siblings": [
@@ -4442,7 +4442,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               },
               "<fingerprint>": {
                 "format": 2,
@@ -4497,7 +4497,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               },
               "<registry-key>": {
                 "payload": {
@@ -4551,7 +4551,7 @@
                     }
                   ]
                 },
-                "stored_at_timestamp": "<time>"
+                "stored_at_timestamp": "<time:int>"
               },
               "other-fresh": {
                 "format": 2,
@@ -4585,7 +4585,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               },
               "other-legacy": {
                 "payload": {
@@ -4618,7 +4618,7 @@
                     }
                   ]
                 },
-                "stored_at_timestamp": "<time>"
+                "stored_at_timestamp": "<time:int>"
               },
               "other-stale": {
                 "format": 2,
@@ -4673,7 +4673,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [
@@ -5427,7 +5427,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [
@@ -5903,7 +5903,7 @@
                     }
                   ]
                 },
-                "stored_at": "<time>"
+                "stored_at": "<time:int>"
               }
             },
             "siblings": [

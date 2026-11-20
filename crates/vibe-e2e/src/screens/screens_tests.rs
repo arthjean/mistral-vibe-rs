@@ -11,7 +11,7 @@ fn a_row_keeps_its_text_only_when_every_letter_on_it_is_authored() {
     let screen = Screen::parse(40, 3, b"> hello there\r\nsomething the subject wrote\r\n");
     let view = normalized(&screen, &[], &["hello there"], &masks(), "");
     assert_eq!(view["rows"][0], json!({"text": "> hello there"}));
-    assert_eq!(view["rows"][1]["length"], json!(27));
+    assert_eq!(view["rows"][1]["prose"], json!(27));
     assert_eq!(view["rows"][1]["sha256"].as_str().map(str::len), Some(64));
     assert!(view["rows"][1].get("text").is_none());
     assert_eq!(view["rows"][2], json!({"text": ""}));

@@ -43,8 +43,8 @@ impl CommandPolicy {
 
 /// The programs whose policy can withhold a grant.
 ///
-/// Reference `_OPTION_GATED_COMMANDS`. The others only nominate path
-/// candidates, which become outside-directory requirements of their own.
+/// Reference `_OPTION_GATED_COMMANDS`. Every other program merely proposes
+/// paths, each of which turns into its own outside-directory requirement.
 const OPTION_GATED_COMMANDS: [&str; 15] = [
     "date",
     "du",

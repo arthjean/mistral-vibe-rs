@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-cli/tests/programmatic-parity/corpus.json",
-  "measuredAgainst": "b0bd297700320168752a4b2ac908304fbef47a4ae10df84048231ad7562b351e",
+  "measuredAgainst": "d570c56cd5d6f79d617c912d666bbd7e5075bbbaee995d772f8ed950ed0f4388",
   "schemaVersion": 1,
   "tallies": {
     "programmatic parity:": {

@@ -29,6 +29,7 @@ this directory on ``sys.path``.
 
 from __future__ import annotations
 
+import argparse
 import datetime
 import json
 import os
@@ -97,6 +98,33 @@ def naming_scenarios(capture: Callable[[dict[str, Any]], T]) -> Callable[[dict[s
     return named
 
 
+#: Flags a driver no longer takes, each with the one that replaced it.
+RETIRED_FLAGS = {"--allow-unpinned": "--expected-commit"}
+
+
+class _RetiredFlag(argparse.Action):
+    """Refuses a retired flag, naming the flag that replaced it."""
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: Any, values: Any,
+                 option_string: str | None = None) -> None:
+        replacement = RETIRED_FLAGS.get(option_string or "", "--expected-commit")
+        parser.error(
+            f"{option_string} is retired; the commit a capture measures is {replacement}, which "
+            "defaults to the pin, and an off-pin capture runs only through "
+            "`python3 scripts/parity/repin.py capture <corpus> --commit <sha>`"
+        )
+
+
+def add_commit_argument(parser: argparse.ArgumentParser) -> None:
+    """The one flag naming the commit a driver's reference capture measures,
+    `--expected-commit` (the pin by default; :func:`provenance.expected_commit`
+    refuses any other unless `repin.py capture --commit` set it), and every
+    retired spelling of it, which exits naming it."""
+    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    for flag in RETIRED_FLAGS:
+        parser.add_argument(flag, nargs=0, action=_RetiredFlag, help=argparse.SUPPRESS)
+
+
 def _target_commit(expected: str | None) -> str:
     try:
         return provenance.expected_commit(expected, EXPECTED_COMMIT)
@@ -133,7 +161,7 @@ def environment(
     ``scripts/parity/repin.py capture`` started the capture, or ``reference``
     is the attested environment of ``PREVIOUS_COMMIT`` during a rolling
     re-pin, which a live probe of a corpus still at that commit passes: an empty or
-    ``None`` ``expected`` (``--expected-commit ''``, ``--allow-unpinned``) or
+    ``None`` ``expected`` (``--expected-commit ''``) or
     another commit is refused anywhere else, since the corpus it wrote would
     record a commit no replay accepts (:func:`provenance.expected_commit`).
     """

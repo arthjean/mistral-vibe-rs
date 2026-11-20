@@ -109,6 +109,63 @@ fn collect_differences(reference: &Value, port: &Value, pointer: &str, found: &m
     }
 }
 
+/// The observation of one answer a replay compares answer by answer: `value`
+/// under the keys of `path`, so `["spans", "name"]` and `"chat"` read
+/// `{"spans": {"name": "chat"}}`, and the answer's difference sits at
+/// `/spans/name`. An absent answer, for a surface this port does not have,
+/// is no key at all, which differs from any answer the reference gave.
+#[must_use]
+pub fn nested(path: &[&str], value: Option<Value>) -> Value {
+    path.iter()
+        .rev()
+        .fold(value, |inner, key| {
+            let mut object = serde_json::Map::new();
+            if let Some(inner) = inner {
+                object.insert((*key).to_owned(), inner);
+            }
+            Some(Value::Object(object))
+        })
+        .unwrap_or(Value::Null)
+}
+
+/// How a replay that records [`nested`] observations `depth` keys deep finds
+/// their differences: the keys above `depth` are walked, a key only one side
+/// holds is a difference at its own pointer, and whatever sits at `depth` is
+/// one value, so one answer is one difference however much it holds. A
+/// [`Tally`] over such observations declares it through [`Tally::differ`].
+pub fn nested_differences(depth: usize) -> impl Fn(&Value, &Value) -> Vec<String> + Copy {
+    move |reference, port| {
+        let mut found = Vec::new();
+        collect_nested(reference, port, "", depth, &mut found);
+        found
+    }
+}
+
+fn collect_nested(
+    reference: &Value,
+    port: &Value,
+    pointer: &str,
+    depth: usize,
+    found: &mut Vec<String>,
+) {
+    match (reference, port) {
+        (Value::Object(left), Value::Object(right)) if depth > 0 => {
+            let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
+            for key in keys {
+                let child = format!("{pointer}/{}", key.replace('~', "~0").replace('/', "~1"));
+                match (left.get(key), right.get(key)) {
+                    (Some(left), Some(right)) => {
+                        collect_nested(left, right, &child, depth - 1, found);
+                    }
+                    _ => found.push(child),
+                }
+            }
+        }
+        _ if reference != port => found.push(pointer.to_owned()),
+        _ => {}
+    }
+}
+
 /// One place two documents disagree, with what each side holds there.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValuedDifference {
@@ -263,11 +320,12 @@ pub fn scorecard_rows(scorecard: &str) -> BTreeSet<&str> {
 }
 
 /// A text as a capture records the prose a program authored: its length in
-/// code points and the hexadecimal SHA-256 of its UTF-8 bytes.
+/// code points under `prose` and the hexadecimal SHA-256 of its UTF-8 bytes,
+/// the one digest shape every driver writes and [`is_digest`] reads.
 #[must_use]
 pub fn digest(text: &str) -> Value {
     json!({
-        "length": text.chars().count(),
+        "prose": text.chars().count(),
         "sha256": crate::text::sha256_hex(text.as_bytes()),
     })
 }
@@ -289,6 +347,54 @@ pub fn pinned_reference(probe: &str) -> Option<PathBuf> {
 #[track_caller]
 pub fn pinned_reference_native(probe: &str) -> Option<PathBuf> {
     super::live::gate_native(probe)
+}
+
+/// A directory of one live recapture's own, under the records directory
+/// (`parity/runs/<label>-<process>-<n>` of the Cargo target directory), so two
+/// concurrent runs, or two probes of one run, never write each other's files.
+/// It is removed when dropped, unless the thread is panicking, which keeps
+/// what a failing probe wrote for the reader of its failure.
+#[derive(Debug)]
+pub struct RunDirectory(PathBuf);
+
+impl RunDirectory {
+    /// A fresh directory for the recapture `label` names.
+    ///
+    /// # Panics
+    ///
+    /// When the directory cannot be created.
+    #[must_use]
+    pub fn new(label: &str) -> Self {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let directory = super::live::records()
+            .join("runs")
+            .join(format!("{label}-{}-{sequence}", std::process::id()));
+        // A directory a run with a recycled process identifier left behind
+        // holds nothing this run reads.
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap_or_else(|error| {
+            panic!(
+                "the run directory {} is created: {error}",
+                directory.display()
+            )
+        });
+        Self(directory)
+    }
+
+    /// The path of `name` inside the directory.
+    #[must_use]
+    pub fn join(&self, name: &str) -> PathBuf {
+        self.0.join(name)
+    }
+}
+
+impl Drop for RunDirectory {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
 }
 
 /// A capture script under `scripts/parity/` and how a replay runs it.
@@ -410,6 +516,42 @@ impl Capture {
              regenerate it with `{}`",
             self.command()
         );
+    }
+
+    /// Whether the script re-normalizes mutated raw runs
+    /// (`--renormalize`, `scripts/parity/sensitivity.py`).
+    #[must_use]
+    pub fn renormalizes(&self) -> bool {
+        std::fs::read_to_string(repository().join(self.script))
+            .is_ok_and(|source| source.contains("sensitivity.add_arguments(parser)"))
+    }
+
+    /// Re-normalizes mutated copies of the raw runs the capture at `output`
+    /// kept (`--renormalize`) and returns the script's report of what its
+    /// normalization erased.
+    #[must_use]
+    pub fn renormalize(&self, output: &Path) -> Value {
+        let report = output.with_extension("normalization.json");
+        let samples = super::sensitivity::samples()
+            .map_or_else(|| "all".to_owned(), |samples| samples.to_string());
+        let run = self.run(&[
+            OsStr::new("--renormalize"),
+            output.as_os_str(),
+            OsStr::new("--mutate"),
+            OsStr::new("all"),
+            OsStr::new("--samples"),
+            OsStr::new(&samples),
+            OsStr::new("--report"),
+            report.as_os_str(),
+        ]);
+        assert!(
+            run.status.success(),
+            "the renormalization of {} failed: {}",
+            output.display(),
+            String::from_utf8_lossy(&run.stderr)
+        );
+        serde_json::from_str(&std::fs::read_to_string(&report).expect("the report is readable"))
+            .expect("the report parses")
     }
 
     /// The live probe named `probe`: recaptures the pinned reference when
@@ -904,6 +1046,9 @@ pub fn assert_ledger<'l>(
     );
 }
 
+/// How a [`Tally`] finds the differences between two observations.
+type Differ<'l> = Box<dyn Fn(&Value, &Value) -> Vec<String> + 'l>;
+
 /// What one replay found, scenario by scenario, against its ledger.
 pub struct Tally<'l> {
     /// The corpus as the manifest lists it.
@@ -921,6 +1066,37 @@ pub struct Tally<'l> {
     /// The scenarios this run compared, whose debt it owes.
     compared: BTreeSet<String>,
     figures: super::figures::Figures,
+    /// Every observation this run recorded, which the sensitivity pass
+    /// mutates ([`super::sensitivity`]).
+    observed: Vec<Observed>,
+    /// How the differences of a scenario are found: [`differences`] unless
+    /// the replay declares its own through [`Tally::differ`].
+    differ: Differ<'l>,
+    /// The operator classes the replay declares it cannot see.
+    blind: &'l [super::sensitivity::Blind],
+    /// What the driver's normalization erased of mutated raw runs, when the
+    /// replay measured it ([`Capture::renormalize`]).
+    normalization: Option<Value>,
+    /// How long the sensitivity pass has taken so far, which its budget
+    /// bounds.
+    sensitivity_time: std::time::Duration,
+}
+
+/// One scenario as a [`Tally`] recorded it.
+struct Observed {
+    scenario: String,
+    reference: Value,
+    port: Value,
+    found: Vec<String>,
+}
+
+/// Where a difference a scenario holds is accounted for.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Bucket {
+    /// Under the ledger entry of this index.
+    Entry(usize),
+    /// Under the measured debt group of this generalized pointer.
+    Debt(String),
 }
 
 /// A difference no ledger entry admitted.
@@ -960,7 +1136,50 @@ impl<'l> Tally<'l> {
             uncovered: Vec::new(),
             compared: BTreeSet::new(),
             figures: super::figures::Figures::default(),
+            observed: Vec::new(),
+            differ: Box::new(differences),
+            blind: &[],
+            normalization: None,
+            sensitivity_time: std::time::Duration::ZERO,
         }
+    }
+
+    /// Declares how this replay finds the differences between two
+    /// observations, when it is not [`differences`]: every `found` handed to
+    /// [`Tally::record`] has to be what `differ` answers, since the
+    /// sensitivity pass finds the differences of a mutated observation the
+    /// same way.
+    pub fn differ(&mut self, differ: impl Fn(&Value, &Value) -> Vec<String> + 'l) {
+        self.differ = Box::new(differ);
+    }
+
+    /// Declares the operator classes this replay cannot see, each with why
+    /// ([`super::sensitivity::Blind`]).
+    pub fn blind(&mut self, blind: &'l [super::sensitivity::Blind]) {
+        self.blind = blind;
+    }
+
+    /// Records one answer of a replay that compares answer by answer: the
+    /// reference's `expected` and this port's `actual` (absent where the port
+    /// has no such surface), each [`nested`] under `path` in `scenario`. The
+    /// differences are what the replay's differ finds, which for such a
+    /// replay is [`nested_differences`] of `path`'s length.
+    ///
+    /// # Panics
+    ///
+    /// When an answer does not serialize.
+    pub fn answer<T: serde::Serialize>(
+        &mut self,
+        scenario: &str,
+        path: &[&str],
+        expected: &T,
+        actual: Option<&T>,
+    ) {
+        let value = |answer: &T| serde_json::to_value(answer).expect("an answer serializes");
+        let reference = nested(path, Some(value(expected)));
+        let port = nested(path, actual.map(value));
+        let found = (self.differ)(&reference, &port);
+        self.record(scenario, &reference, &port, found);
     }
 
     /// The corpus as the manifest lists it.
@@ -971,7 +1190,28 @@ impl<'l> Tally<'l> {
 
     /// Accounts for `found`, the differences between the two observations of
     /// `scenario`, which an unexplained difference quotes.
+    ///
+    /// # Panics
+    ///
+    /// When `found` is not what the replay's differ ([`Tally::differ`])
+    /// answers for the two observations.
     pub fn record(&mut self, scenario: &str, reference: &Value, port: &Value, found: Vec<String>) {
+        let mut expected = (self.differ)(reference, port);
+        let mut given = found.clone();
+        expected.sort();
+        given.sort();
+        assert_eq!(
+            given, expected,
+            "{scenario}: the differences recorded are not what the replay's differ finds; \
+             declare the function that finds them with `Tally::differ`, so the sensitivity \
+             pass mutates through it"
+        );
+        self.observed.push(Observed {
+            scenario: scenario.to_owned(),
+            reference: reference.clone(),
+            port: port.clone(),
+            found: found.clone(),
+        });
         self.figures.total += 1;
         self.compared.insert(scenario.to_owned());
         if found.is_empty() {
@@ -1147,6 +1387,218 @@ impl<'l> Tally<'l> {
         );
         debt.assert_settled();
         super::figures::check(&measured);
+        if !super::debt::measuring() {
+            self.sensitivity(heading, &debt);
+        }
+    }
+
+    /// How the evaluation of [`Tally::record`] and [`Tally::conclude`]
+    /// accounts for `found` in `scenario`: how many differences each entry
+    /// and debt group covers, or [`None`] when one falls outside both.
+    fn account(
+        &self,
+        debt: &super::debt::Debt,
+        scenario: &str,
+        reference: &Value,
+        port: &Value,
+        found: &[String],
+    ) -> Option<BTreeMap<Bucket, usize>> {
+        let mut buckets = BTreeMap::new();
+        for pointer in found {
+            let left = reference.pointer(pointer);
+            let right = port.pointer(pointer);
+            let covering = self
+                .entries
+                .iter()
+                .position(|entry| entry.covers(scenario, pointer));
+            let bucket = match covering {
+                Some(index) if self.entries[index].admit(left, right).is_ok() => {
+                    Bucket::Entry(index)
+                }
+                _ if debt.holds(scenario, pointer) => {
+                    Bucket::Debt(super::debt::generalize(pointer))
+                }
+                _ => return None,
+            };
+            *buckets.entry(bucket).or_default() += 1;
+        }
+        Some(buckets)
+    }
+
+    /// The sensitivity pass ([`super::sensitivity`]): mutates the port's
+    /// observations, writes the matrix, and asserts the replay detects
+    /// enough of what it applied or declares what it cannot see.
+    fn sensitivity(&self, heading: &str, debt: &super::debt::Debt) {
+        use super::sensitivity::SEED;
+
+        let started = std::time::Instant::now();
+        let matrix = self.mutations(heading, debt, super::sensitivity::samples());
+        let elapsed = self.sensitivity_time + started.elapsed();
+        let row = super::manifest::load()
+            .entry(&self.listed)
+            .map(|entry| entry.row.clone());
+        let mut document = matrix.document(heading, &self.listed, row.as_deref(), self.blind);
+        if let Some(normalization) = &self.normalization {
+            let (applied, erased) = super::sensitivity::erasures(normalization);
+            println!(
+                "{heading} normalization erased {erased} of {applied} raw mutations, seed \
+                 {SEED:#018x}"
+            );
+            document["normalization"] = normalization.clone();
+        }
+        document["elapsedMs"] = json!(elapsed.as_millis());
+        super::sensitivity::write(&document);
+        println!(
+            "{heading} sensitivity {}/{} mutations detected ({:.1}%), seed {SEED:#018x}, in \
+             {elapsed:.1?}",
+            matrix.detected(),
+            matrix.applied(),
+            matrix.rate() * 100.0
+        );
+        let problems = matrix.problems(self.blind);
+        assert!(
+            problems.is_empty(),
+            "the sensitivity pass of `{heading}` over {} refuses the oracle (matrix under \
+             target/parity/sensitivity/):\n  {}",
+            self.listed,
+            problems.join("\n  ")
+        );
+    }
+
+    /// Applies every operator at the first `limit` sites its ranking orders
+    /// (every site when [`None`]) and says which mutations the replay would
+    /// have reported.
+    fn mutations(
+        &self,
+        heading: &str,
+        debt: &super::debt::Debt,
+        limit: Option<usize>,
+    ) -> super::sensitivity::Matrix {
+        use super::sensitivity::{Matrix, Mutation, Operator, SEED, mutate, rank, sites};
+
+        let mut matrix = Matrix::default();
+        for operator in Operator::ALL {
+            let mut candidates: Vec<(u64, usize, String)> = Vec::new();
+            for (index, observed) in self.observed.iter().enumerate() {
+                for pointer in sites(&observed.port, operator) {
+                    let key = rank(
+                        SEED,
+                        &[
+                            &self.listed,
+                            heading,
+                            operator.name(),
+                            &observed.scenario,
+                            &pointer,
+                        ],
+                    );
+                    candidates.push((key, index, pointer));
+                }
+            }
+            matrix.sites.insert(operator, candidates.len());
+            candidates.sort();
+            if let Some(limit) = limit {
+                candidates.truncate(limit);
+            }
+            let mutations = matrix.operators.entry(operator).or_default();
+            for (_, index, pointer) in candidates {
+                let observed = &self.observed[index];
+                let Some(mutated) = mutate(&observed.port, operator, &pointer) else {
+                    continue;
+                };
+                let before = self.account(
+                    debt,
+                    &observed.scenario,
+                    &observed.reference,
+                    &observed.port,
+                    &observed.found,
+                );
+                let found = (self.differ)(&observed.reference, &mutated);
+                let after = self.account(
+                    debt,
+                    &observed.scenario,
+                    &observed.reference,
+                    &mutated,
+                    &found,
+                );
+                let detected = after.is_none() || after != before;
+                let masked_by = if detected {
+                    None
+                } else {
+                    self.masking(debt, observed, &pointer)
+                };
+                mutations.push(Mutation {
+                    scenario: observed.scenario.clone(),
+                    pointer,
+                    detected,
+                    masked_by,
+                });
+            }
+        }
+        matrix
+    }
+
+    /// The label of the ledger entry or debt group that counts a difference
+    /// of `observed` overlapping `pointer`, which masks a mutation there.
+    fn masking(
+        &self,
+        debt: &super::debt::Debt,
+        observed: &Observed,
+        pointer: &str,
+    ) -> Option<String> {
+        observed
+            .found
+            .iter()
+            .filter(|difference| {
+                pointer_within(difference, pointer) || pointer_within(pointer, difference)
+            })
+            .find_map(|difference| {
+                let left = observed.reference.pointer(difference);
+                let right = observed.port.pointer(difference);
+                let entry = self.entries.iter().find(|entry| {
+                    entry.covers(&observed.scenario, difference) && entry.admit(left, right).is_ok()
+                });
+                match entry {
+                    Some(entry) => Some(entry.label()),
+                    None if debt.holds(&observed.scenario, difference) => Some(format!(
+                        "debt {} {}",
+                        observed.scenario,
+                        super::debt::generalize(difference)
+                    )),
+                    None => None,
+                }
+            })
+    }
+
+    /// A tally over `entries` for a corpus no manifest lists, so a test can
+    /// drive the sensitivity pass on observations it builds.
+    #[cfg(test)]
+    pub(super) fn detached(listed: &str, entries: impl IntoIterator<Item = &'l dyn Entry>) -> Self {
+        let entries: Vec<&dyn Entry> = entries.into_iter().collect();
+        Self {
+            listed: listed.to_owned(),
+            recorded: BTreeMap::new(),
+            reproduced: vec![BTreeMap::new(); entries.len()],
+            covered: vec![BTreeSet::new(); entries.len()],
+            entries,
+            uncovered: Vec::new(),
+            compared: BTreeSet::new(),
+            figures: super::figures::Figures::default(),
+            observed: Vec::new(),
+            differ: Box::new(differences),
+            blind: &[],
+            normalization: None,
+            sensitivity_time: std::time::Duration::ZERO,
+        }
+    }
+
+    /// The sensitivity matrix of what this tally recorded, against `debt`.
+    #[cfg(test)]
+    pub(super) fn sensitivity_matrix(
+        &self,
+        debt: &super::debt::Debt,
+        limit: Option<usize>,
+    ) -> super::sensitivity::Matrix {
+        self.mutations("test:", debt, limit)
     }
 }
 
@@ -1228,7 +1680,18 @@ impl Replay<'_> {
     /// compares every scenario with the corpus under `entries` (its own-words
     /// prose entries among them), and concludes the tally.
     pub fn run<'l>(&self, entries: impl IntoIterator<Item = &'l dyn Entry>) {
+        self.run_blind(entries, &[]);
+    }
+
+    /// [`Replay::run`], declaring the operator classes the sensitivity pass
+    /// may find undetected ([`super::sensitivity::Blind`]).
+    pub fn run_blind<'l>(
+        &self,
+        entries: impl IntoIterator<Item = &'l dyn Entry>,
+        blind: &'l [super::sensitivity::Blind],
+    ) {
         let mut tally = Tally::new(self.corpus, entries);
+        tally.blind(blind);
         let corpus: Value = serde_json::from_str(self.corpus).expect("the corpus parses");
         let recorded = scenarios(&corpus);
         assert!(
@@ -1236,8 +1699,21 @@ impl Replay<'_> {
             "{} holds no scenarios, so the replay would compare nothing",
             tally.listed()
         );
-        let replayed = self.capture.port(self.port, self.output);
+        // A driver that renormalizes keeps the raw runs beside what it
+        // normalized, so the sensitivity pass can measure what its
+        // normalization erases without driving the port again.
+        let renormalizes = self.capture.renormalizes();
+        let mut port: Vec<&str> = self.port.to_vec();
+        if renormalizes {
+            port.push("--raw");
+        }
+        let replayed = self.capture.port(&port, self.output);
         tally.compare(self.capture, &recorded, &scenarios(&replayed), differences);
+        if renormalizes && !super::debt::measuring() {
+            let started = std::time::Instant::now();
+            tally.normalization = Some(self.capture.renormalize(self.output));
+            tally.sensitivity_time += started.elapsed();
+        }
         tally.conclude(self.heading);
     }
 }

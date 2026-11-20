@@ -375,8 +375,9 @@ impl HarnessFiles {
         resolve_lenient(&self.paths.vibe_home).join(AGENTS_FILE)
     }
 
-    /// Every non-empty `AGENTS.md` from each open project root up to its trust
-    /// root, outermost first within a root, each directory once across roots.
+    /// Each non-empty `AGENTS.md` met while walking from every open project
+    /// root toward its trust root, outermost first per root, and no directory
+    /// counted twice across roots.
     ///
     /// Reference `load_project_docs`: the working directory's walk stops at the
     /// closest trusted ancestor the trust store records, which may sit above

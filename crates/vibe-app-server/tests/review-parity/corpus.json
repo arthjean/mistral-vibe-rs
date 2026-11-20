@@ -10358,7 +10358,7 @@
                 "activeCallbacks": [],
                 "backgroundProcesses": [],
                 "childSessions": [],
-                "eventId": "<nonzero>",
+                "eventId": 1,
                 "format": "vibe.public-session-state/v1",
                 "history": [
                   {
@@ -10368,7 +10368,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
                     "inputEntryId": null,
@@ -10379,11 +10379,11 @@
                     "source": "turn_start",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "detail": {
                       "display": {
                         "content": null,
@@ -10448,7 +10448,7 @@
                     "title": "file_system.edit",
                     "turnId": "<id-3>",
                     "type": "effect",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   },
                   {
                     "content": [
@@ -10457,7 +10457,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
                     "inputEntryId": "<id-2>",
@@ -10470,11 +10470,11 @@
                     "source": "harness",
                     "turnId": "<id-3>",
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "entryId": "<id-6>",
                       "inplace": true,
@@ -10492,7 +10492,7 @@
                     "sessionId": "<id-1>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   }
                 ],
                 "historyBeforeCursor": null,
@@ -10513,14 +10513,14 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": {
                     "cachedInputTokens": 0,
                     "inputTokens": 10,
                     "outputTokens": 5,
                     "totalTokens": 15
                   },
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-1>",
@@ -10542,7 +10542,7 @@
                     "outputTokens": 25,
                     "totalTokens": 75
                   },
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },
@@ -11039,7 +11039,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
                     "inputEntryId": null,
@@ -11050,7 +11050,7 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
@@ -11060,7 +11060,7 @@
                         "type": "text"
                       }
                     ],
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
                     "inputEntryId": null,
@@ -11073,11 +11073,11 @@
                     "source": "harness",
                     "turnId": null,
                     "type": "message",
-                    "updatedAt": "<time>",
+                    "updatedAt": "<time:int>",
                     "userDisplayContent": null
                   },
                   {
-                    "createdAt": "<time>",
+                    "createdAt": "<time:int>",
                     "details": {
                       "entryId": "<id-5>",
                       "inplace": false,
@@ -11095,7 +11095,7 @@
                     "sessionId": "<id-2>",
                     "turnId": null,
                     "type": "checkpoint",
-                    "updatedAt": "<time>"
+                    "updatedAt": "<time:int>"
                   }
                 ],
                 "historyBeforeCursor": null,
@@ -11116,9 +11116,9 @@
                     "safety": "yolo"
                   },
                   "archivedAt": null,
-                  "bumpedAt": "<time>",
+                  "bumpedAt": "<time:int>",
                   "contextUsage": null,
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "cwd": "<ws>",
                   "harness": "unified",
                   "id": "<id-2>",
@@ -11135,7 +11135,7 @@
                   },
                   "title": null,
                   "tokenUsage": null,
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "workspaceRoots": [],
                   "worktree": null
                 },

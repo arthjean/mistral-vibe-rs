@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/unified-harness-parity/corpus.json",
-  "measuredAgainst": "56db1abc34952cd0943e49c4cb37cb674defc967cf8595be23db231f2a0aecd5",
+  "measuredAgainst": "ec60353ce8c8386e5f88123834a5576f6c052aa8e20aa6357a0905d6b9d18b72",
   "schemaVersion": 1,
   "tallies": {
     "unified harness parity:": {
@@ -1545,6 +1545,8 @@
         "/steps/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
         "/steps/*/response/result/items/*/loops": 1,
         "/steps/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
+        "/steps/*/response/result/lastEventId": 1,
+        "/steps/*/response/result/state/eventId": 1,
         "/steps/*/response/result/state/history/*/detail/mcpApp": 1,
         "/steps/*/response/result/state/history/*/id": 1,
         "/steps/*/response/result/state/history/*/outcome": 2,
@@ -2203,6 +2205,8 @@
         "/steps/*/idle/*/params/state/session/contextUsage/cachedInputTokens": 1,
         "/steps/*/idle/*/params/state/session/loops": 1,
         "/steps/*/idle/*/params/state/session/tokenUsage/cachedInputTokens": 1,
+        "/steps/*/response/result/lastEventId": 1,
+        "/steps/*/response/result/state/eventId": 1,
         "/steps/*/response/result/state/history/*/outcome": 2,
         "/steps/*/response/result/state/history/*/state/output/processId": 1,
         "/steps/*/response/result/state/session/agent": 1,
@@ -4103,7 +4107,9 @@
         "/steps/*/persisted/unified/*/projection/snapshot/session/tokenUsage/totalTokens": 1,
         "/steps/*/response/error": 3,
         "/steps/*/response/result": 3,
+        "/steps/*/response/result/lastEventId": 1,
         "/steps/*/response/result/state/childSessions/*": 1,
+        "/steps/*/response/result/state/eventId": 1,
         "/steps/*/response/result/state/history/*": 2,
         "/steps/*/response/result/state/history/*/content": 1,
         "/steps/*/response/result/state/history/*/detail": 1,

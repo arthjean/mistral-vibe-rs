@@ -72,10 +72,12 @@ import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 from connectors_scenarios import API_KEY, scenarios, unified_scenarios  # noqa: E402
 import loop_capture  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 import subagent_client  # noqa: E402
 
@@ -486,9 +488,10 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any] | None:
     # A clock-only operation comes and goes with timing, and since v3.0.0 the
     # order of commuting operations follows interpreter hashing; both are
     # dropped or fixed as `app_server_client` explains.
-    message = app_server_client.without_clock(message)
-    if message is None:
+    cleared = app_server_client.without_clock(message)
+    if cleared is None:
         return None
+    message = cleared
     method = message.get("method")
     params = {k: v for k, v in (message.get("params") or {}).items() if k not in DROPPED}
     if method == "runtime/updated":
@@ -503,7 +506,7 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any] | None:
         if method == "history/entryAdded" and entry.get("type") != "effect":
             return None
         patch = [
-            {**operation, "value": "<time>"}
+            {**operation, "value": blackbox.time_token(operation.get("value"))}
             if str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS
             else operation
             for operation in app_server_client.commuted(params.get("patch") or [])
@@ -572,10 +575,10 @@ def cache_view(cache: Any, keys: dict[str, str]) -> Any:
     unknown: list[tuple[str, Any]] = []
     for key, entry in cache.items():
         if isinstance(entry, dict):
-            entry = {k: ("<time>" if k in {"stored_at", "stored_at_timestamp"} and isinstance(v, int) else v)
+            entry = {k: (blackbox.time_token(v) if k in {"stored_at", "stored_at_timestamp"} and isinstance(v, int) else v)
                      for k, v in entry.items()}
         if key in keys or not CACHE_DIGEST.fullmatch(key):
-            view[keys.get(key, key)] = entry
+            view[keys[key] if key in keys else key] = entry
         else:
             unknown.append((key, entry))
     # Since v3.0.0 the reference files its catalog under a key that also
@@ -692,12 +695,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'connectors')
+    if renormalized is not None:
+        return renormalized
     unified = arguments.family == "programs"
     arguments.output = provenance.port_output(arguments.output, UNIFIED_OUTPUT if unified else DEFAULT_OUTPUT, server=arguments.server)
     try:

@@ -47,8 +47,9 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 
 SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/checkpoints/opcodes.json")
@@ -367,7 +368,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--python", type=Path, default=None)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     return parser.parse_args()
 
 

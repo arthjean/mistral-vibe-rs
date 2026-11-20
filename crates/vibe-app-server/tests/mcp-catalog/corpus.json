@@ -1073,7 +1073,7 @@
           "keyring": {
             "mcp-oauth:remote:tokens": {
               "access_token": "at-1",
-              "expires_at": "<time>",
+              "expires_at": "<time:float>",
               "expires_in": 3600,
               "refresh_token": "rt-1",
               "token_type": "Bearer"
@@ -1557,7 +1557,7 @@
             },
             "mcp-oauth:secure:tokens": {
               "access_token": "at-1",
-              "expires_at": "<time>",
+              "expires_at": "<time:float>",
               "expires_in": 3600,
               "refresh_token": "rt-1",
               "scope": null,
@@ -3255,7 +3255,7 @@
             },
             "mcp-oauth:secure:tokens": {
               "access_token": "at-1",
-              "expires_at": "<time>",
+              "expires_at": "<time:float>",
               "expires_in": 3600,
               "refresh_token": "rt-1",
               "scope": null,

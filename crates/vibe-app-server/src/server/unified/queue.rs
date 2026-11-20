@@ -315,7 +315,7 @@ impl ServerConnection {
                             return Err(ProtocolFault::with_data(
                                 ProtocolErrorCode::Conflict,
                                 format!(
-                                    "Idempotency key was already used with different input: {key}"
+                                    "This idempotency key already belongs to another input: {key}"
                                 ),
                                 json!({"idempotencyKey": key}),
                             ));
@@ -448,7 +448,7 @@ impl ServerConnection {
             .any(|entry| entry["role"] == "context")
         {
             return Err(ProtocolFault::invalid_params(
-                "Unified Harness queued steering does not support context entries",
+                "Steering queued on the Unified Harness cannot carry context entries",
             ));
         }
         let Some(user) = record.entries.iter().find(|entry| entry["role"] == "user") else {

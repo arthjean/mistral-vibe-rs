@@ -116,8 +116,8 @@ pub fn browser_auth_account_base(browser_base_url: &str, api_base_url: Option<&s
     format!("{}://{}", parsed.scheme, parsed.netloc)
 }
 
-/// Reference `is_likely_mistral_private_cloud_domain`: a Mistral-hosted
-/// console subdomain that is not the default auth host. Private-cloud Studio
+/// Reference `is_likely_mistral_private_cloud_domain`: a console subdomain
+/// hosted by Mistral other than the standard sign-in host. Private-cloud Studio
 /// hands users a custom `console.*.mistral.ai` URL while Mistral-hosted
 /// accounts sign in through `console.mistral.ai`, so the wizard warns without
 /// blocking.
@@ -145,8 +145,8 @@ pub fn configured_custom_domain(provider: &Table) -> Option<&str> {
 
 /// The split-horizon API base the configuration already carries: the
 /// provider's browser-auth API base when both browser-auth URLs are set and
-/// sit on different origins. A same-origin API base is the derived default,
-/// so it answers `None`. Reference `OnboardingApp.configured_custom_api_base`.
+/// sit on different origins. When both share an origin, the API base is just
+/// what would be derived anyway, hence `None`. Reference `OnboardingApp.configured_custom_api_base`.
 #[must_use]
 pub fn configured_custom_api_base(provider: &Table) -> Option<String> {
     let browser = effective_browser_auth_url(provider, "browser_auth_base_url")

@@ -48,9 +48,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import app_server_client  # noqa: E402
 import blackbox  # noqa: E402
 import loop_capture  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
+import sensitivity  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 from unified_harness_scenarios import scenarios  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -266,10 +268,10 @@ class Normalizer(loop_capture.Normalizer):
     def value(self, value: Any, key: str | None = None) -> Any:
         if key in {"start_time", "end_time", "bumped_at", "pinned_at", "archived_at",
                    "unseen_at", "seen_at", "created_at"} and isinstance(value, str):
-            return "<time>"
+            return blackbox.time_token(value)
         if key in {"firedAt", "next_fire_at", "last_fired_at", "nextFireAt", "lastFiredAt"} \
                 and isinstance(value, int | float):
-            return "<time>"
+            return blackbox.time_token(value)
         if key in {"username"} and isinstance(value, str):
             return "<user>"
         return super().value(value, key)
@@ -519,12 +521,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'unified_harness')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:

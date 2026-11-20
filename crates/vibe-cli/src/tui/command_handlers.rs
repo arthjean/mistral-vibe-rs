@@ -243,7 +243,7 @@ pub(super) trait CommandBackend {
     -> Result<ScheduledLoop, String>;
     async fn loops_delete(&mut self, id: &str) -> Result<ScheduledLoop, String>;
     async fn loops_clear(&mut self) -> Result<u64, String>;
-    /// The plugin catalog, or `None` from a backend that resolves no plugins.
+    /// The plugin catalog; a backend without plugin resolution answers `None`.
     /// Reference `PluginCatalogResource.read`.
     fn plugin_catalog(&mut self) -> Result<Option<PluginCatalog>, String>;
     /// Re-pins the session's plugins. Reference `plugin/reload`.
@@ -378,11 +378,11 @@ fn open<B: CommandBackend>(backend: &mut B, panel: Panel) {
 }
 
 pub(super) const DATA_RETENTION_MESSAGE: &str = "\
-## Your Data Helps Improve Mistral AI
+## How Your Data Improves Mistral AI
 
-At Mistral AI, we're committed to delivering the best possible experience. When you use Mistral models on our API, your interactions may be collected to improve our models, ensuring they stay cutting-edge, accurate, and helpful.
+Mistral AI works to give you the best experience it can. Conversations you hold with Mistral models through our API may be gathered to train better models and keep them current, accurate and useful.
 
-Manage your data settings [here](https://chat.mistral.ai/work?profile_dialog=privacy)";
+You can change your data settings [here](https://chat.mistral.ai/work?profile_dialog=privacy)";
 
 const RELOADED: &str = "Configuration reloaded (includes agent instructions and skills).";
 
@@ -432,8 +432,8 @@ async fn clear<B: CommandBackend>(arguments: &str, backend: &mut B) {
     let message = if resumable {
         let short = short_session_id(&previous);
         format!(
-            "New conversation started.\n\nPrevious session: `{short}`\nTo resume it later, run: \
-             `vibe --resume {short}`"
+            "New conversation started.\n\nThe previous session is `{short}`; reopen it any \
+             time with `vibe --resume {short}`"
         )
     } else {
         "New conversation started.".to_owned()
@@ -484,12 +484,12 @@ fn log<B: CommandBackend>(backend: &mut B) {
         ));
     } else if !log.persisted {
         backend.emit(Effect::Error(
-            "The current session has not been persisted yet.".to_owned(),
+            "Nothing is saved for this session yet.".to_owned(),
         ));
     } else {
         backend.emit(Effect::Message(format!(
-            "## Current Log Directory\n\n`{}`\n\nYou can send this directory to share your \
-             interaction.",
+            "## Current Log Directory\n\n`{}`\n\nShare this directory to pass your \
+             interaction along.",
             log.path
         )));
     }
@@ -499,7 +499,7 @@ fn log<B: CommandBackend>(backend: &mut B) {
 async fn compact<B: CommandBackend>(arguments: &str, backend: &mut B) {
     if backend.turn_active() {
         backend.emit(Effect::Error(
-            "Cannot compact while agent loop is processing. Please wait.".to_owned(),
+            "Compaction has to wait until the agent loop finishes processing.".to_owned(),
         ));
         return;
     }

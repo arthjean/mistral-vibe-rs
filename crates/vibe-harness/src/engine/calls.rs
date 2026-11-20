@@ -113,9 +113,9 @@ fn validate(schema: &Value, arguments: &Value) -> Result<(), String> {
         .should_validate_formats(true)
         .build(schema)
         .map_err(|error| format!("invalid Core-owned JSON Schema: {error}"))?;
-    validator.validate(arguments).map_err(|error| {
-        format!("tool arguments do not satisfy the declared input schema: {error}")
-    })
+    validator
+        .validate(arguments)
+        .map_err(|error| format!("the tool arguments fail the declared input schema: {error}"))
 }
 
 pub(super) fn invalid_call_content(message: &str) -> String {

@@ -50,7 +50,7 @@ fn set(pointer: &str, value: &str) -> ConfigMutation {
 fn the_walk_finds_the_nearest_project_file_above_the_working_directory() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     let nested = repository.join("a/b/c");
     fs::create_dir_all(&nested).expect("nested working directory");
     write_config(&project_config(&repository), "active_model = \"root\"\n");
@@ -123,7 +123,7 @@ fn the_walk_stops_before_the_directory_holding_the_vibe_home() {
 fn an_untrusted_discovered_file_leaves_the_project_layer_empty() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     let nested = repository.join("a/b");
     fs::create_dir_all(&nested).expect("nested working directory");
     write_config(&project_config(&repository), "active_model = \"project\"\n");
@@ -146,10 +146,10 @@ fn an_untrusted_discovered_file_leaves_the_project_layer_empty() {
 fn a_symlinked_working_directory_terminates_the_walk() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let target = root.join("work/a/b");
+    let target = root.join("home/work/a/b");
     fs::create_dir_all(&target).expect("link target");
     write_config(&project_config(&target), "active_model = \"linked\"\n");
-    let link = root.join("link");
+    let link = root.join("home/link");
     #[cfg(unix)]
     let linked = std::os::unix::fs::symlink(&target, &link).is_ok();
     #[cfg(windows)]
@@ -173,7 +173,7 @@ fn a_symlinked_working_directory_terminates_the_walk() {
 fn only_the_project_source_refuses_a_user_write() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(&repository).expect("working directory");
     write_config(&project_config(&repository), "active_model = \"project\"\n");
     let user_path = vibe_home(root).join("config.toml");
@@ -211,7 +211,7 @@ fn only_the_project_source_refuses_a_user_write() {
 fn no_usable_source_writes_to_an_ephemeral_layer_instead_of_disk() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(&repository).expect("working directory");
 
     let store = store(root, &repository)
@@ -254,7 +254,7 @@ fn no_usable_source_writes_to_an_ephemeral_layer_instead_of_disk() {
 fn project_roots_absolutize_deduplicate_and_drop_the_working_directory() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     let sibling = root.join("sibling");
     fs::create_dir_all(&repository).expect("working directory");
     fs::create_dir_all(&sibling).expect("additional directory");
@@ -290,7 +290,7 @@ fn project_roots_absolutize_deduplicate_and_drop_the_working_directory() {
 fn an_additional_directory_containing_the_working_directory_survives() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let parent = root.join("workspace");
+    let parent = root.join("home/workspace");
     let repository = parent.join("service");
     fs::create_dir_all(&repository).expect("working directory");
 
@@ -311,7 +311,7 @@ fn an_additional_directory_containing_the_working_directory_survives() {
 fn an_untrusted_workspace_contributes_no_project_root_and_no_project_hooks() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     fs::create_dir_all(&repository).expect("working directory");
 
     let harness = HarnessFiles::new(
@@ -339,7 +339,7 @@ fn an_untrusted_workspace_contributes_no_project_root_and_no_project_hooks() {
 fn tool_directories_follow_the_open_roots_and_the_enabled_sources() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
-    let repository = root.join("work");
+    let repository = root.join("home/work");
     let sibling = root.join("sibling");
     fs::create_dir_all(repository.join(".vibe/tools")).expect("project tools directory");
     fs::create_dir_all(&sibling).expect("additional directory without one");

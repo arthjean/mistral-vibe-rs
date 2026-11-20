@@ -4,8 +4,9 @@
 //! document listing installed registry skills, each pinned to a concrete
 //! version or to an alias such as `latest`. The global manifest lives at
 //! `{vibe_home}/skills.toml`; a project manifest lives at
-//! `.vibe/skills.toml` under its root, and a root whose manifest resolves to
-//! the global one is dropped, so project scope is never an alias for global.
+//! `.vibe/skills.toml` under its root. A root whose manifest turns out to be
+//! the global file is skipped, which keeps the project scope from ever
+//! standing in for the global one.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,9 +16,9 @@ use serde::Deserialize;
 use crate::config::encode::basic_string;
 use crate::platform::resolve_lenient;
 
-/// The registry's reserved alias that always resolves to the newest version,
-/// server-side. A pin set to this alias auto-resolves to latest and never
-/// reports an update as available.
+/// The alias the registry reserves for its most recent version, resolved on
+/// the server. Pinning to it tracks that version automatically, so such a pin
+/// never has a pending update to report.
 pub const REGISTRY_LATEST_ALIAS: &str = "latest";
 
 /// A manifest entry's pin: a concrete version number frozen on disk, or an
@@ -48,8 +49,8 @@ pub struct ManifestEntry {
 }
 
 impl ManifestEntry {
-    /// The pinned alias, or [`None`] when the pin is frozen to a version
-    /// number.
+    /// The alias this entry pins, or [`None`] for a pin fixed to a numbered
+    /// version.
     #[must_use]
     pub fn alias(&self) -> Option<&str> {
         match &self.version {
@@ -102,9 +103,9 @@ pub fn global_manifest_path(vibe_home: &Path) -> PathBuf {
 }
 
 /// The project-scoped manifest paths for the open project roots, resolved,
-/// deduplicated, and never the global manifest: a root whose manifest
-/// resolves to it (running from the home directory, where
-/// `~/.vibe/skills.toml` *is* the global one) is dropped.
+/// deduplicated, and never the global manifest: when a root's manifest is the
+/// global file (as happens from the home directory, whose
+/// `~/.vibe/skills.toml` doubles as the global manifest), that root is left out.
 #[must_use]
 pub fn project_manifest_paths(vibe_home: &Path, project_roots: &[PathBuf]) -> Vec<PathBuf> {
     let global = resolve_lenient(&global_manifest_path(vibe_home));

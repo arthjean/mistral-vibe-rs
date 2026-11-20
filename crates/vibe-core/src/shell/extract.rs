@@ -47,11 +47,11 @@ pub const REDIRECT_MARKER: &str = "<redirect>";
 /// The node kind wrapping a command whose output or input is redirected.
 const REDIRECTED_STATEMENT: &str = "redirected_statement";
 
-/// The children of a `file_redirect` that name its target.
+/// The node kinds under a `file_redirect` that spell where it points.
 const REDIRECT_VALUE_KINDS: [&str; 5] = ["word", "number", "string", "raw_string", "concatenation"];
 
-/// The commands whose argument is a program or script to run, so the arity
-/// table's boundary for them says nothing about where their identity stops.
+/// Commands that take another program or a script as their argument; for
+/// these, the arity table cannot tell where the command's identity ends.
 const OPAQUE_ARGUMENT_COMMANDS: [&str; 3] = [".", "env", "source"];
 
 /// A guard against a pathological tree: no real command nests this deep, and a
@@ -164,8 +164,8 @@ fn visit(node: Node<'_>, source: &[u8], analysis: &mut TextAnalysis) {
         // `HOME=/x git status` extracts as `git status`, so a pattern would
         // cover any environment, including one that redirects what git runs.
         "variable_assignment" | "function_definition" => analysis.invalidates_scope = true,
-        // The body is what runs, the script behind `python <<EOF`, and none
-        // of it reaches the words.
+        // What executes is the inline body (say, the script fed to
+        // `python <<EOF`), and the extracted words never see it.
         "heredoc_redirect" | "herestring_redirect" => analysis.invalidates_scope = true,
         // The target becomes the redirect marker, which a trailing `*` would
         // cover: the pattern would grant every target.
@@ -240,7 +240,7 @@ fn dynamic_reason(kind: &str) -> Option<&'static str> {
 /// Whether a redirect can reach a file, and so why it withholds the grant.
 ///
 /// Renumbering a descriptor (`2>&1`) and discarding into `/dev/null` reach no
-/// file; every other redirect names a path the command writes or reads.
+/// file; any other redirect points the command at a path to read or write.
 fn file_redirect_reason(node: Node<'_>, source: &[u8]) -> Option<String> {
     let reason = || Some("a redirect".to_owned());
     let Some(target) = children(node)
@@ -249,8 +249,8 @@ fn file_redirect_reason(node: Node<'_>, source: &[u8]) -> Option<String> {
     else {
         return reason();
     };
-    // A duplication target must be a bare number: `>&file` is shorthand for
-    // sending both streams into that file.
+    // Only a plain digit makes a pure descriptor copy: `>&file` is a short
+    // way of sending both streams into that file.
     let only_duplication = children(node)
         .filter(|child| {
             !REDIRECT_VALUE_KINDS.contains(&child.kind()) && child.kind() != "file_descriptor"
@@ -307,9 +307,9 @@ struct CommandRead {
 /// The words of a `command` node, and whether they can be granted as a
 /// pattern.
 ///
-/// A token the extraction cannot read is harmless only where the session
-/// pattern would have wildcarded it away; any earlier and it was part of the
-/// command's identity, so `git $SUB` would leave `git *`.
+/// An unreadable token does no harm only at a position the session pattern
+/// replaces with a wildcard anyway; before that point it belongs to what the
+/// command is, and `git $SUB` would collapse to `git *`.
 fn read_command(node: Node<'_>, source: &[u8]) -> CommandRead {
     let mut parts: Vec<String> = Vec::new();
     let mut reasons = BTreeSet::new();
@@ -334,8 +334,8 @@ fn read_command(node: Node<'_>, source: &[u8]) -> CommandRead {
                 } else if dynamic_reason(child.kind()).is_none()
                     && zsh_node_reason(child, source).is_none()
                 {
-                    // The shell runs the original text, so a child this extraction
-                    // omits makes the two views differ.
+                    // The shell executes the source as written, so skipping a
+                    // child here would make our reading diverge from it.
                     reasons.insert(format!(
                         "syntax the policy does not model ({})",
                         child.kind()
@@ -367,13 +367,13 @@ fn read_command(node: Node<'_>, source: &[u8]) -> CommandRead {
     }
 }
 
-/// Whether a pattern over `parts` still names what an unreadable token at
-/// `first_unreadable` runs.
+/// Whether a pattern built from `parts` keeps identifying the program even
+/// though the token at `first_unreadable` cannot be read.
 ///
-/// Only a boundary the arity table states counts: `sudo $CMD` would otherwise
-/// read as an argument the trailing `*` covers when it is the program `sudo`
-/// goes on to run. A guardrailed command is recorded as its own text, which
-/// simply loses the token, and the token could be the guarded option.
+/// Only an arity-table boundary is trusted: otherwise `sudo $CMD` would treat
+/// `$CMD` as a mere argument under the trailing `*`, while in fact it is what
+/// `sudo` launches. A guardrailed command is stored as its literal text, which
+/// drops the token outright, and that token might be the guarded flag.
 fn identity_survives(parts: &[String], first_unreadable: usize) -> bool {
     let tokens = whitespace_words(&parts.join(" "));
     let Some(first) = tokens.first() else {
@@ -385,7 +385,7 @@ fn identity_survives(parts: &[String], first_unreadable: usize) -> bool {
     let Some(arity) = known_session_pattern_arity(&tokens) else {
         return false;
     };
-    // A quote in the kept prefix means the split landed inside a token.
+    // Any quote left in the retained prefix shows the cut fell mid-token.
     if tokens
         .iter()
         .take(arity)

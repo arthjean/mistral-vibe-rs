@@ -64,8 +64,8 @@ pub enum StoreError {
 
 /// A skill's cache directory under the resolved store root, guarding the id.
 ///
-/// The id comes from the registry and is used as a single path segment:
-/// anything empty, `.`, `..`, or holding a separator is rejected here, before
+/// The registry supplies the id, which becomes exactly one path segment; an
+/// empty id, `.`, `..`, or one containing a separator is refused here, ahead of
 /// any filesystem call.
 fn skill_root(root: &Path, skill_id: &str) -> Result<PathBuf, StoreError> {
     if !is_plain_component(skill_id) {
@@ -94,8 +94,8 @@ pub fn skill_dir(root: &Path, skill_id: &str, version: i64) -> Result<PathBuf, S
 
 /// The highest materialized version for a skill, or [`None`] when nothing is.
 ///
-/// Used to resolve alias pins like `latest` to a concrete on-disk version,
-/// offline-safe.
+/// This is how an alias pin such as `latest` maps to a version present on disk,
+/// without needing the network.
 pub fn latest_materialized(root: &Path, skill_id: &str) -> Result<Option<i64>, StoreError> {
     let id_dir = skill_root(root, skill_id)?;
     if !id_dir.is_dir() {
@@ -309,10 +309,10 @@ fn normalize(path: &Path) -> PathBuf {
     normalized
 }
 
-/// Copies a materialized version into `target` as a standalone local skill.
+/// Turns a materialized version into an independent local skill at `target`.
 ///
-/// The registry frontmatter (`source`, `skill_id`, `version`) is dropped so
-/// the result reads as a plain, user-owned skill, and the invocation policy is
+/// It strips the registry's frontmatter keys (`source`, `skill_id`, `version`),
+/// leaving an ordinary skill the user owns, while the invocation policy is
 /// kept; a copy whose `SKILL.md` does not parse is left untouched, because it
 /// already carries valid text of its own.
 pub fn export_local(
@@ -377,9 +377,9 @@ fn copy_tree(source: &Path, target: &Path) -> io::Result<()> {
 /// empty (reference `_prune`). An id the set does not name is left whole: it
 /// belongs to a pin this caller cannot see.
 ///
-/// `recheck` re-reads the active set the moment before the first removal, so
-/// a version another process claimed after `active` was computed is kept; it
-/// runs at most once.
+/// `recheck` reloads the active set right before anything is removed, which
+/// spares a version some other process took after `active` was built; it is
+/// called no more than once.
 pub fn prune(
     root: &Path,
     active: &BTreeSet<(String, i64)>,

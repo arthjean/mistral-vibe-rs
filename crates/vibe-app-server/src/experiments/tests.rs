@@ -81,7 +81,7 @@ impl IdentityResolver for CountingIdentity {
 /// A service over a scratch home carrying `document`.
 pub(super) fn service(root: &Path, document: &str) -> WorkspaceService {
     let home = root.join("home/.vibe");
-    let working = root.join("project");
+    let working = root.join("home/project");
     std::fs::create_dir_all(&home).expect("the home directory");
     std::fs::create_dir_all(&working).expect("the project directory");
     std::fs::write(home.join("config.toml"), document).expect("the document writes");

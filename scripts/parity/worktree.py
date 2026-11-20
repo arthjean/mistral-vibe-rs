@@ -71,7 +71,7 @@ Two artifacts come out of a run:
     paths are relativized against the case's temporary root, the managed
     directory's twelve-hex segment and the scripted repository's head commit
     become named placeholders, and every reference sentence becomes a
-    ``{"described": "sha256:...", "length": n}`` marker. The corpus therefore
+    prose digest, ``{"prose": n, "sha256": "..."}``. The corpus therefore
     carries names, relative pointers, counts and digests, and no reference
     prose, while a digest still fails the replay on any change.
 
@@ -102,8 +102,9 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 from worktree_cases import (
     AUTHORED_NAMES,
     AUTO_NAME_CASES,
@@ -135,10 +136,6 @@ SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path(".parity/worktree-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/worktree/corpus.json")
 
-#: The marker a described string carries in place of its content. The key is
-#: what makes a described value unmistakable in the corpus and in Rust, where an
-#: authored string is a JSON string and a described one is a JSON object.
-DESCRIBED = "described"
 
 #: The placeholders the committed corpus carries in place of the three values
 #: that change between machines: the temporary root a case was built under, the
@@ -350,7 +347,7 @@ def case_root(worktree_module: Any, setup: str, temporary: Path) -> Any:
 
 
 def digest(value: str) -> str:
-    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def describe(value: str) -> dict[str, Any]:
@@ -361,7 +358,7 @@ def describe(value: str) -> dict[str, Any]:
     under, and neither the digest nor the count may depend on it.
     """
 
-    return {DESCRIBED: digest(value), "length": len(value)}
+    return {"prose": len(value), "sha256": digest(value)}
 
 
 class Projection:
@@ -1147,8 +1144,8 @@ def build_corpus(records: list[dict[str, Any]], reference: dict[str, str]) -> di
             "repositories this capture scripts under a hermetic git environment. Paths are "
             "relative to the case root, the managed directory's hashed segment is "
             f"{REPO_DIRECTORY} and the scripted head commit is {HEAD_COMMIT}, so the corpus is "
-            "machine-independent. A reference sentence is committed as a {described, length} "
-            "marker carrying a SHA-256 digest, so no reference prose ships while any change "
+            "machine-independent. A reference sentence is committed as a {prose, sha256} "
+            "digest of its length and SHA-256, so no reference prose ships while any change "
             "still fails the replay. Regenerate with scripts/parity/worktree.py --corpus when "
             "the pinned reference moves."
         ),
@@ -1173,7 +1170,7 @@ def parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument(
         "--check",
         action="store_true",

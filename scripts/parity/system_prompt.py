@@ -49,12 +49,13 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import (  # noqa: E402
     OracleError,
     reference_command,
 )
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
 import stand_in  # noqa: E402
 
@@ -573,7 +574,7 @@ def rendered(payload: dict[str, Any]) -> str:
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])

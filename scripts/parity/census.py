@@ -73,11 +73,16 @@ def server_methods(tree: Path) -> list[str]:
     if module is None:
         return []
     for node in module.body:
-        target = node.target if isinstance(node, ast.AnnAssign) else None
-        if isinstance(node, ast.Assign) and len(node.targets) == 1:
-            target = node.targets[0]
+        target: ast.expr
+        value: ast.expr | None
+        if isinstance(node, ast.AnnAssign):
+            target, value = node.target, node.value
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        else:
+            continue
         if isinstance(target, ast.Name) and target.id == "SERVER_METHODS":
-            return sorted(set(_strings(node.value)))
+            return sorted(set(_strings(value)))
     return []
 
 
@@ -153,7 +158,7 @@ SHORT = re.compile(r"\bshort\s*=\s*'(?P<name>.)'")
 
 
 def cli_flags(tree: Path) -> list[str]:
-    flags = set()
+    flags: set[str] = set()
     for path in sorted((tree / CLI_SOURCES).rglob("*.rs")):
         try:
             text = path.read_text(encoding="utf-8")
@@ -172,7 +177,7 @@ CITED = re.compile(r"`(?P<path>(?:vibe|harness|tests|build_backend)/[A-Za-z0-9_.
 def cited_paths(scorecard: Path = SCORECARD) -> list[str]:
     """The reference paths the rows of the parity table cite."""
 
-    paths = set()
+    paths: set[str] = set()
     inside = False
     for line in scorecard.read_text(encoding="utf-8").splitlines():
         if line.startswith("## "):

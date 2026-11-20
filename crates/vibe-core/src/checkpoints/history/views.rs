@@ -18,8 +18,8 @@ struct DiffView {
 }
 
 impl History<'_> {
-    /// The scope's still-pending change: its kept regions against its kept plus
-    /// pending ones.
+    /// What the scope still has pending: the regions it kept, compared with
+    /// those same regions plus the undecided ones.
     ///
     /// [`None`] when the owner never touched the path, or has nothing left
     /// pending in it.
@@ -116,9 +116,9 @@ impl History<'_> {
 
     /// The pending regions grouped into dependency-connected components.
     ///
-    /// A control rendered on one hunk decides its whole component, so reverting
-    /// it drags every hunk built on the same lines and keeping it pulls in the
-    /// ones it was built on.
+    /// A decision taken on one hunk applies to its entire component: a revert
+    /// also undoes every hunk stacked on those lines, and a keep also accepts
+    /// the hunks underneath it.
     fn pending_components(
         &self,
         path: &str,
@@ -246,8 +246,8 @@ impl History<'_> {
 ///
 /// A deleted line leaves nothing on the current side to carry provenance, so
 /// the block is attributed by its content instead. Each deletion claims one
-/// distinct run and claims it once across the whole diff, which is what keeps
-/// two independent deletions of identical text from being decided together.
+/// distinct run, only once in the entire diff, so two unrelated deletions of
+/// the same text never get settled as one.
 fn match_deletions(
     removed: &[String],
     deletions: &[(RegionId, Vec<String>)],

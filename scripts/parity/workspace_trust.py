@@ -47,15 +47,18 @@ import stat
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -646,13 +649,24 @@ class Normalizer:
         return text
 
 
+def renormalize(scenario: dict[str, Any], raw: dict[str, Any]) -> Any:
+    """The normalization of a raw capture (see `capture_scenario`), as
+    `--renormalize` runs it."""
+    root = Path(raw["root"])
+    run = SimpleNamespace(root=root, world=SimpleNamespace(
+        workspace=root / "workspace", vibe_home=root / "vibe-home", home=root / "home"), sessions=raw["sessions"])
+    return Normalizer(scenario, run).value(copy.deepcopy(raw["steps"]))  # type: ignore[arg-type]
+
+
 def capture_scenario(scenario: dict[str, Any], command: list[str], dialect: str, quiet: float, raw: bool) -> dict[str, Any]:
     run = Run(scenario, command, dialect, quiet)
     try:
         steps = run.run()
         entry = {"name": scenario["name"], "scenario": scenario, "observed": Normalizer(scenario, run).value(copy.deepcopy(steps))}
         if raw:
-            entry["raw"] = steps
+            # The steps and what the normalizer reads of the run, so
+            # `--renormalize` can normalize them again.
+            entry["raw"] = {"steps": steps, "root": str(run.root), "sessions": run.sessions}
         return entry
     finally:
         run.close()
@@ -661,18 +675,22 @@ def capture_scenario(scenario: dict[str, Any], command: list[str], dialect: str,
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument("--server", type=Path, default=None, help="drive this port's stdio fixture instead")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--raw", action="store_true")
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, renormalize, 'workspace_trust')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:

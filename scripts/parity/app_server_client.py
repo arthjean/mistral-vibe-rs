@@ -78,8 +78,8 @@ def commuted(operations: list[Any]) -> list[Any]:
     which operation, which shape) and drops what it leaves free. A patch whose
     paths repeat or nest is order-dependent and kept as written.
     """
-    paths = [item.get("path") if isinstance(item, dict) else None for item in operations]
-    if any(not isinstance(path, str) for path in paths) or len(set(paths)) != len(paths):
+    paths = [item["path"] for item in operations if isinstance(item, dict) and isinstance(item.get("path"), str)]
+    if len(paths) != len(operations) or len(set(paths)) != len(paths):
         return operations
     nested = any(
         other != path and other.startswith(path.rstrip("/") + "/")
@@ -435,13 +435,29 @@ class Normalizer(blackbox.Normalizer):
     #: The keys whose values are wall-clock readings.
     time_keys = TIME_KEYS
 
+    def __init__(self, *arguments: Any, **keywords: Any) -> None:
+        super().__init__(*arguments, **keywords)
+        #: Every nonzero event counter :meth:`collect_ids` saw in the run.
+        self.counters: set[int] = set()
+
+    def counter(self, value: int) -> int:
+        """An event counter as its rank among the run's nonzero counters
+        (1 for the smallest), zero staying zero: the clock-like value is
+        gone, but a sequence that resets or runs backward still reads as
+        one. A counter :meth:`collect_ids` never saw is ranked among those
+        it did, so the two sides rank alike."""
+        if not value:
+            return 0
+        self.counters.add(value)
+        return sorted(self.counters).index(value) + 1
+
     def value(self, value: Any, key: str | None = None) -> Any:
-        if key in COUNTER_KEYS and isinstance(value, int):
-            return "<nonzero>" if value else 0
+        if key in COUNTER_KEYS and isinstance(value, int) and not isinstance(value, bool):
+            return self.counter(value)
         if key in DURATION_KEYS and isinstance(value, int | float):
             return "<duration>"
-        if key in self.time_keys and value is not None:
-            return "<time>"
+        if key in self.time_keys:
+            return blackbox.time_token(value)
         if key in ID_KEYS and isinstance(value, str) and value:
             return self.identity(value)
         if isinstance(value, str) and key not in ID_KEYS:
@@ -457,6 +473,9 @@ class Normalizer(blackbox.Normalizer):
         elif isinstance(value, list):
             for item in value:
                 self.collect_ids(item)
+        elif isinstance(value, int) and not isinstance(value, bool):
+            if key in COUNTER_KEYS and value:
+                self.counters.add(value)
         elif isinstance(value, str) and value:
             if key in ID_KEYS:
                 self.identity(value)

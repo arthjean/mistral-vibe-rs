@@ -186,8 +186,8 @@ def expected_commit(requested: str | None, pinned: str) -> str:
     ``requested`` is what the driver was asked for, ``pinned`` the pin. Inside
     ``repin.py capture`` the commit it set in :data:`CAPTURE_VARIABLE` wins, so
     an off-target capture is always one the manifest records. Anywhere else a
-    capture measures the pin: an empty ``--expected-commit``, ``--allow-unpinned``
-    or another commit is refused, since the corpus it wrote would record a
+    capture measures the pin: an empty ``--expected-commit`` or another commit
+    is refused, since the corpus it wrote would record a
     commit no replay accepts.
     """
 

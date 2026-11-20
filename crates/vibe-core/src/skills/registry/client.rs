@@ -195,8 +195,8 @@ impl<T: RegistryTransport> RegistrySkillsClient<T> {
     }
 }
 
-/// Validates a registry payload, normalizing failures so a malformed 200
-/// surfaces as a registry error naming which payload failed.
+/// Validates a registry payload; a 200 whose body is malformed becomes a
+/// registry error that says which payload was wrong.
 fn parse<M: DeserializeOwned>(payload: Value, what: &str) -> Result<M, RegistrySkillsError> {
     serde_json::from_value(payload).map_err(|_| {
         RegistrySkillsError::new(format!("the {what} response does not match its model"))

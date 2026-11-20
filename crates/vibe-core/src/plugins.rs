@@ -1,5 +1,5 @@
-//! Plugins: packages of skills, MCP servers, hooks, knowledge, agents,
-//! libraries and connectors installed per project, per user, or shipped with
+//! Plugins: bundles that can carry skills, hooks, agents, knowledge, libraries,
+//! connectors and MCP servers, installed for a project or a user, or built into
 //! the binary.
 //!
 //! Reference `vibe/core/plugins/`. Plugins resolve only under the unified

@@ -322,7 +322,6 @@
         "/steps/*/response/agent": 1,
         "/steps/*/response/error": 3,
         "/steps/*/response/result": 3,
-        "/steps/*/response/result/runtime/activeAgent/description": 1,
         "/steps/*/response/result/runtime/activeAgent/displayName": 1,
         "/steps/*/response/result/runtime/activeAgent/name": 1,
         "/steps/*/response/result/runtime/activeAgent/safety": 1

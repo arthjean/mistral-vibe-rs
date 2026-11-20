@@ -35,9 +35,9 @@ pub struct SessionMetadata {
     pub git_branch: Option<String>,
     #[serde(default, deserialize_with = "null_as_default")]
     pub environment: BTreeMap<String, Option<String>>,
-    /// Where the session began. `environment.working_directory` follows the
-    /// session when it moves; this stays, so the listing still offers it from
-    /// where the user started.
+    /// The directory the session started in. `environment.working_directory`
+    /// tracks the session as it moves, whereas this value never changes, which
+    /// lets the listing keep showing the session under its starting place.
     #[serde(default)]
     pub origin_directory: Option<String>,
     #[serde(default = "unknown_username")]

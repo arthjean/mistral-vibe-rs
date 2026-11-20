@@ -439,7 +439,7 @@ impl Resolve<'_> {
             self.issues.push(
                 PluginConfigIssue::coded(
                     root.join("plugin.json"),
-                    format!("This Agent Plugins schema version is not supported: {schema}"),
+                    format!("Unsupported Agent Plugins schema version: {schema}"),
                     codes::SCHEMA_VERSION_UNSUPPORTED,
                     Some(DetectedPluginFormat::AgentPlugins10),
                     "manifest",
@@ -533,7 +533,7 @@ impl Resolve<'_> {
             .and_then(|resolved| {
                 if !is_relative_to(&resolved, root) || !resolved.is_file() {
                     return Err(
-                        "plugin.json has to resolve to a regular file inside the plugin".to_owned(),
+                        "plugin.json does not point at a regular file within the plugin".to_owned(),
                     );
                 }
                 let manifest = parse_manifest(&resolved)?;

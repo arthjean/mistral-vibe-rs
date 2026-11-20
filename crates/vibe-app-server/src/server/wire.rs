@@ -231,7 +231,7 @@ impl SessionSettings {
     pub(crate) fn validate(&self) -> Result<(), ProtocolFault> {
         if self.entries().is_empty() {
             return Err(ProtocolFault::invalid_params(
-                "At least one session setting must be provided",
+                "Name one session setting or more",
             ));
         }
         if self

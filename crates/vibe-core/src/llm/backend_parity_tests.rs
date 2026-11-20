@@ -18,7 +18,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use super::retry::{Clock, SleepFuture, SleepKind, next_delay};
 use super::{TokenFuture, VertexAccess};
-use crate::parity::replay::Capture;
+use crate::parity::replay::{Capture, is_digest};
 use crate::pycompat::{self, Dumps, truthy};
 
 /// `json.dumps(value, ensure_ascii=False)`, how the stand-in serves a body.
@@ -363,12 +363,6 @@ pub(super) fn substitute(value: &Value, from: &[(&str, &str)]) -> Value {
 // --------------------------------------------------------------------------
 // Comparing
 // --------------------------------------------------------------------------
-
-fn is_digest(value: &Value) -> bool {
-    value.as_object().is_some_and(|fields| {
-        fields.len() == 2 && fields.contains_key("length") && fields.contains_key("sha256")
-    })
-}
 
 /// Every JSON pointer at which `port` departs from `reference`. A digest in
 /// the corpus is the reference's own prose: this port's value there must be a

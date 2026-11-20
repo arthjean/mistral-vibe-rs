@@ -44,7 +44,7 @@ fn credentials(name: &str) -> Option<String> {
 fn effective(prefix: &str) -> Table {
     let temporary = tempfile::tempdir().expect("a scratch directory");
     let home = temporary.path().join("home/.vibe");
-    let working = temporary.path().join("project");
+    let working = temporary.path().join("home/project");
     fs::create_dir_all(&home).expect("the home directory");
     fs::create_dir_all(&working).expect("the project directory");
     fs::write(

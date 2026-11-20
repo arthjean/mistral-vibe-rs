@@ -41,7 +41,7 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE
-from reference import OracleError, reexecute_pinned
+from reference import OracleError, add_commit_argument, reexecute_pinned
 
 #: 2 since v2.25.7: a declared method may carry no model (``null`` params and
 #: response), which ``shell/interrupt`` does once its models were deleted.
@@ -954,11 +954,14 @@ def main() -> int:
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--interpreter", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    add_commit_argument(parser)
     arguments = parser.parse_args()
 
     reference = arguments.reference.expanduser()
     try:
-        commit, _ = reexecute_pinned(reference, override=arguments.interpreter)
+        commit, _ = reexecute_pinned(
+            reference, arguments.expected_commit, override=arguments.interpreter
+        )
         corpus = capture(commit)
     except OracleError as error:
         print(f"error: {error}", file=sys.stderr)

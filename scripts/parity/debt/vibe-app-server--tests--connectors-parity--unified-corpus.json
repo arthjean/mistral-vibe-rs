@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/connectors-parity/unified-corpus.json",
-  "measuredAgainst": "ca73173c9f7f2d9af6f8b975fe9e53013b1ae480ba890361ad6c26236d925c8c",
+  "measuredAgainst": "fd88af8b22ba5b369c36e39a98642a589b40c18650191ba068565615bd33ff25",
   "schemaVersion": 1,
   "tallies": {
     "unified connectors parity:": {
@@ -41,7 +41,7 @@
         "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
       },
       "unified/inventory": {
-        "/requests/*/conversation/*/content": 1,
+        "/requests/*/conversation/*/content": 3,
         "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
         "/steps/*/turn/*/entry/detail/mcpApp": 2,
         "/steps/*/turn/*/patch/*": 1,

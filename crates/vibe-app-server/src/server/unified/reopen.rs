@@ -227,7 +227,7 @@ impl ServerConnection {
         }
         Err(ProtocolFault::plain(
             ProtocolErrorCode::NotFound,
-            "Session logging is disabled. Enable it in config to use --continue or --resume",
+            "--continue and --resume need session logging, which the configuration turns off",
         ))
     }
 

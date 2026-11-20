@@ -61,8 +61,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 from reference import DEFAULT_CACHE, OracleError, reexecute_pinned  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 from stand_in import Handler, Loopback  # noqa: E402
 from llm_backends_scenarios import (  # noqa: E402
     BIG,
@@ -99,7 +100,7 @@ TRANSPORT_SETTINGS = (
 
 
 def digest(text: str) -> dict[str, Any]:
-    return {"length": len(text), "sha256": hashlib.sha256(text.encode()).hexdigest()}
+    return {"prose": len(text), "sha256": hashlib.sha256(text.encode()).hexdigest()}
 
 
 # --------------------------------------------------------------------------
@@ -211,7 +212,7 @@ class StandIn(Loopback):
                     stand_in.requests.append(
                         {"method": method, "path": self.path, "headers": headers, "body": body}
                     )
-                    response = (
+                    response: dict[str, Any] = (
                         stand_in.responses.pop(0)
                         if stand_in.responses
                         else {"status": 599, "json": {"error": "unscripted request"}}
@@ -556,7 +557,7 @@ def utility_selections(home: Path) -> list[dict[str, Any]]:
          {"title": "active"}, "title"),
         ("no-override-for-title", [OPENAI, PUBLIC], BIG, [], key, [small], {}, "title"),
     ]
-    every = [(n, e, a, al, env, v, [], {}, None) for n, e, a, al, env, v in cases] + [
+    every: list[tuple[Any, ...]] = [(n, e, a, al, env, v, [], {}, None) for n, e, a, al, env, v in cases] + [
         (n, e, a, al, env, {}, m, u, f) for n, e, a, al, env, m, u, f in overrides
     ]
     out: list[dict[str, Any]] = []
@@ -853,7 +854,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--check", action="store_true",
                         help="recapture and fail when the committed corpus differs")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     return parser.parse_args()
 
 

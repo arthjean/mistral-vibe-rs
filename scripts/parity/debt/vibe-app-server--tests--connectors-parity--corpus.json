@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/connectors-parity/corpus.json",
-  "measuredAgainst": "6d38f106f321de568ce18d8c0a2ace10345657029ec1abfa1e95d3a45d444da5",
+  "measuredAgainst": "b0160feec7e28263d378dfc2184e7beeb49e6ec345ddc9a64496048c4c4f44e3",
   "schemaVersion": 1,
   "tallies": {
     "connectors parity:": {

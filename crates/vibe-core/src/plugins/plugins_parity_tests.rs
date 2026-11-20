@@ -10,9 +10,10 @@
 //!
 //! Diagnostic messages are left out on both sides, being this port's own
 //! prose, and so is the prompt of a skill that declares tools, whose guidance
-//! preamble is reworded. Every other difference has to fall under a `LEDGER`
-//! entry or the corpus's measured debt (`crate::parity::debt`), and every
-//! entry and every debt group has to still reproduce.
+//! preamble is reworded. Every other difference is accounted for by a
+//! [`Tally`]: it falls under a `LEDGER` entry or the corpus's measured debt
+//! (`crate::parity::debt`), every entry and every debt group still
+//! reproduces, and the sensitivity pass measures what the comparison sees.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -20,9 +21,8 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
-use crate::parity::debt::{Debt, Note, assert_notes};
-use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{Capture, differences};
+use crate::parity::debt::{Note, assert_notes};
+use crate::parity::replay::{Capture, PatternDivergence, Tally, differences, entries};
 use crate::plugins::compatibility::PluginMcpServer;
 use crate::plugins::diagnostics::PluginConfigIssue;
 use crate::plugins::materialize::{MaterializedPluginSet, PluginMaterializer};
@@ -34,15 +34,9 @@ const CORPUS: &str = include_str!("../../tests/plugins-parity/corpus.json");
 /// The cases the corpus may not fall below.
 const CASE_FLOOR: usize = 12;
 
-/// A difference this port keeps in one case: every difference whose JSON
-/// pointer starts with `pointer` is covered.
-struct Divergence {
-    case: &'static str,
-    pointer: &'static str,
-    reason: &'static str,
-}
-
-const LEDGER: &[Divergence] = &[];
+/// The differences this port keeps, each naming the case it holds in and the
+/// pointer into that case's summary.
+const LEDGER: &[PatternDivergence] = &[];
 
 /// The corpus as `scripts/parity/manifest.json` lists it.
 const LISTED: &str = "crates/vibe-core/tests/plugins-parity/corpus.json";
@@ -431,76 +425,13 @@ async fn every_plugin_tree_resolves_as_the_reference_resolves_it_or_as_the_ledge
         "fixtures.json declares other cases than the corpus records; recapture with \
          `scripts/parity/plugins.py --family resolve`"
     );
-    let mut unexplained = Vec::new();
-    let mut reproduced = vec![0_usize; LEDGER.len()];
-    let mut debt = Debt::load(LISTED, HEADING);
-    let mut gapped_cases = BTreeSet::new();
-    let mut conformant = 0;
+    let mut tally = Tally::new(CORPUS, entries(LEDGER));
     for (name, reference) in recorded {
         let port = resolve_case(&declared[name]).await;
         let found = differences(reference, &port);
-        if found.is_empty() {
-            conformant += 1;
-        }
-        for pointer in found {
-            match LEDGER.iter().position(|entry| {
-                entry.case == name && crate::parity::replay::pointer_within(entry.pointer, &pointer)
-            }) {
-                Some(index) => reproduced[index] += 1,
-                None if debt.absorb(name, &pointer) => {
-                    gapped_cases.insert(name.clone());
-                }
-                None => unexplained.push(format!(
-                    "{name} {pointer}\n  reference: {}\n  port:      {}",
-                    reference
-                        .pointer(&pointer)
-                        .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                    port.pointer(&pointer)
-                        .map_or_else(|| "<absent>".to_owned(), Value::to_string),
-                )),
-            }
-        }
+        tally.record(name, reference, &port, found);
     }
-    let stale: Vec<String> = LEDGER
-        .iter()
-        .zip(&reproduced)
-        .filter(|(_, count)| **count == 0)
-        .map(|(entry, _)| format!("{} {} ({})", entry.case, entry.pointer, entry.reason))
-        .collect();
-    println!(
-        "plugins resolve parity: {conformant}/{} cases conformant, {} ledgered differences, \
-         {} gap differences",
-        recorded.len(),
-        reproduced.iter().sum::<usize>(),
-        debt.covered()
-    );
-    assert!(
-        unexplained.is_empty(),
-        "the port departs from the corpus where neither a ledger entry nor the measured debt \
-         says it may:\n{}",
-        unexplained.join("\n")
-    );
-    assert!(
-        stale.is_empty(),
-        "these ledger entries no longer reproduce: {stale:?}"
-    );
-
-    // A case with a gap difference is not at parity; every other case that
-    // is not conformant differs only where `LEDGER` says it may.
-    debt.assert_settled();
-    assert_figures(
-        HEADING,
-        LISTED,
-        Figures {
-            conformant,
-            accepted: recorded.len() - conformant - gapped_cases.len(),
-            total: recorded.len(),
-            accepted_differences: reproduced.iter().sum(),
-            gap_differences: debt.covered(),
-            prose_differences: 0,
-        },
-        json!({}),
-    );
+    tally.conclude(HEADING);
 }
 
 /// Recaptures the pinned reference and asserts the committed corpus is still

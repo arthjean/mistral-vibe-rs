@@ -328,9 +328,9 @@ def run_tests(test_files: list[str], records: Path, measure: bool, log: Path) ->
         if measure:
             environment[MEASURE] = "1"
         with log.open("a", encoding="utf-8") as output:
-            for (package, target), filters in groups.items():
+            for (package, arguments), filters in groups.items():
                 command = [
-                    "cargo", "test", "-p", package, "--all-features", *target, "--",
+                    "cargo", "test", "-p", package, "--all-features", *arguments, "--",
                     *filters, "--test-threads=1",
                 ]
                 output.write(f"$ {' '.join(command)}\n")
@@ -411,7 +411,8 @@ def ratchet(previous: Tallies | None, measured: Tallies, unchanged: bool) -> tup
     it."""
 
     previous = previous or {}
-    grown, shrunk = [], []
+    grown: list[str] = []
+    shrunk: list[str] = []
     for heading, scenario, pointer in groups_moved(previous, measured):
         before = previous.get(heading, {}).get(scenario, {}).get(pointer, 0)
         after = measured.get(heading, {}).get(scenario, {}).get(pointer, 0)

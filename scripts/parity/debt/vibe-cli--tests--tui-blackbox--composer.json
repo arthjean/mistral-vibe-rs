@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-cli/tests/tui-blackbox/composer.json",
-  "measuredAgainst": "85f43cd510ed23da5f45f4e1c08e42782c2165425e794c0da74f21117be43d3d",
+  "measuredAgainst": "d11dd82c167f7228e3a8b0a3e6b9e3408d53093b5c4b18c59eebf38a6edeef0a",
   "schemaVersion": 1,
   "tallies": {
     "tui composer parity:": {
@@ -12,9 +12,8 @@
         "/snapshots/*/screen/cursor/col": 2,
         "/snapshots/*/screen/cursor/row": 2,
         "/snapshots/*/screen/cursor/visible": 2,
-        "/snapshots/*/screen/rows/*/length": 16,
-        "/snapshots/*/screen/rows/*/sha256": 18,
-        "/snapshots/*/screen/rows/*/text": 32,
+        "/snapshots/*/screen/rows/*": 18,
+        "/snapshots/*/screen/rows/*/text": 18,
         "/snapshots/*/screen/titles/*": 4
       },
       "composer/typing": {
@@ -25,9 +24,8 @@
         "/snapshots/*/screen/cursor/col": 2,
         "/snapshots/*/screen/cursor/row": 2,
         "/snapshots/*/screen/cursor/visible": 2,
-        "/snapshots/*/screen/rows/*/length": 16,
-        "/snapshots/*/screen/rows/*/sha256": 18,
-        "/snapshots/*/screen/rows/*/text": 20,
+        "/snapshots/*/screen/rows/*": 18,
+        "/snapshots/*/screen/rows/*/text": 6,
         "/snapshots/*/screen/titles/*": 4
       }
     }

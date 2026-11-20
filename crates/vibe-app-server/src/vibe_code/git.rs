@@ -92,8 +92,8 @@ impl GitRepository {
     pub(crate) async fn open(workdir: &Path) -> Result<Self, GitFailure> {
         let executable = vibe_core::worktree::trusted_git_executable(workdir).ok_or_else(|| {
             GitFailure::service(
-                "No trusted git executable was found. Install git, or set \
-                 GIT_PYTHON_GIT_EXECUTABLE to an absolute path.",
+                "Could not find a trusted git executable; install git or point \
+                 GIT_PYTHON_GIT_EXECUTABLE at its absolute path.",
             )
         })?;
         let not_a_repository = || {
@@ -511,8 +511,8 @@ static GITHUB_PATTERNS: LazyLock<[Regex; 3]> = LazyLock::new(|| {
     .map(|pattern| Regex::new(pattern).expect("the GitHub URL pattern compiles"))
 });
 
-/// Reference `parse_github_url`: the owner and repository a GitHub remote URL
-/// names, in their written case.
+/// Reference `parse_github_url`: the owner and the repository named by a
+/// GitHub remote URL, with their case kept as written.
 pub(crate) fn parse_github_url(url: &str) -> Option<(String, String)> {
     GITHUB_PATTERNS.iter().find_map(|pattern| {
         let captures = pattern.captures(url)?;

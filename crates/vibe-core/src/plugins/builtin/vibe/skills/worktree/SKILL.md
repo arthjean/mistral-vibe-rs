@@ -28,9 +28,9 @@ folder name never share a bucket.
 - Claim the directory with a plain `mkdir`. It is atomic, and it is the only
   way to tell a taken path from a bad ref, since `git worktree add` exits 128
   for both.
-- A new branch starts from the remote's default branch, fetched first when the
-  network allows; it never starts from whatever the current checkout has at
-  `HEAD`. An existing branch is checked out as it is.
+- A fresh branch forks from the default branch of the remote, refreshed with a
+  fetch when the network is reachable, and never from the current checkout's
+  `HEAD`. An existing branch is checked out unchanged.
 - Run `git worktree add -b <name> <path> <start>` for a new branch, or drop
   `-b` to reuse one.
 - Record the new worktree's own `HEAD` as `base_commit`: cleanup measures
@@ -78,8 +78,8 @@ a holder that appeared meanwhile would be lost.
 
 ## Snapshots and retention
 
-Vibe keeps the newest configured number of managed worktrees across all
-repositories and never touches one in use. An inactive worktree beyond that
+Across every repository, Vibe retains as many managed worktrees as configured,
+keeping the most recent, and leaves any worktree in use alone. An idle one past
 count is first saved: everything in it, untracked files included and ignored
 ones excluded, is committed through a separate index file to
 `refs/vibe/reaped/<name>`, leaving the worktree's own index as it was. If the

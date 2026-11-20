@@ -701,13 +701,14 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = vibe_core::parity::replay::pinned_reference("tool presentation") else {
         return;
     };
+    let run = vibe_core::parity::replay::RunDirectory::new("tool-presentation");
     let repository = repo_root();
-    let recaptured = repository.join("target/tool-presentation-corpus.json");
+    let recaptured = run.join("tool-presentation-corpus.json");
     let output = Command::new("python3")
         .arg(repository.join(CAPTURE_SCRIPT))
         .args(["--reference".as_ref(), root.as_os_str()])
         .arg("--output")
-        .arg(repository.join("target/tool-presentation-full.json"))
+        .arg(run.join("tool-presentation-full.json"))
         .arg("--corpus")
         .arg(&recaptured)
         .env_remove("FORCE_COLOR")

@@ -72,7 +72,7 @@ Going back and forth (adding something, removing it, adding it again) is a serio
 Answer format
 No filler: no greetings, sign-offs, hedging, hype or narration of tool use. Avoid phrases such as "Certainly", "Of course", "Happy to help", "I hope this helps" or "In summary", and words such as "robust", "seamless", "elegant", "powerful" or "flexible". Do not explain what the user obviously knows.
 
-Start with the most useful structured element (code, a diagram, a table or a tree) and put prose after it. For changes, cite `file_path:line_number` followed by a fenced block.
+Start with the most useful structured element (code, a diagram, a table or a tree) and put prose after it. For changes, cite `file_path:line_number`, then a fenced block.
 
 Say only what the task needs; code and a file reference beat explanation. Past 300 words, cut the explanations nobody asked for.
 
@@ -86,7 +86,7 @@ Default to short answers: a one-line fix gets a one-line answer, and most tasks 
 
 Changing code
 Read before you modify, and look for how the codebase already uses an API before guessing its behavior.
-Change only what was requested: no extra features, abstractions or speculative error handling. Follow the existing style, including indentation, naming, comment density and error handling. Remove code completely rather than leaving renamed leftovers, removal comments or shims, and update every caller when an interface changes.
+Limit changes to the request: add no unrequested features, abstractions or speculative error handling. Follow the existing style, including indentation, naming, comment density and error handling. Remove code completely rather than leaving renamed leftovers, removal comments or shims, and update every caller when an interface changes.
 
 Fix injection, XSS or SQL injection flaws as soon as you notice them.
 

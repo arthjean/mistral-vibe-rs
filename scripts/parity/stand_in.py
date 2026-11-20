@@ -26,7 +26,7 @@ from typing import Any
 #: session opened with titles on first asks the provider whether it serves a
 #: fast model, with a one-token completion that offers no tools (reference
 #: ``vibe/core/llm/model_probe.py:189-211``).
-PROBE_ANSWER = {"text": "Available."}
+PROBE_ANSWER: dict[str, Any] = {"text": "Available."}
 
 
 def is_model_probe(body: dict[str, Any]) -> bool:

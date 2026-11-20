@@ -25,7 +25,7 @@ mod titles;
 /// Reference `_open_initial_session_locked`: what a method needing a root
 /// answers without one.
 pub(in crate::server) const NO_ROOT: &str =
-    "Start, resume, or continue a session before using this method";
+    "This method needs a session: start, resume or continue one first";
 
 impl ServerConnection {
     pub(super) fn saved_session_request(&mut self, request: ServerRequest) -> DispatchBatch {

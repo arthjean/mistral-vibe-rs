@@ -38,7 +38,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import host_env  # noqa: E402
 from blackbox import (  # noqa: E402
     Agent,
@@ -51,7 +51,9 @@ from blackbox import (  # noqa: E402
 )
 from acp_scenarios import scenarios  # noqa: E402
 import provenance  # noqa: E402
+import sensitivity  # noqa: E402
 from reference import OracleError, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -64,6 +66,11 @@ QUIET_SECONDS = 0.6
 #: Notifications the reference emits from detached tasks, whose position
 #: relative to the response is not part of the contract.
 ASYNC_UPDATES = {"usage_update", "available_commands_update"}
+
+#: Notifications detached from a turn only: the title the app server generates
+#: once a prompt ends reaches the editor before or after the prompt's response,
+#: while a title an extension sets is sent before its answer.
+TURN_ASYNC_UPDATES = {"session_info_update"}
 
 
 # --------------------------------------------------------------------------
@@ -214,6 +221,12 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[dict[st
         detached: list[Any] = []
         response: Any = None
         answered = False
+        # A turn is the step whose answer carries a stop reason.
+        turn = any(
+            isinstance(message.get("result"), dict) and "stopReason" in message["result"]
+            for message in step["messages"]
+            if "method" not in message
+        )
         for message in step["messages"]:
             message = copy.deepcopy(message)
             sort_grep_matches(message)
@@ -228,7 +241,8 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[dict[st
                 response = normalized
                 answered = True
                 continue
-            if message_kind(message) in ASYNC_UPDATES:
+            kind = message_kind(message)
+            if kind in ASYNC_UPDATES or (turn and kind in TURN_ASYNC_UPDATES):
                 detached.append(normalized)
                 continue
             stream.append({"after": answered, "message": normalized})
@@ -335,12 +349,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=1, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'acp')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, agent=arguments.agent)
     try:
         if arguments.agent is not None:

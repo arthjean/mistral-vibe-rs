@@ -34,7 +34,7 @@ fn an_unqualified_name_is_refused_with_the_names_that_hold_it() {
 fn a_blank_name_is_refused() {
     assert_eq!(
         check_request(&AVAILABLE, &json!({"name": " "})),
-        Err("skill name must be a non-empty string".to_owned())
+        Err("the skill name has to be a non-empty string".to_owned())
     );
 }
 

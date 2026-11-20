@@ -1063,13 +1063,13 @@ async fn stdin_takes_exactly_one_input_and_refuses_bad_base64_before_writing() {
         )
         .await
         .expect_err("two inputs are refused");
-    assert!(both.to_string().contains("exactly one"), "{both}");
+    assert!(both.to_string().contains("a single input"), "{both}");
 
     let neither = harness
         .call("bash_stdin", json!({"session_id": session}))
         .await
         .expect_err("no input is refused");
-    assert!(neither.to_string().contains("exactly one"), "{neither}");
+    assert!(neither.to_string().contains("a single input"), "{neither}");
 
     let malformed = harness
         .call(
@@ -1894,8 +1894,8 @@ async fn a_shell_override_carries_the_argument_form_of_the_executable_it_names()
     assert!(refused.to_string().contains("bash.exe"), "{refused}");
 }
 
-/// Reference `get_windows_bash_path` scans every `PATH` entry rather than
-/// stopping at the first hit, so a real Git Bash listed after the WSL launcher
+/// Reference `get_windows_bash_path` walks all of `PATH` instead of halting on
+/// its first match, so a genuine Git Bash that comes after the WSL launcher
 /// still wins, and `WINDOWS_POWERSHELL_DEFAULT_SHELLS` prefers PowerShell 7.
 #[test]
 fn the_windows_shell_search_skips_the_wsl_launcher_and_keeps_the_reference_order() {

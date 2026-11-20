@@ -256,7 +256,7 @@ fn scratchpad(arguments: &Value, directory: &Path) -> Result<ToolResult, String>
     let target = resolve_within(directory, &path)?;
     if hard_linked(&target) {
         return Err(format!(
-            "Path is a hard link and may alias a file outside the scratchpad: {path}"
+            "Refusing a hard link, which could point at a file beyond the scratchpad: {path}"
         ));
     }
     if action == "read" {
@@ -286,7 +286,7 @@ fn resolve_within(directory: &Path, path: &str) -> Result<PathBuf, String> {
         vibe_core::platform::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
     let resolved = vibe_core::platform::resolve_lenient(&root.join(path));
     if resolved == root {
-        return Err("Path must name a file inside the scratchpad".to_owned());
+        return Err("The path has to name a file within the scratchpad".to_owned());
     }
     if !resolved.starts_with(&root) {
         return Err(format!("Path escapes the scratchpad directory: {path}"));

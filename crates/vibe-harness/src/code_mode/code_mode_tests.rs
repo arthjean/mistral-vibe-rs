@@ -50,7 +50,7 @@ fn a_thrown_error_is_described_and_a_missing_main_refused() {
     };
     assert_eq!(
         error["message"],
-        "run_typescript code must define async function main()."
+        "run_typescript code has to declare an async function main()."
     );
 }
 
@@ -90,7 +90,7 @@ fn a_tool_call_suspends_until_the_record_answers_it() {
 
 #[test]
 fn a_failed_call_rejects_with_the_recorded_error() {
-    let code = "async function main() {\n  try { await tools.file_system.read_file({path: 'x'}); } catch (error) { return error.name + ': ' + error.message; }\n}";
+    let code = "async function main() {\n  const settle = (failure) => `${failure.name}: ${failure.message}`;\n  return tools.file_system.read_file({path: 'x'}).then(() => 'resolved', settle);\n}";
     let record = vec![Recorded {
         name: "file_system.read_file".to_owned(),
         arguments: json!({"path": "x"}),

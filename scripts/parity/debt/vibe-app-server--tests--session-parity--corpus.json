@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/session-parity/corpus.json",
-  "measuredAgainst": "cad5f4d21d89dc8c9992f8220d4abdc79dffa692bb3034f06611525e70de7ff8",
+  "measuredAgainst": "e178cdc4764c74386a60be68a99f408f20413428692254e211869314fc1e747a",
   "schemaVersion": 1,
   "tallies": {
     "session parity:": {
@@ -193,6 +193,8 @@
         "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
         "/*/response/result/items/*/loops": 1,
         "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
+        "/*/response/result/lastEventId": 1,
+        "/*/response/result/state/eventId": 1,
         "/*/response/result/state/history/*/outcome": 4,
         "/*/response/result/state/session/agent": 2,
         "/*/response/result/state/session/contextUsage/cachedInputTokens": 2,
@@ -210,7 +212,7 @@
       },
       "relocate/refusals": {
         "/*/response/error/code": 2,
-        "/*/response/error/message": 2
+        "/*/response/error/message": 1
       },
       "relocate/to-a-worktree": {
         "/*/response/error": 2,

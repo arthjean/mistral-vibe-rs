@@ -4,9 +4,9 @@
 //! Reference `vibe/core/skills/registry/_ledger.py`. The store under the Vibe
 //! home is shared by every repository on the machine, but one sync only reads
 //! its own manifests; pruning against those alone would evict a version a
-//! sibling repository still pins. Each repository, keyed by its resolved
-//! project roots or `global` when it has none, records the versions it keeps
-//! active in a file of its own, and a prune keeps the union of every record.
+//! sibling repository still pins. So every repository writes the versions it
+//! holds active to a separate file, named after the project roots it resolves
+//! to (or `global` without any), and a prune spares the union of all those files.
 //! A repository rewrites its own record on every sync, so a dropped pin leaves
 //! the union unless another repository still holds it.
 

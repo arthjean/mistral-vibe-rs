@@ -76,7 +76,7 @@ pub fn plugin_reload_notices(plugins: &SessionPlugins) -> Vec<String> {
     unavailable.sort();
     if !unavailable.is_empty() {
         notices.push(format!(
-            "These plugin tools are no longer offered by their source and calling one will fail: {}.",
+            "Their source stopped offering these plugin tools, so any call to one fails: {}.",
             unavailable.join(", ")
         ));
     }

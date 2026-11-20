@@ -80,7 +80,7 @@ pub(super) fn validate_contained_tree(
 pub(super) fn contained_component_file(plugin_root: &Path, path: &Path) -> Result<PathBuf, String> {
     let resolved = resolve_strict(path).map_err(|error| error.to_string())?;
     if !is_relative_to(&resolved, plugin_root) || !resolved.is_file() {
-        return Err("the component has to resolve to a regular file inside the plugin".to_owned());
+        return Err("the component does not point at a regular file within the plugin".to_owned());
     }
     Ok(resolved)
 }

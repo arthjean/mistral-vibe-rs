@@ -12,8 +12,8 @@
 //! checkout, as `resolve_git_executable` does (`vibe/utils/platform.py:89-149`),
 //! so a repository cannot ship the `git` its own worktree operations run. And
 //! every invocation carries `-c core.fsmonitor=` and a `core.hooksPath` that
-//! names no directory, the two keys a repository can use to make git run a
-//! command of its choosing (`vibe/core/git/repo.py:39-48,122-134`). The
+//! names no directory, since those two settings are how a repository could
+//! get git to execute a program it picks (`vibe/core/git/repo.py:39-48,122-134`). The
 //! reference applies the pair to the calls that write refs or read a working
 //! tree; applying it to the read-only ones as well changes no answer they give.
 
@@ -29,9 +29,9 @@ mod git_tests;
 
 /// What `core.hooksPath` is pointed at so a repository's hooks never run.
 ///
-/// Absolute and absent rather than empty: git resolves a relative hooks path
-/// against the directory the hooks would run in, which is the untrusted
-/// worktree itself (`vibe/core/git/repo.py:39-48`).
+/// An absolute path to nothing, not an empty value: git would read a relative
+/// hooks path from where hooks execute, and that is the very worktree we do
+/// not trust (`vibe/core/git/repo.py:39-48`).
 pub(crate) const NO_HOOKS_PATH: &str = "/nonexistent-vibe-disabled-git-hooks";
 
 /// The status git exits with when it refuses an option it does not know.
@@ -56,8 +56,7 @@ const GIT_EXECUTABLE_ENV: &str = "GIT_PYTHON_GIT_EXECUTABLE";
 const CONVENTIONAL_BASE_BRANCHES: [&str; 3] = ["main", "master", "develop"];
 
 /// The sentence both unavailable-git refusals carry, which the launch reports.
-const GIT_UNAVAILABLE: &str =
-    "no trusted git executable was found; install git or set GIT_PYTHON_GIT_EXECUTABLE";
+const GIT_UNAVAILABLE: &str = "no trusted git executable was found; put git on PATH or point GIT_PYTHON_GIT_EXECUTABLE at one";
 
 /// A trusted `git` for work that happens around `cwd`.
 ///
@@ -154,8 +153,8 @@ pub(crate) fn command(executable: &Path, directory: &Path) -> Command {
         .args(["-c", "core.fsmonitor="])
         .arg("-c")
         .arg(format!("core.hooksPath={NO_HOOKS_PATH}"))
-        // Git must never stop to ask: a remote needing credentials would
-        // otherwise open a helper and block (`vibe/core/git/repo.py:30-34`).
+        // Prompts are switched off so a remote that wants credentials fails
+        // fast instead of launching a helper that hangs (`vibe/core/git/repo.py:30-34`).
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never");
     command
@@ -244,8 +243,8 @@ impl GitRepo {
         })
     }
 
-    /// Opens a worktree in its own right rather than through the repository it
-    /// is linked to, so what is read is that worktree's own state.
+    /// Opens a worktree directly instead of via its parent repository, so every
+    /// read reflects the worktree's own state.
     pub(crate) fn at(target: &Path) -> Result<Self, WorktreeError> {
         let executable = git_executable(target)?;
         Ok(Self {
@@ -415,9 +414,9 @@ impl GitRepo {
 
     /// Checks a worktree out at `target`, creating `branch` when asked to.
     ///
-    /// The start point is omitted rather than defaulted when there is none,
-    /// because git's own default is the invoking checkout's `HEAD`, which is
-    /// the right answer for a repository with no remote
+    /// Without a start point none is passed, letting git fall back to `HEAD`
+    /// of the checkout it runs from, which is what a remote-less repository
+    /// needs
     /// (`vibe/core/git/repo.py:460-486`).
     pub(crate) fn add_worktree(
         &self,
@@ -560,7 +559,7 @@ impl GitRepo {
             })
     }
 
-    /// A best-effort guess at the branch this work merges back into, without
+    /// Guesses, as well as it can, which branch these changes will merge into,
     /// asking the network (`vibe/core/git/repo.py:292-327`).
     pub(crate) fn base_branch(&self) -> Option<String> {
         self.origin_head_branch()
@@ -711,8 +710,8 @@ pub(crate) fn parse_worktree_records(output: &str, separator: char) -> Vec<Workt
     records
 }
 
-/// Reference `normalise_remote_url` (`vibe/core/git/remote.py:47-55`): one
-/// spelling of the repository a remote URL names, `https://{host}/{path}.git`
+/// Reference `normalise_remote_url` (`vibe/core/git/remote.py:47-55`): the
+/// canonical form of the repository behind a remote URL, `https://{host}/{path}.git`
 /// with every path segment between the owner and the repository kept, or
 /// [`None`] for a URL naming no host, owner and repository.
 pub(crate) fn normalize_remote_url(url: &str) -> Option<String> {

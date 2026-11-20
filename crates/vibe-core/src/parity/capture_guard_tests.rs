@@ -158,7 +158,7 @@ fn an_off_pin_reference_capture_runs_only_through_repin() {
     let missing = root.join("target/no-such-reference");
     let missing = missing.to_string_lossy().into_owned();
     let cases: [(&str, &[&str]); 3] = [
-        ("scripts/parity/tool_config.py", &["--allow-unpinned"]),
+        ("scripts/parity/tool_config.py", &["--expected-commit", ""]),
         ("scripts/parity/review.py", &["--expected-commit", ""]),
         (
             "scripts/parity/review.py",
@@ -187,7 +187,7 @@ fn an_off_pin_reference_capture_runs_only_through_repin() {
     let sanctioned = "0123456789abcdef0123456789abcdef01234567";
     let output = run(
         &root.join("scripts/parity/tool_config.py"),
-        &["--allow-unpinned", "--reference", missing.as_str()],
+        &["--expected-commit", "", "--reference", missing.as_str()],
         &[("VIBE_PARITY_REPIN_COMMIT", sanctioned)],
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -296,5 +296,73 @@ fn no_driver_passes_a_harness_flag() {
     assert!(
         offending.is_empty(),
         "these drivers still pass or offer a harness flag: {offending:?}"
+    );
+}
+
+#[test]
+fn a_retired_commit_flag_exits_naming_the_one_that_remains() {
+    let root = repository();
+    for script in [
+        "scripts/parity/tool_config.py",
+        "scripts/parity/review.py",
+        "scripts/parity/config_surface.py",
+    ] {
+        let output = run(&root.join(script), &["--allow-unpinned"], &[]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success()
+                && stderr.contains("--allow-unpinned is retired")
+                && stderr.contains("--expected-commit")
+                && stderr.contains("repin.py capture <corpus> --commit <sha>"),
+            "{script} --allow-unpinned must exit naming --expected-commit: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn every_driver_names_its_commit_through_the_shared_flag() {
+    // One spelling of the commit a capture measures: a driver declares it
+    // through `reference.add_commit_argument`, which also refuses the
+    // retired spellings, never by hand.
+    let root = repository();
+    let mut offending = Vec::new();
+    let mut missing = Vec::new();
+    let directory = root.join("scripts/parity");
+    let mut sources: Vec<PathBuf> = std::fs::read_dir(&directory)
+        .expect("the drivers are listed")
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().is_some_and(|extension| extension == "py"))
+        .collect();
+    sources.push(root.join("crates/vibe-cli/tests/runtime-parity/cli-surface-oracle.py"));
+    for path in sources {
+        let source = std::fs::read_to_string(&path).expect("a driver is readable");
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned());
+        if name.as_deref() == Some("reference.py") {
+            continue;
+        }
+        if source.contains("\"--expected-commit\"") || source.contains("\"--allow-unpinned\"") {
+            offending.push(path.display().to_string());
+        }
+        // A driver that re-executes under the pinned reference and parses a
+        // command line takes the shared flag, so a retired spelling passed to
+        // it exits naming `--expected-commit` instead of argparse's generic
+        // refusal.
+        if source.contains("reexecute_pinned(")
+            && source.contains("parse_args(")
+            && !source.contains("add_commit_argument(parser)")
+        {
+            missing.push(path.display().to_string());
+        }
+    }
+    assert!(
+        offending.is_empty(),
+        "these drivers declare a commit flag by hand instead of `add_commit_argument`: {offending:?}"
+    );
+    assert!(
+        missing.is_empty(),
+        "these drivers parse a command line without `add_commit_argument(parser)`, so a retired \
+         commit flag would not exit naming `--expected-commit`: {missing:?}"
     );
 }

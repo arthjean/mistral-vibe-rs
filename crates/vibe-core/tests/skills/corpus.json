@@ -4,14 +4,14 @@
     "skills": [
       {
         "description": {
-          "digest": "b73a11a8b3438f60bc88c5e6013960469814c3305e071ce1a027b6be611b0765",
-          "length": 249
+          "prose": 249,
+          "sha256": "b73a11a8b3438f60bc88c5e6013960469814c3305e071ce1a027b6be611b0765"
         },
         "hasPath": true,
         "name": "vibe:create-plugin",
         "prompt": {
-          "digest": "119b3ad57feb7affa8d58443c104e4a1fab1904f4e750c6d2a3444301cae2ec3",
-          "length": 12783
+          "prose": 12783,
+          "sha256": "119b3ad57feb7affa8d58443c104e4a1fab1904f4e750c6d2a3444301cae2ec3"
         },
         "scope": "builtin",
         "source": "plugin",
@@ -19,14 +19,14 @@
       },
       {
         "description": {
-          "digest": "c6e85bed9c5d1c1fc9d3320bd3e06a6685563dfd363539cbd5b8aebf9cab49f3",
-          "length": 245
+          "prose": 245,
+          "sha256": "c6e85bed9c5d1c1fc9d3320bd3e06a6685563dfd363539cbd5b8aebf9cab49f3"
         },
         "hasPath": true,
         "name": "vibe:skill-creator",
         "prompt": {
-          "digest": "95df7bf48dccb36eec406db29ac19f033043a48d7691a6b1a3afafe6b726f3ee",
-          "length": 4564
+          "prose": 4564,
+          "sha256": "95df7bf48dccb36eec406db29ac19f033043a48d7691a6b1a3afafe6b726f3ee"
         },
         "scope": "builtin",
         "source": "plugin",
@@ -34,14 +34,14 @@
       },
       {
         "description": {
-          "digest": "050ebe851d36b47c8fe6d0ab3539436916ab5bed7d86678cf13dc3b45312146a",
-          "length": 842
+          "prose": 842,
+          "sha256": "050ebe851d36b47c8fe6d0ab3539436916ab5bed7d86678cf13dc3b45312146a"
         },
         "hasPath": true,
         "name": "vibe:vibe",
         "prompt": {
-          "digest": "424dac44a67ebf3fecbe5d04188c487f1d31c4c9177d83256df33aa9a2a65f81",
-          "length": 77603
+          "prose": 77603,
+          "sha256": "424dac44a67ebf3fecbe5d04188c487f1d31c4c9177d83256df33aa9a2a65f81"
         },
         "scope": "builtin",
         "source": "plugin",
@@ -49,14 +49,14 @@
       },
       {
         "description": {
-          "digest": "d3a87b3d126d454b39eadf54f0ddf0417f8b880679e477fcaecfe91528eb503d",
-          "length": 195
+          "prose": 195,
+          "sha256": "d3a87b3d126d454b39eadf54f0ddf0417f8b880679e477fcaecfe91528eb503d"
         },
         "hasPath": true,
         "name": "vibe:worktree",
         "prompt": {
-          "digest": "9c15ef3ad58ebe29f2216ddb7c8f17e5eee743dee0b245548a0200e232f9332e",
-          "length": 4412
+          "prose": 4412,
+          "sha256": "9c15ef3ad58ebe29f2216ddb7c8f17e5eee743dee0b245548a0200e232f9332e"
         },
         "scope": "builtin",
         "source": "plugin",
@@ -7515,8 +7515,8 @@
       }
     ],
     "fallbackDescription": {
-      "digest": "0e92a2a1265eb0161f8f592bc8ec4dc840881be880c0e6528edb700c1a6c45d1",
-      "length": 34
+      "prose": 34,
+      "sha256": "0e92a2a1265eb0161f8f592bc8ec4dc840881be880c0e6528edb700c1a6c45d1"
     }
   },
   "sync": [

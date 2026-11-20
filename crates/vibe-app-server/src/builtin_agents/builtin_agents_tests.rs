@@ -20,7 +20,7 @@ fn the_lean_profile_admits_its_own_model_by_name() {
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         registry::default_document(),
     )

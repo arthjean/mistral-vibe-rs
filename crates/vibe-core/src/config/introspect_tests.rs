@@ -19,7 +19,7 @@ fn described(user: &str, runtime: Table) -> (tempfile::TempDir, ConfigFields) {
     let described = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
-            working_directory: temporary.path().join("project"),
+            working_directory: temporary.path().join("home/project"),
         },
         default_document(),
     )
@@ -99,8 +99,8 @@ fn the_described_surface_is_the_published_registry_without_the_tool_table() {
     let (_temporary, described) = described("", Table::new());
 
     let described_names: Vec<&str> = described.fields.iter().map(|field| field.name).collect();
-    // The active model's context window closes the list: it lives only on
-    // models, so it has no field of its own.
+    // The list ends with the active model's context window, which exists only
+    // as a per-model setting and therefore has no standalone field.
     let expected: Vec<&str> = registry::FIELDS
         .iter()
         .filter(|spec| spec.published && !introspect::HIDDEN_FIELDS.contains(&spec.name))
@@ -172,7 +172,7 @@ fn a_sensitive_field_is_redacted_in_its_value_and_in_every_layer() {
 fn the_writable_targets_lead_with_the_selection_and_drop_an_untrusted_project() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
-    let project = temporary.path().join("project");
+    let project = temporary.path().join("home/project");
     fs::create_dir_all(&home).expect("home directory");
     fs::create_dir_all(project.join(PROJECT_DIRECTORY)).expect("project directory");
     fs::write(

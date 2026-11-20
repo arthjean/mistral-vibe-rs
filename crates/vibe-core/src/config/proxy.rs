@@ -50,12 +50,12 @@ impl ProxyKey {
     #[must_use]
     pub const fn description(self) -> &'static str {
         match self {
-            Self::Http => "Proxy URL for HTTP requests",
-            Self::Https => "Proxy URL for HTTPS requests",
-            Self::All => "Proxy URL for all requests (fallback)",
-            Self::No => "Comma-separated list of hosts to bypass proxy",
-            Self::SslCertFile => "Path to custom SSL certificate file",
-            Self::SslCertDir => "Path to directory containing SSL certificates",
+            Self::Http => "Proxy server URL used for plain HTTP traffic",
+            Self::Https => "Proxy server URL used for HTTPS traffic",
+            Self::All => "Fallback proxy server URL for any traffic",
+            Self::No => "Hosts reached without the proxy, separated by commas",
+            Self::SslCertFile => "File holding a custom SSL certificate",
+            Self::SslCertDir => "Folder holding the SSL certificates to trust",
         }
     }
 }

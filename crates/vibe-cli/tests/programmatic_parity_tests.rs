@@ -51,16 +51,28 @@ const OWN_SENTENCES: &str = "Programmatic mode's own sentences";
 /// Every text this port words its own way, digest by digest. At v3.1.0 only
 /// the warning about an untrusted folder's project configuration still falls
 /// in its band; the other refusals moved, and are gaps below.
-const PROSE: &[OwnProse] = &[OwnProse {
-    scenarios: &["trust/untrusted-project-config"],
-    pointer: "/*/stderr/*/message",
-    count: 1,
-    band: Band::DEFAULT,
-    directives: None,
-    row: "13",
-    accepted: OWN_SENTENCES,
-    reason: "the warning `vibe -p` reports when it ignores an untrusted folder's configuration",
-}];
+const PROSE: &[OwnProse] = &[
+    OwnProse {
+        scenarios: &["trust/untrusted-project-config"],
+        pointer: "/*/stderr/*/message",
+        count: 1,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "13",
+        accepted: OWN_SENTENCES,
+        reason: "the warning `vibe -p` reports when it ignores an untrusted folder's configuration",
+    },
+    OwnProse {
+        scenarios: &["failure/unauthorized", "session/resume-without-id"],
+        pointer: "/*/stderr/*/message",
+        count: 2,
+        band: Band::DEFAULT,
+        directives: None,
+        row: "13",
+        accepted: OWN_SENTENCES,
+        reason: "the refusal `vibe -p` reports, reworded in this port's words under the same exit status",
+    },
+];
 /// Drives this port's `vibe` through every scenario the corpus records and
 /// compares what it answers.
 #[test]

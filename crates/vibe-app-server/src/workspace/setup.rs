@@ -2,10 +2,10 @@
 //! session exists: the seed its wizard opens on, the key it stores, and the
 //! choices it submits.
 //!
-//! Reference `vibe/app_server/_setup.py`. No session is opened, no trust gate
-//! fires and no runtime is built: every answer reads the configuration the
-//! process resolved, and every write goes through the same persistence the
-//! terminal's own onboarding uses.
+//! Reference `vibe/app_server/_setup.py`. These methods open no session, raise
+//! no trust prompt and build no runtime: they answer from the configuration
+//! this process already resolved, and they write through the persistence the
+//! terminal onboarding also uses.
 
 use std::collections::BTreeMap;
 
@@ -182,9 +182,9 @@ impl WorkspaceService {
     }
 
     /// Reference `SetupRequestHandler._submit_choices`: only what the wizard
-    /// moved is written, the provider merged onto the configured one of the
-    /// same name so the settings the wizard never shows survive, then the
-    /// theme when one was chosen.
+    /// moved is written, the provider merged onto the configured provider
+    /// bearing its name, which keeps every setting the wizard hides, and then
+    /// the theme if the user picked one.
     pub(super) fn setup_submit_choices(
         &self,
         params: &BTreeMap<String, Value>,
@@ -281,8 +281,8 @@ fn named_provider(snapshot: &ConfigSnapshot, name: &str) -> Result<Table, Worksp
         })
 }
 
-/// Reference `_merged_provider`: the provider to persist and whether the
-/// wizard's view moved it. The view's fields land on the configured provider
+/// Reference `_merged_provider`: what provider to write, and whether the
+/// view the wizard returned changed it. The view's fields land on the configured provider
 /// of the same name; an unknown name starts a fresh one, and no view passes
 /// the seed provider through unchanged.
 fn merged_provider(snapshot: &ConfigSnapshot, view: Option<&ProviderView>) -> (Table, bool) {

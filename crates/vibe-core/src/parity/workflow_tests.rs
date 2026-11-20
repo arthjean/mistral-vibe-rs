@@ -211,6 +211,45 @@ fn the_linux_and_windows_gates_run_the_agents_sequence_and_count_parity() {
     );
 }
 
+/// The version `text` pins right after `prefix` (`ruff==`, `mypy==`).
+fn pinned_version<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
+    let rest = text.split_once(prefix)?.1;
+    let end = rest
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(rest.len());
+    Some(&rest[..end]).filter(|version| !version.is_empty())
+}
+
+/// US-027 of `tasks/prd-trustworthy-parity-v3.md`: the Linux gate lints and
+/// type-checks `scripts/parity/` at the versions its requirements file pins,
+/// which are the ones AGENTS.md runs locally, and ruff's is the one the
+/// committed configuration requires. The workflow itself carries no version
+/// literal (`release_parity_tests` in `vibe-cli`).
+#[test]
+fn the_parity_scripts_are_linted_and_type_checked_at_one_version_of_each_tool() {
+    let workflow = read(CI);
+    let agents = read("AGENTS.md");
+    let config = read("scripts/parity/pyproject.toml");
+    let requirements = read("scripts/parity/lint-requirements.txt");
+    let ruff = pinned_version(&requirements, "\nruff==").expect("a pinned ruff");
+    let mypy = pinned_version(&requirements, "\nmypy==").expect("a pinned mypy");
+    assert!(
+        workflow.contains("working-directory: scripts/parity")
+            && workflow.contains("--requirement lint-requirements.txt\n")
+            && workflow.contains("          ruff check .\n")
+            && workflow.contains("          mypy\n"),
+        "{CI}: the quality job installs the pinned tools and runs ruff and mypy from scripts/parity"
+    );
+    assert!(
+        config.contains(&format!("required-version = \"=={ruff}\"")),
+        "scripts/parity/pyproject.toml requires a ruff other than the {ruff} the requirements pin"
+    );
+    assert!(
+        agents.contains(&format!("uvx ruff@{ruff} check . && uvx mypy=={mypy}")),
+        "AGENTS.md runs other versions than the ruff {ruff} and mypy {mypy} the requirements pin"
+    );
+}
+
 #[test]
 fn no_nextest_profile_retries_a_parity_test_and_the_ci_report_lists_skips() {
     let config: toml::Table =
@@ -317,4 +356,102 @@ fn every_live_probe_outside_a_parity_path_is_exempt_from_retries() {
             );
         }
     }
+}
+
+/// The pattern the `Count windows ignore tags` step of [`CI`] counts a tagged
+/// test by, line by line: one string literal naming its cause and stories.
+const COUNTED_TAG: &str = r#""windows: [^"]*\(US-[0-9]+(, US-[0-9]+)*\)""#;
+/// The opening the same step counts a test ignored by design with.
+const BY_DESIGN: &str = r#""windows by design: "#;
+
+/// The string literal opening at `start` of `text`, quotes included.
+fn literal_at(text: &str, start: usize) -> &str {
+    let mut escaped = false;
+    for (offset, character) in text[start + 1..].char_indices() {
+        match character {
+            '\\' if !escaped => escaped = true,
+            '"' if !escaped => return &text[start..start + 1 + offset + 1],
+            _ => escaped = false,
+        }
+    }
+    &text[start..]
+}
+
+/// Every reason a test is skipped on Windows with, under AGENTS.md: a tag
+/// `"windows: <cause> (US-NNN)"` the CI summary counts, or a reason opening
+/// `"windows by design: "`. A reason the step's line-by-line `grep` cannot
+/// see (one spread over lines, one missing its story, a constant or no reason
+/// at all on an `ignore` attribute) leaves a Windows-only failure uncounted.
+#[test]
+fn every_windows_ignore_reason_is_one_the_ci_summary_counts() {
+    use regex::Regex;
+
+    let ci = read(CI);
+    assert!(
+        ci.contains(&format!(
+            "grep -rhoE '{COUNTED_TAG}' crates --include='*.rs'"
+        )) && ci.contains(&format!("grep -rhoE '{BY_DESIGN}' crates --include='*.rs'")),
+        "{CI} no longer counts tags with `{COUNTED_TAG}` and `{BY_DESIGN}`: update both"
+    );
+    let counted = Regex::new(COUNTED_TAG).expect("the counted pattern compiles");
+    let attribute = Regex::new(
+        r#"cfg_attr\(\s*(?:windows|not\(unix\)|target_os\s*=\s*"windows")\s*,\s*ignore\b\s*(=\s*)?"#,
+    )
+    .expect("the attribute pattern compiles");
+    let root = repository();
+    let mut sources = Vec::new();
+    rust_sources(&root.join("crates"), &mut sources);
+    let mut offenders = Vec::new();
+    let mut tags = 0;
+    for path in &sources {
+        let relative = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        if relative == "crates/vibe-core/src/parity/workflow_tests.rs" {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(path) else {
+            continue;
+        };
+        let line_of = |offset: usize| text[..offset].matches('\n').count() + 1;
+        for (start, _) in text.match_indices("\"windows: ") {
+            let reason = literal_at(&text, start);
+            tags += 1;
+            if reason.contains('\n') || !counted.is_match(reason) {
+                offenders.push(format!("{relative}:{}: {reason}", line_of(start)));
+            }
+        }
+        for found in attribute.captures_iter(&text) {
+            let whole = found.get(0).expect("a match");
+            let rest = &text[whole.end()..];
+            // An attribute quoted inside a string literal is a fixture's text,
+            // whose reason opens with an escaped quote.
+            if rest.starts_with("\\\"") {
+                continue;
+            }
+            let reasoned = found.get(1).is_some()
+                && rest.starts_with('"')
+                && (rest.starts_with(BY_DESIGN) || rest.starts_with("\"windows: "));
+            if !reasoned {
+                let shown: String = rest.chars().take(60).collect();
+                offenders.push(format!(
+                    "{relative}:{}: an ignore reason that is not a tag literal: {shown}",
+                    line_of(whole.start())
+                ));
+            }
+        }
+    }
+    assert!(
+        tags > 0,
+        "no `windows:` tag found, so the scan reads nothing"
+    );
+    assert!(
+        offenders.is_empty(),
+        "these Windows ignore reasons are not counted by the CI summary; write each as one \
+         literal `\"windows: <cause> (US-NNN)\"` or `\"windows by design: <cause>\"` \
+         (AGENTS.md, Quality gates):\n{}",
+        offenders.join("\n")
+    );
 }

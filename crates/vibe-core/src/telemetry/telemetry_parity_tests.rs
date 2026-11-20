@@ -17,10 +17,10 @@
 //! `None` and the ledger below names the story that closes it, so the row goes
 //! stale the moment the surface lands.
 //!
-//! A key is `family/field/case`, and a trailing `*` covers every key that starts
-//! with the prefix. A divergence no entry names fails the replay; an entry whose
-//! divergence stopped reproducing fails as stale, which is what forces a row out
-//! once the behavior conforms.
+//! Every answer is one scenario of a [`Tally`], named by its case and observed
+//! as `{family: {field: value}}`. A divergence no entry names fails the
+//! replay; an entry whose divergence stopped reproducing fails as stale, which
+//! is what forces a row out once the behavior conforms.
 
 #![expect(
     deprecated,
@@ -48,10 +48,11 @@ use crate::observability::{
     LOG_RELATIVE_FILE, LogInitError, LogLevel, LogReader, LogSettings, decode_log_message,
     encode_log_message, format_log_line, log_pattern_groups, parse_log_line, process_identifiers,
 };
-use crate::parity::debt::{Debt, Note, assert_notes};
-use crate::parity::figures::{Figures, assert_figures};
+use crate::parity::debt::{Note, assert_notes};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Capture, pinned_reference};
+use crate::parity::replay::{
+    Capture, Class, PatternDivergence, Tally, entries, nested_differences, pinned_reference,
+};
 use crate::time::UtcTimestamp;
 use crate::tracing::{
     AGENT_NAME, AgentSpan, BackendFailure, HOOK_NAME_KEY, HOOK_TYPE_KEY, HookSpan,
@@ -130,49 +131,63 @@ const FAMILIES: [&str; 15] = [
 /// over.
 const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 
-/// Cases where this build answers something other than the reference, each with
-/// the reason and the story that closes it.
-///
-/// Every entry here is open work rather than an accepted divergence: this epic
-/// builds the instrument, and EP-002 through EP-005 are what remove the rows.
-/// The staleness check is what forces a row out once its behavior conforms, so
-/// the ledger cannot outlive the gap it records.
-const DIVERGENCES: &[(&str, &str)] = &[
-    // -- EP-002: closed. What the epic left standing ------------------------
-    (
-        "baseMetadata/sentryTags/*",
-        "ACCEPTED: the reference ships Sentry dormant, both DSNs null at the pin, so no crash \
-         reporter exists here to tag; US-020 records the dormancy",
-    ),
-    // -- EP-005: closed. What the epic left standing ------------------------
-    (
-        "constants/logging/patternDigest.*",
-        "ACCEPTED: the digest is of the reference's own regular expression, which `NOTICE` forbids \
-         reproducing verbatim; `vibe_core::observability::LOG_LINE_PATTERN` is written for this \
-         port and accepts the same language, which the whole `logParse` family measures line for \
-         line",
-    ),
-    (
-        "logPagination/messages/file-shrank-between-polls",
-        "ACCEPTED: the case drives the reference's polling watcher, whose `set_consumer` and \
-         `start_watching` have no caller outside `vibe/core/log_reader.py` at the pin, so nothing \
-         upstream ever counts a line for a shrink to reset; this port's console pulls pages \
-         through `diagnostics/logs/read` and reads backward from the end, where a truncated file \
-         needs no reset",
-    ),
-    (
-        "logPagination/lineNumbers/file-shrank-between-polls",
-        "ACCEPTED: as above",
-    ),
-    (
-        "logPagination/hasMore/file-shrank-between-polls",
-        "ACCEPTED: as above",
-    ),
-    (
-        "logPagination/cursor/file-shrank-between-polls",
-        "ACCEPTED: as above",
-    ),
+/// The row of `docs/parity.md` this corpus measures.
+const TELEMETRY_ROW: &str = "27";
+
+/// Answers this build gives otherwise than the reference on purpose, each
+/// naming the accepted divergence of `docs/parity.md` that decides it. An
+/// answer is the scenario of its case, observed as `{family: {field: value}}`
+/// ([`Report::check`]), so an entry names the case (or a pattern of cases)
+/// and the `/family/field` pointer. A [`Tally`] holds every entry to its count
+/// and fails one that stops reproducing.
+const DIVERGENCES: &[PatternDivergence] = &[
+    PatternDivergence {
+        scenario: "*",
+        pointer: "/baseMetadata/sentryTags",
+        count: SENTRY_TAGGED_CASES,
+        row: TELEMETRY_ROW,
+        class: Class::Accepted("The crash reporter is absent"),
+        reason: "the reference ships Sentry dormant, both DSNs null at the pin, so no crash \
+                 reporter exists here to tag; US-020 records the dormancy",
+    },
+    PatternDivergence {
+        scenario: "patternDigest.*",
+        pointer: "/constants/logging",
+        count: 2,
+        row: TELEMETRY_ROW,
+        class: Class::Accepted("The log line pattern is this port's own"),
+        reason: "the digest is of the reference's own regular expression, which `NOTICE` \
+                 forbids reproducing verbatim; `vibe_core::observability::LOG_LINE_PATTERN` is \
+                 written for this port and accepts the same language, which the whole \
+                 `logParse` family measures line for line",
+    },
+    shrink_divergence("/logPagination/messages"),
+    shrink_divergence("/logPagination/lineNumbers"),
+    shrink_divergence("/logPagination/hasMore"),
+    shrink_divergence("/logPagination/cursor"),
 ];
+
+/// How many base-metadata cases carry Sentry tags.
+const SENTRY_TAGGED_CASES: usize = 12;
+
+/// One field of the `file-shrank-between-polls` pagination case, which drives
+/// the reference's polling watcher: its `set_consumer` and `start_watching`
+/// have no caller outside `vibe/core/log_reader.py` at the pin, so nothing
+/// upstream ever counts a line for a shrink to reset. This port's console
+/// pulls pages through `diagnostics/logs/read` and reads backward from the end,
+/// where a truncated file needs no reset.
+const fn shrink_divergence(pointer: &'static str) -> PatternDivergence {
+    PatternDivergence {
+        scenario: "file-shrank-between-polls",
+        pointer,
+        count: 1,
+        row: TELEMETRY_ROW,
+        class: Class::Accepted("A log file that shrinks between polls resets no line count"),
+        reason: "the reference's polling watcher has no caller at the pin, so no shrink resets a \
+                 line count upstream; this port reads pages backward through \
+                 `diagnostics/logs/read`, where a truncated file needs no reset",
+    }
+}
 
 /// What the re-pin's measured gaps of this corpus are known to stand on:
 /// each note explains groups of its measured debt
@@ -668,26 +683,28 @@ fn corpus() -> Corpus {
 // The ledger
 // --------------------------------------------------------------------------
 
-/// Whether a ledger entry covers a divergence key: an exact match, or a
-/// `prefix*` entry the key starts with.
-fn covers(entry: &str, key: &str) -> bool {
-    entry
-        .strip_suffix('*')
-        .map_or(entry == key, |prefix| key.starts_with(prefix))
-}
-
-/// Records one comparison, so a family reports a count and a divergence names
-/// itself instead of stopping at the first one.
-#[derive(Default)]
+/// Every answer the replay compares, accounted for by one [`Tally`] over the
+/// whole corpus. An answer is the scenario its case names, observed as
+/// `{family: {field: value}}`, which is where the corpus's measured debt reads
+/// it; a divergence no entry or debt group covers fails the replay when it
+/// concludes, and so does an entry or group whose count moved.
 struct Report {
-    conformant: usize,
-    total: usize,
-    divergences: Vec<String>,
-    observed: Vec<String>,
+    tally: Tally<'static>,
+    /// Per family, the answers it compared and how many of them conform.
+    families: BTreeMap<String, (usize, usize)>,
 }
 
 impl Report {
-    fn check<T: PartialEq + std::fmt::Debug>(
+    fn new(corpus: &str) -> Self {
+        let mut tally = Tally::new(corpus, entries(DIVERGENCES));
+        tally.differ(nested_differences(2));
+        Self {
+            tally,
+            families: BTreeMap::new(),
+        }
+    }
+
+    fn check<T: PartialEq + std::fmt::Debug + serde::Serialize>(
         &mut self,
         family: &str,
         field: &str,
@@ -695,21 +712,12 @@ impl Report {
         expected: &T,
         actual: &T,
     ) {
-        self.total = self.total.saturating_add(1);
-        if expected == actual {
-            self.conformant = self.conformant.saturating_add(1);
-            return;
-        }
-        self.observed.push(format!("{family}/{field}/{case}"));
-        self.divergences.push(format!(
-            "{family}/{field}/{case}: reference {expected:?}, port {actual:?}"
-        ));
+        self.check_absent(family, field, case, expected, Some(actual));
     }
 
-    /// A comparison against a surface this build does not have yet. The port
-    /// answer is [`None`], which is what makes the entry go stale the moment the
-    /// surface starts answering.
-    fn check_absent<T: PartialEq + std::fmt::Debug>(
+    /// A comparison against a surface this build may not have yet. The port
+    /// answer is [`None`] where it is absent, which is a difference of its own.
+    fn check_absent<T: PartialEq + std::fmt::Debug + serde::Serialize>(
         &mut self,
         family: &str,
         field: &str,
@@ -717,100 +725,32 @@ impl Report {
         expected: &T,
         actual: Option<&T>,
     ) {
-        self.check(family, field, case, &Some(expected), &actual);
+        let value = |answer: &T| serde_json::to_value(answer).expect("an answer serializes");
+        assert_eq!(
+            actual == Some(expected),
+            actual.map(value) == Some(value(expected)),
+            "{family}/{field}/{case}: the answers compare otherwise than what they serialize \
+             to: reference {expected:?}, port {actual:?}"
+        );
+        let counts = self.families.entry(family.to_owned()).or_default();
+        counts.1 += 1;
+        if actual == Some(expected) {
+            counts.0 += 1;
+        }
+        self.tally.answer(case, &[family, field], expected, actual);
     }
-}
 
-/// What the ledger has to say about one family's report: the divergences it does
-/// not name, and the entries whose divergence no longer reproduces.
-fn audit(report: &Report, family: &str, ledger: &[(&str, &str)]) -> (Vec<String>, Vec<String>) {
-    let unrecorded = report
-        .divergences
-        .iter()
-        .filter(|line| {
-            let key = line.split(':').next().unwrap_or_default();
-            !ledger.iter().any(|(entry, _)| covers(entry, key))
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    let family_prefix = format!("{family}/");
-    let stale = ledger
-        .iter()
-        .map(|(entry, _)| (*entry).to_owned())
-        .filter(|entry| entry.starts_with(&family_prefix))
-        .filter(|entry| !report.observed.iter().any(|key| covers(entry, key)))
-        .collect::<Vec<_>>();
-    (unrecorded, stale)
-}
-
-/// Fails on any divergence the ledger does not name, and on any ledger entry
-/// whose divergence no longer reproduces, then reports the family's count.
-fn settle(report: &Report, family: &str) -> usize {
-    let (unrecorded, stale) = audit(report, family, DIVERGENCES);
-    let mut gapped = 0;
-    let unrecorded = unrecorded
-        .into_iter()
-        .filter(|line| {
-            let key = line.split(':').next().unwrap_or_default();
-            if !absorb_gap(key) {
-                return true;
-            }
-            gapped += 1;
-            false
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        unrecorded.is_empty(),
-        "{family} diverges from the reference and is unrecorded:\n{}",
-        unrecorded.join("\n")
-    );
-    assert!(
-        stale.is_empty(),
-        "these {family} entries conform now and their ledger entry is stale: {stale:?}"
-    );
-    let ledgered = report.total.saturating_sub(report.conformant);
-    println!(
-        "telemetry: {family} {}/{} conform ({ledgered} ledgered, {gapped} of them gaps)",
-        report.conformant, report.total
-    );
-    CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
-    GAPPED.with(|total| total.set(total.get() + gapped));
-    report.total
-}
-
-/// Covers the divergence `family/field/case` with the replay's measured debt,
-/// read as the case and the pointer `/family/field`, and says whether it did.
-fn absorb_gap(key: &str) -> bool {
-    let Some((family, rest)) = key.split_once('/') else {
-        return false;
-    };
-    let Some((field, case)) = rest.split_once('/') else {
-        return false;
-    };
-    let pointer = format!("/{family}/{field}");
-    DEBT.with(|debt| {
-        debt.borrow_mut()
-            .as_mut()
-            .is_some_and(|debt| debt.absorb(case, &pointer))
-    })
-}
-
-/// Fails on a group of the measured debt whose count moved, once every
-/// family settled.
-fn conclude_gaps() {
-    if let Some(debt) = DEBT.with(|debt| debt.borrow_mut().take()) {
-        debt.assert_settled();
+    /// Prints what every family compared, then concludes the tally against
+    /// the replay's line of "Measured figures", returning how many answers it
+    /// compared.
+    fn conclude(self) -> usize {
+        for (family, (conformant, total)) in &self.families {
+            println!("telemetry: {family} {conformant}/{total} conform");
+        }
+        let compared = self.families.values().map(|(_, total)| total).sum();
+        self.tally.conclude(HEADING);
+        compared
     }
-}
-
-std::thread_local! {
-    /// The conformant comparisons every family [`settle`]d on this thread
-    /// has counted, which the replay's figures read.
-    static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// The comparisons the measured debt covered on this thread.
-    static GAPPED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-    /// The measured debt of the replay running on this thread.
-    static DEBT: std::cell::RefCell<Option<Debt>> = const { std::cell::RefCell::new(None) };
 }
 
 // --------------------------------------------------------------------------
@@ -834,7 +774,7 @@ impl Loaded {
         let effective = LayeredConfig::new(
             ConfigPaths {
                 vibe_home: home,
-                working_directory: enclosure.path().join("project"),
+                working_directory: enclosure.path().join("home/project"),
             },
             default_document(),
         )
@@ -2449,8 +2389,8 @@ fn digest(value: &str) -> Value {
     let mut hasher = sha2::Sha256::new();
     hasher.update(value.as_bytes());
     json!({
-        "length": value.chars().count(),
-        "digest": crate::text::hex_encode(&hasher.finalize()),
+        "prose": value.chars().count(),
+        "sha256": crate::text::hex_encode(&hasher.finalize()),
     })
 }
 
@@ -3424,40 +3364,6 @@ fn every_event_this_build_publishes_has_a_corpus_entry() {
     );
 }
 
-/// A divergence no ledger entry names is what the replay exists to fail on, and
-/// a ledger entry whose divergence stopped reproducing is a decision that
-/// outlived its cause. Both verdicts are computed by [`audit`], so they are
-/// asserted here rather than only through the corpus.
-#[test]
-fn the_ledger_fails_an_unrecorded_divergence_and_a_stale_entry() {
-    let ledger: &[(&str, &str)] = &[
-        ("spans/name/agent-span", "recorded"),
-        ("spans/attributeKeys/*", "recorded"),
-    ];
-
-    let mut report = Report::default();
-    report.check("spans", "name", "agent-span", &1, &2);
-    report.check("spans", "attributeKeys", "agent-span", &1, &2);
-    let (unrecorded, stale) = audit(&report, "spans", ledger);
-    assert!(unrecorded.is_empty(), "recorded divergences pass");
-    assert!(stale.is_empty(), "entries that reproduced are not stale");
-
-    let mut report = Report::default();
-    report.check("spans", "statusCode", "agent-span", &1, &2);
-    report.check("spans", "attributeKeys", "agent-span", &1, &2);
-    let (unrecorded, stale) = audit(&report, "spans", ledger);
-    assert_eq!(unrecorded.len(), 1, "the unnamed divergence is reported");
-    assert!(
-        unrecorded[0].starts_with("spans/statusCode/agent-span: reference"),
-        "the failure names the family, the field, the case and both values: {unrecorded:?}"
-    );
-    assert_eq!(
-        stale,
-        vec!["spans/name/agent-span".to_owned()],
-        "the entry whose divergence stopped reproducing is stale"
-    );
-}
-
 #[test]
 fn the_committed_corpus_replays_against_this_port() {
     crate::parity::manifest::assert_corpus("crates/vibe-core/tests/telemetry/corpus.json");
@@ -3471,99 +3377,34 @@ fn the_committed_corpus_replays_against_this_port() {
         .build()
         .expect("a runtime for the span families")
         .block_on(port_spans());
-    println!(
-        "telemetry: divergence ledger ({} entries)",
-        DIVERGENCES.len()
-    );
-    for (case, reason) in DIVERGENCES {
-        println!("  {case}: {reason}");
-    }
-    CONFORMANT.with(|conformant| conformant.set(0));
-    GAPPED.with(|total| total.set(0));
-    DEBT.with(|debt| *debt.borrow_mut() = Some(Debt::load(CORPUS_RELATIVE, HEADING)));
-    let mut comparisons = 0;
-
-    let mut report = Report::default();
+    let raw = fs::read_to_string(repo_root().join(CORPUS_RELATIVE)).expect("the corpus reads");
+    let mut report = Report::new(&raw);
     run_constants(&corpus.constants, &mut report);
-    comparisons += settle(&report, "constants");
-
-    let mut report = Report::default();
     run_envelope(&corpus, &mut report);
-    comparisons += settle(&report, "envelope");
-
-    let mut report = Report::default();
     run_base_metadata(&corpus, &mut report);
-    comparisons += settle(&report, "baseMetadata");
-
-    let mut report = Report::default();
     run_attachment_counts(&corpus, &mut report);
-    comparisons += settle(&report, "attachmentCounts");
-
-    let mut report = Report::default();
     run_event_vocabulary(&corpus, &mut report);
-    comparisons += settle(&report, "eventVocabulary");
-
-    let mut report = Report::default();
     run_event_payloads(&corpus, &mut report);
-    comparisons += settle(&report, "eventPayloads");
-
-    let mut report = Report::default();
     run_exporter_config(&corpus, &mut report);
-    comparisons += settle(&report, "exporterConfig");
-
-    let mut report = Report::default();
     run_spans(&corpus, &mut report, &produced);
-    comparisons += settle(&report, "spans");
-
-    let mut report = Report::default();
     run_provider_names(&corpus, &mut report);
-    comparisons += settle(&report, "providerNames");
-
-    let mut report = Report::default();
     run_redaction(&corpus, &mut report);
-    comparisons += settle(&report, "redaction");
-
-    for (family, run) in [
-        ("logFormat", run_log_format as fn(&Corpus, &mut Report)),
-        ("logEncoding", run_log_encoding),
-        ("logParse", run_log_parse),
-        ("logPagination", run_log_pagination),
-        ("logConfig", run_log_config),
-    ] {
-        let mut report = Report::default();
-        run(&corpus, &mut report);
-        comparisons += settle(&report, family);
-    }
-
+    run_log_format(&corpus, &mut report);
+    run_log_encoding(&corpus, &mut report);
+    run_log_parse(&corpus, &mut report);
+    run_log_pagination(&corpus, &mut report);
+    run_log_config(&corpus, &mut report);
+    let families = report.families.len();
+    let comparisons = report.conclude();
     println!(
-        "telemetry: {comparisons} comparisons across {} families replayed at {}",
-        FAMILIES.len(),
+        "telemetry: {comparisons} comparisons across {families} families replayed at {}",
         &corpus.reference.commit[..12],
     );
+    assert_eq!(families, FAMILIES.len(), "every family compares an answer");
     assert!(
         comparisons >= MINIMUM_COMPARISONS,
         "the corpus replays {comparisons} comparisons, below the {MINIMUM_COMPARISONS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
-    );
-    conclude_gaps();
-    // Every comparison that departs passed `settle`, so either `DIVERGENCES`,
-    // whose entries are all accepted divergences, or the measured debt
-    // records it.
-    let conformant = CONFORMANT.with(std::cell::Cell::get);
-    let gapped = GAPPED.with(std::cell::Cell::get);
-    assert_figures(
-        HEADING,
-        "crates/vibe-core/tests/telemetry/corpus.json",
-        Figures {
-            total: comparisons,
-            gap_differences: gapped,
-            ..Figures::decided(
-                conformant,
-                comparisons - gapped,
-                comparisons - conformant - gapped,
-            )
-        },
-        serde_json::json!({}),
     );
 }
 
@@ -3575,10 +3416,10 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = pinned_reference("telemetry") else {
         return;
     };
-    let target = repo_root().join("target");
+    let run = crate::parity::replay::RunDirectory::new("telemetry");
     let (full, recaptured) = (
-        target.join("telemetry-full.json"),
-        target.join("telemetry-corpus.json"),
+        run.join("telemetry-full.json"),
+        run.join("telemetry-corpus.json"),
     );
     let capture = Capture {
         script: CAPTURE_SCRIPT,

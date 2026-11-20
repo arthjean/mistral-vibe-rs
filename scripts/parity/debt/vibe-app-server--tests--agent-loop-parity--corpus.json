@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/agent-loop-parity/corpus.json",
-  "measuredAgainst": "b41b27bac1272f72941f2f81e0d712221937668d3a2710605413c9a2efd603d5",
+  "measuredAgainst": "d6b245bd2944c3bb9d71ddd38f9321321aabb5f8c0266ef3e12613b30e0dfb54",
   "schemaVersion": 1,
   "tallies": {
     "agent loop parity:": {

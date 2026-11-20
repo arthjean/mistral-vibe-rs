@@ -39,8 +39,9 @@ mod state_tests;
 pub(crate) mod testing;
 
 pub use keyring::{
-    KEYRING_SERVICE, KeyringBackend, KeyringFailure, KeyringStore, LEGACY_KEYRING_SERVICES,
-    MemoryKeyringBackend, NativeKeyringBackend, PRIOR_BUILD_KEYRING_SERVICE,
+    KEYRING_BACKEND_ENV_VAR, KEYRING_SERVICE, KeyringBackend, KeyringFailure, KeyringStore,
+    LEGACY_KEYRING_SERVICES, MemoryKeyringBackend, NativeKeyringBackend,
+    PRIOR_BUILD_KEYRING_SERVICE, StorelessBackend,
 };
 pub use mcp_oauth::{
     AuthUrlSink, McpOAuthError, McpOAuthStore, RefreshOutcome, mcp_oauth_username,

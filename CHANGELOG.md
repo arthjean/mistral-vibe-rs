@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `PYTHON_KEYRING_BACKEND` naming `keyring.backends.fail.Keyring` or
+  `keyring.backends.null.Keyring` replaces the OS credential store on Linux
+  and Windows, as it does for the reference: the fail backend answers as a
+  host with no credential store, and the null backend stores nothing. Any
+  other value, and every value on macOS, keeps the native store.
+- The terminal client, the app server, the Unified Harness, the editor adapter
+  and the voice stack now write their messages, tool answers and command
+  descriptions in this project's own sentences, each keeping the cause, the
+  values and the limits it reports.
+
 - `session/start`, `session/resume`, `session/continue` and `session/fork`
   refuse an agent configuration whose `system_prompt` is empty or only
   whitespace with an invalid-parameters error, as the v3.1.0 reference does.
@@ -336,9 +346,9 @@
   `lean` profile now lists `labs-leanstral-1-5`, and an allowlist an
   organization enforces that admits no model refuses the configuration. The
   load warns when the allowlist excludes the pinned model or a
-  `[utility_models]` alias names no selectable model, a compaction model on
-  another provider than the active one warns and the active model compacts
-  instead of the load failing, and a `compaction_prompt_id` that names no
+  `[utility_models]` alias names no selectable model, a compaction model
+  served by a provider other than the active one warns, and the active model
+  compacts in its place rather than failing the load, and a `compaction_prompt_id` that names no
   prompt fails the load. `config/fields/read` names a value's layer as the
   reference does (`user-toml`, `default`, ...), reads the threshold row off the
   active model, and adds a row for its context window.
@@ -409,8 +419,8 @@
   key variable is empty or unset, as the Mistral client does.
 
 - Read the `[utility_models]` table, as the reference does since v2.26.0:
-  `title` names, by alias, the model a session title runs on, or `active` for
-  the session's own model; an alias no available model carries leaves the
+  `title` names, by alias, the model a session title runs on, or `active` to
+  reuse the model the session itself runs; an alias no available model carries leaves the
   automatic choice, and a session whose titles are overridden skips the
   fast-model probe. `smart_approve` is accepted and validated; the smart
   approval it configures runs only on the reference's Unified Harness.

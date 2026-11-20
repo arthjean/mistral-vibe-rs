@@ -596,8 +596,10 @@ impl<D: TurnDriver> Run<'_, D> {
 /// the app-server error it is.
 fn teleport_refusal(error: &ClientError) -> CliError {
     match error {
-        ClientError::InvalidResponse(message) if message.contains("no Vibe Code project") => {
-            CliError::Teleport("No Vibe Code project is linked to this repository".to_owned())
+        ClientError::InvalidResponse(message)
+            if message.contains("no linked Vibe Code project") =>
+        {
+            CliError::Teleport("This repository has no linked Vibe Code project".to_owned())
         }
         other => CliError::Session(client_error_message(other)),
     }

@@ -39,7 +39,7 @@ impl Resolve<'_> {
             .and_then(|resolved| {
                 if !is_relative_to(&resolved, &plugin.root) || !resolved.is_file() {
                     return Err(
-                        "mcp.json has to resolve to a regular file inside the plugin".to_owned(),
+                        "mcp.json does not point at a regular file within the plugin".to_owned(),
                     );
                 }
                 let text = read_text(&resolved).map_err(|error| error.to_string())?;
@@ -107,8 +107,8 @@ impl Resolve<'_> {
             self.issues.push(PluginConfigIssue {
                 file: definition.config_file.clone(),
                 message: format!(
-                    "The MCP server {} of plugin {} is disabled because a configured MCP server \
-                     already has that name and the two would share credentials; rename one of them",
+                    "The MCP server {} of plugin {} is turned off: a configured MCP server uses \
+                     the same name, so both would draw on the same credentials; rename either one",
                     pycompat::repr_str(&definition.source_id),
                     pycompat::repr_str(&definition.plugin_name),
                 ),

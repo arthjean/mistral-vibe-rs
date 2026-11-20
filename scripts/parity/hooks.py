@@ -58,10 +58,12 @@ from hook_recorder import (  # noqa: E402
     write_hooks,
     write_responses,
 )
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 from subagent_client import Normalizer, transcript  # noqa: E402
 
@@ -177,7 +179,9 @@ def persisted(world: blackbox.World) -> list[Any]:
                 continue
             lines.append(message)
         sessions.append(transcript(lines) if lines else [])
-        for entry, message in zip(sessions[-1], [m for m in lines if m.get("role") != "system"]):
+        for entry, message in zip(
+            sessions[-1], [m for m in lines if m.get("role") != "system"], strict=False
+        ):
             if message.get("injected"):
                 entry["injected"] = True
     return sessions
@@ -224,7 +228,7 @@ def run_steps(
                 session.learn(message)
             continue
         if "interrupt" in step:
-            started = next(
+            started: dict[str, Any] = next(
                 (m for m in reversed(pending) if m.get("method") == "turn/started"), {}
             )
             turn_id = ((started.get("params") or {}).get("turn") or {}).get("id")
@@ -290,7 +294,7 @@ def reduce_notification(message: dict[str, Any]) -> dict[str, Any]:
     for operation in params.get("patch") or []:
         # A patch that stamps a time names the key in its path.
         if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in app_server_client.TIME_KEYS:
-            operation["value"] = "<time>"
+            operation["value"] = blackbox.time_token(operation.get("value"))
     if isinstance(params.get("patch"), list):
         params["patch"] = app_server_client.commuted(params["patch"])
     return {"method": message.get("method"), "params": params}
@@ -904,12 +908,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=4, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'hooks')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:

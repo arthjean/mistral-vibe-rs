@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-core/tests/telemetry/corpus.json",
-  "measuredAgainst": "85bccc72acd4b654e97b8cd5bfac2821ba9b84cbc3a2cead3c547739dc967c94",
+  "measuredAgainst": "f54849f95e5cd077639b6c4a32dea2af723c3820775dfbd251dfd3d8b52c148c",
   "schemaVersion": 1,
   "tallies": {
     "telemetry parity:": {

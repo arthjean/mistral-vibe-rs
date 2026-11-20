@@ -79,10 +79,12 @@ from app_server_protocol_scenarios import (  # noqa: E402
     session_flows,
 )
 import blackbox  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE  # noqa: E402
 import provenance  # noqa: E402
 from reference import OracleError, naming_scenarios, reference_command  # noqa: E402
+from reference import add_commit_argument  # noqa: E402
 import host_env  # noqa: E402
+import sensitivity  # noqa: E402
 import stand_in  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -268,8 +270,22 @@ class Backend(stand_in.Backend):
 
 #: Where `flows/setup` stores a key through `setup/store-credential`: the
 #: keyring service both implementations use, and the provider's variable.
+#: `host_env.isolated` keeps the child off the store, so the key lands in the
+#: dotenv as on Linux; `sweep_credentials` removes what a child that reached
+#: the Windows vault anyway left there.
 KEYRING_SERVICE = "ai.mistral.vibe"
 STORED_ACCOUNT = "OTHER_ORACLE_KEY"
+
+
+def sweep_credentials() -> None:
+    """Remove every vault entry a scenario of this driver can store.
+
+    It runs before the first capture, whatever ``--only`` selects, so a run
+    killed inside ``flows/setup`` is cleaned by the next one, and again when
+    that scenario ends.
+    """
+
+    host_env.forget_credential(KEYRING_SERVICE, STORED_ACCOUNT)
 
 
 def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> dict[str, Any]:
@@ -278,8 +294,6 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         session = Session(root)
         world = session.world
         stores_credential = '"setup/store-credential"' in json.dumps(scenario)
-        if stores_credential:
-            host_env.forget_credential(KEYRING_SERVICE, STORED_ACCOUNT)
         try:
             backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
             (world.vibe_home / "config.toml").write_text(
@@ -328,7 +342,7 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
         finally:
             backend.close()
             if stores_credential:
-                host_env.forget_credential(KEYRING_SERVICE, STORED_ACCOUNT)
+                sweep_credentials()
 
 
 def init_repository(workspace: Path, remote: str | None = None) -> None:
@@ -370,9 +384,12 @@ def shape(value: Any, pointer: str = "", opaque: frozenset[str] = frozenset()) -
     A result's values belong to the row that owns the method (the config, the
     sessions, the tools); what this row measures is the wire contract, so a
     success is compared by the keys it carries and the type each one holds.
-    A list is the shape its items take together: every key any item carries,
-    with every type it holds, so two lists of different lengths or orders
-    compare equal when their items do.
+    A list is the shape its items take together (every key any item carries,
+    with every type it holds), whether it is empty, and, when its items are
+    objects that name their kind, the kinds in the order the server listed
+    them ([`item_kinds`]), so an empty list against a full one, or a reordered
+    sequence of kinds, is a difference while two lists of the same kinds at
+    other values are not.
     """
     if pointer in opaque:
         return "<json>"
@@ -394,13 +411,35 @@ def shape(value: Any, pointer: str = "", opaque: frozenset[str] = frozenset()) -
         for item in value:
             item_shape = shape(item, f"{pointer}/<list>", opaque)
             merged = merge_shapes(merged, item_shape) if merged is not None else item_shape
-        return {"<list>": merged}
+        listed: dict[str, Any] = {"<list>": merged, "<empty>": not value}
+        kinds = item_kinds(value)
+        if kinds is not None:
+            listed["<kinds>"] = kinds
+        return listed
     if isinstance(value, bool):
         return "<bool>"
     if isinstance(value, (int, float)):
         return "<number>"
     if isinstance(value, str):
         return "<string>"
+    return None
+
+
+#: The keys an item of a list names its kind by, in the order they are tried.
+KIND_KEYS = ("type", "kind", "role", "method", "status")
+
+
+def item_kinds(items: list[Any]) -> list[Any] | None:
+    """The kind of every item in order, when every item is an object naming
+    its kind under the first of :data:`KIND_KEYS` they all carry as a string;
+    the reference lists such items in an order its contract keeps (entries,
+    messages, events), so the order is part of the shape. `None` for a list
+    whose items name no common kind."""
+    if not items or not all(isinstance(item, dict) for item in items):
+        return None
+    for key in KIND_KEYS:
+        if all(isinstance(item.get(key), str) for item in items):
+            return [item[key] for item in items]
     return None
 
 
@@ -415,7 +454,15 @@ def merge_shapes(left: Any, right: Any) -> Any:
     if isinstance(left, dict) and isinstance(right, dict) and "<list>" in left and "<list>" in right:
         inner = left["<list>"] if right["<list>"] is None else (
             right["<list>"] if left["<list>"] is None else merge_shapes(left["<list>"], right["<list>"]))
-        return {"<list>": inner}
+        merged: dict[str, Any] = {"<list>": inner}
+        # Lists met in several items keep what all of them agree on: one
+        # emptiness, or both seen; one kind sequence, or none.
+        empties = {left.get("<empty>"), right.get("<empty>")} - {None}
+        if empties:
+            merged["<empty>"] = empties.pop() if len(empties) == 1 else "<both>"
+        if "<kinds>" in left and left.get("<kinds>") == right.get("<kinds>"):
+            merged["<kinds>"] = left["<kinds>"]
+        return merged
     options = {json.dumps(option, sort_keys=True)
                for side in (left, right)
                for option in (side["<any>"] if isinstance(side, dict) and "<any>" in side else [side])}
@@ -499,7 +546,14 @@ def run_steps(
         if "start" in step:
             params = session.substitute(step["start"]) if step["start"] else start_params(world)
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "session/start", "params": params})
-            observed, _ = server.drain(identifier, quiet)
+            observed, answered = server.drain(identifier, quiet)
+            if not answered:
+                # Every later step reads the session this one opens, so a run
+                # without it would record answers to a missing session.
+                raise RuntimeError(
+                    f"{scenario['name']}: session/start went unanswered within "
+                    f"{blackbox.RESPONSE_TIMEOUT:.0f}s"
+                )
             for message in observed:
                 session.learn(message)
             if step.get("record"):
@@ -665,6 +719,12 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[Any]:
 # --------------------------------------------------------------------------
 
 
+#: Methods whose answer is followed by a `runtime/updated` frame. The frame
+#: leaves right behind the answer, but on a loaded host the writer can stall
+#: between the two past the default quiet, so their rooted probe waits longer.
+TRAILING_RUNTIME = {"mcp/refresh": 2.0, "mcp_catalog/refresh": 2.0}
+
+
 def probes() -> list[dict[str, Any]]:
     scenarios: list[dict[str, Any]] = []
     for method in inventory():
@@ -672,7 +732,7 @@ def probes() -> list[dict[str, Any]]:
             "name": f"probe/{method}/bare",
             "steps": [INIT, send(method), send(method, {"sessionId": UNKNOWN_SESSION})],
         })
-        scenarios.append({
+        rooted: dict[str, Any] = {
             "name": f"probe/{method}/rooted",
             "steps": [
                 INIT,
@@ -681,7 +741,10 @@ def probes() -> list[dict[str, Any]]:
                 send(method, {"sessionId": UNKNOWN_SESSION}),
                 send(method, {"sessionId": "$S1"}),
             ],
-        })
+        }
+        if method in TRAILING_RUNTIME:
+            rooted["quiet"] = TRAILING_RUNTIME[method]
+        scenarios.append(rooted)
     return scenarios
 
 
@@ -704,12 +767,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--quiet", type=float, default=QUIET_SECONDS)
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--jobs", type=int, default=8, help="scenarios run side by side")
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
+    sensitivity.add_arguments(parser)
     return parser.parse_args()
 
 
 def main() -> int:
     arguments = parse_arguments()
+    renormalized = sensitivity.main(arguments, normalize_run, 'app_server_protocol')
+    if renormalized is not None:
+        return renormalized
     arguments.output = provenance.port_output(arguments.output, DEFAULT_OUTPUT, server=arguments.server)
     try:
         if arguments.server is not None:
@@ -744,6 +811,7 @@ def main() -> int:
             )
             return entry
 
+        sweep_credentials()
         with concurrent.futures.ThreadPoolExecutor(max_workers=arguments.jobs) as pool:
             captured = list(pool.map(naming_scenarios(capture), selected))
         corpus = {

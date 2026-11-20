@@ -46,9 +46,9 @@ names, node-kind names, booleans and the answers to cases this repository
 authored. A label survives verbatim only when it is one of its requirement's two
 patterns, which is the command text the case itself carries; every other label
 (the outside-workdir label, and the exact-command label that names the syntax
-requiring approval) is reference-authored text and is committed as
-``{"described": "sha256:...", "length": n}``, which still fails the replay on
-any change. No reference-authored prose is recorded, which is what ``NOTICE``
+requiring approval) is reference-authored text and is committed as the prose
+digest ``{"prose": n, "sha256": "..."}``, which still fails the replay on any
+change. No reference-authored prose is recorded, which is what ``NOTICE``
 forbids shipping.
 
 Usage::
@@ -74,8 +74,9 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 from shell_policy_cases import (
     ALLOWLIST_GRANT_CASES,
     EXTRACTION_CASES,
@@ -509,10 +510,11 @@ def capture_windows_grammar() -> dict[str, Any]:
 
 
 def describe(value: str) -> dict[str, Any]:
-    """The committable form of a string that may carry reference-authored prose."""
+    """The committable form of a string that may carry reference-authored prose:
+    the prose digest every driver writes, its length and its SHA-256."""
     return {
-        "described": "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32],
-        "length": len(value),
+        "prose": len(value),
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
     }
 
 
@@ -590,17 +592,13 @@ def main() -> int:
         default=None,
         help="Python that can import `vibe`; also read from " + INTERPRETER_VARIABLE,
     )
-    parser.add_argument(
-        "--allow-unpinned",
-        action="store_true",
-        help="capture from a checkout at another revision, for a re-pin",
-    )
+    add_commit_argument(parser)
     arguments = parser.parse_args()
 
     try:
         commit, _ = reexecute_pinned(
             arguments.reference,
-            None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            arguments.expected_commit,
             override=arguments.interpreter,
         )
         corpus = build_corpus(commit)

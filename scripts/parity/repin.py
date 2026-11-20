@@ -909,8 +909,13 @@ def write_shingles(commit: str, check: bool) -> int:
                 f"and misses {len(ours - theirs)} that one does: "
                 f"{sorted(theirs ^ ours)[:5]}"
             )
-        if committed.get("measuredOn") == content["measuredOn"]:
-            if shingles.render_layer(committed) != shingles.render_layer(content):
+        # The attribution is a function of the platform's installed files; a
+        # Python patch release of the same platform changes none of them, so
+        # it never turns the comparison off.
+        measured_on = (committed.get("measuredOn") or {}).get("platform")
+        if measured_on == content["measuredOn"]["platform"]:
+            attribution = ("distributions", "digests")
+            if any(committed.get(key) != content[key] for key in attribution):
                 problems.append(f"{name} attributes its digests to other distributions than this environment")
         else:
             print(

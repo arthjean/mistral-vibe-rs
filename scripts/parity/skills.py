@@ -57,8 +57,8 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
-from reference import DEFAULT_CACHE, OracleError, reexecute_pinned
+from pin import DEFAULT_REFERENCE
+from reference import DEFAULT_CACHE, OracleError, add_commit_argument, reexecute_pinned
 from skills_cases import (
     DISCOVERY_SCENARIOS,
     FILTERING_SCENARIOS,
@@ -170,8 +170,6 @@ def capture_frontmatter() -> list[dict[str, Any]]:
 
 
 def capture_metadata() -> list[dict[str, Any]]:
-    from pydantic import ValidationError
-
     from vibe.core.skills.models import SkillMetadata
 
     captured: list[dict[str, Any]] = []
@@ -1172,7 +1170,7 @@ def capture_service(scratch: Path) -> list[dict[str, Any]]:
                     result = None
                 else:
                     labels = {**roots_by_label, "home": Path(os.environ["HOME"])}
-                    label = _label_path(target, labels)
+                    label = _label_path(target, labels) or ("unknown", str(target))
                     result = {"root": label[0], "relPath": label[1], "tree": _tree_of(target, None)}
             elif op in ("checkUpdates", "checkNewVersions"):
                 check = _service.check_updates if op == "checkUpdates" else _service.check_new_versions
@@ -1359,12 +1357,13 @@ def main() -> int:
         default=None,
         help="interpreter that can import `vibe`; also read from VIBE_PARITY_PYTHON",
     )
+    add_commit_argument(parser)
     arguments = parser.parse_args()
 
     try:
         commit, _ = reexecute_pinned(
             arguments.reference,
-            EXPECTED_COMMIT,
+            arguments.expected_commit,
             cache=arguments.cache,
             override=arguments.python,
         )

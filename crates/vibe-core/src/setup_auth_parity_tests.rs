@@ -56,9 +56,10 @@ use crate::auth::{
 use crate::config::registry::default_document;
 use crate::config::{ConfigPaths, DotenvValues, LayeredConfig};
 use crate::identity::IdentityFuture;
-use crate::parity::figures::{Figures, assert_figures};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Capture, pinned_reference};
+use crate::parity::replay::{
+    Capture, PatternDivergence, Tally, entries, nested_differences, pinned_reference,
+};
 use crate::pycompat::{Dumps, dumps};
 use crate::whoami::{
     WhoAmIFailure, WhoAmIGateway, WhoAmIResult, read_whoami_response, reconcile_tenant_domains,
@@ -85,17 +86,18 @@ const ERROR_CODE_COUNT: usize = 11;
 /// The URL-validation floor the setup-parity PRD commits to.
 const MINIMUM_URL_CASES: usize = 29;
 
-/// Cases where this port answers something other than the reference, each with
-/// the reason. A case that conforms while listed here fails the replay as a
-/// stale entry, and a case that diverges without an entry fails naming the
-/// family, the case and the observed and expected values.
+/// Answers this port gives otherwise than the reference on purpose, each
+/// naming the accepted divergence of `docs/parity.md` that decides it. An
+/// answer is the scenario `family/case`, observed as `{field: value}`
+/// ([`Report::check`]), so `family/*` names every case of a family. A
+/// [`Tally`] holds every entry to its count and fails one that stops
+/// reproducing.
 ///
-/// A `family/*` entry covers every case of its family and goes stale only
-/// when the whole family conforms. The ledger is empty since EP-054 landed
-/// the sign-in flow: every family answers, and the only divergences this
-/// subtree keeps are the `NOTICE`-mandated prose inequalities, which are
-/// asserted directly rather than ledgered.
-const DIVERGENCES: &[(&str, &str)] = &[];
+/// The ledger is empty since EP-054 landed the sign-in flow: every family
+/// answers, and the only divergences this subtree keeps are the
+/// `NOTICE`-mandated prose inequalities, which are asserted directly rather
+/// than ledgered.
+const DIVERGENCES: &[PatternDivergence] = &[];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -342,8 +344,8 @@ struct ErrorCode {
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Digested {
-    length: usize,
-    digest: String,
+    prose: usize,
+    sha256: String,
 }
 
 /// One label a reference ACP authentication method carries. The inequality
@@ -396,26 +398,26 @@ fn corpus() -> Corpus {
 // The ledger
 // --------------------------------------------------------------------------
 
-/// The divergence ledger as a lookup, keyed `family/case` or `family/*`.
-fn ledger() -> BTreeMap<String, String> {
-    DIVERGENCES
-        .iter()
-        .map(|(case, reason)| ((*case).to_owned(), (*reason).to_owned()))
-        .collect()
-}
-
-/// Records one comparison, so a family reports a count and a divergence names
-/// itself instead of stopping at the first one.
-#[derive(Default)]
+/// Every answer the replay compares, accounted for by one [`Tally`] over the
+/// whole corpus: a divergence no entry covers fails the replay when it
+/// concludes, and so does an entry whose count moved.
 struct Report {
-    conformant: usize,
-    total: usize,
-    divergences: Vec<String>,
-    observed: Vec<String>,
+    tally: Tally<'static>,
+    /// Per family, the answers it compared and how many of them conform.
+    families: BTreeMap<String, (usize, usize)>,
 }
 
 impl Report {
-    fn check<T: PartialEq + std::fmt::Debug>(
+    fn new(corpus: &str) -> Self {
+        let mut tally = Tally::new(corpus, entries(DIVERGENCES));
+        tally.differ(nested_differences(1));
+        Self {
+            tally,
+            families: BTreeMap::new(),
+        }
+    }
+
+    fn check<T: PartialEq + std::fmt::Debug + serde::Serialize>(
         &mut self,
         family: &str,
         case: &str,
@@ -423,65 +425,37 @@ impl Report {
         expected: &T,
         actual: &T,
     ) {
-        self.total += 1;
+        let value = |answer: &T| serde_json::to_value(answer).expect("an answer serializes");
+        assert_eq!(
+            expected == actual,
+            value(expected) == value(actual),
+            "{family}/{case}: {field} compares otherwise than what it serializes to: reference \
+             {expected:?}, port {actual:?}"
+        );
+        let counts = self.families.entry(family.to_owned()).or_default();
+        counts.1 += 1;
         if expected == actual {
-            self.conformant += 1;
-            return;
+            counts.0 += 1;
         }
-        self.observed.push(format!("{family}/{case}"));
-        self.divergences.push(format!(
-            "{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"
-        ));
+        self.tally.answer(
+            &format!("{family}/{case}"),
+            &[field],
+            expected,
+            Some(actual),
+        );
     }
-}
 
-/// Fails on any divergence the ledger does not name, and on any ledger entry
-/// whose divergence no longer reproduces. A `family/*` entry is stale once its
-/// family diverges nowhere.
-fn settle(report: &Report, family: &str) -> usize {
-    let recorded = ledger();
-    let wildcard = format!("{family}/*");
-    let unrecorded = report
-        .divergences
-        .iter()
-        .filter(|line| {
-            let key = line.split(':').next().unwrap_or_default();
-            !recorded.contains_key(key) && !recorded.contains_key(&wildcard)
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    assert!(
-        unrecorded.is_empty(),
-        "{family} diverges from the reference and is unrecorded:\n{}",
-        unrecorded.join("\n")
-    );
-    let stale = recorded
-        .keys()
-        .filter(|key| {
-            if **key == wildcard {
-                report.total > 0 && report.divergences.is_empty()
-            } else {
-                key.starts_with(&format!("{family}/")) && !report.observed.contains(key)
-            }
-        })
-        .cloned()
-        .collect::<Vec<_>>();
-    assert!(
-        stale.is_empty(),
-        "these {family} entries conform now and their ledger entry is stale: {stale:?}"
-    );
-    println!(
-        "setup-auth: {family} {}/{} conform",
-        report.conformant, report.total
-    );
-    CONFORMANT.with(|conformant| conformant.set(conformant.get() + report.conformant));
-    report.total
-}
-
-std::thread_local! {
-    /// The conformant comparisons every family [`settle`]d on this thread
-    /// has counted, which the replay's figures read.
-    static CONFORMANT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Prints what every family compared, then concludes the tally against
+    /// the replay's line of "Measured figures", returning how many answers it
+    /// compared.
+    fn conclude(self) -> usize {
+        for (family, (conformant, total)) in &self.families {
+            println!("setup-auth: {family} {conformant}/{total} conform");
+        }
+        let compared = self.families.values().map(|(_, total)| total).sum();
+        self.tally.conclude("setup-auth parity:");
+        compared
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -504,8 +478,7 @@ fn published_mistral_provider() -> toml::Table {
         .clone()
 }
 
-fn run_constants(corpus: &Constants) -> usize {
-    let mut report = Report::default();
+fn run_constants(corpus: &Constants, report: &mut Report) {
     let provider = published_mistral_provider();
     let string_field = |name: &str| {
         provider
@@ -645,7 +618,6 @@ fn run_constants(corpus: &Constants) -> usize {
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_' | '~')),
     );
-    settle(&report, "constants")
 }
 
 /// The custom key variable the capture uses for the unsupported-provider rows.
@@ -723,7 +695,7 @@ fn observed_auth_state(case: &AuthStateCase) -> String {
     }
 }
 
-fn run_auth_state(cases: &[AuthStateCase]) -> usize {
+fn run_auth_state(cases: &[AuthStateCase], report: &mut Report) {
     let kinds = cases
         .iter()
         .filter_map(|case| case.kind.clone())
@@ -741,7 +713,7 @@ fn run_auth_state(cases: &[AuthStateCase]) -> usize {
             "the corpus reaches no {expected} verdict; regenerate it with {CAPTURE_SCRIPT}"
         );
     }
-    let mut report = Report::default();
+
     for case in cases {
         if cfg!(not(unix)) && case.dotenv == "unreadable" {
             println!(
@@ -766,7 +738,6 @@ fn run_auth_state(cases: &[AuthStateCase]) -> usize {
         let observed = observed_auth_state(case);
         report.check("authState", &case.case, "assessment", &expected, &observed);
     }
-    settle(&report, "authState")
 }
 
 /// Drops the calls that reach the prior-build service `mistral-vibe-rs`: the
@@ -1116,8 +1087,7 @@ fn replay_keyring_read_case(case: &PersistenceCase) -> (String, String) {
     (expected, observed)
 }
 
-fn run_persistence(cases: &[PersistenceCase]) -> usize {
-    let mut report = Report::default();
+fn run_persistence(cases: &[PersistenceCase], report: &mut Report) {
     for case in cases {
         let (expected, observed) = match case.op.as_str() {
             "persist" => replay_persist_case(case),
@@ -1127,7 +1097,6 @@ fn run_persistence(cases: &[PersistenceCase]) -> usize {
         };
         report.check("persistence", &case.case, "effects", &expected, &observed);
     }
-    settle(&report, "persistence")
 }
 
 fn block_on<F: Future>(future: F) -> F::Output {
@@ -1334,8 +1303,7 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
     (expected, observed)
 }
 
-fn run_sign_in_protocol(cases: &[ProtocolCase], scripted_verifier: &str) -> usize {
-    let mut report = Report::default();
+fn run_sign_in_protocol(cases: &[ProtocolCase], scripted_verifier: &str, report: &mut Report) {
     for case in cases {
         let (expected, observed) = match case.layer.as_str() {
             "service" => replay_service_case(case, scripted_verifier),
@@ -1350,17 +1318,16 @@ fn run_sign_in_protocol(cases: &[ProtocolCase], scripted_verifier: &str) -> usiz
             &observed,
         );
     }
-    settle(&report, "signInProtocol")
 }
 
-fn run_url_validation(cases: &[UrlValidationCase]) -> usize {
+fn run_url_validation(cases: &[UrlValidationCase], report: &mut Report) {
     assert!(
         cases.len() >= MINIMUM_URL_CASES,
         "the corpus records {} URL validation cases, below the {MINIMUM_URL_CASES} the PRD \
          commits to; regenerate it with {CAPTURE_SCRIPT}",
         cases.len()
     );
-    let mut report = Report::default();
+
     for case in cases {
         assert!(
             matches!(case.verdict.as_str(), "accepted" | "rejected"),
@@ -1381,11 +1348,9 @@ fn run_url_validation(cases: &[UrlValidationCase]) -> usize {
         };
         report.check("urlValidation", &case.case, "verdict", &expected, &observed);
     }
-    settle(&report, "urlValidation")
 }
 
-fn run_url_rewrite(cases: &[UrlRewriteCase]) -> usize {
-    let mut report = Report::default();
+fn run_url_rewrite(cases: &[UrlRewriteCase], report: &mut Report) {
     for case in cases {
         let expected = match (case.verdict.as_str(), &case.returned) {
             ("accepted", Some(returned)) => format!("accepted {returned}"),
@@ -1401,7 +1366,6 @@ fn run_url_rewrite(cases: &[UrlRewriteCase]) -> usize {
         };
         report.check("urlRewrite", &case.case, "verdict", &expected, &observed);
     }
-    settle(&report, "urlRewrite")
 }
 
 /// One scripted console: records each request the way the capture's mock
@@ -1432,8 +1396,7 @@ impl WhoAmIGateway for ScriptedConsole {
     }
 }
 
-fn run_tenant_domains(cases: &[TenantDomainsCase]) -> usize {
-    let mut report = Report::default();
+fn run_tenant_domains(cases: &[TenantDomainsCase], report: &mut Report) {
     for case in cases {
         if let Some(candidate) = &case.candidate {
             let observed = sanitize_tenant_url(candidate, "api");
@@ -1487,11 +1450,9 @@ fn run_tenant_domains(cases: &[TenantDomainsCase]) -> usize {
             &observed,
         );
     }
-    settle(&report, "tenantDomains")
 }
 
-fn run_provider_credentials(cases: &[ProviderCredentialsCase]) -> usize {
-    let mut report = Report::default();
+fn run_provider_credentials(cases: &[ProviderCredentialsCase], report: &mut Report) {
     for case in cases {
         let (config, home, _temporary) = scratch_config(case.user.as_deref());
         let mut provider = published_mistral_provider();
@@ -1538,7 +1499,6 @@ fn run_provider_credentials(cases: &[ProviderCredentialsCase]) -> usize {
             &config_files(&home),
         );
     }
-    settle(&report, "providerCredentials")
 }
 
 /// A layered configuration over a scratch home holding `user`, and an empty
@@ -1580,8 +1540,7 @@ fn config_files(home: &Path) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn run_tenant_reconcile(cases: &[TenantReconcileCase]) -> usize {
-    let mut report = Report::default();
+fn run_tenant_reconcile(cases: &[TenantReconcileCase], report: &mut Report) {
     for case in cases {
         let (config, home, _temporary) = scratch_config(case.user.as_deref());
         let reasons = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -1616,7 +1575,6 @@ fn run_tenant_reconcile(cases: &[TenantReconcileCase]) -> usize {
             &config_files(&home),
         );
     }
-    settle(&report, "tenantReconcile")
 }
 
 fn walk_files(root: &Path) -> Vec<PathBuf> {
@@ -1636,7 +1594,7 @@ fn walk_files(root: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
+fn run_error_taxonomy(cases: &[ErrorCode], report: &mut Report) {
     assert_eq!(
         cases.len(),
         ERROR_CODE_COUNT,
@@ -1650,7 +1608,7 @@ fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
             code.value
         );
     }
-    let mut report = Report::default();
+
     report.check(
         "errorTaxonomy",
         "codeCount",
@@ -1685,8 +1643,8 @@ fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
         // plus SHA-256 since the reference text is never committed.
         let sentence = port_code.message();
         let port_digest = Digested {
-            length: sentence.len(),
-            digest: Sha256::digest(sentence.as_bytes())
+            prose: sentence.chars().count(),
+            sha256: Sha256::digest(sentence.as_bytes())
                 .iter()
                 .map(|byte| format!("{byte:02x}"))
                 .collect(),
@@ -1704,11 +1662,9 @@ fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
             },
         );
     }
-    settle(&report, "errorTaxonomy")
 }
 
-fn run_acp_auth_prose(cases: &[AcpProseRun]) -> usize {
-    let mut report = Report::default();
+fn run_acp_auth_prose(cases: &[AcpProseRun], report: &mut Report) {
     report.check(
         "acpAuthProse",
         "surfaces",
@@ -1728,12 +1684,11 @@ fn run_acp_auth_prose(cases: &[AcpProseRun]) -> usize {
             &case.surface,
             "digest shape",
             &true,
-            &(case.run.length > 0
-                && case.run.digest.len() == 64
-                && case.run.digest.chars().all(|c| c.is_ascii_hexdigit())),
+            &(case.run.prose > 0
+                && case.run.sha256.len() == 64
+                && case.run.sha256.chars().all(|c| c.is_ascii_hexdigit())),
         );
     }
-    settle(&report, "acpAuthProse")
 }
 
 // --------------------------------------------------------------------------
@@ -1744,29 +1699,24 @@ fn run_acp_auth_prose(cases: &[AcpProseRun]) -> usize {
 fn the_committed_corpus_replays_against_this_port() {
     crate::parity::manifest::assert_corpus("crates/vibe-core/tests/setup-auth/corpus.json");
     let corpus = corpus();
-    println!("setup-auth: divergence ledger");
-    if DIVERGENCES.is_empty() {
-        println!("  (empty: every family conforms)");
-    }
-    for (case, reason) in DIVERGENCES {
-        println!("  {case}: {reason}");
-    }
-    CONFORMANT.with(|conformant| conformant.set(0));
-    let mut scenarios = 0;
-    scenarios += run_constants(&corpus.constants);
-    scenarios += run_auth_state(&corpus.auth_state);
-    scenarios += run_persistence(&corpus.persistence);
-    scenarios += run_sign_in_protocol(
+    let raw = fs::read_to_string(repo_root().join(CORPUS_RELATIVE)).expect("the corpus reads");
+    let mut report = Report::new(&raw);
+    run_constants(&corpus.constants, &mut report);
+    run_auth_state(&corpus.auth_state, &mut report);
+    run_persistence(&corpus.persistence, &mut report);
+    run_sign_in_protocol(
         &corpus.sign_in_protocol,
         &corpus.constants.pkce.scripted_verifier,
+        &mut report,
     );
-    scenarios += run_url_validation(&corpus.url_validation);
-    scenarios += run_url_rewrite(&corpus.url_rewrite);
-    scenarios += run_tenant_domains(&corpus.tenant_domains);
-    scenarios += run_provider_credentials(&corpus.provider_credentials);
-    scenarios += run_tenant_reconcile(&corpus.tenant_reconcile);
-    scenarios += run_error_taxonomy(&corpus.error_taxonomy);
-    scenarios += run_acp_auth_prose(&corpus.acp_auth_prose);
+    run_url_validation(&corpus.url_validation, &mut report);
+    run_url_rewrite(&corpus.url_rewrite, &mut report);
+    run_tenant_domains(&corpus.tenant_domains, &mut report);
+    run_provider_credentials(&corpus.provider_credentials, &mut report);
+    run_tenant_reconcile(&corpus.tenant_reconcile, &mut report);
+    run_error_taxonomy(&corpus.error_taxonomy, &mut report);
+    run_acp_auth_prose(&corpus.acp_auth_prose, &mut report);
+    let scenarios = report.conclude();
     println!(
         "setup-auth: {scenarios} scenarios across 10 families plus the constants block \
          replayed at {}",
@@ -1776,15 +1726,6 @@ fn the_committed_corpus_replays_against_this_port() {
         scenarios >= MINIMUM_SCENARIOS,
         "the corpus replays {scenarios} scenarios, below the {MINIMUM_SCENARIOS} floor; \
          regenerate it with {CAPTURE_SCRIPT}"
-    );
-    // Every comparison that departs passed `settle`, so `DIVERGENCES`, whose
-    // entries are decisions, records it.
-    let conformant = CONFORMANT.with(std::cell::Cell::get);
-    assert_figures(
-        "setup-auth parity:",
-        "crates/vibe-core/tests/setup-auth/corpus.json",
-        Figures::decided(conformant, scenarios, scenarios - conformant),
-        serde_json::json!({}),
     );
 }
 
@@ -1796,9 +1737,9 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = pinned_reference("setup-auth") else {
         return;
     };
-    let target = repo_root().join("target");
-    let recaptured = target.join("setup-auth-corpus.json");
-    let full = target.join("setup-auth-full.json");
+    let run = crate::parity::replay::RunDirectory::new("setup-auth");
+    let recaptured = run.join("setup-auth-corpus.json");
+    let full = run.join("setup-auth-full.json");
     let capture = Capture {
         script: CAPTURE_SCRIPT,
         family: &[],

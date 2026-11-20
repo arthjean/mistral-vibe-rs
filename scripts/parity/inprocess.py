@@ -96,6 +96,6 @@ def digest(value: str) -> dict[str, Any]:
     """
 
     return {
-        "length": len(value),
-        "digest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+        "prose": len(value),
+        "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
     }

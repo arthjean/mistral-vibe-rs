@@ -105,7 +105,8 @@ class Backend(stand_in.Backend):
         #: The hosts a fetch asked the proxy to tunnel to, all of them refused.
         self.tunnels: list[str] = []
         self.release = threading.Event()
-        handler = self.server.RequestHandlerClass
+        # Patched in place: the stand-in grafts its routes onto the class.
+        handler: Any = self.server.RequestHandlerClass
         backend = self
         chat = handler.do_POST
 

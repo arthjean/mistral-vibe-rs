@@ -172,8 +172,8 @@ impl AppServer {
     }
 
     /// The skills a unified session's plugins publish, by alias, which seed its
-    /// skill catalog in place of the legacy builtins: those reach a unified
-    /// session as skills of the shipped `vibe` plugin.
+    /// skill catalog in place of the legacy builtins: a unified session
+    /// receives those as skills the bundled `vibe` plugin carries.
     ///
     /// Reads the table alone, never the session lock, so a registration that
     /// holds it can ask.

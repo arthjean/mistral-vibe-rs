@@ -99,8 +99,8 @@ pub fn persist_api_key(
     process_env.insert(env_key.to_owned(), api_key.to_owned());
     match store.set_api_key(env_key, api_key) {
         Ok(()) => {
-            // The key is safely stored in the keyring; a stale plaintext copy
-            // that cannot be removed is not worth failing a completed save.
+            // The keyring now holds the key; failing to delete an old plaintext
+            // copy should not turn a successful save into an error.
             let _ = remove_env_file_key(env_file, env_key);
         }
         Err(_) => {

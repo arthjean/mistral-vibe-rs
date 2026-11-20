@@ -98,7 +98,7 @@ impl WorkspaceService {
         ManagedRoot::for_vibe_home(&self.paths.vibe_home)
     }
 
-    /// Every repository a project links, read as git.
+    /// The git view of each repository a project links.
     pub(super) fn git_checkouts(
         &self,
         params: &BTreeMap<String, Value>,

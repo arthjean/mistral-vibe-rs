@@ -66,8 +66,8 @@ impl AgentStatsSnapshot {
         json!(self)
     }
 
-    /// Reference `_seed_stats`: a resumed session adopts its spend and the
-    /// context its last call left.
+    /// Reference `_seed_stats`: a resumed session takes over what it has
+    /// spent so far and the context size its final call reached.
     pub fn seed(&mut self, state: &Value) {
         let session = &state["session"];
         if let Some(usage) = session["tokenUsage"].as_object() {

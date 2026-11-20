@@ -200,14 +200,14 @@ mod tests {
         );
         let failure = classify_check_upgrade(
             Err(UpdateError::Gateway(
-                "Network error while checking for updates.".to_owned(),
+                "The release server could not be reached.".to_owned(),
             )),
             "2.23.1",
         );
         assert_eq!(
             failure,
             CheckUpgradeOutcome::Failed {
-                message: "✗ Update check failed: Network error while checking for updates."
+                message: "✗ Update check failed: The release server could not be reached."
                     .to_owned()
             }
         );

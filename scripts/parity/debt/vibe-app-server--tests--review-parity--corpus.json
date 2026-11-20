@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/review-parity/corpus.json",
-  "measuredAgainst": "46f85f669e46c0570efa9135dfa254e9ca4382af42846b136422235d55cc43a4",
+  "measuredAgainst": "a061169d8b50bb178ed996b160654dca88b75c62c13f78918880b9e4d8f5d7b7",
   "schemaVersion": 1,
   "tallies": {
     "review parity:": {

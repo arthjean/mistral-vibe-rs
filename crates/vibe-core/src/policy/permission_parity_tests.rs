@@ -48,6 +48,14 @@ const CORPUS_SCHEMA_VERSION: u32 = 6;
 
 /// One observed difference from the reference, scoped to the corpus pointer
 /// it contradicts.
+///
+/// This ledger keeps its own shape rather than the entry kinds of
+/// `crate::parity::replay`, because what it admits is not a difference
+/// between two observation documents: each check is one verdict a test
+/// derives by probing this port's serde model (`required`, `optional`,
+/// `declared`, `undeclared`), and an entry pins the exact verdict the port
+/// gives in place of the reference's. The `replay` entries match a difference
+/// by its pointer and none pins the value the port holds there.
 struct Divergence {
     /// The JSON pointer into the corpus whose reference answer this port does
     /// not give.

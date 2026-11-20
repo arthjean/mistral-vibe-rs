@@ -461,6 +461,7 @@ fn the_fast_model_probe_answers_every_case_as_the_corpus_records() {
         results
     });
     let mut tally = Tally::new(CORPUS, []);
+    tally.differ(departures);
     for (name, reference, port) in &results {
         tally.record(name, reference, port, departures(reference, port));
     }
@@ -606,6 +607,7 @@ fn every_utility_completion_is_labeled_and_attributed_as_the_corpus_records() {
         .build()
         .expect("a runtime starts");
     let mut tally = Tally::new(CORPUS, []);
+    tally.differ(departures);
     for (index, case) in cases.iter().enumerate() {
         let home = scratch.path().join(format!("completion-{index}"));
         let port = runtime.block_on(run_completion_case(case, &home));

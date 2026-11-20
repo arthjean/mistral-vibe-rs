@@ -624,8 +624,8 @@ fn display_description(description: &str, source: &str) -> String {
 }
 
 /// Refuses to toggle or remove a server a plugin owns: no configuration entry
-/// backs it, so the write would add one shadowing the plugin's under the same
-/// name (reference `_reject_plugin_mutation`). A configured server of that
+/// backs it, so writing one would create an entry of that name hiding the
+/// plugin's (reference `_reject_plugin_mutation`). A configured server of that
 /// name owns it outright.
 fn reject_plugin_mutation(
     session: &CoreResourceSession,
@@ -648,7 +648,7 @@ fn reject_plugin_mutation(
     Err(McpCatalogError::refused(
         vibe_protocol::ProtocolErrorCode::InvalidParams,
         format!(
-            "MCP server '{name}' is managed by the '{plugin}' plugin and cannot be toggled or removed from the MCP catalog."
+            "MCP server '{name}' belongs to the '{plugin}' plugin; the MCP catalog can neither toggle nor remove it."
         ),
     ))
 }

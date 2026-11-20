@@ -159,6 +159,16 @@ impl Debt {
         true
     }
 
+    /// Whether the debt holds the group of the difference at `pointer` in
+    /// `scenario`, without covering it.
+    #[must_use]
+    pub fn holds(&self, scenario: &str, pointer: &str) -> bool {
+        self.measuring
+            || self
+                .declared
+                .contains_key(&(scenario.to_owned(), generalize(pointer)))
+    }
+
     /// How many differences the debt has covered.
     #[must_use]
     pub fn covered(&self) -> usize {

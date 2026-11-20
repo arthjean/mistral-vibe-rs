@@ -473,8 +473,8 @@ pub fn mic_access_hint() -> &'static str {
 #[must_use]
 pub fn mic_access_hint_for(platform: &str) -> &'static str {
     match platform {
-        "darwin" => " Grant access in System Settings → Privacy & Security → Microphone.",
-        "windows" => " Grant access in Settings → Privacy & security → Microphone.",
+        "darwin" => " Allow it under System Settings → Privacy & Security → Microphone.",
+        "windows" => " Allow it under Settings → Privacy & security → Microphone.",
         _ => "",
     }
 }
@@ -483,7 +483,7 @@ pub fn mic_access_hint_for(platform: &str) -> &'static str {
 #[must_use]
 pub fn no_audio_detected_message() -> String {
     format!(
-        "No audio detected from microphone; check your terminal has mic access.{}",
+        "The microphone picked up no audio; make sure your terminal may use it.{}",
         mic_access_hint()
     )
 }

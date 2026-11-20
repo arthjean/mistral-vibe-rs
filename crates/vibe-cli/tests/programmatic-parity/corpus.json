@@ -98,7 +98,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -109,7 +109,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -119,7 +119,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -132,7 +132,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -346,7 +346,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -357,7 +357,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -439,7 +439,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
                   "inputEntryId": "<id-1>",
@@ -452,7 +452,7 @@
                   "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -649,7 +649,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -660,7 +660,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -670,7 +670,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -683,7 +683,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -975,7 +975,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -986,7 +986,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -996,7 +996,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -1009,7 +1009,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -1259,7 +1259,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -1270,7 +1270,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -1352,7 +1352,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
                   "inputEntryId": "<id-1>",
@@ -1365,7 +1365,7 @@
                   "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -1929,7 +1929,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -1940,7 +1940,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -1950,7 +1950,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -1963,7 +1963,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -1973,7 +1973,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-5>",
                 "inputEntryId": null,
@@ -1984,7 +1984,7 @@
                 "source": "turn_start",
                 "turnId": "<id-6>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -1994,7 +1994,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-7>",
                 "inputEntryId": "<id-5>",
@@ -2007,7 +2007,7 @@
                 "source": "harness",
                 "turnId": "<id-6>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -2411,7 +2411,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -2422,7 +2422,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -2504,7 +2504,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
                   "inputEntryId": "<id-1>",
@@ -2517,7 +2517,7 @@
                   "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -2776,7 +2776,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -2787,7 +2787,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -2797,7 +2797,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -2810,7 +2810,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -4321,7 +4321,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -4332,7 +4332,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -4490,7 +4490,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -4501,7 +4501,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -5106,7 +5106,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -5117,7 +5117,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -5199,7 +5199,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
                   "inputEntryId": "<id-1>",
@@ -5212,7 +5212,7 @@
                   "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -5481,7 +5481,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -5492,11 +5492,11 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "detail": {
                   "display": {
                     "content": null,
@@ -5550,7 +5550,7 @@
                 "title": "file_system.bash",
                 "turnId": "<id-3>",
                 "type": "effect",
-                "updatedAt": "<time>"
+                "updatedAt": "<time:int>"
               },
               {
                 "content": [
@@ -5559,7 +5559,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-5>",
                 "inputEntryId": "<id-1>",
@@ -5572,7 +5572,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -6001,7 +6001,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -6012,11 +6012,11 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "detail": {
                   "display": {
                     "content": null,
@@ -6070,7 +6070,7 @@
                 "title": "file_system.bash",
                 "turnId": "<id-3>",
                 "type": "effect",
-                "updatedAt": "<time>"
+                "updatedAt": "<time:int>"
               },
               {
                 "content": [
@@ -6079,7 +6079,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-5>",
                 "inputEntryId": "<id-1>",
@@ -6092,7 +6092,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -6631,7 +6631,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -6642,11 +6642,11 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "detail": {
                   "display": {
                     "content": null,
@@ -6711,7 +6711,7 @@
                 "title": "file_system.edit",
                 "turnId": "<id-3>",
                 "type": "effect",
-                "updatedAt": "<time>"
+                "updatedAt": "<time:int>"
               },
               {
                 "content": [
@@ -6720,7 +6720,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-5>",
                 "inputEntryId": "<id-1>",
@@ -6733,7 +6733,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -7199,7 +7199,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -7210,7 +7210,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -7220,7 +7220,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -7233,7 +7233,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -7479,7 +7479,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
                 "inputEntryId": null,
@@ -7490,7 +7490,7 @@
                 "source": "turn_start",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               },
               {
@@ -7500,7 +7500,7 @@
                     "type": "text"
                   }
                 ],
-                "createdAt": "<time>",
+                "createdAt": "<time:int>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
                 "inputEntryId": "<id-1>",
@@ -7513,7 +7513,7 @@
                 "source": "harness",
                 "turnId": "<id-3>",
                 "type": "message",
-                "updatedAt": "<time>",
+                "updatedAt": "<time:int>",
                 "userDisplayContent": null
               }
             ],
@@ -7765,7 +7765,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -7776,7 +7776,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -7852,7 +7852,7 @@
               },
               {
                 "json": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -7930,7 +7930,7 @@
                   "title": "vibe.todo",
                   "turnId": "<id-3>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "layout": [
                   [
@@ -8152,7 +8152,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-5>",
                   "inputEntryId": "<id-1>",
@@ -8165,7 +8165,7 @@
                   "source": "harness",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -8394,7 +8394,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -8405,7 +8405,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [
@@ -8967,7 +8967,7 @@
                       "type": "text"
                     }
                   ],
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
                   "inputEntryId": null,
@@ -8978,7 +8978,7 @@
                   "source": "turn_start",
                   "turnId": "<id-3>",
                   "type": "message",
-                  "updatedAt": "<time>",
+                  "updatedAt": "<time:int>",
                   "userDisplayContent": null
                 },
                 "layout": [

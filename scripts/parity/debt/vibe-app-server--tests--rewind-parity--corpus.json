@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/rewind-parity/corpus.json",
-  "measuredAgainst": "57adf0d74c7a937908b580b22bf3569743bce49269a3184907f726afc17efe2d",
+  "measuredAgainst": "5d4b9bdff90f36b7c9ae469896f49aed41dd84805d0d628ffea2f73870c71960",
   "schemaVersion": 1,
   "tallies": {
     "rewind parity:": {

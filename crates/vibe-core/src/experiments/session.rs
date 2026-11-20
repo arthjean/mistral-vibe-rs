@@ -159,8 +159,8 @@ pub async fn initialize_experiments(
     let Some(state) = manager.export_state() else {
         return (false, user_plan);
     };
-    // Without the hash attribute the response carries no assignment, and
-    // caching that empty answer would overwrite a good entry.
+    // A response obtained without the hash attribute assigns nothing; storing
+    // that blank result would clobber a valid cached one.
     if attributes.user_id.is_some()
         && let Some(cache) = cache
     {

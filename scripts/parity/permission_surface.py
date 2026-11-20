@@ -45,8 +45,9 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import INTERPRETER_VARIABLE, OracleError, reexecute_pinned
+from reference import add_commit_argument
 
 SCHEMA_VERSION = 6
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/permission-surface/vocabulary.json")
@@ -807,17 +808,13 @@ def main() -> int:
         default=None,
         help="Python that can import `vibe`; also read from " + INTERPRETER_VARIABLE,
     )
-    parser.add_argument(
-        "--allow-unpinned",
-        action="store_true",
-        help="capture from a checkout at another revision, for a re-pin",
-    )
+    add_commit_argument(parser)
     arguments = parser.parse_args()
 
     try:
         commit, _ = reexecute_pinned(
             arguments.reference,
-            None if arguments.allow_unpinned else EXPECTED_COMMIT,
+            arguments.expected_commit,
             override=arguments.interpreter,
         )
         corpus = build_corpus(commit)

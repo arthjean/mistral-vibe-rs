@@ -24,13 +24,13 @@ fn posix_splitting_follows_python_shlex() {
 #[test]
 fn mcp_add_arguments_follow_the_reference_grammar() {
     let parsed = parse_add(
-        "https://mcp.example/sse --name docs --scope read --scope write --transport http \
+        "https://mcp.example/sse --name notes --scope admin --scope read --transport http \
          --no-login --allow-insecure-http",
     )
     .unwrap();
     assert_eq!(parsed.url, "https://mcp.example/sse");
-    assert_eq!(parsed.name.as_deref(), Some("docs"));
-    assert_eq!(parsed.scopes, ["read", "write"]);
+    assert_eq!(parsed.name.as_deref(), Some("notes"));
+    assert_eq!(parsed.scopes, ["admin", "read"]);
     assert_eq!(parsed.transport, "http");
     assert!(!parsed.login);
     assert!(parsed.allow_insecure_http);
@@ -50,7 +50,7 @@ fn mcp_add_arguments_follow_the_reference_grammar() {
     );
     assert_eq!(
         parse_add("https://a --transport sse").unwrap_err(),
-        "MCP server transport must be one of: http, streamable-http."
+        "MCP server transport has to be http or streamable-http."
     );
     assert_eq!(
         parse_add("https://a --bogus").unwrap_err(),
@@ -105,8 +105,10 @@ fn status_groups_thousands_and_renders_the_cost() {
         session_cost: 0.123_456,
         ..Stats::default()
     });
-    assert!(document.contains("- **Session Prompt Tokens**: 12,000 _(including 2,000 cached)_"));
-    assert!(document.contains("- **Last Turn Tokens**: 0\n"));
+    assert!(
+        document.contains("- **Prompt Tokens This Session**: 12,000 _(including 2,000 cached)_")
+    );
+    assert!(document.contains("- **Tokens in the Latest Turn**: 0\n"));
     assert!(document.ends_with("- **Cost**: $0.1235\n"));
 }
 

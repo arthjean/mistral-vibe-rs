@@ -145,9 +145,9 @@ or rerunning the cited command; corrections are listed at the end.
   `vibe/core/llm/backend/`, `vibe/cli/commands.py`, `vibe/cli/programmatic.py`,
   `vibe/cli/entrypoint.py`, `vibe/core/middleware.py`.
 - The `vibe` console script now maps to `vibe.cli.launcher:main`, which starts
-  `vibe/cli-rust/` (907 `.rs` files). Its manifest changed from a proprietary
-  license to Apache-2.0 in `a0c78d0a` (v3.0.0); `docs/parity.md:310-312` still
-  describes it as proprietary.
+  `vibe/cli-rust/` (907 `.rs` files). Upstream publishes that source, and its
+  manifest declares Apache-2.0 since `a0c78d0a` (v3.0.0); `docs/parity.md:310-312`
+  still describes its license as closed.
 - `SERVER_METHODS` grew from 146 to 174: 33 added, 5 removed, including the two
   worktree reap methods the v2.26.0 protocol pass had just measured
   (independent recount at both revisions).

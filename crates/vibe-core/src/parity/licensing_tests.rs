@@ -62,7 +62,7 @@
 //! line it drops, so the re-cut never grows the baseline, and the previous
 //! digest set leaves with it.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
 use std::process::Command;
@@ -623,7 +623,7 @@ fn no_tracked_file_shares_prose_with_the_reference_outside_the_baseline() {
 fn the_normalization_matches_the_one_the_digest_set_was_built_with() {
     // `scripts/parity/shingles.py` builds the set; these are the digests its
     // `digest(words(...))` answers for the same text.
-    let text = "Hello, World!\\nThe quick brown fox jumps over the lazy dog";
+    let text = "Hello, World!\\nA small gray heron waits beside the still pond";
     let found = words(text);
     let normalized: Vec<String> = found
         .iter()
@@ -632,13 +632,14 @@ fn the_normalization_matches_the_one_the_digest_set_was_built_with() {
     assert_eq!(
         normalized,
         [
-            "hello", "world", "the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"
+            "hello", "world", "a", "small", "gray", "heron", "waits", "beside", "the", "still",
+            "pond"
         ]
     );
     let mut buffer = String::new();
     let first = digest(text, &found[..WIDTH], &mut buffer);
-    assert_eq!(buffer, "hello world the quick brown fox jumps over");
-    assert_eq!(first, 0xe6da_98e7_5de5_ba6d_u64, "{first:016x}");
+    assert_eq!(buffer, "hello world a small gray heron waits beside");
+    assert_eq!(first, 0x57cc_f5a6_b303_609d_u64, "{first:016x}");
 }
 
 #[test]
@@ -659,7 +660,7 @@ fn a_run_of_identifiers_is_not_prose() {
 
 #[test]
 fn consecutive_shared_shingles_form_one_run() {
-    let text = "one two three four five six seven eight nine ten";
+    let text = "amber birch cedar dahlia elm fern gorse hazel iris juniper";
     let all = words(text);
     let mut buffer = String::new();
     let mut set: Vec<u64> = (0..=all.len() - WIDTH)
@@ -774,6 +775,73 @@ fn a_run_a_locked_distribution_also_ships_is_not_the_reference_s() {
         .collect();
     assert_eq!(found, [(0, 8), (2, 8)]);
     assert!(runs("sample.md", text, &subtract(&reference, &reference)).is_empty());
+}
+
+/// The locked distributions whose messages the port reproduces on purpose
+/// (a validation error `pydantic` words, a transport error `httpx2` words),
+/// which the hand-kept exemption list admitted before the layer replaced it.
+const LIBRARY_MESSAGES: [&str; 2] = ["pydantic==", "httpx2=="];
+
+#[test]
+fn an_empty_layer_fails_on_the_library_messages_and_nothing_else() {
+    let root = repository();
+    let reference = digest_set(&root, REFERENCE_COMMIT);
+    let path = root
+        .join(LICENSING)
+        .join(format!("third-party-{}.json", &REFERENCE_COMMIT[..12]));
+    let layer: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).expect("the layer is readable"))
+            .expect("the layer parses");
+    let shipped = |value: u64| -> Vec<&str> {
+        layer["digests"][format!("{value:016x}")]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .collect()
+    };
+    let files = tracked(&root);
+    let subtracted = subtract(
+        &reference,
+        &third_party_layer(&root, REFERENCE_COMMIT, &reference),
+    );
+    let admitted: BTreeSet<_> = scan(&root, &files, &subtracted)
+        .iter()
+        .map(Run::key)
+        .collect();
+    let unlayered = scan(&root, &files, &subtract(&reference, &[]));
+    let only_without: Vec<&Run> = unlayered
+        .iter()
+        .filter(|run| !admitted.contains(&run.key()))
+        .collect();
+    assert!(
+        !only_without.is_empty(),
+        "without its third-party layer the guard fails on nothing more, so the layer no longer \
+         subtracts a library message any tracked file reproduces"
+    );
+    let mut buffer = String::new();
+    let foreign: Vec<String> = only_without
+        .iter()
+        .filter(|run| {
+            let text = std::fs::read_to_string(root.join(&run.file)).expect("a tracked file");
+            let all = words(&text);
+            let distributions: BTreeSet<&str> = (run.start..=run.start + run.words - WIDTH)
+                .flat_map(|start| shipped(digest(&text, &all[start..start + WIDTH], &mut buffer)))
+                .collect();
+            !distributions.iter().any(|distribution| {
+                LIBRARY_MESSAGES
+                    .iter()
+                    .any(|library| distribution.starts_with(library))
+            })
+        })
+        .map(|run| format!("{}:{} ({} words)", run.file, run.line, run.words))
+        .collect();
+    assert!(
+        foreign.is_empty(),
+        "without its third-party layer the guard fails on runs no `pydantic` or `httpx2` \
+         message accounts for:\n{}",
+        foreign.join("\n")
+    );
 }
 
 #[test]

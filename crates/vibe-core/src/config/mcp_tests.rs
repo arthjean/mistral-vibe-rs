@@ -33,7 +33,7 @@ fn only_server(document: &str) -> McpServerConfig {
 fn store_with(document: &str) -> (tempfile::TempDir, LayeredConfig) {
     let temporary = tempfile::tempdir().expect("temporary root");
     let home = temporary.path().join("home/.vibe");
-    let project = temporary.path().join("project");
+    let project = temporary.path().join("home/project");
     fs::create_dir_all(&home).expect("home directory");
     fs::create_dir_all(&project).expect("project directory");
     fs::write(home.join("config.toml"), document).expect("user fixture");
@@ -229,7 +229,7 @@ fn an_explicitly_requested_name_is_refused_rather_than_renamed() {
 
     let empty = resolve_new_mcp_server_name(Some("!!!"), "https://mcp.github.com/api", &taken)
         .expect_err("a name that normalizes to nothing is refused");
-    assert!(message(&empty).contains("letters or numbers"));
+    assert!(message(&empty).contains("letter or digit"));
 }
 
 // --------------------------------------------------------------------------
@@ -320,7 +320,7 @@ headers = { X-Trace = "on" }
         ),
         (r#"api_key_env = "2BAD""#, "environment variable"),
         (r#"api_key_format = "Bearer {{token}}""#, "placeholder"),
-        (r#"api_key_format = "Bearer {secret}""#, "token placeholder"),
+        (r#"api_key_format = "Bearer {secret}""#, "besides `{token}`"),
     ];
     for (line, expected) in refusals {
         let document = format!(
@@ -429,7 +429,7 @@ redirect_port = 51000
         ("client_id = \"vibe\"", "scopes"),
         (
             "scopes = []\nclient_id = \"vibe\"\nclient_metadata_url = \"https://docs.example/client.json\"",
-            "mutually exclusive",
+            "never both",
         ),
         ("scopes = []\nredirect_port = 80", "redirect_port"),
         ("scopes = []\nredirect_port = 70000", "redirect_port"),

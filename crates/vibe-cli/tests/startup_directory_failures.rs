@@ -37,7 +37,7 @@ fn a_missing_workdir_is_reported_resolved() {
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     assert!(
         stdout.contains(&format!(
-            "Error: --workdir does not exist or is not a directory: {}",
+            "Error: --workdir names no existing directory: {}",
             expected.display()
         )),
         "the resolved path must be named, stdout: {stdout}"
@@ -79,7 +79,7 @@ fn a_missing_add_dir_is_reported_as_it_was_typed() {
     let stdout = report(&output);
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     assert!(
-        stdout.contains("Error: --add-dir path does not exist or is not a directory: ./missing"),
+        stdout.contains("Error: --add-dir path names no existing directory: ./missing"),
         "the typed argument must be named, stdout: {stdout}"
     );
     assert!(
@@ -105,8 +105,7 @@ fn the_first_bad_add_dir_is_the_one_reported() {
     let stdout = report(&output);
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     assert!(
-        stdout
-            .contains("Error: --add-dir path does not exist or is not a directory: second-missing"),
+        stdout.contains("Error: --add-dir path names no existing directory: second-missing"),
         "the second value must be the one named, stdout: {stdout}"
     );
     assert!(
@@ -151,12 +150,12 @@ fn a_deleted_working_directory_explains_itself_and_offers_workdir() {
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     let mut lines = stdout
         .lines()
-        .skip_while(|line| !line.starts_with("Error: Current working directory"));
+        .skip_while(|line| !line.starts_with("Error: The current working directory"));
     let first = lines.next().unwrap_or_else(|| {
         panic!("the deletion must be stated first, stdout: {stdout}");
     });
     assert_eq!(
-        first, "Error: Current working directory no longer exists.",
+        first, "Error: The current working directory is gone.",
         "stdout: {stdout}"
     );
     let second = lines
@@ -184,7 +183,7 @@ fn the_update_routes_refuse_a_bad_directory_before_the_network() {
         let stdout = report(&output);
         assert_eq!(output.status.code(), Some(1), "{argv:?} stdout: {stdout}");
         assert!(
-            stdout.contains("Error: --workdir does not exist or is not a directory:"),
+            stdout.contains("Error: --workdir names no existing directory:"),
             "{argv:?} must refuse the directory, stdout: {stdout}"
         );
         assert!(
@@ -200,7 +199,7 @@ fn the_update_routes_refuse_a_bad_directory_before_the_network() {
     let stdout = report(&output);
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     assert!(
-        stdout.contains("Error: --add-dir path does not exist or is not a directory: ./missing"),
+        stdout.contains("Error: --add-dir path names no existing directory: ./missing"),
         "stdout: {stdout}"
     );
 }

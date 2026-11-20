@@ -49,7 +49,7 @@ pub fn redact_argv(argv: &[String]) -> Vec<String> {
     redacted
 }
 
-/// The parts [`redact_argv`] replaces: operands and option values.
+/// What [`redact_argv`] masks, namely every operand and every option value.
 #[must_use]
 pub fn argv_values(argv: &[String]) -> Vec<String> {
     argv.iter()

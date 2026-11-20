@@ -51,7 +51,7 @@ where
             .and_then(Value::as_str)
             .ok_or_else(|| {
                 ClientError::InvalidResponse(
-                    "no Vibe Code project is linked to this working directory".to_owned(),
+                    "this working directory has no linked Vibe Code project".to_owned(),
                 )
             })?;
         let operation_id = vibe_core::session_id::uuid_v4();

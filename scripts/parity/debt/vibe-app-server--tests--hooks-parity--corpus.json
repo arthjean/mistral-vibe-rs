@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/hooks-parity/corpus.json",
-  "measuredAgainst": "86f518a047ddf19726df0d47129bd543136de9402115405e8f820edec441d54d",
+  "measuredAgainst": "ea6008996894927f2d762bb5e098495a931cce83b06aeb8fe6071b6f07309784",
   "schemaVersion": 1,
   "tallies": {
     "hooks parity:": {
@@ -930,7 +930,6 @@
         "/conversations/*/*/toolCallId": 3,
         "/conversations/*/*/toolCalls/*/id": 3,
         "/stdin/early": 1,
-        "/steps/*/notifications/*": 1,
         "/steps/*/response/result/runtime/hooksCount": 2,
         "/steps/*/turn/*": 4,
         "/steps/*/turn/*/method": 4,

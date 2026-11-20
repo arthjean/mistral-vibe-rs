@@ -36,7 +36,7 @@ pub enum LeaseError {
     Busy(String),
     #[error("invalid session ID: {0:?}")]
     InvalidSessionId(String),
-    #[error("session lease path cannot contain a symbolic link")]
+    #[error("a symbolic link was found in the session lease path")]
     SymbolicLink,
     #[error("I/O failure at `{path}`: {source}")]
     Io {

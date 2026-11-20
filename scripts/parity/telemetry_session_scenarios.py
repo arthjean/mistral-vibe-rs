@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import blackbox
-
 
 MISTRAL_PROVIDER = (
     "\n[[providers]]\n"
@@ -247,11 +245,38 @@ def programmatic_scenarios() -> list[dict[str, Any]]:
     ]
 
 
+# The editor's side of an ACP session, the messages `acp_scenarios.py` sends
+# too. A table imports only the standard library, so each holds its own.
+
+
+def acp_request(identifier: int, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {"send": {"id": identifier, "method": method, "params": params or {}}}
+
+
 def acp_prompt(identifier: int, value: str, session: str = "$S1") -> dict[str, Any]:
-    return blackbox.prompt(identifier, value, session)
+    return acp_request(
+        identifier,
+        "session/prompt",
+        {"sessionId": session, "prompt": [{"type": "text", "text": value}]},
+    )
 
 
-ACP_OPEN = [blackbox.INITIALIZE, blackbox.NEW_SESSION]
+def acp_new_session(identifier: int = 1) -> dict[str, Any]:
+    return acp_request(identifier, "session/new", {"cwd": "$WS", "mcpServers": []})
+
+
+ACP_INITIALIZE = acp_request(
+    0,
+    "initialize",
+    {
+        "protocolVersion": 1,
+        "clientCapabilities": {"fs": {"readTextFile": True, "writeTextFile": True}, "terminal": True},
+        "clientInfo": {"name": "oracle-client", "version": "1.0.0"},
+    },
+)
+ACP_APPROVE_ONCE = {"outcome": {"outcome": "selected", "optionId": "allow_once"}}
+ACP_REJECT = {"outcome": {"outcome": "selected", "optionId": "reject_once"}}
+ACP_OPEN = [ACP_INITIALIZE, acp_new_session()]
 BASH = call("call_shell", "bash", command="true")
 
 
@@ -274,19 +299,19 @@ def acp_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "acp/approval-approved",
-            "client": {"session/request_permission": blackbox.APPROVE_ONCE},
+            "client": {"session/request_permission": ACP_APPROVE_ONCE},
             "steps": [*ACP_OPEN, {"backend": [BASH, text("Ran.")]}, acp_prompt(2, "run it")],
         },
         {
             "name": "acp/approval-rejected",
-            "client": {"session/request_permission": blackbox.REJECT},
+            "client": {"session/request_permission": ACP_REJECT},
             "steps": [*ACP_OPEN, {"backend": [BASH, text("No.")]}, acp_prompt(2, "run it")],
         },
         {
             "name": "acp/second-session",
             "steps": [
                 *ACP_OPEN,
-                blackbox.new_session(2),
+                acp_new_session(2),
                 {"backend": [text("Hi.")]},
                 acp_prompt(3, "hello", "$S2"),
             ],
@@ -298,8 +323,8 @@ def acp_scenarios() -> list[dict[str, Any]]:
                 {"backend": [text("One.")]},
                 acp_prompt(2, "first"),
                 {"restart": True},
-                blackbox.INITIALIZE,
-                blackbox.request(
+                ACP_INITIALIZE,
+                acp_request(
                     1, "session/load", {"sessionId": "$S1", "cwd": "$WS", "mcpServers": []}
                 ),
                 {"backend": [text("Two.")]},

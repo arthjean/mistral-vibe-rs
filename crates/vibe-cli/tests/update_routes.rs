@@ -122,7 +122,7 @@ fn a_failed_check_names_the_gateway_cause_and_exits_one() {
     assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
     assert_eq!(
         stdout.trim_end(),
-        "✗ Update check failed: Network error while checking for updates.",
+        "✗ Update check failed: The release server could not be reached.",
     );
 }
 

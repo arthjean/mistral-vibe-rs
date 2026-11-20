@@ -76,8 +76,8 @@ pub(super) fn todo_spec() -> ToolSpec {
                 Property::string()
                     .constrained("enum", json!(["read", "write"]))
                     .described(
-                        "Required on every call: `read` to view the current list, `write` to \
-                         replace it",
+                        "Always required: `read` returns the list as it stands, `write` \
+                         replaces it",
                     ),
             )
             .optional(

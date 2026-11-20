@@ -178,8 +178,8 @@ impl RegistrySkillItem {
         if self.skill_id.is_empty() {
             return None;
         }
-        // The id-based fallback runs through the same sanitizer so it obeys
-        // the charset, length and hyphen rules the skill schema enforces, and
+        // The fallback built from the id is sanitized the same way, which
+        // holds it to the schema's rules on characters, length and hyphens, and
         // the full id rather than a prefix keeps unnamed skills
         // collision-free.
         sanitize_skill_name(&format!("skill-{}", self.skill_id.replace('-', "")))

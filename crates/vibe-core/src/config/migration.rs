@@ -19,8 +19,8 @@ use crate::platform::Platform;
 /// read-only commands have been unioned into an existing allowlist.
 pub const BASH_READ_ONLY_MIGRATION: &str = "bash_read_only_defaults_v1";
 
-/// Old tool name to new tool name. The new tools replaced these in place, so a
-/// configuration keyed by the old names has its settings moved over.
+/// Maps a retired tool name to its successor. Each successor took over its
+/// predecessor's role, so settings stored under a retired name are carried over.
 const RENAMED_TOOLS: [(&str, &str); 2] = [("read", "read_file"), ("search_replace", "edit")];
 
 /// Options the old tool carried that the new one does not, dropped on transfer.

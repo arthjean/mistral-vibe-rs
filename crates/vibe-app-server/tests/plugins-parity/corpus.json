@@ -78,7 +78,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -165,7 +165,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -251,7 +251,7 @@
       "experimentalHarness": null,
       "issues": [],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "privateConnectorsHidden": false,
@@ -264,7 +264,7 @@
         "locked": false,
         "name": "demo:hello",
         "prompt": {
-         "len": 10,
+         "prose": 10,
          "sha256": "c8e2c1437abb87b67330d0dddbd1de9a179ca6be207497f14873894c26e7d742"
         },
         "registry": null,
@@ -278,7 +278,7 @@
         "locked": false,
         "name": "local:review",
         "prompt": {
-         "len": 10,
+         "prose": 10,
          "sha256": "c905f66169fd408cbdc2c545c1d3d0077959709922f613df78a8b10b0e78a97d"
         },
         "registry": null,
@@ -339,7 +339,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "privateConnectorsHidden": false,
@@ -452,7 +452,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -525,7 +525,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -572,7 +572,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -638,7 +638,7 @@
       "experimentalHarness": null,
       "issues": [],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "privateConnectorsHidden": false,
@@ -698,7 +698,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "privateConnectorsHidden": false,
@@ -797,7 +797,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -822,7 +822,7 @@
        }
       ],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "privateConnectorsHidden": false,
@@ -978,7 +978,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1065,7 +1065,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1185,7 +1185,7 @@
        }
       ],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {
         "missing": "mcp_transport_failed"
        },
@@ -1300,7 +1300,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {
         "missing": "mcp_transport_failed"
        },
@@ -1380,7 +1380,10 @@
         }
        ]
       },
-      "message": "Invalid request parameters"
+      "message": {
+       "prose": 26,
+       "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+      }
      },
      "call": "mcp_catalog/toggle",
      "ok": false,
@@ -1390,7 +1393,10 @@
      "answer": {
       "code": "invalid_params",
       "data": null,
-      "message": "MCP server 'fixture' is managed by the 'servers' plugin and cannot be toggled or removed from the MCP catalog."
+      "message": {
+       "prose": 110,
+       "sha256": "20ac62d6a88d96666839c0b030eb6b3f7a4a0af91ef4b4f050b1dae0fc3539be"
+      }
      },
      "call": "mcp_catalog/remove",
      "ok": false,
@@ -1569,7 +1575,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1589,7 +1595,7 @@
       "experimentalHarness": null,
       "issues": [],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "privateConnectorsHidden": false,
@@ -1602,7 +1608,7 @@
         "locked": false,
         "name": "added:new",
         "prompt": {
-         "len": 4,
+         "prose": 4,
          "sha256": "d6924223112656a3d41d35b5e3cbc889578ed5138d2febacfa09644147ace73e"
         },
         "registry": null,
@@ -1616,7 +1622,7 @@
         "locked": false,
         "name": "demo:hello",
         "prompt": {
-         "len": 16,
+         "prose": 16,
          "sha256": "e08e3d69e309d1f8cfc29e2877d9f0c19ac94682c2400d115d113d3209696c36"
         },
         "registry": null,
@@ -1737,7 +1743,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
@@ -1819,7 +1825,10 @@
      "answer": {
       "code": "not_found",
       "data": null,
-      "message": "Session not found: not-this-session"
+      "message": {
+       "prose": 35,
+       "sha256": "1bead7b5c85acaef138780a8d59899394a6c55849a32cab57e29bf683dd102a3"
+      }
      },
      "call": "plugin_catalog/read",
      "ok": false,
@@ -1829,7 +1838,10 @@
      "answer": {
       "code": "not_found",
       "data": null,
-      "message": "Session not found: not-this-session"
+      "message": {
+       "prose": 35,
+       "sha256": "1bead7b5c85acaef138780a8d59899394a6c55849a32cab57e29bf683dd102a3"
+      }
      },
      "call": "plugin/info",
      "ok": false,
@@ -1839,7 +1851,10 @@
      "answer": {
       "code": "not_found",
       "data": null,
-      "message": "Session not found: not-this-session"
+      "message": {
+       "prose": 35,
+       "sha256": "1bead7b5c85acaef138780a8d59899394a6c55849a32cab57e29bf683dd102a3"
+      }
      },
      "call": "plugin/reload",
      "ok": false,
@@ -1882,7 +1897,10 @@
      "answer": {
       "code": "not_found",
       "data": null,
-      "message": "Session not found: nobody"
+      "message": {
+       "prose": 25,
+       "sha256": "9ed7b1f0e04b68e93ae00bf3cae0d18b251493a4cfb71c70c9f6a9757ad21b5e"
+      }
      },
      "call": "plugin_catalog/read",
      "ok": false,
@@ -1892,7 +1910,10 @@
      "answer": {
       "code": "conflict",
       "data": null,
-      "message": "Start, resume, or continue a session before using this method"
+      "message": {
+       "prose": 61,
+       "sha256": "8af0cddb629a47014fc75971c2e1bded9e8d653275a75a243266a7fd6674d998"
+      }
      },
      "call": "plugin/info",
      "ok": false,
@@ -1902,7 +1923,10 @@
      "answer": {
       "code": "conflict",
       "data": null,
-      "message": "Start, resume, or continue a session before using this method"
+      "message": {
+       "prose": 61,
+       "sha256": "8af0cddb629a47014fc75971c2e1bded9e8d653275a75a243266a7fd6674d998"
+      }
      },
      "call": "plugin/reload",
      "ok": false,
@@ -1994,7 +2018,7 @@
          "contentSha256": "<builtin-digest>",
          "description": "Skills and components shipped with the Vibe CLI.",
          "drifted": 0,
-         "installedRoot": "/home/arthjean/us004/rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
+         "installedRoot": "/home/arthur/dev/mistral-vibe-rs/.parity/reference-c96a6dbb34d3/.venv/lib/python3.12/site-packages/vibe/plugins/builtins/vibe",
          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
          "name": "vibe",
          "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",

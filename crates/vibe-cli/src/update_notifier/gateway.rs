@@ -29,13 +29,15 @@ impl UpdateGatewayCause {
     #[must_use]
     pub const fn default_message(self) -> &'static str {
         match self {
-            Self::TooManyRequests => "Rate limit exceeded while checking for updates.",
-            Self::Forbidden => "Request was forbidden while checking for updates.",
-            Self::NotFound => "Unable to fetch the releases. Please check your permissions.",
-            Self::RequestFailed => "Network error while checking for updates.",
-            Self::ErrorResponse => "Unexpected response received while checking for updates.",
-            Self::InvalidResponse => "Received an invalid response while checking for updates.",
-            Self::Unknown => "Unable to determine whether an update is available.",
+            Self::TooManyRequests => "The release server rate-limited the update check.",
+            Self::Forbidden => "The release server refused the update check.",
+            Self::NotFound => "The releases could not be fetched; check your permissions.",
+            Self::RequestFailed => "The release server could not be reached.",
+            Self::ErrorResponse => {
+                "The release server answered the update check with an unexpected status."
+            }
+            Self::InvalidResponse => "The update check got back a malformed response.",
+            Self::Unknown => "Could not tell whether an update is available.",
         }
     }
 }

@@ -20,7 +20,7 @@ pub fn teleport_push_overlay(event: &Value) -> Option<Overlay> {
     // Reference `VibeApp._ask_push_approval`: one question under a `Push`
     // header with two choices and no free-text answer.
     let question = if branch {
-        "Your branch doesn't exist on remote. Push to continue?".to_owned()
+        "The remote has no copy of your branch. Push to continue?".to_owned()
     } else {
         format!(
             "You have {count} unpushed commit{}. Push to continue?",

@@ -580,7 +580,7 @@ fn ajv_errors(error: &jsonschema::ValidationError<'_>) -> Vec<Value> {
         ),
         Kind::Enum { options } => (
             json!({"allowedValues": options}),
-            "must be equal to one of the allowed values".to_owned(),
+            "must match one of the allowed values".to_owned(),
         ),
         Kind::ExclusiveMaximum { limit } => (
             json!({"comparison": "<", "limit": limit}),

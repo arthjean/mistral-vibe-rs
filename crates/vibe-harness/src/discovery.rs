@@ -175,7 +175,7 @@ fn empty(mode: Mode, message: &str) -> Answer {
     }
 }
 
-const NOTHING_CALLABLE: &str = "No tool functions are available in run_typescript.";
+const NOTHING_CALLABLE: &str = "run_typescript exposes no tool functions right now.";
 
 fn best_match(functions: &[Function], connectors: &[String], query: Option<&str>) -> Answer {
     let mode = Mode::BestMatch;
@@ -186,7 +186,7 @@ fn best_match(functions: &[Function], connectors: &[String], query: Option<&str>
     if query.is_empty() {
         return empty(
             mode,
-            "No query provided. Describe the capability you need for best_match mode.",
+            "best_match mode needs a query: describe the capability you are looking for.",
         );
     }
     let candidates = of_connectors(functions, connectors);
@@ -197,11 +197,11 @@ fn best_match(functions: &[Function], connectors: &[String], query: Option<&str>
     if ranked.is_empty() {
         let message = if connectors.is_empty() {
             format!(
-                "No matching tool functions found for query \"{query}\". Try a broader search query."
+                "No tool function matched the query \"{query}\". Search again with broader terms."
             )
         } else {
             format!(
-                "No matching tool functions found for query \"{query}\" in connectors: {}. Try a broader search query or omit the connector filter.",
+                "No tool function matched the query \"{query}\" in connectors: {}. Search again with broader terms or drop the connector filter.",
                 connectors.join(", ")
             )
         };
@@ -256,7 +256,7 @@ fn capabilities(functions: &[Function], connectors: &[String]) -> Answer {
     if connectors.is_empty() {
         return empty(
             mode,
-            "All_connector_capabilities mode requires at least one exact connector name.",
+            "All_connector_capabilities mode needs one or more exact connector names.",
         );
     }
     let listed = of_connectors(functions, connectors);
@@ -315,7 +315,7 @@ fn details(functions: &[Function], named: &[String]) -> Answer {
         }
     }
     let body = if loaded.is_empty() {
-        "No exact tool function details loaded. Call best_match/all_connector_capabilities first, then request exact returned function names.".to_owned()
+        "No tool function details are loaded yet. Run best_match or all_connector_capabilities first, then ask for the exact function names they returned.".to_owned()
     } else {
         loaded
             .iter()
@@ -343,7 +343,7 @@ fn details(functions: &[Function], named: &[String]) -> Answer {
             .iter()
             .map(|name| match name {
                 Some(name) => format!("- No exact tool function found for: {name}"),
-                None => "- Details mode requires at least one exact function name returned by best_match or all_connector_capabilities mode.".to_owned(),
+                None => "- Details mode needs one or more exact function names, as best_match or all_connector_capabilities mode returned them.".to_owned(),
             })
             .collect::<Vec<_>>();
         lines.extend([
@@ -363,7 +363,7 @@ fn details(functions: &[Function], named: &[String]) -> Answer {
 
 fn unknown_connectors(connectors: &[String]) -> String {
     format!(
-        "No exact connectors found for: {}. Try a connector name returned by best_match mode.",
+        "No connector exactly matches: {}. Use a connector name that best_match mode returned.",
         connectors.join(", ")
     )
 }

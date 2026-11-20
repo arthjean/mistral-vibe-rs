@@ -64,8 +64,8 @@ pub(super) fn managed_worktree_root_in(
 /// a directory, it lies inside the worktree once resolved, resolving it moved
 /// nothing, and nothing between it and the worktree root carries a `.git`
 /// entry. The fourth refuses a link below the root even when it lands inside
-/// it: the directory becomes the session's position, its write root and a
-/// trust grant, so a committed link must not choose it. The fifth keeps a
+/// it: that directory turns into where the session sits, where it may write and
+/// what it trusts, so no committed link may pick it. The fifth keeps a
 /// session out of a nested repository the worktree merely contains.
 pub(super) fn target_cwd(
     root: &Path,
@@ -240,7 +240,7 @@ pub(super) fn validate_listed_worktree(target: &Path) -> Result<(), WorktreeErro
         return Err(WorktreeError::failed(
             &name,
             format!(
-                "path `{}` already exists but is not a git worktree",
+                "`{}` is already present and is no git worktree",
                 target.display()
             ),
         ));

@@ -44,14 +44,14 @@ struct ProseRun {
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 struct Digested {
-    length: usize,
-    digest: String,
+    prose: usize,
+    sha256: String,
 }
 
 fn digested(value: &str) -> Digested {
     Digested {
-        length: value.len(),
-        digest: hex::encode(Sha256::digest(value.as_bytes())),
+        prose: value.chars().count(),
+        sha256: hex::encode(Sha256::digest(value.as_bytes())),
     }
 }
 

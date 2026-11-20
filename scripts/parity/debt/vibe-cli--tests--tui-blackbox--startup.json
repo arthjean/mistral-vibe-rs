@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-cli/tests/tui-blackbox/startup.json",
-  "measuredAgainst": "21a8c7b8a899ff7542b169095daaa89e2bc3f52fbca48cb7b3036bd9805961bd",
+  "measuredAgainst": "f157a02bf6e49841dd7d22646bb60cb0b0faca0a21092b24b05e66452f58c3ce",
   "schemaVersion": 1,
   "tallies": {
     "tui startup parity:": {
@@ -12,9 +12,8 @@
         "/snapshots/*/screen/cursor/col": 1,
         "/snapshots/*/screen/cursor/row": 1,
         "/snapshots/*/screen/cursor/visible": 1,
-        "/snapshots/*/screen/rows/*/length": 8,
-        "/snapshots/*/screen/rows/*/sha256": 9,
-        "/snapshots/*/screen/rows/*/text": 10,
+        "/snapshots/*/screen/rows/*": 9,
+        "/snapshots/*/screen/rows/*/text": 3,
         "/snapshots/*/screen/titles/*": 2
       },
       "startup/help": {
@@ -25,16 +24,12 @@
         "/snapshots/*/screen/cursor/col": 2,
         "/snapshots/*/screen/cursor/row": 2,
         "/snapshots/*/screen/cursor/visible": 2,
-        "/snapshots/*/screen/rows/*/length": 70,
-        "/snapshots/*/screen/rows/*/sha256": 72,
-        "/snapshots/*/screen/rows/*/text": 4,
+        "/snapshots/*/screen/rows/*": 72,
         "/snapshots/*/screen/titles/*": 4
       },
       "startup/quit": {
         "/snapshots/*/screen/cursor/row": 1,
-        "/snapshots/*/screen/rows/*/length": 3,
-        "/snapshots/*/screen/rows/*/sha256": 3,
-        "/snapshots/*/screen/rows/*/text": 3,
+        "/snapshots/*/screen/rows/*": 3,
         "/snapshots/*/screen/titles/*": 1
       },
       "startup/resize": {
@@ -45,9 +40,8 @@
         "/snapshots/*/screen/cursor/col": 2,
         "/snapshots/*/screen/cursor/row": 2,
         "/snapshots/*/screen/cursor/visible": 2,
-        "/snapshots/*/screen/rows/*/length": 17,
-        "/snapshots/*/screen/rows/*/sha256": 19,
-        "/snapshots/*/screen/rows/*/text": 21,
+        "/snapshots/*/screen/rows/*": 19,
+        "/snapshots/*/screen/rows/*/text": 6,
         "/snapshots/*/screen/titles/*": 4
       }
     }

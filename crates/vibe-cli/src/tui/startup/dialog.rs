@@ -308,7 +308,7 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
     let (title, lines, help) = match dialog {
         StartupDialog::Trust { prompt, selected } => {
             let mut lines = vec![Line::from(
-                "Malicious configs can modify AI behavior, exfiltrate data, run destructive commands, or silently alter your code.",
+                "A hostile config could steer the AI, leak your data, run destructive commands, or quietly rewrite your files.",
             )];
             append_detected_files(
                 &mut lines,

@@ -57,8 +57,8 @@ pub(super) fn turn_error(error: &ProviderError, environment: &TurnEnvironment) -
         _ => None,
     };
     if let Some(reason) = rejection {
-        // Only a 401 says the credential itself was refused, so only then is
-        // where it came from worth naming.
+        // A 401 alone means the credential itself was rejected, and only then
+        // does naming its origin help.
         let origin = cause
             .filter(|_| reason == "http_unauthorized")
             .and_then(|cause| cause.api_key_origin.as_ref());
@@ -85,9 +85,9 @@ fn invalid_api_key_message(origin: Option<&vibe_core::llm::error::KeyOrigin>) ->
                 KeySource::Environment => format!("env var {}", origin.variable),
                 KeySource::Keyring => "the keyring".to_owned(),
             };
-            format!("Invalid API key (from {source}). Please check your API key and try again.")
+            format!("The API key from {source} was rejected. Verify it, then retry.")
         }
-        None => "Invalid API key. Please check your API key and try again.".to_owned(),
+        None => "The API key was rejected. Verify it, then retry.".to_owned(),
     }
 }
 

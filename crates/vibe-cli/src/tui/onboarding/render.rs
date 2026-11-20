@@ -325,7 +325,7 @@ fn draw_sign_in_target(frame: &mut Frame<'_>, area: Rect, model: &OnboardingMode
             (
                 "Other",
                 None,
-                "A Mistral-compatible deployment on your own domain.",
+                "A Mistral-compatible service hosted on a domain you run.",
             ),
         ],
         model.target_selection(),

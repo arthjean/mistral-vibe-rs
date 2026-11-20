@@ -195,7 +195,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -261,13 +261,13 @@
                   },
                   "turnId": "<id-5>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -333,7 +333,7 @@
                   },
                   "turnId": "<id-5>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -706,7 +706,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -740,7 +740,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -1183,7 +1183,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -1217,7 +1217,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -1654,7 +1654,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -1688,7 +1688,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -2062,7 +2062,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -2096,7 +2096,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -2460,7 +2460,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -2494,7 +2494,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -2925,7 +2925,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -2959,7 +2959,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },
@@ -3366,7 +3366,7 @@
               },
               {
                 "entry": {
-                  "createdAt": "<time>",
+                  "createdAt": "<time:int>",
                   "detail": {
                     "display": {
                       "content": null,
@@ -3400,7 +3400,7 @@
                   "title": "connector_Drive.search",
                   "turnId": "<id-4>",
                   "type": "effect",
-                  "updatedAt": "<time>"
+                  "updatedAt": "<time:int>"
                 },
                 "method": "history/entryAdded"
               },

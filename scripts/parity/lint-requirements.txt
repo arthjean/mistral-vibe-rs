@@ -1,0 +1,4 @@
+# The linter and type checker the CI `quality` job installs for the parity
+# scripts; AGENTS.md ("Quality gates") runs the same versions through `uvx`.
+ruff==0.15.2
+mypy==2.4.1

@@ -631,7 +631,7 @@ fn ctrl_z_suspends_the_session_and_resumes_a_restored_terminal() {
     // The reference restores the terminal, prints the resume hint, and only
     // then stops, so both observations precede the stop.
     let suspended = process.wait_for(
-        b"Mistral Vibe has been suspended. Run fg to bring Mistral Vibe back.",
+        b"Mistral Vibe is now suspended. Type fg to bring Mistral Vibe back.",
         STEP,
     );
     assert!(
@@ -685,7 +685,7 @@ fn confirmed_exit_prints_the_reference_session_summary() {
     assert!(status.success(), "confirmed exit failed with {status}");
     let text = String::from_utf8_lossy(&transcript);
     assert!(
-        text.contains("Total tokens used this session: input=0 output=0 (total=0)"),
+        text.contains("Tokens spent in this session: input=0 output=0 (total=0)"),
         "exit omitted the reference usage summary: {text}"
     );
     assert!(

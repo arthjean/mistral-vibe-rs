@@ -276,7 +276,7 @@ async fn bind(
     }
     .resolve();
     for plugin in &resolution.plugins {
-        // `${PLUGIN_DATA}` is handed out as writable, so it has to exist.
+        // Plugins are promised a writable `${PLUGIN_DATA}`: create it up front.
         let _ = fs::create_dir_all(&plugin.data_root);
     }
     resolution.issues.extend(pin_issues);

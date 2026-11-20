@@ -602,7 +602,7 @@ fn a_url_another_entry_already_addresses_is_refused_naming_it() {
     assert!(
         outcome
             .stderr
-            .contains("MCP server URL is already configured as `remote`"),
+            .contains("the MCP server `remote` already uses this URL"),
         "{}",
         outcome.stderr
     );
@@ -832,11 +832,11 @@ fn every_add_refusal_exits_two_and_leaves_the_configuration_alone() {
         ),
         (
             &["add", "s", "--url", "http://plain.example.com/mcp"],
-            "MCP server URL must use https unless it points to localhost",
+            "MCP server URL needs https when its host is not localhost",
         ),
         (
             &["add", "s", "--url", "https://a.example.com/mcp#frag"],
-            "MCP server URL must not include a fragment",
+            "MCP server URL cannot carry a `#` fragment",
         ),
         (
             &["add", "___", "--url", "https://a.example.com/mcp"],

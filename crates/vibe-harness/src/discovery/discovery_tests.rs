@@ -76,7 +76,7 @@ fn best_match_ranks_by_bm25_and_names_the_connectors() {
     );
     let empty = search(&functions(), request(json!({"query": "zzzz"})));
     assert!(empty.content.ends_with(
-        "No matching tool functions found for query \"zzzz\". Try a broader search query."
+        "No tool function matched the query \"zzzz\". Search again with broader terms."
     ));
 }
 

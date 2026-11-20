@@ -57,7 +57,7 @@ new session that can be resumed separately.
 
 ## Prompts sent while the agent works
 
-A prompt submitted during a turn is queued rather than refused, and everything
+Sending a prompt while a turn runs puts it in a queue instead of rejecting it, and everything
 queued during one turn is delivered together as the next one, each prompt kept
 as its own editable entry. `Ctrl+C` drops the newest queued prompt, `Esc`
 interrupts the turn and pauses the queue, and an empty `Enter` steers the

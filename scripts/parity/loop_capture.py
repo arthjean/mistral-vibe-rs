@@ -276,7 +276,7 @@ def persisted(world: blackbox.World) -> list[dict[str, Any]]:
     directory included, in the order they were created: each message line with
     its keys in the order the server wrote them, and the metadata a loop keeps."""
 
-    found = []
+    found: list[dict[str, Any]] = []
     root = world.vibe_home / "logs/session"
     for meta_path in root.glob("**/meta.json"):
         directory = meta_path.parent
@@ -286,7 +286,7 @@ def persisted(world: blackbox.World) -> list[dict[str, Any]]:
             metadata = json.loads(meta_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             metadata = {}
-        lines = []
+        lines: list[dict[str, Any]] = []
         log = directory / "messages.jsonl"
         if log.is_file():
             for line in log.read_text(encoding="utf-8").splitlines():
@@ -468,7 +468,7 @@ def reduce_notification(message: dict[str, Any], time_keys: set[str]) -> dict[st
     params = {k: v for k, v in (message.get("params") or {}).items() if k not in DROPPED}
     for operation in params.get("patch") or []:
         if isinstance(operation, dict) and str(operation.get("path", "")).rsplit("/", 1)[-1] in time_keys:
-            operation["value"] = "<time>"
+            operation["value"] = blackbox.time_token(operation.get("value"))
     if isinstance(params.get("patch"), list):
         params["patch"] = app_server_client.commuted(params["patch"])
     return {"method": message.get("method"), "params": params}
@@ -477,7 +477,7 @@ def reduce_notification(message: dict[str, Any], time_keys: set[str]) -> dict[st
 def reduce_state(params: dict[str, Any]) -> dict[str, Any]:
     """A session state snapshot reduced to what the loop moves in it."""
 
-    state = params.get("state") if isinstance(params.get("state"), dict) else params
+    state: dict[str, Any] = params["state"] if isinstance(params.get("state"), dict) else params
     session = state.get("session") or {}
     return {
         "isQuiescent": state.get("isQuiescent"),
@@ -522,10 +522,10 @@ def reduce_turn(
             continue
         if scenario.get("observe") and not any(method.startswith(m) for m in scenario["observe"]):
             continue
-        message = app_server_client.without_clock(message)
-        if message is None:
+        cleared = app_server_client.without_clock(message)
+        if cleared is None:
             continue
-        reduced = reduce_notification(message, time_keys)
+        reduced = reduce_notification(cleared, time_keys)
         if method == "session/state":
             reduced["params"] = reduce_state(reduced["params"])
         if lands_in_background(reduced):
@@ -563,7 +563,7 @@ def send(method: str, pick: list[str] | None = None, **params: Any) -> dict[str,
     return step
 
 
-START = {"start": {}}
+START: dict[str, Any] = {"start": {}}
 PERSISTED = {"persisted": True}
 TITLES = {"titles": True, "client": {"entrypoint": "cli"},
           "config": "", "tables": "\n[session_logging]\ngenerate_titles = true\n"}

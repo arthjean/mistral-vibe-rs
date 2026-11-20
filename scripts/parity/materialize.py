@@ -44,7 +44,6 @@ import json
 import os
 from pathlib import Path
 import platform
-import shutil
 import subprocess
 import sys
 import tarfile
@@ -147,7 +146,7 @@ def _walk(root: Path, tree: str) -> list[str]:
     """Every file under ``root / tree``, as a POSIX path relative to ``root``,
     outside :data:`UNATTESTED_DIRECTORIES`."""
 
-    found = []
+    found: list[str] = []
     base = root / tree
     for directory, subdirectories, files in os.walk(base):
         subdirectories[:] = sorted(

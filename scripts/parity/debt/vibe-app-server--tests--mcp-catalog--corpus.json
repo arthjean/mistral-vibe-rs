@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/mcp-catalog/corpus.json",
-  "measuredAgainst": "d71b93ec037bb64f5ca47c52f2605d02c1585b0a6409545ecffe208aa5b5c4c3",
+  "measuredAgainst": "4ae71765a6e9348fbe26ec84ebdf354b545db631ed084b4ee0f915b4f01ec3a4",
   "schemaVersion": 1,
   "tallies": {
     "MCP catalog parity:": {

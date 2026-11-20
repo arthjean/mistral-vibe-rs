@@ -32,7 +32,7 @@ use std::path::Path;
 
 use serde_json::Value;
 use vibe_core::parity::replay::{
-    Capture, Class, Divergence, OwnProse, Replay, Tally, assert_ledger, differences, entries,
+    Band, Capture, Class, Divergence, OwnProse, Replay, Tally, assert_ledger, differences, entries,
     scenarios,
 };
 
@@ -53,7 +53,19 @@ const CAPTURE: Capture = Capture {
 /// directories, backend and server processes.
 const JOBS: &[&str] = &["--jobs", "4"];
 
-const PROSE: &[OwnProse] = &[];
+/// The accepted divergence the prose below stands on.
+const SERVER_PROSE: &str = "Server refusals and errors are this port's own prose";
+
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &["lifecycle/toggle-refusals"],
+    pointer: "/steps/*/response/error/message",
+    count: 4,
+    band: Band::DEFAULT,
+    directives: None,
+    row: "21",
+    accepted: SERVER_PROSE,
+    reason: "the refusal of a connector toggle the catalog does not allow, reworded in this port's words under the same error code",
+}];
 
 #[test]
 fn the_port_runs_every_connector_scenario_as_the_corpus_records_or_as_the_ledger_names() {

@@ -33,7 +33,9 @@
 use std::path::Path;
 
 use serde_json::Value;
-use vibe_core::parity::replay::{Capture, OwnProse, Replay, assert_ledger, entries, scenarios};
+use vibe_core::parity::replay::{
+    Band, Capture, OwnProse, Replay, assert_ledger, entries, scenarios,
+};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
 const CORPUS: &str = include_str!("agents-parity/corpus.json");
@@ -50,7 +52,23 @@ const CAPTURE: Capture = Capture {
 };
 
 /// Every text this port words its own way in these scenarios.
-const PROSE: &[OwnProse] = &[];
+/// The accepted divergence the prose below stands on.
+const AGENT_PROSE: &str = "Builtin agent descriptions are this port's own prose";
+
+const PROSE: &[OwnProse] = &[OwnProse {
+    scenarios: &[
+        "selection/install",
+        "selection/smart-approve-available",
+        "selection/smart-approve-forced",
+    ],
+    pointer: "/steps/*/response/result/**/description",
+    count: 9,
+    band: Band::DEFAULT,
+    directives: None,
+    row: "20",
+    accepted: AGENT_PROSE,
+    reason: "the description of a builtin agent, in this port's words for the same role and safety",
+}];
 
 #[test]
 fn the_port_runs_every_agent_scenario_as_the_corpus_records_or_as_the_ledger_names() {

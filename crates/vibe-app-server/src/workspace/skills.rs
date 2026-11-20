@@ -253,7 +253,7 @@ impl WorkspaceService {
                     })?;
                 if row["locked"] == true {
                     return Err(invalid(format!(
-                        "{} is fixed by configuration and cannot be toggled here",
+                        "{} is pinned by the configuration, so it cannot be toggled from here",
                         pycompat::repr_str(name)
                     )));
                 }
@@ -320,8 +320,8 @@ impl WorkspaceService {
         .await
     }
 
-    /// Reference `_resolve_endpoint`: the active provider when it is a
-    /// Mistral one, the first Mistral provider otherwise, and the credential
+    /// Reference `_resolve_endpoint`: the active provider if Mistral serves
+    /// it, else the first Mistral provider configured, and the credential
     /// its variable resolves to.
     fn registry_endpoint(&self) -> Option<RegistryEndpoint> {
         let snapshot = self.config.load().ok()?;
@@ -353,8 +353,8 @@ impl WorkspaceService {
         Some(RegistryEndpoint { api_base, api_key })
     }
 
-    /// Reference `writable_disabled_skills`: the writable layer's own
-    /// `disabled_skills`, or [`None`] when the configuration cannot be read.
+    /// Reference `writable_disabled_skills`: the `disabled_skills` list the
+    /// writable layer itself declares, [`None`] if the configuration fails to load.
     fn writable_disabled_skills(&self) -> Option<Vec<String>> {
         let snapshot = self.config.load().ok()?;
         Some(
@@ -384,8 +384,8 @@ impl WorkspaceService {
         manifest::project_manifest_paths(&self.paths.vibe_home, &roots)
     }
 
-    /// The manifests updates are checked against, project ones first so a
-    /// project pin's name wins over a global one.
+    /// The manifests updates are checked against, project manifests before
+    /// global ones, so a name pinned in the project takes precedence.
     fn update_manifests(&self) -> Vec<SkillManifest> {
         self.project_manifest_paths()
             .into_iter()

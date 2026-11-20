@@ -32,13 +32,16 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::lines::{FileState, decode_lines};
 use super::matcher::SequenceMatcher;
 use crate::parity::figures::{Figures, assert_figures};
-use crate::parity::replay::{pinned_reference, repository};
+use crate::parity::replay::{
+    Divergence as ReplayDivergence, Tally, differences, entries, pinned_reference, repository,
+};
 use crate::parity::{is_pin_commit, pinned_interpreter};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/checkpoint_opcodes.py";
@@ -555,21 +558,16 @@ const ENGINE_SCHEMA_VERSION: u32 = 1;
 /// the capture script.
 const MINIMUM_SCENARIOS: usize = 40;
 
-/// A divergence this port accepts, with what holds it in place.
+/// The divergences this port accepts, each naming its scenarios, the pointer
+/// into their observation ([`EngineObservation`]) and the row that answers
+/// for it.
 ///
-/// An entry that no longer matches a real divergence fails the replay, because
-/// a ledger nobody prunes is a list of things that used to be true. Nothing is
-/// listed today: every family below is expected to match exactly, and a
-/// divergence in any of them is a different protocol rather than a tolerable
-/// gap.
-struct LedgerEntry {
-    scenario: &'static str,
-    family: &'static str,
-    #[expect(dead_code, reason = "the reason documents the entry for its readers")]
-    reason: &'static str,
-}
-
-const LEDGER: &[LedgerEntry] = &[];
+/// A [`Tally`] fails an entry that no longer matches a real divergence,
+/// because a ledger nobody prunes is a list of things that used to be true.
+/// Nothing is listed today: every family below is expected to match exactly,
+/// and a divergence in any of them is a different protocol rather than a
+/// tolerable gap.
+const LEDGER: &[ReplayDivergence] = &[];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -647,7 +645,7 @@ enum Step {
     Clear,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct FileObservation {
     path: String,
@@ -660,7 +658,7 @@ struct FileObservation {
     scopes: Vec<ScopeObservation>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RegionObservation {
     version_index: u64,
@@ -671,7 +669,7 @@ struct RegionObservation {
     change: ChangeObservation,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(
     tag = "kind",
     rename_all = "camelCase",
@@ -696,7 +694,7 @@ enum ChangeObservation {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct AnchorObservation {
     side: HunkSide,
@@ -704,7 +702,7 @@ struct AnchorObservation {
     regions: Vec<(u64, usize)>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ScopeObservation {
     owner: Owner,
@@ -713,14 +711,14 @@ struct ScopeObservation {
     anchors: Vec<AnchorObservation>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct DiffObservation {
     baseline: String,
     current: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RestorePlanObservation {
     turn_id: u64,
@@ -728,7 +726,7 @@ struct RestorePlanObservation {
     plan: Vec<PlanEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct PlanEntry {
     path: String,
@@ -934,287 +932,121 @@ fn observe_restore_plan(log: &Checkpointer, turn_id: u64) -> RestorePlanObservat
     }
 }
 
-/// One divergence, named by the scenario and the family it belongs to.
-#[derive(Debug)]
-struct Divergence {
-    scenario: String,
-    family: &'static str,
-    detail: String,
+/// What one scenario leaves behind, on either side: what each step did, the
+/// shape of the log, every file it observed and every restore plan it asked
+/// for. The reference's is the corpus's own record; this port's is what
+/// [`port_observation`] reads off a replayed log.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EngineObservation {
+    outcomes: Vec<String>,
+    has_open_turn: bool,
+    tracked_paths: Vec<String>,
+    last_turn_paths: Vec<String>,
+    scopes: Vec<Owner>,
+    files: Vec<FileObservation>,
+    restore_plans: Vec<RestorePlanObservation>,
 }
 
-impl std::fmt::Display for Divergence {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            formatter,
-            "{} [{}]: {}",
-            self.scenario, self.family, self.detail
-        )
+impl EngineObservation {
+    fn value(&self) -> Value {
+        serde_json::to_value(self).expect("an observation serializes")
     }
 }
 
-/// Replays one scenario and reports every family that answered differently.
-fn scenario_divergences(scenario: &Scenario) -> Vec<Divergence> {
-    let mut found = Vec::new();
-    let mut report = |family: &'static str, detail: String| {
-        found.push(Divergence {
-            scenario: scenario.name.clone(),
-            family,
-            detail,
-        });
-    };
+/// What the reference recorded for `scenario`.
+fn reference_observation(scenario: &Scenario) -> EngineObservation {
+    EngineObservation {
+        outcomes: scenario.outcomes.clone(),
+        has_open_turn: scenario.has_open_turn,
+        tracked_paths: scenario.tracked_paths.clone(),
+        last_turn_paths: scenario.last_turn_paths.clone(),
+        scopes: scenario.scopes.clone(),
+        files: scenario.files.clone(),
+        restore_plans: scenario.restore_plans.clone(),
+    }
+}
 
+/// Replays `scenario` through this port and observes what the reference's
+/// record observes: the same files and the same restore plans.
+fn port_observation(scenario: &Scenario) -> EngineObservation {
     let mut log = Checkpointer::new();
-    let outcomes: Vec<&str> = scenario
+    let outcomes: Vec<String> = scenario
         .steps
         .iter()
-        .map(|step| apply_step(&mut log, step))
+        .map(|step| apply_step(&mut log, step).to_owned())
         .collect();
-    if outcomes != scenario.outcomes {
-        report(
-            "steps",
-            format!(
-                "the reference answered {:?}, this port {:?}",
-                scenario.outcomes, outcomes
-            ),
-        );
-    }
-
     let history = log.history();
-    if history.tracked_paths() != scenario.tracked_paths {
-        report(
-            "logShape",
-            format!(
-                "the reference tracked {:?}, this port {:?}",
-                scenario.tracked_paths,
-                history.tracked_paths()
-            ),
-        );
-    }
-    if history.last_turn_paths() != scenario.last_turn_paths {
-        report(
-            "logShape",
-            format!(
-                "the reference's last turn tracked {:?}, this port's {:?}",
-                scenario.last_turn_paths,
-                history.last_turn_paths()
-            ),
-        );
-    }
-    if history.scopes() != scenario.scopes {
-        report(
-            "logShape",
-            format!(
-                "the reference held the slots {:?}, this port {:?}",
-                scenario.scopes,
-                history.scopes()
-            ),
-        );
-    }
-    if log.has_open_turn() != scenario.has_open_turn {
-        report(
-            "logShape",
-            format!(
-                "the reference left the turn {}, this port {}",
-                if scenario.has_open_turn {
-                    "open"
-                } else {
-                    "closed"
-                },
-                if log.has_open_turn() {
-                    "open"
-                } else {
-                    "closed"
-                }
-            ),
-        );
-    }
+    let (tracked_paths, last_turn_paths, scopes) = (
+        history.tracked_paths(),
+        history.last_turn_paths(),
+        history.scopes(),
+    );
     drop(history);
-
-    for expected in &scenario.files {
-        let observed = observe_file(&log, &expected.path);
-        if observed.regions != expected.regions {
-            report(
-                "regions",
-                format!(
-                    "{}: the reference held {:?}, this port {:?}",
-                    expected.path, expected.regions, observed.regions
-                ),
-            );
-        }
-        if (
-            &observed.content,
-            &observed.accepted_baseline,
-            &observed.original,
-            observed.fully_reviewed,
-        ) != (
-            &expected.content,
-            &expected.accepted_baseline,
-            &expected.original,
-            expected.fully_reviewed,
-        ) {
-            report(
-                "projections",
-                format!(
-                    "{}: the reference projected content {} baseline {} original {} reviewed {}, \
-                     this port {} {} {} {}",
-                    expected.path,
-                    expected.content,
-                    expected.accepted_baseline,
-                    expected.original,
-                    expected.fully_reviewed,
-                    observed.content,
-                    observed.accepted_baseline,
-                    observed.original,
-                    observed.fully_reviewed
-                ),
-            );
-        }
-        if observed.anchors != expected.anchors {
-            report(
-                "anchors",
-                format!(
-                    "{}: the reference anchored {:?}, this port {:?}",
-                    expected.path, expected.anchors, observed.anchors
-                ),
-            );
-        }
-        if observed.scopes != expected.scopes {
-            report(
-                "scopes",
-                format!(
-                    "{}: the reference scoped {:?}, this port {:?}",
-                    expected.path, expected.scopes, observed.scopes
-                ),
-            );
-        }
+    EngineObservation {
+        outcomes,
+        has_open_turn: log.has_open_turn(),
+        tracked_paths,
+        last_turn_paths,
+        scopes,
+        files: scenario
+            .files
+            .iter()
+            .map(|expected| observe_file(&log, &expected.path))
+            .collect(),
+        restore_plans: scenario
+            .restore_plans
+            .iter()
+            .map(|expected| observe_restore_plan(&log, expected.turn_id))
+            .collect(),
     }
-    let observed_paths: Vec<String> = scenario
-        .files
-        .iter()
-        .map(|file| file.path.clone())
-        .collect();
-    if observed_paths != scenario.tracked_paths {
-        report(
-            "logShape",
-            format!(
-                "the corpus observed {observed_paths:?} but recorded {:?} as tracked",
-                scenario.tracked_paths
-            ),
-        );
-    }
-
-    for expected in &scenario.restore_plans {
-        let observed = observe_restore_plan(&log, expected.turn_id);
-        if &observed != expected {
-            report(
-                "restorePlans",
-                format!(
-                    "turn {}: the reference planned {:?} (has_turn {}), this port {:?} (has_turn \
-                     {})",
-                    expected.turn_id,
-                    expected.plan,
-                    expected.has_turn,
-                    observed.plan,
-                    observed.has_turn
-                ),
-            );
-        }
-    }
-    found
 }
 
-/// The divergences left after the ledger has taken the ones it accounts for,
-/// with the ledger entries nothing matched.
-fn against_ledger(
-    divergences: Vec<Divergence>,
-    ledger: &[LedgerEntry],
-) -> (Vec<Divergence>, Vec<String>) {
-    let mut unaccounted = Vec::new();
-    let mut matched = vec![false; ledger.len()];
-    for divergence in divergences {
-        match ledger.iter().position(|entry| {
-            entry.scenario == divergence.scenario && entry.family == divergence.family
-        }) {
-            Some(index) => matched[index] = true,
-            None => unaccounted.push(divergence),
-        }
-    }
-    let stale = ledger
-        .iter()
-        .zip(matched)
-        .filter(|(_entry, hit)| !hit)
-        .map(|(entry, _hit)| format!("{} [{}]", entry.scenario, entry.family))
-        .collect();
-    (unaccounted, stale)
+/// Every pointer at which this port's replay of `scenario` departs from the
+/// reference's record.
+fn scenario_differences(scenario: &Scenario) -> Vec<String> {
+    differences(
+        &reference_observation(scenario).value(),
+        &port_observation(scenario).value(),
+    )
 }
 
 #[test]
 fn the_engine_matches_the_reference_over_every_scenario() {
     crate::parity::manifest::assert_corpus("crates/vibe-core/tests/checkpoints/engine.json");
     let corpus = engine_corpus();
-    let mut per_family: BTreeMap<&'static str, (usize, usize)> = BTreeMap::new();
-    let mut all = Vec::new();
-    let mut conformant = 0;
+    let raw = fs::read_to_string(engine_corpus_path()).expect("the corpus is committed");
+    let mut tally = Tally::new(&raw, entries(LEDGER));
+    let mut per_family: BTreeMap<String, usize> = BTreeMap::new();
     for scenario in &corpus.scenarios {
-        let divergences = scenario_divergences(scenario);
-        if divergences.is_empty() {
-            conformant += 1;
-        }
-        let diverged: Vec<&'static str> = divergences
+        let observed: Vec<String> = scenario
+            .files
             .iter()
-            .map(|divergence| divergence.family)
+            .map(|file| file.path.clone())
             .collect();
-        for family in [
-            "steps",
-            "logShape",
-            "regions",
-            "projections",
-            "anchors",
-            "scopes",
-            "restorePlans",
-        ] {
-            let counts = per_family.entry(family).or_default();
-            if diverged.contains(&family) {
-                counts.1 += 1;
-            } else {
-                counts.0 += 1;
-            }
+        assert_eq!(
+            observed, scenario.tracked_paths,
+            "{}: the corpus observes other files than it records as tracked",
+            scenario.name
+        );
+        let reference = reference_observation(scenario).value();
+        let port = port_observation(scenario).value();
+        let found = differences(&reference, &port);
+        for pointer in &found {
+            let family = pointer.split('/').nth(1).unwrap_or_default();
+            *per_family.entry(family.to_owned()).or_default() += 1;
         }
-        all.extend(divergences);
+        tally.record(&scenario.name, &reference, &port, found);
     }
-    let differences = all.len();
-    let (unaccounted, stale) = against_ledger(all, LEDGER);
-
     println!(
         "checkpoint engine: {} scenarios replayed against the reference at {}",
         corpus.scenarios.len(),
         &corpus.reference_commit[..12]
     );
-    for (family, (conforming, divergent)) in &per_family {
-        println!("  {family}: {conforming} conforming, {divergent} divergent");
+    for (family, divergent) in &per_family {
+        println!("  {family}: {divergent} differences");
     }
-    assert!(
-        stale.is_empty(),
-        "the ledger names divergences that no longer happen, so it is stale:\n  {}",
-        stale.join("\n  ")
-    );
-    assert!(
-        unaccounted.is_empty(),
-        "engine divergences outside the ledger:\n  {}",
-        unaccounted
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join("\n  ")
-    );
-    // The ledger is empty, so the checks above leave every scenario
-    // conformant and the figures whole.
-    assert_figures(
-        "checkpoint engine parity:",
-        "crates/vibe-core/tests/checkpoints/engine.json",
-        Figures::decided(conformant, corpus.scenarios.len(), differences),
-        serde_json::json!({}),
-    );
+    tally.conclude("checkpoint engine parity:");
 }
 
 #[test]
@@ -1301,7 +1133,7 @@ fn the_engine_corpus_covers_the_behaviors_the_epic_names() {
 }
 
 #[test]
-fn a_divergent_scenario_is_reported_by_name_and_family() {
+fn a_divergent_scenario_is_reported_at_the_pointer_that_moved() {
     let corpus = engine_corpus();
     let mut scenario = corpus
         .scenarios
@@ -1309,39 +1141,13 @@ fn a_divergent_scenario_is_reported_by_name_and_family() {
         .find(|scenario| scenario.name == "per-region-revert-keeps-the-sibling")
         .expect("the scenario is committed")
         .clone();
-    assert!(scenario_divergences(&scenario).is_empty());
+    assert!(scenario_differences(&scenario).is_empty());
 
     // What a real divergence looks like: the same steps, one decision moved.
     scenario.files[0].regions[0].decision = Decision::Keep;
-    let found = scenario_divergences(&scenario);
+    let found = scenario_differences(&scenario);
 
-    assert_eq!(found.len(), 1, "{found:?}");
-    assert_eq!(found[0].family, "regions");
-    assert_eq!(found[0].scenario, "per-region-revert-keeps-the-sibling");
-}
-
-#[test]
-fn a_ledger_entry_nothing_diverges_on_is_reported_as_stale() {
-    let ledger = &[LedgerEntry {
-        scenario: "one-turn-two-regions",
-        family: "regions",
-        reason: "a divergence this port does not actually have",
-    }];
-
-    let (unaccounted, stale) = against_ledger(Vec::new(), ledger);
-
-    assert!(unaccounted.is_empty());
-    assert_eq!(stale, vec!["one-turn-two-regions [regions]"]);
-
-    // And an entry that does match takes its divergence out of the report.
-    let divergence = Divergence {
-        scenario: "one-turn-two-regions".to_owned(),
-        family: "regions",
-        detail: "for the sake of the argument".to_owned(),
-    };
-    let (unaccounted, stale) = against_ledger(vec![divergence], ledger);
-    assert!(unaccounted.is_empty());
-    assert!(stale.is_empty());
+    assert_eq!(found, vec!["/files/0/regions/0/decision".to_owned()]);
 }
 
 #[test]

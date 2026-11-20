@@ -43,7 +43,9 @@ use sha2::{Digest, Sha256};
 use crate::extensions::{DiscoveryRoots, SkillDefinition, discover_extensions};
 use crate::parity::debt::{Note, assert_notes};
 use crate::parity::is_pin_commit;
-use crate::parity::replay::{Capture, Class, PatternDivergence, Tally, entries, pinned_reference};
+use crate::parity::replay::{
+    Capture, Class, PatternDivergence, Tally, entries, nested_differences, pinned_reference,
+};
 use crate::skills::builtins::builtin_skills;
 use crate::skills::parser::{SkillParseErrorKind, parse_skill_markdown};
 use crate::skills::registry::manifest::{ManifestEntry, ManifestVersion, SkillManifest};
@@ -188,11 +190,11 @@ struct BuiltinSkill {
     prompt: Digested,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Digested {
-    length: usize,
-    digest: String,
+    prose: usize,
+    sha256: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -418,17 +420,21 @@ pub(super) struct Report {
 }
 
 /// One comparison: the scenario `<family>/<case>`, the compared field, both
-/// sides as they print, and whether they agreed.
+/// sides as they serialize, and whether they agreed.
 struct Comparison {
     scenario: String,
     field: String,
-    expected: String,
-    actual: String,
+    expected: Value,
+    actual: Value,
     equal: bool,
 }
 
 impl Report {
-    pub(super) fn check<T: PartialEq + std::fmt::Debug>(
+    /// Records one comparison. The two sides are compared as the values they
+    /// serialize to, which is what the replay's tally reads; a pair whose
+    /// typed comparison disagrees with that fails here, since the tally would
+    /// otherwise count what the typed comparison did not.
+    pub(super) fn check<T: PartialEq + std::fmt::Debug + serde::Serialize>(
         &mut self,
         family: &str,
         case: &str,
@@ -436,11 +442,19 @@ impl Report {
         expected: &T,
         actual: &T,
     ) {
+        let value = |side: &T| serde_json::to_value(side).expect("a compared value serializes");
+        let (reference, port) = (value(expected), value(actual));
+        assert_eq!(
+            expected == actual,
+            reference == port,
+            "{family}/{case}: {field} compares otherwise than what it serializes to: reference \
+             {expected:?}, port {actual:?}"
+        );
         self.comparisons.push(Comparison {
             scenario: format!("{family}/{case}"),
             field: field.to_owned(),
-            expected: format!("{expected:?}"),
-            actual: format!("{actual:?}"),
+            expected: reference,
+            actual: port,
             equal: expected == actual,
         });
     }
@@ -727,8 +741,8 @@ fn digest_of(value: &str) -> Digested {
     let mut hasher = Sha256::new();
     hasher.update(value.as_bytes());
     Digested {
-        length: value.chars().count(),
-        digest: hex_encode(&hasher.finalize()),
+        prose: value.chars().count(),
+        sha256: hex_encode(&hasher.finalize()),
     }
 }
 
@@ -1654,14 +1668,17 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     );
 
     let mut tally = Tally::new(&text, entries(LEDGER));
+    tally.differ(nested_differences(1));
     for comparison in COMPARISONS.with(std::cell::RefCell::take) {
         let reference = json!({ comparison.field.as_str(): comparison.expected });
         let port = json!({ comparison.field.as_str(): comparison.actual });
-        let found = if comparison.equal {
-            Vec::new()
-        } else {
-            vec![format!("/{}", comparison.field)]
-        };
+        let found = nested_differences(1)(&reference, &port);
+        assert_eq!(
+            found.is_empty(),
+            comparison.equal,
+            "{}",
+            comparison.scenario
+        );
         tally.record(&comparison.scenario, &reference, &port, found);
     }
     tally.conclude("skills parity:");
@@ -1675,7 +1692,8 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
     let Some(root) = pinned_reference("skills") else {
         return;
     };
-    let recaptured = repo_root().join("target/skills-corpus.json");
+    let run = crate::parity::replay::RunDirectory::new("skills");
+    let recaptured = run.join("skills-corpus.json");
     let capture = Capture {
         script: CAPTURE_SCRIPT,
         family: &[],

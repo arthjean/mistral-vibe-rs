@@ -168,7 +168,7 @@ pub(super) fn plugin_changes(before: &PluginCatalog, after: &PluginCatalog) -> V
         .collect()
 }
 
-/// What a reload moved, by digest, rather than that it ran.
+/// What a reload changed, compared by digest, not merely the fact that it ran.
 pub(super) fn reload_report(changes: &[PluginChange], after: &PluginCatalog) -> String {
     if changes.is_empty() {
         return "Plugins reloaded. Nothing changed.".to_owned();
@@ -455,7 +455,7 @@ impl PluginsPanel {
 
 /// The two calls the catalog commands make.
 pub(super) trait PluginsPort {
-    /// The catalog, or `None` from a backend that resolves no plugins.
+    /// The catalog, or `None` when the backend has no plugin resolution.
     fn read_catalog(&mut self) -> Result<Option<PluginCatalog>, String>;
     fn reload(&mut self) -> Result<(), String>;
 }

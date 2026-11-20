@@ -229,9 +229,9 @@ impl Checkpointer {
 
     /// Records the state `path` held before the running turn wrote to it.
     ///
-    /// Only the first recording of a path counts for the turn, and a path that
-    /// drifted since the log last saw it has that drift sealed as a manual edit
-    /// ordered just before this turn's mark.
+    /// A turn keeps only the first recording of each path. If the file changed
+    /// since the log last observed it, that change is sealed as a manual edit
+    /// placed immediately ahead of the turn's mark.
     ///
     /// # Errors
     ///

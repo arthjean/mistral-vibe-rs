@@ -1,6 +1,6 @@
 {
   "corpus": "crates/vibe-app-server/tests/protocol-parity/corpus.json",
-  "measuredAgainst": "cdf3ad79db3bbacd7e74dcd89eb0c2be46946b17ebcd24209326b8b4207c3f36",
+  "measuredAgainst": "fb8f2556c1958073afc0e2982d329327335f2106915a06c3837d7976726300c0",
   "schemaVersion": 1,
   "tallies": {
     "protocol parity:": {
@@ -106,6 +106,7 @@
         "/*/notifications/*/params/runtime/stats/modelCalls": 3,
         "/*/notifications/*/params/runtime/tools/<list>/isCustom": 3,
         "/*/response/result/catalog/catalogRevision": 1,
+        "/*/response/result/catalog/connectors/<empty>": 1,
         "/*/response/result/catalog/connectors/<list>": 1,
         "/*/response/result/privateConnectorsHidden": 5,
         "/*/response/result/runtime/config/activeModel/autoCompactThreshold": 3,
@@ -188,8 +189,7 @@
         "/*/response/result/pinnedConsoleUrl": 5
       },
       "flows/shell-command": {
-        "/*/notifications/*": 1,
-        "/*/response/error/message": 1
+        "/*/notifications/*": 1
       },
       "flows/skills-registry": {
         "/*/notifications/*": 6,
@@ -223,6 +223,7 @@
         "/*/response/result/runtime/mcp/privateConnectorsHidden": 13,
         "/*/response/result/runtime/stats/modelCalls": 13,
         "/*/response/result/runtime/tools/<list>/isCustom": 13,
+        "/*/response/result/skills/<empty>": 1,
         "/*/response/result/skills/<list>": 1
       },
       "flows/turn-lifecycle": {
@@ -242,7 +243,8 @@
         "/*/notifications/*/params/turn": 4,
         "/*/notifications/*/params/turnId": 6,
         "/*/response/error/data": 1,
-        "/*/response/error/message": 2
+        "/*/response/error/message": 2,
+        "/*/response/result/lastEventId": 1
       },
       "flows/turn-queue-busy": {
         "/*/response/error/data": 1,
@@ -400,6 +402,9 @@
         "/*/response/error/data": 1,
         "/*/response/error/message": 2,
         "/*/response/result": 1
+      },
+      "probe/config/fields/read/rooted": {
+        "/*/response/result/fields/<kinds>/*": 50
       },
       "probe/config/model/write/rooted": {
         "/*/notifications/*/params/runtime/config/activeModel/autoCompactThreshold": 1,
@@ -795,8 +800,6 @@
       },
       "probe/session/resume/rooted": {
         "/*/notifications/*": 1,
-        "/*/response/result/lastEventId": 1,
-        "/*/response/result/state/eventId": 1,
         "/*/response/result/state/session/agent": 1,
         "/*/response/result/state/session/bumpedAt": 1,
         "/*/response/result/state/session/loops": 1
@@ -937,6 +940,7 @@
         "/*/response/result/pinnedConsoleUrl": 1
       },
       "probe/skills/installed/rooted": {
+        "/*/response/result/skills/<empty>": 1,
         "/*/response/result/skills/<list>": 1
       },
       "probe/skills/list/bare": {

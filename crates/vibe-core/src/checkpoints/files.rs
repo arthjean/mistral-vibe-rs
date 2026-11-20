@@ -7,8 +7,8 @@
 //! applying a plan, sit behind an interface rather than behind a concrete
 //! directory.
 //!
-//! One distinction carries the port. A path that does not exist reads as an
-//! absent state, and a path that exists but cannot be read fails. Collapsing
+//! The port hinges on one distinction. A missing path reads as an absent
+//! state, while an existing path that refuses to be read is an error. Merging
 //! the two would report a file whose permissions changed as deleted, and the
 //! engine would record a deletion nobody performed and offer to revert it.
 //!

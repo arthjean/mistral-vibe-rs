@@ -200,8 +200,8 @@ fn the_listing_answers_one_entry_per_linked_worktree() {
     );
 }
 
-/// The details cost a merge base per branch, so they are paid only when a
-/// caller asks: the lines each branch changed and the main checkout's branch.
+/// Computing the details takes one merge base per branch, so only a caller
+/// that asks pays for them: the lines each branch changed and the main checkout's branch.
 #[test]
 fn the_listing_reports_details_only_when_asked() {
     let (_scratch, root) = case_root();

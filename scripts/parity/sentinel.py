@@ -116,7 +116,8 @@ def take(url: str, store: Path) -> dict[str, Any]:
     tags = upstream_tags(url)
     newest = max(tags, key=lambda name: release(name) or ())
     pinned = release(f"v{EXPECTED_VERSION}") or ()
-    behind = sorted((name for name in tags if (release(name) or ()) > pinned), key=release)
+    behind = sorted((name for name in tags if (release(name) or ()) > pinned),
+                    key=lambda name: release(name) or ())
     notes = []
     pin_tag = f"v{EXPECTED_VERSION}"
     if pin_tag in tags and tags[pin_tag] != EXPECTED_COMMIT:

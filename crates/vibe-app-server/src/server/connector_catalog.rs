@@ -422,7 +422,7 @@ impl AppServer {
                     return Err(ProtocolFault::plain(
                         ProtocolErrorCode::NotFound,
                         format!(
-                            "Connector alias not found in the accepted session catalog: {alias}"
+                            "The accepted session catalog has no connector with this alias: {alias}"
                         ),
                     ));
                 }
@@ -441,7 +441,7 @@ impl AppServer {
         {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,
-                "The host connector catalog does not match the target session",
+                "The target session's connector catalog differs from the host's",
             ));
         }
         let mut current = catalog::resolve_selection(&snapshot, resolved.as_ref());
@@ -474,7 +474,7 @@ impl AppServer {
             if live.revision != live_revision {
                 return Err(ProtocolFault::plain(
                     ProtocolErrorCode::Conflict,
-                    "The connector selection affects a live session; provide sessionId",
+                    "This connector selection reaches a live session, so sessionId is required",
                 ));
             }
         }
@@ -615,7 +615,7 @@ impl AppServer {
         if !lock(&self.connector_auth_requests).insert(key.clone()) {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,
-                "Connector authorization is already pending for this catalog revision",
+                "This catalog revision already has a connector authorization in progress",
             ));
         }
         let broker_id = vibe_core::session_id::uuid_v4();
@@ -724,7 +724,7 @@ impl AppServer {
         let runtime = self.runtime_snapshot(session_id).ok_or_else(|| {
             ProtocolFault::plain(
                 ProtocolErrorCode::InternalError,
-                "Connector refresh did not produce a runtime projection",
+                "Refreshing the connectors yielded no runtime projection",
             )
         })?;
         let mut outbound = vec![success_bytes(

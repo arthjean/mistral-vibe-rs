@@ -30,9 +30,10 @@ pub fn normalized(argument: &str, raw: &str) -> Result<String, ToolError> {
         return Err(ToolError::SchemaViolation {
             path: format!("/{argument}"),
             message: format!(
-                "`{raw}` names a drive or a root but not both, so Windows would resolve it \
-                 against whichever drive is current; give a drive and a root (`C:\\work`), a \
-                 Git Bash path (`/c/work`), or a path relative to the working directory"
+                "`{raw}` carries a drive without a root, or a root without a drive, which \
+                 Windows resolves against the current drive; use a drive plus a root \
+                 (`C:\\work`), a Git Bash path (`/c/work`), or a relative path, which starts \
+                 from the working directory"
             ),
         });
     }
@@ -60,7 +61,7 @@ pub(crate) fn fold_msys_drive(path: &str) -> String {
     format!("{}:{suffix}", letter.to_ascii_uppercase())
 }
 
-/// Whether a Windows path has a drive or a root but not both, as
+/// Whether a Windows path carries exactly one of a drive and a root, as
 /// `PureWindowsPath` splits it. A UNC share carries both.
 fn is_unanchored_windows_path(path: &str) -> bool {
     let bytes = path.as_bytes();

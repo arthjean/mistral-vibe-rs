@@ -2,36 +2,36 @@
   "acpAuthProse": [
     {
       "run": {
-        "digest": "c34ee5e81b75d1b8c430e1ba3eba1a15c799a541bc1dc98234463b10e81d9c02",
-        "length": 62
+        "prose": 62,
+        "sha256": "c34ee5e81b75d1b8c430e1ba3eba1a15c799a541bc1dc98234463b10e81d9c02"
       },
       "surface": "browserMethod/description"
     },
     {
       "run": {
-        "digest": "c8ba6d8de5fd9b503014f01a69a4f8ea9a6fc7fbac45907407918700a5c3257b",
-        "length": 33
+        "prose": 33,
+        "sha256": "c8ba6d8de5fd9b503014f01a69a4f8ea9a6fc7fbac45907407918700a5c3257b"
       },
       "surface": "browserMethod/name"
     },
     {
       "run": {
-        "digest": "425335a924a3ea7a3c84ac43e316105df1eb80873b78b6842193d32045023ebc",
-        "length": 41
+        "prose": 41,
+        "sha256": "425335a924a3ea7a3c84ac43e316105df1eb80873b78b6842193d32045023ebc"
       },
       "surface": "terminalMethod/description"
     },
     {
       "run": {
-        "digest": "4ab4e54febdce455d0daf1d24d7f95ba00df91578bbe3b2ace6dfc72e508d926",
-        "length": 18
+        "prose": 18,
+        "sha256": "4ab4e54febdce455d0daf1d24d7f95ba00df91578bbe3b2ace6dfc72e508d926"
       },
       "surface": "terminalMethod/label"
     },
     {
       "run": {
-        "digest": "c7d4ae1f0c2c2c29a452d627083374d23b9e67ae9430b940bd181ec22efcab80",
-        "length": 21
+        "prose": 21,
+        "sha256": "c7d4ae1f0c2c2c29a452d627083374d23b9e67ae9430b940bd181ec22efcab80"
       },
       "surface": "terminalMethod/name"
     }
@@ -1960,8 +1960,8 @@
     {
       "messages": [
         {
-          "digest": "f6e722cd04eb0ffa3a2c3be7b9486306f5acdba222ea5c55f2156d38d7b6f540",
-          "length": 32
+          "prose": 32,
+          "sha256": "f6e722cd04eb0ffa3a2c3be7b9486306f5acdba222ea5c55f2156d38d7b6f540"
         }
       ],
       "name": "START_FAILED",
@@ -1970,8 +1970,8 @@
     {
       "messages": [
         {
-          "digest": "4356bea6c7acaf98758c2ee576f2365dc0dee361db8f3606ff22a5366902f227",
-          "length": 46
+          "prose": 46,
+          "sha256": "4356bea6c7acaf98758c2ee576f2365dc0dee361db8f3606ff22a5366902f227"
         }
       ],
       "name": "POLL_FAILED",
@@ -1980,8 +1980,8 @@
     {
       "messages": [
         {
-          "digest": "9555769f4f665fe90b03b5d82fcf74c314d3c053def72d1e7d3650cf26ec03b1",
-          "length": 42
+          "prose": 42,
+          "sha256": "9555769f4f665fe90b03b5d82fcf74c314d3c053def72d1e7d3650cf26ec03b1"
         }
       ],
       "name": "UNKNOWN_STATE",
@@ -1990,8 +1990,8 @@
     {
       "messages": [
         {
-          "digest": "fbb56805d28e1142bd6a3db24f45082c765580142a877c3670861396becaa44a",
-          "length": 50
+          "prose": 50,
+          "sha256": "fbb56805d28e1142bd6a3db24f45082c765580142a877c3670861396becaa44a"
         }
       ],
       "name": "EXCHANGE_FAILED",
@@ -2000,8 +2000,8 @@
     {
       "messages": [
         {
-          "digest": "b6d6a96a71cc4bc1719a85b9bf8f5f10abd559c95aa2f6a737ea2e380ed3ddb9",
-          "length": 51
+          "prose": 51,
+          "sha256": "b6d6a96a71cc4bc1719a85b9bf8f5f10abd559c95aa2f6a737ea2e380ed3ddb9"
         }
       ],
       "name": "MISSING_API_KEY",
@@ -2010,8 +2010,8 @@
     {
       "messages": [
         {
-          "digest": "eb77efe5cf70f3542d551a775b855226756a8f0b358398fe387acbf1f32b1603",
-          "length": 42
+          "prose": 42,
+          "sha256": "eb77efe5cf70f3542d551a775b855226756a8f0b358398fe387acbf1f32b1603"
         }
       ],
       "name": "MISSING_EXCHANGE_TOKEN",
@@ -2020,8 +2020,8 @@
     {
       "messages": [
         {
-          "digest": "274639141b3a743e2c0a3ac71c6cac402f1e752cf7e0ab0ada303919104965b2",
-          "length": 24
+          "prose": 24,
+          "sha256": "274639141b3a743e2c0a3ac71c6cac402f1e752cf7e0ab0ada303919104965b2"
         }
       ],
       "name": "EXPIRED",
@@ -2030,8 +2030,8 @@
     {
       "messages": [
         {
-          "digest": "dd23b50df84be199d4ec11ad86cdb777a3d95215babf8ebab6114c8cd2646427",
-          "length": 27
+          "prose": 27,
+          "sha256": "dd23b50df84be199d4ec11ad86cdb777a3d95215babf8ebab6114c8cd2646427"
         }
       ],
       "name": "DENIED",
@@ -2040,8 +2040,8 @@
     {
       "messages": [
         {
-          "digest": "7b6f3d46ca34c21cef7402a9d4dc155563be6e509291cbb2defc2a1470b99e3d",
-          "length": 23
+          "prose": 23,
+          "sha256": "7b6f3d46ca34c21cef7402a9d4dc155563be6e509291cbb2defc2a1470b99e3d"
         }
       ],
       "name": "PROVIDER_ERROR",
@@ -2050,8 +2050,8 @@
     {
       "messages": [
         {
-          "digest": "61b928d049e4f00b6c14a899dfaa84c9b9fa75f986d30f9b445b225667190fe1",
-          "length": 26
+          "prose": 26,
+          "sha256": "61b928d049e4f00b6c14a899dfaa84c9b9fa75f986d30f9b445b225667190fe1"
         }
       ],
       "name": "TIMED_OUT",
@@ -2060,8 +2060,8 @@
     {
       "messages": [
         {
-          "digest": "d5308f70138abb1973c9176f909d0e0bd4bd46c866eae8d35f986fd482af44d9",
-          "length": 35
+          "prose": 35,
+          "sha256": "d5308f70138abb1973c9176f909d0e0bd4bd46c866eae8d35f986fd482af44d9"
         }
       ],
       "name": "OPEN_BROWSER_FAILED",

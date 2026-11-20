@@ -37,8 +37,9 @@ from typing import Any
 
 #: The pin and the checkout path come from the one place this repository writes
 #: them, so a re-pin does not have to find this script.
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
+from pin import DEFAULT_REFERENCE
 from reference import OracleError, reexecute_pinned
+from reference import add_commit_argument
 
 SCHEMA_VERSION = 5
 DIGEST_SCHEMA_VERSION = 1
@@ -266,10 +267,12 @@ def capture_windows_tools() -> list[dict[str, Any]]:
                 or value.__module__ != module.__name__
             ):
                 continue
-            name = value.get_name()
-            rank = (value.selection_priority, index)
+            # A `BaseTool` subclass, untyped here as the reference is.
+            tool: Any = value
+            name = tool.get_name()
+            rank = (tool.selection_priority, index)
             if name not in ranked or rank > ranked[name][0]:
-                ranked[name] = (rank, value)
+                ranked[name] = (rank, tool)
         captured.extend(
             {
                 "family": family,
@@ -412,7 +415,10 @@ def rejection_summary(
             {str(location[0]) for location in locations if location and isinstance(location[0], str)}
         ),
         "pointers": sorted({render_pointer(location) for location in locations}),
-        "digest": "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "digest": {
+            "prose": len(text),
+            "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        },
     }
 
 
@@ -784,7 +790,7 @@ def parse_arguments() -> argparse.Namespace:
             f"replay reads unconditionally (default {DEFAULT_QUADRANTS})"
         ),
     )
-    parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    add_commit_argument(parser)
     parser.add_argument(
         "--check",
         action="store_true",

@@ -148,7 +148,9 @@ pub fn resolve_new_mcp_server_name(
     };
     let requested = normalize_mcp_server_name(requested);
     if requested.is_empty() {
-        return Err(invalid("MCP server name must contain letters or numbers"));
+        return Err(invalid(
+            "MCP server name needs at least one letter or digit",
+        ));
     }
     if existing.contains(&requested) {
         return Err(invalid(format!(
@@ -185,7 +187,7 @@ pub fn normalize_mcp_server_url_with(
     let parsed = Url::parse(raw).map_err(|error| match error {
         url::ParseError::RelativeUrlWithoutBase => invalid("MCP server URL must include a scheme"),
         url::ParseError::EmptyHost => invalid("MCP server URL must include a host"),
-        _ => invalid("MCP server URL must be a valid HTTP(S) URL"),
+        _ => invalid("MCP server URL is not a well-formed HTTP(S) address"),
     })?;
     let scheme = parsed.scheme();
     if !matches!(scheme, "http" | "https") {
@@ -198,14 +200,14 @@ pub fn normalize_mcp_server_url_with(
         .fragment()
         .is_some_and(|fragment| !fragment.is_empty())
     {
-        return Err(invalid("MCP server URL must not include a fragment"));
+        return Err(invalid("MCP server URL cannot carry a `#` fragment"));
     }
     if authority_of(raw).contains('@') {
         return Err(invalid("MCP server URL must not include credentials"));
     }
     if scheme == "http" && !allow_insecure_http && !crate::text::is_loopback_host(host) {
         return Err(invalid(
-            "MCP server URL must use https unless it points to localhost",
+            "MCP server URL needs https when its host is not localhost",
         ));
     }
     Ok(render_url(&parsed, raw_has_path(raw), false))
@@ -279,7 +281,9 @@ pub(super) fn decode_mcp_server(
 ) -> Result<McpServerConfig, ConfigError> {
     let alias = normalize_mcp_server_name(required_mcp_string(table, "name")?);
     if alias.is_empty() {
-        return Err(invalid("MCP server name must contain letters or numbers"));
+        return Err(invalid(
+            "MCP server name needs at least one letter or digit",
+        ));
     }
     let declared = required_mcp_string(table, "transport")?;
     let auth = decode_auth(table)?;
@@ -470,13 +474,13 @@ fn decode_static_auth(table: &Table) -> Result<McpStaticAuth, ConfigError> {
     let api_key_env = optional_mcp_string(table, "api_key_env")?.unwrap_or_default();
     if !api_key_env.is_empty() && !is_environment_variable_name(api_key_env) {
         return Err(invalid(
-            "`api_key_env` must be a valid environment variable name",
+            "`api_key_env` is not a usable environment variable name",
         ));
     }
     let api_key_header =
         optional_mcp_string(table, "api_key_header")?.unwrap_or(DEFAULT_MCP_API_KEY_HEADER);
     if !is_http_header_name(api_key_header) {
-        return Err(invalid("`api_key_header` must be a valid HTTP header name"));
+        return Err(invalid("`api_key_header` is not a legal HTTP header name"));
     }
     let api_key_format =
         optional_mcp_string(table, "api_key_format")?.unwrap_or(DEFAULT_MCP_API_KEY_FORMAT);
@@ -505,7 +509,7 @@ fn decode_oauth(table: &Table) -> Result<McpOAuthConfig, ConfigError> {
         };
     if client_id.is_some() && client_metadata_url.is_some() {
         return Err(invalid(
-            "`client_id` and `client_metadata_url` are mutually exclusive",
+            "set `client_id` or `client_metadata_url`, never both",
         ));
     }
     let redirect_port = match table.get("redirect_port") {
@@ -565,7 +569,11 @@ fn validate_token_format(value: &str) -> Result<(), ConfigError> {
             '}' if characters.peek() == Some(&'}') => {
                 characters.next();
             }
-            '}' => return Err(invalid("`api_key_format` must be a valid format string")),
+            '}' => {
+                return Err(invalid(
+                    "`api_key_format` is not a well-formed format string",
+                ));
+            }
             '{' => {
                 let mut field = String::new();
                 let mut closed = false;
@@ -577,7 +585,9 @@ fn validate_token_format(value: &str) -> Result<(), ConfigError> {
                     field.push(character);
                 }
                 if !closed {
-                    return Err(invalid("`api_key_format` must be a valid format string"));
+                    return Err(invalid(
+                        "`api_key_format` is not a well-formed format string",
+                    ));
                 }
                 let name = field
                     .split([':', '!'])
@@ -586,7 +596,7 @@ fn validate_token_format(value: &str) -> Result<(), ConfigError> {
                     .to_owned();
                 if name != "token" {
                     return Err(invalid(
-                        "`api_key_format` may only reference the token placeholder",
+                        "`api_key_format` accepts no placeholder besides `{token}`",
                     ));
                 }
                 fields = fields.saturating_add(1);
@@ -786,7 +796,7 @@ pub(super) fn preflight_mcp_add(
         };
         if &mcp_server_url_key(existing_url) == requested_key {
             return Err(invalid(format!(
-                "MCP server URL is already configured as `{}`",
+                "the MCP server `{}` already uses this URL",
                 name.unwrap_or_else(|| FALLBACK_ALIAS.to_owned())
             )));
         }
@@ -890,7 +900,7 @@ pub(super) fn decide_mcp_add(
         };
         if mcp_server_url_key(existing_url) == requested_key {
             return Err(invalid(format!(
-                "MCP server URL is already configured as `{}`",
+                "the MCP server `{}` already uses this URL",
                 table
                     .get("name")
                     .and_then(Value::as_str)

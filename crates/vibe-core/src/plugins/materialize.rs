@@ -399,7 +399,7 @@ fn node_modules_root(runtime_path: &Path) -> io::Result<PathBuf> {
         .map(Path::to_path_buf)
         .ok_or_else(|| {
             io::Error::other(format!(
-                "the Node library path has no node_modules root: {}",
+                "no node_modules directory encloses the Node library path {}",
                 runtime_path.display()
             ))
         })
