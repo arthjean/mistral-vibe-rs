@@ -871,7 +871,7 @@ def write_shingles(commit: str, check: bool) -> int:
     attestation = materialize.verify(root, commit)
     values, files = shingles.digests(root / materialize.SOURCE)
     subtracted, read, scanned = shingles.third_party(root, values)
-    content = shingles.layer(commit, attestation, subtracted, read)
+    content = shingles.layer(commit, attestation, subtracted, read, shingles.lockfile_digest(root))
     summary = (
         f"{len(values)} shingle digests from {files} reference files, {len(subtracted)} of them "
         f"shipped by {len(read)} locked third-party distributions ({scanned} files read), "
