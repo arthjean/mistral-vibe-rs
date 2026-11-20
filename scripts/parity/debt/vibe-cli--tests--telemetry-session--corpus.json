@@ -1,764 +1,3468 @@
 {
   "corpus": "crates/vibe-cli/tests/telemetry-session/corpus.json",
   "measuredAgainst": "232ac5cb5fc2eed836caef4bed418832a9c435ad75ca20b579203739e09c153a",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "telemetry session parity (acp):": {
       "acp/approval-approved": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/chatRequests": 1,
-        "/*/events/*": 4,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "54eb1898bd1178ec",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "41db6bace2694836",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 4,
+          "fingerprint": "887e9e1ee841396a",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "acp/approval-rejected": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/chatRequests": 1,
-        "/*/events/*": 4,
-        "/*/events/*/event": 2,
-        "/*/events/*/properties/action": 1,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "54eb1898bd1178ec",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "41db6bace2694836",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 4,
+          "fingerprint": "3f0b569877b06622",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 2,
+          "fingerprint": "3682d05844c29fae",
+          "level": "exact"
+        },
+        "/*/events/*/properties/action": {
+          "count": 1,
+          "fingerprint": "d5c61da523fa866c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "794835e71b9695cf",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "802348dcd60ad93b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "702611c6dadaefa3",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "c455190982311382",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "c17fc712b056f9be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "b47fc30bbd79398f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "ae42b9f53a44c196",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "70667e9041878423",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "acp/auto-compaction": {
-        "/*/accountRequests": 1,
-        "/*/chatMetadata/*": 3,
-        "/*/chatRequests": 1,
-        "/*/evaluations/*": 1,
-        "/*/events/*": 4,
-        "/*/identityRequests": 1
+        "/*/accountRequests": {
+          "count": 1,
+          "fingerprint": "37d9a4397c0ddb4d",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*": {
+          "count": 3,
+          "fingerprint": "0658cf1e5a8c3e45",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "97a60c2c39ef20dd",
+          "level": "exact"
+        },
+        "/*/evaluations/*": {
+          "count": 1,
+          "fingerprint": "f8bcf96a261c2aaa",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 4,
+          "fingerprint": "e2e8fb18fe6c34bd",
+          "level": "exact"
+        },
+        "/*/identityRequests": {
+          "count": 1,
+          "fingerprint": "7d259e0b1e84f1bf",
+          "level": "exact"
+        }
       },
       "acp/experiments-disabled": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/chatRequests": 1,
-        "/*/events/*": 2,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "a81087e46d753867",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "4ed83d5442949260",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "0ada7bc513fbfcff",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "acp/load-session": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/chatRequests": 1,
-        "/*/events/*": 3,
-        "/*/events/*/event": 3,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/entrypoint": 1,
-        "/*/events/*/properties/has_agents_md": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/host_kind": 1,
-        "/*/events/*/properties/init_duration_ms": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_mcp_servers": 1,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 2
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "a81087e46d753867",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "a8e760e97562938a",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "4ed83d5442949260",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 3,
+          "fingerprint": "6bedcac19f9ad9c7",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 3,
+          "fingerprint": "9d50df1ad63566be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "2f238f6e821a6a93",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "c00ac385a1e0ddab",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "4165e4f8f3ab091a",
+          "level": "exact"
+        },
+        "/*/events/*/properties/entrypoint": {
+          "count": 1,
+          "fingerprint": "05f0dbf6d0fec078",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_agents_md": {
+          "count": 1,
+          "fingerprint": "d5d89f8e13381bf5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/host_kind": {
+          "count": 1,
+          "fingerprint": "37b5e4a32ec23869",
+          "level": "exact"
+        },
+        "/*/events/*/properties/init_duration_ms": {
+          "count": 1,
+          "fingerprint": "84aa5f1c474bb80b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "433405e8858217a7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "22e0bcb0d82d4e45",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "70915d044f3b0d78",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "af47491e1a98bef5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_mcp_servers": {
+          "count": 1,
+          "fingerprint": "04d9203d728ea7b7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "99a2d0adac049710",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "6d1cd67641c2baf8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "c6526d8bea9ed8d1",
+          "level": "exact"
+        }
       },
       "acp/manual-compaction": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/call_type": 1,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/chatRequests": 1,
-        "/*/events/*": 3,
-        "/*/events/*/event": 2,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/command": 1,
-        "/*/events/*/properties/command_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "54eb1898bd1178ec",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/call_type": {
+          "count": 1,
+          "fingerprint": "bf679ec006748757",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "41db6bace2694836",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 3,
+          "fingerprint": "f4700ce0d034d568",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 2,
+          "fingerprint": "bc930c2e35e1da38",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "794835e71b9695cf",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "802348dcd60ad93b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "702611c6dadaefa3",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command": {
+          "count": 1,
+          "fingerprint": "8c7acb5abe2f14dd",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command_type": {
+          "count": 1,
+          "fingerprint": "64e8ffe7d5e12976",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "c455190982311382",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "c17fc712b056f9be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "b47fc30bbd79398f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "ae42b9f53a44c196",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "70667e9041878423",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "acp/second-session": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/chatRequests": 1,
-        "/*/events/*": 2,
-        "/*/events/*/event": 2,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/has_outside_workdir_deny": 2,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 2,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 2,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 2,
-        "/*/events/*/properties/session_id": 1,
-        "/*/managedConfigRequests": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "a81087e46d753867",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "4ed83d5442949260",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "b2a934b17a4665ae",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 2,
+          "fingerprint": "1626901ff35fc927",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "f67cf632398bb238",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "4226b4ee8d5a49eb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "f8ecd0d790851a00",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 2,
+          "fingerprint": "3899cdabf613b5b4",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "14530caf22b461f7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "f94631f9e5fb5ad0",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "f2685909e577b050",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "40f85b8e76f4a829",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "30806db4f5c15815",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 2,
+          "fingerprint": "6c6fc6855ab83e3a",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 2,
+          "fingerprint": "9ff150ed2dbe9e0d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "79ea6fc7c9f6cc2d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "1e108f99ffaddcfd",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_id": {
+          "count": 1,
+          "fingerprint": "6b70f76703dc46a9",
+          "level": "exact"
+        },
+        "/*/managedConfigRequests": {
+          "count": 1,
+          "fingerprint": "29cc0e3ba064acfd",
+          "level": "exact"
+        }
       },
       "acp/telemetry-disabled": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatRequests": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "a81087e46d753867",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "4ed83d5442949260",
+          "level": "exact"
+        }
       },
       "acp/tool-turn": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/chatRequests": 1,
-        "/*/events/*": 3,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "54eb1898bd1178ec",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "41db6bace2694836",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 3,
+          "fingerprint": "d17a5aaf8b258593",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "acp/two-prompts": {
-        "/*/chatMetadata/*": 1,
-        "/*/chatMetadata/*/call_type": 1,
-        "/*/chatMetadata/*/message_id": 1,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/chatRequests": 1,
-        "/*/events/*": 3,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*": {
+          "count": 1,
+          "fingerprint": "54eb1898bd1178ec",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/call_type": {
+          "count": 1,
+          "fingerprint": "0272f75235342851",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/message_id": {
+          "count": 1,
+          "fingerprint": "f1f2a4fafaa82176",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "41db6bace2694836",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 3,
+          "fingerprint": "d17a5aaf8b258593",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       }
     },
     "telemetry session parity (programmatic, tui):": {
       "programmatic/account-refused": {
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/account-unavailable": {
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/admin-config-applied": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*/event": 3,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/entrypoint": 2,
-        "/*/events/*/properties/experiment_assignments": 1,
-        "/*/events/*/properties/experiment_attributes": 1,
-        "/*/events/*/properties/experiments": 1,
-        "/*/events/*/properties/has_agents_md": 2,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/host_kind": 2,
-        "/*/events/*/properties/init_duration_ms": 2,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_enforced_fields": 1,
-        "/*/events/*/properties/nb_mcp_servers": 2,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 2,
-        "/*/events/*/properties/outcome": 1,
-        "/*/events/*/properties/user_plan": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 3,
+          "fingerprint": "9d0c340c23c8d8b7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "75104dc395f9d869",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "3886d8f65d113839",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "fd65618739ed8c5a",
+          "level": "exact"
+        },
+        "/*/events/*/properties/entrypoint": {
+          "count": 2,
+          "fingerprint": "d455b9ed99967ca8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_assignments": {
+          "count": 1,
+          "fingerprint": "71486aba765eb5ce",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_attributes": {
+          "count": 1,
+          "fingerprint": "7cd9c4086cc28946",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiments": {
+          "count": 1,
+          "fingerprint": "9da3aec5587512ec",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_agents_md": {
+          "count": 2,
+          "fingerprint": "ba1d3601cce848d2",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "2696ed1c9a8e1808",
+          "level": "exact"
+        },
+        "/*/events/*/properties/host_kind": {
+          "count": 2,
+          "fingerprint": "92ebf0ee4547b1ad",
+          "level": "exact"
+        },
+        "/*/events/*/properties/init_duration_ms": {
+          "count": 2,
+          "fingerprint": "c273e13395493eb2",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "5b638bb9a67e556f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "752fe13435d623b6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "6e21a34c59a702c4",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "b053fe3586bae987",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_enforced_fields": {
+          "count": 1,
+          "fingerprint": "2d74ff419b3d5240",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_mcp_servers": {
+          "count": 2,
+          "fingerprint": "d3f104ca245713ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "945b3d3d26b25486",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "a706491611f6b54d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "d98a69a71b70c4eb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "56d53dc19cd3d372",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "b737785fe4cba655",
+          "level": "exact"
+        },
+        "/*/events/*/properties/outcome": {
+          "count": 1,
+          "fingerprint": "754cc88ca91e10fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/user_plan": {
+          "count": 1,
+          "fingerprint": "05b4cea9cb4b684a",
+          "level": "exact"
+        }
       },
       "programmatic/admin-config-disabled": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "527883fd4e138399",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "77cae72ed49d0bb8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "75104dc395f9d869",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "3886d8f65d113839",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "fd65618739ed8c5a",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "2696ed1c9a8e1808",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "5b638bb9a67e556f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "752fe13435d623b6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "6e21a34c59a702c4",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "b053fe3586bae987",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "10c38ba233b3ddf6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "a706491611f6b54d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "d98a69a71b70c4eb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "56d53dc19cd3d372",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "563199b7f1c2b130",
+          "level": "exact"
+        }
       },
       "programmatic/admin-config-unparsable": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/approval-bypassed": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 3,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 3,
+          "fingerprint": "d17a5aaf8b258593",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/approval-refused": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 2,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "0ada7bc513fbfcff",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/auto-compaction": {
-        "/*/accountRequests": 1,
-        "/*/chatMetadata/*": 3,
-        "/*/chatRequests": 1,
-        "/*/evaluations/*": 1,
-        "/*/events/*": 4,
-        "/*/exit": 1,
-        "/*/identityRequests": 1
+        "/*/accountRequests": {
+          "count": 1,
+          "fingerprint": "37d9a4397c0ddb4d",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*": {
+          "count": 3,
+          "fingerprint": "e1f6df2113f797df",
+          "level": "exact"
+        },
+        "/*/chatRequests": {
+          "count": 1,
+          "fingerprint": "97a60c2c39ef20dd",
+          "level": "exact"
+        },
+        "/*/evaluations/*": {
+          "count": 1,
+          "fingerprint": "21fb5d9fae4b3a91",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 4,
+          "fingerprint": "618b43039e1ca130",
+          "level": "exact"
+        },
+        "/*/exit": {
+          "count": 1,
+          "fingerprint": "016863722c0735f9",
+          "level": "exact"
+        },
+        "/*/identityRequests": {
+          "count": 1,
+          "fingerprint": "7d259e0b1e84f1bf",
+          "level": "exact"
+        }
       },
       "programmatic/chat-plan": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/continue": {
-        "/*/chatMetadata/*/user_plan": 3,
-        "/*/events/*": 3,
-        "/*/events/*/event": 3,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/entrypoint": 1,
-        "/*/events/*/properties/has_agents_md": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/host_kind": 1,
-        "/*/events/*/properties/init_duration_ms": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_mcp_servers": 1,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 2
+        "/*/chatMetadata/*/user_plan": {
+          "count": 3,
+          "fingerprint": "b7215cb39e7e7524",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 3,
+          "fingerprint": "6dd2183fa7d9118a",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 3,
+          "fingerprint": "9d50df1ad63566be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "2f238f6e821a6a93",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "c00ac385a1e0ddab",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "4165e4f8f3ab091a",
+          "level": "exact"
+        },
+        "/*/events/*/properties/entrypoint": {
+          "count": 1,
+          "fingerprint": "bc7a0c3ed5e7220b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_agents_md": {
+          "count": 1,
+          "fingerprint": "d5d89f8e13381bf5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/host_kind": {
+          "count": 1,
+          "fingerprint": "37b5e4a32ec23869",
+          "level": "exact"
+        },
+        "/*/events/*/properties/init_duration_ms": {
+          "count": 1,
+          "fingerprint": "84aa5f1c474bb80b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "433405e8858217a7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "22e0bcb0d82d4e45",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "70915d044f3b0d78",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "af47491e1a98bef5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_mcp_servers": {
+          "count": 1,
+          "fingerprint": "04d9203d728ea7b7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "99a2d0adac049710",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "6d1cd67641c2baf8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "c6526d8bea9ed8d1",
+          "level": "exact"
+        }
       },
       "programmatic/evaluation-fails": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/evaluation-without-exposure": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/experiments-disabled": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/failed-request": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/failed-tool": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 2,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "0ada7bc513fbfcff",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/identity-unavailable": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/identity-without-organization": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/mention": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/permission-never": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 2,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "0ada7bc513fbfcff",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/resume-by-id": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 2,
-        "/*/events/*/event": 3,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/entrypoint": 1,
-        "/*/events/*/properties/has_agents_md": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/host_kind": 1,
-        "/*/events/*/properties/init_duration_ms": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_mcp_servers": 1,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 2
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "a8e760e97562938a",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "198cfd177408fd7f",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 3,
+          "fingerprint": "9d50df1ad63566be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "2f238f6e821a6a93",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "c00ac385a1e0ddab",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "4165e4f8f3ab091a",
+          "level": "exact"
+        },
+        "/*/events/*/properties/entrypoint": {
+          "count": 1,
+          "fingerprint": "bc7a0c3ed5e7220b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_agents_md": {
+          "count": 1,
+          "fingerprint": "d5d89f8e13381bf5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/host_kind": {
+          "count": 1,
+          "fingerprint": "37b5e4a32ec23869",
+          "level": "exact"
+        },
+        "/*/events/*/properties/init_duration_ms": {
+          "count": 1,
+          "fingerprint": "84aa5f1c474bb80b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "433405e8858217a7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "22e0bcb0d82d4e45",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "70915d044f3b0d78",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "af47491e1a98bef5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_mcp_servers": {
+          "count": 1,
+          "fingerprint": "04d9203d728ea7b7",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "99a2d0adac049710",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "6d1cd67641c2baf8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "c6526d8bea9ed8d1",
+          "level": "exact"
+        }
       },
       "programmatic/text-turn": {
-        "/*/chatMetadata/*/user_plan": 1,
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 1,
+          "fingerprint": "e925b278160550d3",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/third-party-model-beside-mistral": {
-        "/*/events/*": 1,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/events/*": {
+          "count": 1,
+          "fingerprint": "6eb8266e7ce9aa93",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "e6c605668c348019",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/tool-turn": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 2,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "0ada7bc513fbfcff",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "programmatic/written-file": {
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/events/*": 2,
-        "/*/events/*/event": 1,
-        "/*/events/*/properties/attachment_counts": 1,
-        "/*/events/*/properties/call_source": 1,
-        "/*/events/*/properties/call_type": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/message_id": 1,
-        "/*/events/*/properties/model": 1,
-        "/*/events/*/properties/nb_context_chars": 1,
-        "/*/events/*/properties/nb_context_messages": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 1,
-        "/*/events/*/properties/nb_skills": 1
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "0ada7bc513fbfcff",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 1,
+          "fingerprint": "0cccea0a0e48a72c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 1,
+          "fingerprint": "cb3b43a6e6ca8278",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 1,
+          "fingerprint": "fde7d7447049c967",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 1,
+          "fingerprint": "c66463d0f43f9ded",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 1,
+          "fingerprint": "e2d1e5660a1a6728",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 1,
+          "fingerprint": "374ed1a8f82b9636",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 1,
+          "fingerprint": "094c0b75b0e553ba",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 1,
+          "fingerprint": "8aa7b04a632a9439",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 1,
+          "fingerprint": "554ed91f451d11d8",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        }
       },
       "tui/clear": {
-        "/*/evaluations/*": 1,
-        "/*/evaluations/*/client_name": 1,
-        "/*/events/*/properties/client_name": 9,
-        "/*/events/*/properties/experiment_attributes/client_name": 8,
-        "/*/events/*/properties/harness_selection_source": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 2,
-        "/*/events/*/properties/mouse_capture": 1,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 2,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 2,
-        "/*/events/*/properties/nb_skills": 2,
-        "/*/events/*/properties/session_init_duration_ms": 1
+        "/*/evaluations/*": {
+          "count": 1,
+          "fingerprint": "2b31533a521f13d3",
+          "level": "exact"
+        },
+        "/*/evaluations/*/client_name": {
+          "count": 1,
+          "fingerprint": "a84143740bb36381",
+          "level": "exact"
+        },
+        "/*/events/*/properties/client_name": {
+          "count": 9,
+          "fingerprint": "361d684dd37d3a53",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_attributes/client_name": {
+          "count": 8,
+          "fingerprint": "1238edde9da36d58",
+          "level": "exact"
+        },
+        "/*/events/*/properties/harness_selection_source": {
+          "count": 1,
+          "fingerprint": "b7255012ec381bfc",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 2,
+          "fingerprint": "b5d751c719e1bb74",
+          "level": "exact"
+        },
+        "/*/events/*/properties/mouse_capture": {
+          "count": 1,
+          "fingerprint": "9ee33f692d964efe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "a8a689c621e1b55f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 2,
+          "fingerprint": "55e9748fd20478ea",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 2,
+          "fingerprint": "3913284c03de179c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "10e889b375c1b7fc",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_init_duration_ms": {
+          "count": 1,
+          "fingerprint": "a7d94dbfa8faa96d",
+          "level": "exact"
+        }
       },
       "tui/interrupt": {
-        "/*/chatMetadata/*/client_name": 2,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/evaluations/*/client_name": 1,
-        "/*/events/*": 2,
-        "/*/events/*/event": 4,
-        "/*/events/*/properties/action": 1,
-        "/*/events/*/properties/agent_ready_duration_ms": 1,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/client_name": 7,
-        "/*/events/*/properties/command": 2,
-        "/*/events/*/properties/command_type": 2,
-        "/*/events/*/properties/experiment_attributes/client_name": 6,
-        "/*/events/*/properties/first_frame_duration_ms": 1,
-        "/*/events/*/properties/harness_selection_source": 1,
-        "/*/events/*/properties/has_initial_prompt": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/is_resuming_session": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 1,
-        "/*/events/*/properties/prompt_for_workspace_trust": 1,
-        "/*/events/*/properties/session_init_duration_ms": 1,
-        "/*/events/*/properties/show_resume_picker": 1,
-        "/*/events/*/properties/teleport_on_start": 1
+        "/*/chatMetadata/*/client_name": {
+          "count": 2,
+          "fingerprint": "e933333e44df24e1",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/evaluations/*/client_name": {
+          "count": 1,
+          "fingerprint": "a84143740bb36381",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "3da18adff36af3b5",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 4,
+          "fingerprint": "782800d77ee553cf",
+          "level": "exact"
+        },
+        "/*/events/*/properties/action": {
+          "count": 1,
+          "fingerprint": "4b7d113f93f56922",
+          "level": "exact"
+        },
+        "/*/events/*/properties/agent_ready_duration_ms": {
+          "count": 1,
+          "fingerprint": "315b8cd5d77e4b2c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "794835e71b9695cf",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "802348dcd60ad93b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "702611c6dadaefa3",
+          "level": "exact"
+        },
+        "/*/events/*/properties/client_name": {
+          "count": 7,
+          "fingerprint": "8854e50d947dc880",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command": {
+          "count": 2,
+          "fingerprint": "76950b73bb697a89",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command_type": {
+          "count": 2,
+          "fingerprint": "ba96fca9eab5aafe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_attributes/client_name": {
+          "count": 6,
+          "fingerprint": "4996f8fa7c1b0395",
+          "level": "exact"
+        },
+        "/*/events/*/properties/first_frame_duration_ms": {
+          "count": 1,
+          "fingerprint": "f41f060ddf0fd8f6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/harness_selection_source": {
+          "count": 1,
+          "fingerprint": "2e90c764365c4d3c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_initial_prompt": {
+          "count": 1,
+          "fingerprint": "4cf76cf18c2e7525",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/is_resuming_session": {
+          "count": 1,
+          "fingerprint": "3658e89919804d19",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "c455190982311382",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "c17fc712b056f9be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "b47fc30bbd79398f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "ae42b9f53a44c196",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "70667e9041878423",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/prompt_for_workspace_trust": {
+          "count": 1,
+          "fingerprint": "f61cdb4fadeabbf5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_init_duration_ms": {
+          "count": 1,
+          "fingerprint": "40302c21e09c4b39",
+          "level": "exact"
+        },
+        "/*/events/*/properties/show_resume_picker": {
+          "count": 1,
+          "fingerprint": "1f231a0d5b0cc7df",
+          "level": "exact"
+        },
+        "/*/events/*/properties/teleport_on_start": {
+          "count": 1,
+          "fingerprint": "a3ce2188ea778af6",
+          "level": "exact"
+        }
       },
       "tui/prompt": {
-        "/*/chatMetadata/*/client_name": 2,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/evaluations/*/client_name": 1,
-        "/*/events/*": 2,
-        "/*/events/*/event": 3,
-        "/*/events/*/properties/agent_ready_duration_ms": 1,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/client_name": 6,
-        "/*/events/*/properties/command": 1,
-        "/*/events/*/properties/command_type": 1,
-        "/*/events/*/properties/experiment_attributes/client_name": 5,
-        "/*/events/*/properties/first_frame_duration_ms": 1,
-        "/*/events/*/properties/harness_selection_source": 1,
-        "/*/events/*/properties/has_initial_prompt": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/is_resuming_session": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 1,
-        "/*/events/*/properties/prompt_for_workspace_trust": 1,
-        "/*/events/*/properties/session_init_duration_ms": 1,
-        "/*/events/*/properties/show_resume_picker": 1,
-        "/*/events/*/properties/teleport_on_start": 1
+        "/*/chatMetadata/*/client_name": {
+          "count": 2,
+          "fingerprint": "e933333e44df24e1",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/evaluations/*/client_name": {
+          "count": 1,
+          "fingerprint": "a84143740bb36381",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "75571412efec9281",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 3,
+          "fingerprint": "3d2cda4e11967d3d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/agent_ready_duration_ms": {
+          "count": 1,
+          "fingerprint": "315b8cd5d77e4b2c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "794835e71b9695cf",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "802348dcd60ad93b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "702611c6dadaefa3",
+          "level": "exact"
+        },
+        "/*/events/*/properties/client_name": {
+          "count": 6,
+          "fingerprint": "d24e234470b0b35b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command": {
+          "count": 1,
+          "fingerprint": "98c359465e6223ff",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command_type": {
+          "count": 1,
+          "fingerprint": "64e8ffe7d5e12976",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_attributes/client_name": {
+          "count": 5,
+          "fingerprint": "212c4380a55cb572",
+          "level": "exact"
+        },
+        "/*/events/*/properties/first_frame_duration_ms": {
+          "count": 1,
+          "fingerprint": "f41f060ddf0fd8f6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/harness_selection_source": {
+          "count": 1,
+          "fingerprint": "2e90c764365c4d3c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_initial_prompt": {
+          "count": 1,
+          "fingerprint": "4cf76cf18c2e7525",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/is_resuming_session": {
+          "count": 1,
+          "fingerprint": "3658e89919804d19",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "c455190982311382",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "c17fc712b056f9be",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "b47fc30bbd79398f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "ae42b9f53a44c196",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "70667e9041878423",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/prompt_for_workspace_trust": {
+          "count": 1,
+          "fingerprint": "f61cdb4fadeabbf5",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_init_duration_ms": {
+          "count": 1,
+          "fingerprint": "40302c21e09c4b39",
+          "level": "exact"
+        },
+        "/*/events/*/properties/show_resume_picker": {
+          "count": 1,
+          "fingerprint": "1f231a0d5b0cc7df",
+          "level": "exact"
+        },
+        "/*/events/*/properties/teleport_on_start": {
+          "count": 1,
+          "fingerprint": "a3ce2188ea778af6",
+          "level": "exact"
+        }
       },
       "tui/prompt-then-clear": {
-        "/*/chatMetadata/*/client_name": 2,
-        "/*/chatMetadata/*/user_plan": 2,
-        "/*/evaluations/*": 1,
-        "/*/evaluations/*/client_name": 1,
-        "/*/events/*": 2,
-        "/*/events/*/event": 5,
-        "/*/events/*/properties/agent_ready_duration_ms": 1,
-        "/*/events/*/properties/attachment_counts": 2,
-        "/*/events/*/properties/call_source": 2,
-        "/*/events/*/properties/call_type": 2,
-        "/*/events/*/properties/client_name": 9,
-        "/*/events/*/properties/command": 3,
-        "/*/events/*/properties/command_type": 3,
-        "/*/events/*/properties/experiment_attributes/client_name": 8,
-        "/*/events/*/properties/first_frame_duration_ms": 1,
-        "/*/events/*/properties/harness_selection_source": 1,
-        "/*/events/*/properties/has_initial_prompt": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 2,
-        "/*/events/*/properties/is_resuming_session": 1,
-        "/*/events/*/properties/message_id": 2,
-        "/*/events/*/properties/model": 2,
-        "/*/events/*/properties/nb_context_chars": 2,
-        "/*/events/*/properties/nb_context_messages": 2,
-        "/*/events/*/properties/nb_models": 2,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 2,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 2,
-        "/*/events/*/properties/nb_prompt_chars": 2,
-        "/*/events/*/properties/nb_skills": 2,
-        "/*/events/*/properties/prompt_for_workspace_trust": 1,
-        "/*/events/*/properties/session_id": 1,
-        "/*/events/*/properties/session_init_duration_ms": 1,
-        "/*/events/*/properties/show_resume_picker": 1,
-        "/*/events/*/properties/teleport_on_start": 1
+        "/*/chatMetadata/*/client_name": {
+          "count": 2,
+          "fingerprint": "e933333e44df24e1",
+          "level": "exact"
+        },
+        "/*/chatMetadata/*/user_plan": {
+          "count": 2,
+          "fingerprint": "e4462a4997d24b14",
+          "level": "exact"
+        },
+        "/*/evaluations/*": {
+          "count": 1,
+          "fingerprint": "2b31533a521f13d3",
+          "level": "exact"
+        },
+        "/*/evaluations/*/client_name": {
+          "count": 1,
+          "fingerprint": "a84143740bb36381",
+          "level": "exact"
+        },
+        "/*/events/*": {
+          "count": 2,
+          "fingerprint": "46db0416143f5acf",
+          "level": "exact"
+        },
+        "/*/events/*/event": {
+          "count": 5,
+          "fingerprint": "cbe0b33c3aa00686",
+          "level": "exact"
+        },
+        "/*/events/*/properties/agent_ready_duration_ms": {
+          "count": 1,
+          "fingerprint": "10b91c052cd5d436",
+          "level": "exact"
+        },
+        "/*/events/*/properties/attachment_counts": {
+          "count": 2,
+          "fingerprint": "ff708b8f70c9002d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_source": {
+          "count": 2,
+          "fingerprint": "27decf214ad38985",
+          "level": "exact"
+        },
+        "/*/events/*/properties/call_type": {
+          "count": 2,
+          "fingerprint": "b815d05c65b9b367",
+          "level": "exact"
+        },
+        "/*/events/*/properties/client_name": {
+          "count": 9,
+          "fingerprint": "361d684dd37d3a53",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command": {
+          "count": 3,
+          "fingerprint": "cb3e0fe3e59e85a6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/command_type": {
+          "count": 3,
+          "fingerprint": "16cf544e5da9a273",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_attributes/client_name": {
+          "count": 8,
+          "fingerprint": "1238edde9da36d58",
+          "level": "exact"
+        },
+        "/*/events/*/properties/first_frame_duration_ms": {
+          "count": 1,
+          "fingerprint": "296f9de3bb13a94e",
+          "level": "exact"
+        },
+        "/*/events/*/properties/harness_selection_source": {
+          "count": 1,
+          "fingerprint": "b7255012ec381bfc",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_initial_prompt": {
+          "count": 1,
+          "fingerprint": "878721256d55a18e",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 2,
+          "fingerprint": "b5d751c719e1bb74",
+          "level": "exact"
+        },
+        "/*/events/*/properties/is_resuming_session": {
+          "count": 1,
+          "fingerprint": "c5ffb225a592a440",
+          "level": "exact"
+        },
+        "/*/events/*/properties/message_id": {
+          "count": 2,
+          "fingerprint": "1d9963bec6252dee",
+          "level": "exact"
+        },
+        "/*/events/*/properties/model": {
+          "count": 2,
+          "fingerprint": "9fa339518a0e7a19",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_chars": {
+          "count": 2,
+          "fingerprint": "e3373b96ba5ec076",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_context_messages": {
+          "count": 2,
+          "fingerprint": "1e32317c6d8558fc",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 2,
+          "fingerprint": "a8a689c621e1b55f",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 2,
+          "fingerprint": "55e9748fd20478ea",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 2,
+          "fingerprint": "3913284c03de179c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_prompt_chars": {
+          "count": 2,
+          "fingerprint": "991630fdc161c9e3",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 2,
+          "fingerprint": "10e889b375c1b7fc",
+          "level": "exact"
+        },
+        "/*/events/*/properties/prompt_for_workspace_trust": {
+          "count": 1,
+          "fingerprint": "363d50bfc9084f2c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_id": {
+          "count": 1,
+          "fingerprint": "c222ab94803a390c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_init_duration_ms": {
+          "count": 1,
+          "fingerprint": "a7d94dbfa8faa96d",
+          "level": "exact"
+        },
+        "/*/events/*/properties/show_resume_picker": {
+          "count": 1,
+          "fingerprint": "bf8c564d6be37930",
+          "level": "exact"
+        },
+        "/*/events/*/properties/teleport_on_start": {
+          "count": 1,
+          "fingerprint": "70a829e96be59735",
+          "level": "exact"
+        }
       },
       "tui/startup": {
-        "/*/evaluations/*/client_name": 1,
-        "/*/events/*/properties/client_name": 6,
-        "/*/events/*/properties/experiment_attributes/client_name": 5,
-        "/*/events/*/properties/harness_selection_source": 1,
-        "/*/events/*/properties/has_outside_workdir_deny": 1,
-        "/*/events/*/properties/mouse_capture": 1,
-        "/*/events/*/properties/nb_models": 1,
-        "/*/events/*/properties/nb_post_agent_main_hooks": 1,
-        "/*/events/*/properties/nb_post_agent_scoped_hooks": 1,
-        "/*/events/*/properties/nb_skills": 1,
-        "/*/events/*/properties/session_init_duration_ms": 1
+        "/*/evaluations/*/client_name": {
+          "count": 1,
+          "fingerprint": "a84143740bb36381",
+          "level": "exact"
+        },
+        "/*/events/*/properties/client_name": {
+          "count": 6,
+          "fingerprint": "d24e234470b0b35b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/experiment_attributes/client_name": {
+          "count": 5,
+          "fingerprint": "212c4380a55cb572",
+          "level": "exact"
+        },
+        "/*/events/*/properties/harness_selection_source": {
+          "count": 1,
+          "fingerprint": "2e90c764365c4d3c",
+          "level": "exact"
+        },
+        "/*/events/*/properties/has_outside_workdir_deny": {
+          "count": 1,
+          "fingerprint": "f61a004cfba23bdb",
+          "level": "exact"
+        },
+        "/*/events/*/properties/mouse_capture": {
+          "count": 1,
+          "fingerprint": "50b76a93197dc9b6",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_models": {
+          "count": 1,
+          "fingerprint": "090ab412f0ba9847",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_main_hooks": {
+          "count": 1,
+          "fingerprint": "998a4d9e07abf031",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_post_agent_scoped_hooks": {
+          "count": 1,
+          "fingerprint": "97c25cea8eb020fe",
+          "level": "exact"
+        },
+        "/*/events/*/properties/nb_skills": {
+          "count": 1,
+          "fingerprint": "7318b705eca5e98b",
+          "level": "exact"
+        },
+        "/*/events/*/properties/session_init_duration_ms": {
+          "count": 1,
+          "fingerprint": "40302c21e09c4b39",
+          "level": "exact"
+        }
       }
     }
   }

@@ -1,295 +1,1123 @@
 {
   "corpus": "crates/vibe-core/tests/llm-backends/corpus.json",
   "measuredAgainst": "5b9a3e5c17dd59cfd28059ef5437dfaa7493079e66b4e209ac720f43453d976d",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "fast-model probe parity:": {
       "availabilityProbes/active-on-mistral": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/allowlist-second-only": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/array-file": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/cached-unavailable": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/disabled": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "e4c8ea227925fab0",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "d0e5956f32eea306",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "6f3cbde58a513d28",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "a788b72a79741247",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "649c9df09e9e30f8",
+          "level": "exact"
+        }
       },
       "availabilityProbes/external-write-within-a-minute": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "f87d6587f060e1d8",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "a1592419ddf766c5",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "a1f5e11562f0f023",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "f745b76f88c60604",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "501dd028bef39272",
+          "level": "exact"
+        }
       },
       "availabilityProbes/keyless": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/keyless-client-environment-key": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/keyless-refused": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       },
       "availabilityProbes/malformed-entry": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/malformed-file": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/one-of-two-features-overridden": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/prune-on-write": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/rate-limited": {
-        "/*/file": 1,
-        "/*/requests/*/body/model": 1,
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2,
-        "/*/selection/alias": 1,
-        "/*/selection/model": 1
+        "/*/file": {
+          "count": 1,
+          "fingerprint": "08c04fb75f285a49",
+          "level": "exact"
+        },
+        "/*/requests/*/body/model": {
+          "count": 1,
+          "fingerprint": "fa45a3dde65a69c2",
+          "level": "exact"
+        },
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        },
+        "/*/selection/alias": {
+          "count": 1,
+          "fingerprint": "0f69963143011030",
+          "level": "exact"
+        },
+        "/*/selection/model": {
+          "count": 1,
+          "fingerprint": "62550e48ac1f4ae4",
+          "level": "exact"
+        }
       },
       "availabilityProbes/refused-both": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       },
       "availabilityProbes/refused-first-served-second": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       },
       "availabilityProbes/remembered-in-process": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/request-timeout-status": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       },
       "availabilityProbes/second-cached-available": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/served-first": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/server-errors": {
-        "/*/file": 3,
-        "/*/requests/*": 1,
-        "/*/requests/*/body/model": 1,
-        "/*/requests/*/body/reasoning_effort": 3,
-        "/*/requests/*/body/stream": 3,
-        "/*/requests/*/body/tools": 3,
-        "/*/requests/*/headers/accept": 3,
-        "/*/requests/*/headers/user-agent": 3,
-        "/*/selection/alias": 3,
-        "/*/selection/fast": 2,
-        "/*/selection/model": 3,
-        "/*/selection/provider": 2
+        "/*/file": {
+          "count": 3,
+          "fingerprint": "cae0a0c0878f6717",
+          "level": "exact"
+        },
+        "/*/requests/*": {
+          "count": 1,
+          "fingerprint": "84718c8e90cf1281",
+          "level": "exact"
+        },
+        "/*/requests/*/body/model": {
+          "count": 1,
+          "fingerprint": "fa45a3dde65a69c2",
+          "level": "exact"
+        },
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 3,
+          "fingerprint": "a0381e9e56f6bcb3",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 3,
+          "fingerprint": "b949b3fd68d13dd5",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 3,
+          "fingerprint": "dd08078de45277cd",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 3,
+          "fingerprint": "1415c347aeed9a13",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 3,
+          "fingerprint": "954c723cb1128ee5",
+          "level": "exact"
+        },
+        "/*/selection/alias": {
+          "count": 3,
+          "fingerprint": "e53a93036f49b184",
+          "level": "exact"
+        },
+        "/*/selection/fast": {
+          "count": 2,
+          "fingerprint": "bc63df14d874d360",
+          "level": "exact"
+        },
+        "/*/selection/model": {
+          "count": 3,
+          "fingerprint": "9c8e7f58abc00770",
+          "level": "exact"
+        },
+        "/*/selection/provider": {
+          "count": 2,
+          "fingerprint": "061f58210d58cd92",
+          "level": "exact"
+        }
       },
       "availabilityProbes/slow-first": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "d8e5ebd34c9ff2d2",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "a477a5502250e725",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "1e39b66bf8b51798",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "2ffd1f7bafc7f744",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "ce3c67d0642960e9",
+          "level": "exact"
+        }
       },
       "availabilityProbes/smart-approve-overridden": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/stale-available": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       },
       "availabilityProbes/stale-unavailable": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/title-overridden-to-missing": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/unauthorized": {
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       },
       "availabilityProbes/unknown-active-model": {
-        "/*/requests/*/body/reasoning_effort": 1,
-        "/*/requests/*/body/stream": 1,
-        "/*/requests/*/body/tools": 1,
-        "/*/requests/*/headers/accept": 1,
-        "/*/requests/*/headers/user-agent": 1
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "c24049320b023bc6",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "c9ca80cf7639c3b9",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "9770d8929db330bc",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "1fb3b1f02133fa69",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "c629180227053c01",
+          "level": "exact"
+        }
       },
       "availabilityProbes/unprocessable": {
-        "/*/file": 1,
-        "/*/requests/*/body/reasoning_effort": 2,
-        "/*/requests/*/body/stream": 2,
-        "/*/requests/*/body/tools": 2,
-        "/*/requests/*/headers/accept": 2,
-        "/*/requests/*/headers/user-agent": 2
+        "/*/file": {
+          "count": 1,
+          "fingerprint": "27392157b4b46e3b",
+          "level": "exact"
+        },
+        "/*/requests/*/body/reasoning_effort": {
+          "count": 2,
+          "fingerprint": "3812499ca0529d1a",
+          "level": "exact"
+        },
+        "/*/requests/*/body/stream": {
+          "count": 2,
+          "fingerprint": "e812c4f25c315c9d",
+          "level": "exact"
+        },
+        "/*/requests/*/body/tools": {
+          "count": 2,
+          "fingerprint": "537dd2a9b1b11e4d",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/accept": {
+          "count": 2,
+          "fingerprint": "8acabb004f9a876e",
+          "level": "exact"
+        },
+        "/*/requests/*/headers/user-agent": {
+          "count": 2,
+          "fingerprint": "53cdcc1caa97c528",
+          "level": "exact"
+        }
       }
     },
     "utility completion parity:": {
       "utilityCompletions/empty-answer": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/keyless-not-skipped": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/smart-approve": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/title-attributed": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/title-override": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/title-unattributed": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/title-without-terminal": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/unlabeled": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/worktree-title": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       },
       "utilityCompletions/worktree-title-reported": {
-        "/requests/*/body/reasoning_effort": 1,
-        "/requests/*/body/stream": 1,
-        "/requests/*/body/tools": 1,
-        "/requests/*/headers/accept": 1,
-        "/requests/*/headers/user-agent": 1
+        "/requests/*/body/reasoning_effort": {
+          "count": 1,
+          "fingerprint": "2c1d082603166afa",
+          "level": "exact"
+        },
+        "/requests/*/body/stream": {
+          "count": 1,
+          "fingerprint": "00c4654ff152e7e8",
+          "level": "exact"
+        },
+        "/requests/*/body/tools": {
+          "count": 1,
+          "fingerprint": "87ec3e5c8c27e692",
+          "level": "exact"
+        },
+        "/requests/*/headers/accept": {
+          "count": 1,
+          "fingerprint": "58a9f72de54728dc",
+          "level": "exact"
+        },
+        "/requests/*/headers/user-agent": {
+          "count": 1,
+          "fingerprint": "4d9c7f068ee6a6ca",
+          "level": "exact"
+        }
       }
     }
   }

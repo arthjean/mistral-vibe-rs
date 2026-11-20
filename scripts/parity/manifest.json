@@ -20,7 +20,7 @@
         "scenarios": 77
       },
       "debt": {
-        "sha256": "07347d0812e549e1cb9472030c9a69c0808ade9a9bf6a88ddc063011e9b42413",
+        "sha256": "977ee1695e26a746f133569230213a54df80c4c7f3b61a688c6a38a497e8c7e7",
         "measuredAgainst": "4ed28a97d448e5d564e3f4babc49f50887d14777de7b2988081588b086044694"
       }
     },
@@ -61,7 +61,7 @@
         "scenarios": 30
       },
       "debt": {
-        "sha256": "041a8d07201804a53cb77014448d82cedf4b07aa992fb7a1e4308a7c67b02839",
+        "sha256": "feabdfa6b6f0f2e075258f07307c4824a46138c1efef1036efa7b17f5255e151",
         "measuredAgainst": "d6b245bd2944c3bb9d71ddd38f9321321aabb5f8c0266ef3e12613b30e0dfb54"
       }
     },
@@ -81,7 +81,7 @@
         "scenarios": 33
       },
       "debt": {
-        "sha256": "e7c3c8fca6e92910e4989e41e00de7bf00704eb733e13c9b38e52a8c6c38e366",
+        "sha256": "60874e20cdac5d612563ee32e6b0f959806dc8e894a36ee964930fbfa1b447c3",
         "measuredAgainst": "d49701d568cf1b1291e34b88efa21ced39188f2e686f052c38e3314d9860fd39"
       }
     },
@@ -125,7 +125,7 @@
         "scenarios": 41
       },
       "debt": {
-        "sha256": "0280a84a311550078c6909353d12e7abbebc6eb4ee3a4e3a1dd48911ce74db49",
+        "sha256": "52b3b509408f1cd6f447257a8f4cb46d3fd49a3e043f2bd375c6930c9d9ce08f",
         "measuredAgainst": "b0160feec7e28263d378dfc2184e7beeb49e6ec345ddc9a64496048c4c4f44e3"
       }
     },
@@ -147,7 +147,7 @@
         "scenarios": 9
       },
       "debt": {
-        "sha256": "cd0ac7c1c69574813aa39e677125976cb6138dd6f80794c28de77752e8cfa8da",
+        "sha256": "ee65e291de2c082f94dee7ffa7f5da713007deb0e11844ada663c650ae9be043",
         "measuredAgainst": "fd88af8b22ba5b369c36e39a98642a589b40c18650191ba068565615bd33ff25"
       }
     },
@@ -167,7 +167,7 @@
         "startup": 15
       },
       "debt": {
-        "sha256": "d03f6689d5b2613b2fdf013a8cc0cce480c0ccbdb3a8374d309006c4b106ab68",
+        "sha256": "b7ff0327aa6b92575ba35e8f51f7fe20c43148a77445c99d84a90de6a78bbfdd",
         "measuredAgainst": "ef37073778e02fb7442b25970f7c321bd77ebff894e3cd65f48eba21b9514911"
       }
     },
@@ -187,7 +187,7 @@
         "scenarios": 38
       },
       "debt": {
-        "sha256": "dae9df12ec176ccc0d6bc008163d86d15b6c4b70f4f71a05976c8cff518f636a",
+        "sha256": "f1c898a0831d05723eb1a45fd018c1735180bbccb110f37d5c5cec91abc63feb",
         "measuredAgainst": "ea6008996894927f2d762bb5e098495a931cce83b06aeb8fe6071b6f07309784"
       }
     },
@@ -207,7 +207,7 @@
         "scenarios": 15
       },
       "debt": {
-        "sha256": "e56586f6443ae2349d52a69b94e3aeebac3637a1ae0e0f6d5218705f44ec250d",
+        "sha256": "30c5c0a9f145c70274b7fac5c5dcc686963374b7598ea64faaf221cfb83d21a7",
         "measuredAgainst": "4ae71765a6e9348fbe26ec84ebdf354b545db631ed084b4ee0f915b4f01ec3a4"
       }
     },
@@ -227,7 +227,7 @@
         "scenarios": 47
       },
       "debt": {
-        "sha256": "c35241f1d3fff1cfa230b358ae1d2b71882199df86411621e8e3aea8caf76658",
+        "sha256": "6d09fb2dbab37fe2b3a52b39b92bbd5b8a1e7115738eec254ee1e9755559c1ea",
         "measuredAgainst": "8536a383de647943de8fe75942408fed2b22517b08c7d0a1c424f43b72bc5ff3"
       }
     },
@@ -250,7 +250,7 @@
       },
       "note": "needs `cargo build -p vibe-app-server --features test-fixtures --bin vibe-mcp-stdio-fixture` first",
       "debt": {
-        "sha256": "62fc1c4765efad4aaa159b696efc5592ed88c1b7ab384d5c30c09039f914f616",
+        "sha256": "f877def550af070707084db7b6f629816e552370e269f20465c775d57618f29d",
         "measuredAgainst": "ed9d418294fce1d377c4a7aa412b1adadd5f4ab6506737e1e4014b8eb108d7af"
       }
     },
@@ -270,7 +270,7 @@
         "scenarios": 114
       },
       "debt": {
-        "sha256": "f7435b421c46f1a0659c94957829bba7dab2b5cfba23c1bfbf862d733c278b66",
+        "sha256": "e10c8526f7b5356e6e5c64122c477a388a5a981fdcbd87406c5825a6dcbe9235",
         "measuredAgainst": "d0d4947668aa925d02bf90530951ac408e922b12070acb592b591ff0e90489e2"
       }
     },
@@ -290,7 +290,7 @@
         "scenarios": 380
       },
       "debt": {
-        "sha256": "235509ebedfea06def01746cdb397bfdcd003b4b14fdf54271ea4b322f147a2d",
+        "sha256": "1a05452736910e69dd132b6d157c4cda7b9a5745db5bcda1b2d26cf2170695f1",
         "measuredAgainst": "fb8f2556c1958073afc0e2982d329327335f2106915a06c3837d7976726300c0"
       }
     },
@@ -310,7 +310,7 @@
         "scenarios": 28
       },
       "debt": {
-        "sha256": "f6542cb180d6503a1489db860957f6e1fed02666c111a655f35b1e1a072c1e0d",
+        "sha256": "1288cedde0f081191031c4b8b8ee6c2922048455995bd8e058709aec1760d98a",
         "measuredAgainst": "a061169d8b50bb178ed996b160654dca88b75c62c13f78918880b9e4d8f5d7b7"
       }
     },
@@ -330,7 +330,7 @@
         "scenarios": 12
       },
       "debt": {
-        "sha256": "fee508071ce3ad6ec1de283c5dc53a64dc62a20e091572f22012fcee565a391f",
+        "sha256": "7c4349a9352b5e944a67775c707050fa28595379f022ef4a7230b61b7e9d62d2",
         "measuredAgainst": "5d4b9bdff90f36b7c9ae469896f49aed41dd84805d0d628ffea2f73870c71960"
       }
     },
@@ -350,7 +350,7 @@
         "scenarios": 24
       },
       "debt": {
-        "sha256": "05722f34bbda116a5335635c17186dae880d3a74dd08a020f743f26c5c158fa0",
+        "sha256": "c775df8cbd2bf6a34a423f2cd253b05b70c559d5adf8c38bb43f49a0fbb42abf",
         "measuredAgainst": "e178cdc4764c74386a60be68a99f408f20413428692254e211869314fc1e747a"
       }
     },
@@ -370,7 +370,7 @@
         "scenarios": 99
       },
       "debt": {
-        "sha256": "b6b31e3347a25f5be819046ba68c5a73b6f5b9172e0c611b3c1b1525767c5b00",
+        "sha256": "12ae2591b1843fb10e72be88a6631720c8a7275f80583c5bf2f67125a1c97cf4",
         "measuredAgainst": "1a309270e0321e637073928a2b68af06f1330b11d85558bde9dc13c29283d6d7"
       }
     },
@@ -391,7 +391,7 @@
       },
       "note": "records the host platform: capture on Linux",
       "debt": {
-        "sha256": "01ea2787643a0f402ac7e9b165a84a6a24f68a651061ec8bc6cacb4531fb3534",
+        "sha256": "6ad144f9f6712d6d8ede0474971aae972c1d17454b41d372638b1910c368c8af",
         "measuredAgainst": "d101c68671cd46e7d426a3529588f641a35047e40f9e3cb06af16b5d54491229"
       }
     },
@@ -489,7 +489,7 @@
         "scenarios": 85
       },
       "debt": {
-        "sha256": "01517196038699ee73fc668da12ae35a046f94c525aef778b85e5872d9b3f1f6",
+        "sha256": "acf7dc3edccd8182ddd1a905939dd63afd67a8833c4c237d08b3d5f7e51be7b7",
         "measuredAgainst": "ec60353ce8c8386e5f88123834a5576f6c052aa8e20aa6357a0905d6b9d18b72"
       }
     },
@@ -510,7 +510,7 @@
       },
       "note": "the same run captures crates/vibe-app-server/src/wire_validation/schema.json, listed as its own entry",
       "debt": {
-        "sha256": "d4320ea30980685782e04050ee34c931ead61f2a252b21af49b8e0aa6ddb35fa",
+        "sha256": "6822bf364157ba0ddfb991b65541640de1e3990fab13b1d9fc442fceb59c690e",
         "measuredAgainst": "b66c6446d753da9657101569e482e0d8ed4acb772f5cf936f28d767e82112627"
       }
     },
@@ -546,7 +546,7 @@
         "scenarios": 55
       },
       "debt": {
-        "sha256": "1a2d8c0f86887c62f56f2b13c63de6a44e1712d0f83538722f819232c7719da7",
+        "sha256": "2c5a492e0cc9345c437a6015bb062118fc17e786c636a4cb42e3c9d343b07ed1",
         "measuredAgainst": "d570c56cd5d6f79d617c912d666bbd7e5075bbbaee995d772f8ed950ed0f4388"
       }
     },
@@ -566,7 +566,7 @@
         "scenarios": 64
       },
       "debt": {
-        "sha256": "b894c6d1f1060c4becb07cbc0d9827f1b8528aa482eba710a7ccbfc2f42ab1a8",
+        "sha256": "f7f91dbbd18a29c5099a19a5e91efe12280e04c0e4709ea0ea2bd7910c3958cf",
         "measuredAgainst": "8c88d9408d8e69dcb1c70576ff16781ce904184955431aba607b5624788b67d3"
       }
     },
@@ -586,7 +586,7 @@
         "scenarios": 47
       },
       "debt": {
-        "sha256": "5ee5b739b145cf12073e5b02cef9eebf2c3df4f8fd33d1fcafbb43e8fb491ef6",
+        "sha256": "7d6be9f8c8c3cdb8ddda84cd1e1449335bbfc28a913cea5d0bf5901f2d2a3851",
         "measuredAgainst": "b5f68d8e4ee92800dfe21a5ee600b3c89fe8e5433ba4f31a222b0ea2f03f1f53"
       }
     },
@@ -607,7 +607,7 @@
       },
       "note": "the tui surface needs a POSIX pseudo-terminal: capture on Linux",
       "debt": {
-        "sha256": "3b4e182f086a9c8a7706f00b36e6f560061beec04b8aeef8f6df16352f48bda5",
+        "sha256": "66ff2a51656f56974ac3baf63aff841b933b72a0adb44506acc4dbc026a4d6c7",
         "measuredAgainst": "232ac5cb5fc2eed836caef4bed418832a9c435ad75ca20b579203739e09c153a"
       }
     },
@@ -637,7 +637,7 @@
         "scenarios": 3
       },
       "debt": {
-        "sha256": "d2c556fe300c82af856aa9f724b87e7b43dff4876e174ebbe4393a09108c02cd",
+        "sha256": "e7c421de1b27bb0288567460efd8395a6cefb73c917a216afe19e2fea0de6879",
         "measuredAgainst": "67e37ebb0c85a40f0514873322359f5dfcec6f7b92fe4c391ab717e2e248a45c"
       }
     },
@@ -667,7 +667,7 @@
         "scenarios": 2
       },
       "debt": {
-        "sha256": "3c6c9c478f7bf974ad2ec6f6d2a0805e33574a0e9cf3b3f84e560f64f53c58aa",
+        "sha256": "cea97fff4a97b3df62800d379e570c567d2f71efc59dbbaffabd6b407d29a1dc",
         "measuredAgainst": "d11dd82c167f7228e3a8b0a3e6b9e3408d53093b5c4b18c59eebf38a6edeef0a"
       }
     },
@@ -697,7 +697,7 @@
         "scenarios": 2
       },
       "debt": {
-        "sha256": "a4ba26a705ff925478158261bc5feddcc2b7596c6bdd70dd7e81a2175efe01ed",
+        "sha256": "36d76ce66fdf1ae35bd10ce7d912a143091217c0c802452fccd167c6d7ab35d9",
         "measuredAgainst": "b2c07de8be54fa4903baeaef1325dc686b08aa34a4746fc992f3158d7acfbb12"
       }
     },
@@ -727,7 +727,7 @@
         "scenarios": 4
       },
       "debt": {
-        "sha256": "c3c820db68a0a334ecabd052acfcb1b85a25f80c3cf1e7691436b6877f4d68ed",
+        "sha256": "62062af87b73bec6c6a805b22c57e5ece609c11e84f074761532d5b2d5ea400c",
         "measuredAgainst": "f157a02bf6e49841dd7d22646bb60cb0b0faca0a21092b24b05e66452f58c3ce"
       }
     },
@@ -757,7 +757,7 @@
         "scenarios": 3
       },
       "debt": {
-        "sha256": "f6373e259df25f0f3e68543cb88c6727452baf35b2df9804b6982e8a0753c6a5",
+        "sha256": "225b07d0e0a078ba56266ab8adf650dea9b62d1d755b2839cbe60ae079505d6e",
         "measuredAgainst": "859a4e98d3abdfac4ca379ba1279cfdb81d964eaf3ac85fdadd946c43e5bba40"
       }
     },
@@ -810,7 +810,7 @@
         "summaryExtractions": 16
       },
       "debt": {
-        "sha256": "31eecfb0136c923b402b53cc62beb3e2905882ebfe3d0ecabce9aaffd90a61f4",
+        "sha256": "2f2ac334395f20b00a322cb32fec45d084e0ef504b517aac49345b46c50758ad",
         "measuredAgainst": "b068759fa04bb9da2efa4f4a58f7342a11eec6895de8be473341be3a2f6298e5"
       }
     },
@@ -843,7 +843,7 @@
         "strategies": 3
       },
       "debt": {
-        "sha256": "683af1febbb2e42ffb269c51a406656fbd62dc4288e03980b748d17bbe80daf0",
+        "sha256": "663066a3dfaf2f19812c7bd60b3d0a8a3cbe314673427b86fcebb99ec9ffc9a7",
         "measuredAgainst": "32af5fa438e89ed4daf8c5faf40a099ba71c8da7b068a8275fadaca1efa041e6"
       }
     },
@@ -879,7 +879,7 @@
         "variantResolution": 11
       },
       "debt": {
-        "sha256": "05d9d810def8f5853a4155d9eebdbe8ac8fee68dceafef68a8f636e48ff16004",
+        "sha256": "b06fd669f953188412013ca6839e408b6867a7449c20c39fb1c963b07dd9bc30",
         "measuredAgainst": "f31f980df63b6c0a384e86cf0559d36a829b874b8fa86d698438229f2ccd42cd"
       }
     },
@@ -903,7 +903,7 @@
         "utilitySelections": 47
       },
       "debt": {
-        "sha256": "a6859fbfbf8174b902f7900935c41f34c4bb9078a4d424be2ae3a14f020efd6f",
+        "sha256": "acad7f85e7e5a424698143c58d25db13877a85ab46ad29ce56c77bcdd0164769",
         "measuredAgainst": "5b9a3e5c17dd59cfd28059ef5437dfaa7493079e66b4e209ac720f43453d976d"
       }
     },
@@ -954,7 +954,7 @@
         "cases": 12
       },
       "debt": {
-        "sha256": "5e5c7899c62dcaf2ca7a26c6a9e424a3de433801d9c641340ad28ebec75f54cb",
+        "sha256": "e2a65a0809d1606b554f76523d2e93ab56032415c38c1526eaedf18ed58f0e6d",
         "measuredAgainst": "194db6bf4f612ef9b3251a4b252926c6adc9bcfc091f85e7dd8112ae2f076ccc"
       }
     },
@@ -1017,7 +1017,7 @@
         "windowsGrammar": 4
       },
       "debt": {
-        "sha256": "f67576c76e405a6b9386cda14bfb1d961081df8b12b08a457a80c955859c27d3",
+        "sha256": "42e2ddf9046e4180a8a1110bfbc2a5d2dc4c35b3d2754f76d6e63764edb6ce46",
         "measuredAgainst": "e655957ee8bd26d2a368a1e025c525ad8ee156fb418fd49295621d3934a09366"
       }
     },
@@ -1050,7 +1050,7 @@
         "sync": 24
       },
       "debt": {
-        "sha256": "323e5cf9b9e305900d6b6f5a2f0307be298fcf6d9ba6f2522eae29aaa917ef6a",
+        "sha256": "32bd4c64dac42aee892745423d953af411a684dc5f17bd95b031d22ef20a7a4d",
         "measuredAgainst": "319b95b53c96468bff5a531dbf73b9bd6134598f2c787501bc4e4da59d379107"
       }
     },
@@ -1085,7 +1085,7 @@
         "spans": 17
       },
       "debt": {
-        "sha256": "33f4437b58366c1e16766765c813a7b6a57622deca0572c1182a8492a4cdb3f0",
+        "sha256": "e0c696a15dadb61912eb94ad0db2c3b1008d685e2ff4893b1c06b219aafc14b9",
         "measuredAgainst": "f54849f95e5cd077639b6c4a32dea2af723c3820775dfbd251dfd3d8b52c148c"
       }
     },
@@ -1108,7 +1108,7 @@
         "tools": 24
       },
       "debt": {
-        "sha256": "054c8ddae2e55ce555528ce47cf0399390d15fd7121e6ae53f7a458eeed0729a",
+        "sha256": "cdbfebebc48f6bc2385f1fa973b54c18793c769816964e48a8b7c9de645e8865",
         "measuredAgainst": "45ab7b4defbf7678fcddedf5676c2158c919aa1de67cad85d3faaf10219d29c5"
       }
     },
@@ -1130,7 +1130,7 @@
         "tree": 3
       },
       "debt": {
-        "sha256": "2f82f7f6cb58cb1fc5af55891ec96ab6f285294073a32e5195f7ea9b25674127",
+        "sha256": "a9065856c1fbdf487ff21d165686ed5766310ebe5d8a2215d6cb6a09bdc86de8",
         "measuredAgainst": "e4e7682e632762096089cd689010f097159661bd8e5de5aaaa40709ce46e1087"
       }
     },
@@ -1168,7 +1168,7 @@
         "scenarios": 127
       },
       "debt": {
-        "sha256": "1d56987bd54b699524dd938be1d8dc7f82fafc240ae30f73eab6591d13d8735b",
+        "sha256": "bf796f9930eafb50de9d221da401ee7841f597a8ae0adb0e4b07d702f2aeed2b",
         "measuredAgainst": "7fa3b30357703ac503d246f13dbb2f0cbe549efca98972ddd9ec0737739ba97d"
       }
     },
@@ -1200,7 +1200,7 @@
         "wireFrames": 26
       },
       "debt": {
-        "sha256": "b70819981d734b8161f7f30a67a215d9629541ae2e54bab0c79e7ded53b2c543",
+        "sha256": "fe89fdaf47860ee619fac8e4ad7731a662d461a21cc650739e55670fef51381a",
         "measuredAgainst": "451067b3a609b3669a097b889bb9f661a027ebc00b4102edb0764786e2164e75"
       }
     }

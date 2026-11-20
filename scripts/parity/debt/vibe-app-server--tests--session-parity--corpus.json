@@ -1,290 +1,1234 @@
 {
   "corpus": "crates/vibe-app-server/tests/session-parity/corpus.json",
   "measuredAgainst": "e178cdc4764c74386a60be68a99f408f20413428692254e211869314fc1e747a",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "session parity:": {
       "continue/after-a-restart": {
-        "/*/notifications/*": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "19cd96eb5f702b2f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "c316a62ba15468de",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "90ec30a8bac37d32",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "819ab0430243cf6a",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "3899d27e110a8b9a",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "880b6cf4adbc73e5",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "e0c9c4824d691831",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "8d0eea5377fd2004",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "2b18042aaaf6e002",
+          "level": "exact"
+        }
       },
       "continue/refusals": {
-        "/*/response/error/data": 3
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "bb6050ce302f9090",
+          "level": "exact"
+        }
       },
       "delete/saved": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/store/tree/*": 35
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "6c8359f4b77deef0",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 35,
+          "fingerprint": "b2af50b351035581",
+          "level": "exact"
+        }
       },
       "fork/attached-and-detached": {
-        "/*/notifications/*": 1,
-        "/*/response/error/code": 1,
-        "/*/response/error/data": 1,
-        "/*/response/error/message": 1,
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/bumpedAt": 2,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 3,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/state/history/*/outcome": 8,
-        "/*/response/result/state/session/agent": 2,
-        "/*/response/result/state/session/bumpedAt": 2,
-        "/*/response/result/state/session/loops": 2,
-        "/*/store/leases/active~1<id-1>.lock.json": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-2>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/end_time": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/runtime_path": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-3>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/end_time": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 97
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "73e66829b7a016a0",
+          "level": "exact"
+        },
+        "/*/response/error/code": {
+          "count": 1,
+          "fingerprint": "48bf271e46106f1b",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "7669d5c949c7805c",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "783c03a9c5f83af1",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "b3627a6197bca8c6",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/bumpedAt": {
+          "count": 2,
+          "fingerprint": "453dddebb9d95180",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "0706f55a951d9033",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 3,
+          "fingerprint": "bdcbad37393112ae",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "808acf49a880a908",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 8,
+          "fingerprint": "0352c6db77c3a13a",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 2,
+          "fingerprint": "8291da558eaff0bb",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 2,
+          "fingerprint": "44c4379c92135630",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 2,
+          "fingerprint": "0c6f93ef2a9e0897",
+          "level": "exact"
+        },
+        "/*/store/leases/active~1<id-1>.lock.json": {
+          "count": 1,
+          "fingerprint": "b767c4efda67731c",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "12f7917d58325a22",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "2b4ad23ce0f4f72e",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "ed6226f2440e4643",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "86ec049a1655a9fe",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "1579832b20b2c095",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "3e74062371085ab6",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "0f87014cac496799",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "462efb029abee5f2",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/end_time": {
+          "count": 1,
+          "fingerprint": "3f9382c437558ec8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "9dae95534dc67103",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "fdbd4f4db3bccf3f",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "1826167722315aee",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "76f75d45f69d4934",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "242954a33e471217",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/end_time": {
+          "count": 1,
+          "fingerprint": "54457626f627c549",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "2d7f185bf5cd2dbc",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "b082e777b42f507e",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 97,
+          "fingerprint": "7a29c54e04732c5d",
+          "level": "exact"
+        }
       },
       "history/attached": {
-        "/*/response/result/items/*/outcome": 16
+        "/*/response/result/items/*/outcome": {
+          "count": 16,
+          "fingerprint": "c34dd707ff17b9bc",
+          "level": "exact"
+        }
       },
       "history/clear": {
-        "/*/notifications/*": 1,
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "ab433574a0b12531",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "433bc7657dd20f64",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "cd9a261499971f58",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "973859762893a196",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "384c37f82c343a90",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "19cd96eb5f702b2f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "f99ba8d4f536be50",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "eaef41767ffabb68",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "f0c6926692f0ba0f",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "4f522929f276f9a8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "d268d64e936d5477",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "30293b9d2199e6a8",
+          "level": "exact"
+        }
       },
       "history/saved": {
-        "/*/response/error": 3,
-        "/*/response/result": 3,
-        "/*/response/result/state/history/*/outcome": 4,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1
+        "/*/response/error": {
+          "count": 3,
+          "fingerprint": "c6bc96fcd7767445",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 3,
+          "fingerprint": "c789615e58d3c013",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 4,
+          "fingerprint": "4afd2338b2d267f1",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "8ecfb23e2f1151f0",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "67caf9cac28d8e6a",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "bfde94631f00607d",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "7c18839cb3081418",
+          "level": "exact"
+        }
       },
       "history/seeded": {
-        "/*/notifications/*": 1,
-        "/*/response/result/continueSessionId": 2,
-        "/*/response/result/history/*/outcome": 4,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 3,
-        "/*/response/result/items/*/outcome": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/state/history/*/outcome": 4,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 21
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "73e66829b7a016a0",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 2,
+          "fingerprint": "21b385f0e86f9658",
+          "level": "exact"
+        },
+        "/*/response/result/history/*/outcome": {
+          "count": 4,
+          "fingerprint": "44beb56af2999550",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "18f1ac653a0269db",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 3,
+          "fingerprint": "323bba0efa948899",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/outcome": {
+          "count": 1,
+          "fingerprint": "fc6a71e330a6fe6e",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "8fbde31dc1b3101c",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 4,
+          "fingerprint": "6a537862d3f9417f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "85c9184b7fbe7fee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "603f9bdac3ba95e2",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "12f7917d58325a22",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "2b4ad23ce0f4f72e",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "ed6226f2440e4643",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "86ec049a1655a9fe",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "1579832b20b2c095",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 21,
+          "fingerprint": "d8a7f91ffa224f2a",
+          "level": "exact"
+        }
       },
       "lease/second-server": {
-        "/*/notifications/*": 1,
-        "/*/response/error/data": 1,
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 10,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 2,
-        "/*/store/tree/*": 112
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "73e66829b7a016a0",
+          "level": "exact"
+        },
+        "/*/response/error/data": {
+          "count": 1,
+          "fingerprint": "30c94f3e739810c9",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "433bc7657dd20f64",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "cd9a261499971f58",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "973859762893a196",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "384c37f82c343a90",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "37eab0a22bcdbeb1",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "8311052a0a975c3a",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "0460ee8b928ce8ac",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "603f9bdac3ba95e2",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "4d313de47bb2aeb8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 10,
+          "fingerprint": "3856c66a4594fe58",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 2,
+          "fingerprint": "59e4a45c68ab2e88",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 2,
+          "fingerprint": "d100159b652385cb",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 2,
+          "fingerprint": "fce46a4de8c697a8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 2,
+          "fingerprint": "bfcce1874dacf677",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 112,
+          "fingerprint": "432441974fae68bb",
+          "level": "exact"
+        }
       },
       "list/after-a-turn": {
-        "/*/response/result/continueSessionId": 7,
-        "/*/response/result/items/*": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 4,
-        "/*/response/result/items/*/loops": 4,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 4,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/response/result/continueSessionId": {
+          "count": 7,
+          "fingerprint": "14015c9a8ea7a034",
+          "level": "exact"
+        },
+        "/*/response/result/items/*": {
+          "count": 1,
+          "fingerprint": "9c5395cddfebe701",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 4,
+          "fingerprint": "8ba70f4d615835d7",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 4,
+          "fingerprint": "b2a32108b56425e0",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 4,
+          "fingerprint": "972d20c50b4857d0",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "d41312e2dc6e4464",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "b1f3bb8e2efe4c42",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "f13dd20037f9d0d6",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "75da3a764318f0e4",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "0207ffbc0af67c04",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "df6c345f041ef56d",
+          "level": "exact"
+        }
       },
       "list/before-any-session": {
-        "/*/response/result/continueSessionId": 2,
-        "/*/store/tree/*": 33
+        "/*/response/result/continueSessionId": {
+          "count": 2,
+          "fingerprint": "3216e0881cc71144",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 33,
+          "fingerprint": "c64297efe6acc1ec",
+          "level": "exact"
+        }
       },
       "list/lineage": {
-        "/*": 4,
-        "/*/failure": 1,
-        "/*/method": 1,
-        "/*/notifications": 1,
-        "/*/notifications/*": 1,
-        "/*/response": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/bumpedAt": 1,
-        "/*/response/result/state/session/loops": 1
+        "/*": {
+          "count": 4,
+          "fingerprint": "47be92b1890015b7",
+          "level": "exact"
+        },
+        "/*/failure": {
+          "count": 1,
+          "fingerprint": "b528887ca03f8a44",
+          "level": "exact"
+        },
+        "/*/method": {
+          "count": 1,
+          "fingerprint": "cfc4e07fe3073efc",
+          "level": "exact"
+        },
+        "/*/notifications": {
+          "count": 1,
+          "fingerprint": "483af4c2d4450c5f",
+          "level": "exact"
+        },
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response": {
+          "count": 1,
+          "fingerprint": "6e7ce8ec3f3e3d86",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "19cd96eb5f702b2f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/bumpedAt": {
+          "count": 1,
+          "fingerprint": "8be6bad54080a27f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        }
       },
       "list/pagination": {
-        "/*/response/result/continueSessionId": 6,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 11,
-        "/*/response/result/items/*/id": 2,
-        "/*/response/result/items/*/loops": 11,
-        "/*/response/result/items/*/preview": 2,
-        "/*/response/result/items/*/rootSessionId": 2,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 11,
-        "/*/response/result/nextCursor": 3,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-2>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-2>/meta/values/runtime_path": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-3>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-3>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 98
+        "/*/response/result/continueSessionId": {
+          "count": 6,
+          "fingerprint": "df9814a1e0a9025e",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 11,
+          "fingerprint": "5e30a019d7b5392e",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/id": {
+          "count": 2,
+          "fingerprint": "0154f200fca5d4df",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 11,
+          "fingerprint": "90ce68b83b4812ba",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/preview": {
+          "count": 2,
+          "fingerprint": "c23a4eaf477933ef",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/rootSessionId": {
+          "count": 2,
+          "fingerprint": "ec669945b080d102",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 11,
+          "fingerprint": "d3b95ce1adf1d011",
+          "level": "exact"
+        },
+        "/*/response/result/nextCursor": {
+          "count": 3,
+          "fingerprint": "1088ad6557d4fb40",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "9c066e548a46f613",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "9901f9cc509fe82e",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "2441de789cbd22b8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "59efbc03f2243661",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "0205fdffb1211804",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "68bcd3a4e008f49c",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "89d424f80d95268f",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "1e49f16133ade402",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "115e0d213c68a8a8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-2>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "16c46e08a79cfa0d",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "46402e4cff771ab4",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "bdc61ec831ec5453",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "a5b4a9260222350e",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "bbdbd4c581caacce",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-3>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "d2152ddc94727ddb",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 98,
+          "fingerprint": "e70b9f242638a8d2",
+          "level": "exact"
+        }
       },
       "list/refusals": {
-        "/*/response/result/continueSessionId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "5fab44af74cd3c41",
+          "level": "exact"
+        }
       },
       "logging/disabled": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*": 1,
-        "/*/store/tree/*": 14
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "5c30e517c2f411da",
+          "level": "exact"
+        },
+        "/*/response/result/items/*": {
+          "count": 1,
+          "fingerprint": "62e06b448de3ff17",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 14,
+          "fingerprint": "8c11351eb1988bbf",
+          "level": "exact"
+        }
       },
       "logging/elsewhere": {
-        "/*/notifications/*": 2,
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/lastEventId": 1,
-        "/*/response/result/state/eventId": 1,
-        "/*/response/result/state/history/*/outcome": 4,
-        "/*/response/result/state/session/agent": 2,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 2,
-        "/*/response/result/state/session/loops": 2,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/notifications/*": {
+          "count": 2,
+          "fingerprint": "c9f7fac200b95286",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "4ae85c4f862fcf68",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "42acf13cf620b405",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "8cad564e70166726",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "42bbb30399480b42",
+          "level": "exact"
+        },
+        "/*/response/result/lastEventId": {
+          "count": 1,
+          "fingerprint": "0424199fef8517f6",
+          "level": "exact"
+        },
+        "/*/response/result/state/eventId": {
+          "count": 1,
+          "fingerprint": "ee62d1b6b926a6c3",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 4,
+          "fingerprint": "2060231a91ff7c1d",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 2,
+          "fingerprint": "e0bdbbdc5f2b9684",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 2,
+          "fingerprint": "4f0b635727b10e65",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 2,
+          "fingerprint": "d2d9b7431347827e",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 2,
+          "fingerprint": "824dda7524ef2d41",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "819ab0430243cf6a",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "3899d27e110a8b9a",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "880b6cf4adbc73e5",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "e0c9c4824d691831",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "8d0eea5377fd2004",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "4b49711820eae1d2",
+          "level": "exact"
+        }
       },
       "pin/is-not-served-by-the-legacy-backend": {
-        "/*/response/result/continueSessionId": 1
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "cdde102dbc1ef7c9",
+          "level": "exact"
+        }
       },
       "relocate/refusals": {
-        "/*/response/error/code": 2,
-        "/*/response/error/message": 1
+        "/*/response/error/code": {
+          "count": 2,
+          "fingerprint": "80ee250431f1996e",
+          "level": "exact"
+        },
+        "/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "554f772837f67247",
+          "level": "exact"
+        }
       },
       "relocate/to-a-worktree": {
-        "/*/response/error": 2,
-        "/*/response/result": 2,
-        "/*/response/result/continueSessionId": 2,
-        "/*/response/result/items/*": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/cwd": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 10,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/values/environment/working_directory": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 2,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 2,
-        "/*/store/tree/*": 112
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "ed50364bb6f97bd2",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "823950e911fadb0e",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 2,
+          "fingerprint": "a4a81bdaf57f4467",
+          "level": "exact"
+        },
+        "/*/response/result/items/*": {
+          "count": 1,
+          "fingerprint": "5c799b6ff8b01bc5",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "cd9a261499971f58",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/cwd": {
+          "count": 1,
+          "fingerprint": "b3a5801a59b17957",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "973859762893a196",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "384c37f82c343a90",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 10,
+          "fingerprint": "dd66c6851b5a13a7",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 2,
+          "fingerprint": "3cd8362d0ca2bbb0",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 2,
+          "fingerprint": "894b54bad1650abe",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/environment/working_directory": {
+          "count": 1,
+          "fingerprint": "077bd66e438abb4c",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 2,
+          "fingerprint": "bcb59e88553496ca",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 2,
+          "fingerprint": "3373588c4eecda73",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 112,
+          "fingerprint": "9dd68c1b894b0af9",
+          "level": "exact"
+        }
       },
       "rename/attached": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "d61b3695049b9fa9",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "b9b20c5a30773f2a",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "524506839972d054",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "a19ff5ed2e6884b4",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "9c066e548a46f613",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "9901f9cc509fe82e",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "2441de789cbd22b8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "59efbc03f2243661",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "0205fdffb1211804",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "d2dc3b09a893bccd",
+          "level": "exact"
+        }
       },
       "rename/saved": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/lastEventId": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "b5d61e31fc80656b",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "18f1ac653a0269db",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "db2023faf68b0b79",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "8fbde31dc1b3101c",
+          "level": "exact"
+        },
+        "/*/response/result/lastEventId": {
+          "count": 1,
+          "fingerprint": "900be69064e047ee",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "12f7917d58325a22",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "2b4ad23ce0f4f72e",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "ed6226f2440e4643",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "86ec049a1655a9fe",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "1579832b20b2c095",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "4ee8379ea35f8edd",
+          "level": "exact"
+        }
       },
       "resume/after-a-restart": {
-        "/*/notifications/*": 1,
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/response/result/state/history/*/outcome": 2,
-        "/*/response/result/state/session/agent": 1,
-        "/*/response/result/state/session/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/state/session/loops": 1,
-        "/*/response/result/state/session/tokenUsage/cachedInputTokens": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "c00366e6beb5943d",
+          "level": "exact"
+        },
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "433bc7657dd20f64",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "cd9a261499971f58",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "973859762893a196",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "384c37f82c343a90",
+          "level": "exact"
+        },
+        "/*/response/result/state/history/*/outcome": {
+          "count": 2,
+          "fingerprint": "19cd96eb5f702b2f",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/agent": {
+          "count": 1,
+          "fingerprint": "7e9345ef96137bee",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "c316a62ba15468de",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/loops": {
+          "count": 1,
+          "fingerprint": "9471b4a5a3c43b35",
+          "level": "exact"
+        },
+        "/*/response/result/state/session/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "90ec30a8bac37d32",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "f99ba8d4f536be50",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "eaef41767ffabb68",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "f0c6926692f0ba0f",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "4f522929f276f9a8",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "d268d64e936d5477",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "140dfb33c6e14bb1",
+          "level": "exact"
+        }
       },
       "titles/generated": {
-        "/*/response/result/continueSessionId": 1,
-        "/*/response/result/items/*/contextUsage/cachedInputTokens": 1,
-        "/*/response/result/items/*/loops": 1,
-        "/*/response/result/items/*/tokenUsage/cachedInputTokens": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/keys/*": 5,
-        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/config": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/project": 1,
-        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": 1,
-        "/*/store/tree/*": 56
+        "/*/response/result/continueSessionId": {
+          "count": 1,
+          "fingerprint": "4ae85c4f862fcf68",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/contextUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "42acf13cf620b405",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/loops": {
+          "count": 1,
+          "fingerprint": "8cad564e70166726",
+          "level": "exact"
+        },
+        "/*/response/result/items/*/tokenUsage/cachedInputTokens": {
+          "count": 1,
+          "fingerprint": "42bbb30399480b42",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/keys/*": {
+          "count": 5,
+          "fingerprint": "819ab0430243cf6a",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/artifacts": {
+          "count": 1,
+          "fingerprint": "3899d27e110a8b9a",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/config": {
+          "count": 1,
+          "fingerprint": "880b6cf4adbc73e5",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/project": {
+          "count": 1,
+          "fingerprint": "e0c9c4824d691831",
+          "level": "exact"
+        },
+        "/*/store/sessions/unified~1<id-1>/meta/values/runtime_path": {
+          "count": 1,
+          "fingerprint": "8d0eea5377fd2004",
+          "level": "exact"
+        },
+        "/*/store/tree/*": {
+          "count": 56,
+          "fingerprint": "4b49711820eae1d2",
+          "level": "exact"
+        }
       }
     }
   }

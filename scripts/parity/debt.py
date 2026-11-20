@@ -5,8 +5,13 @@ corpus measures is a measurement instead, so no ledger may keep one
 (``vibe_core::parity::replay::assert_ledger``); the corpus keeps it as a
 *debt*, a generated file under ``scripts/parity/debt/``. For every replay
 heading, every exact scenario and every pointer with its array indices
-written ``*``, the debt counts the differences no ledger entry covers. It
-holds names and counts only, never reference text.
+written ``*``, the debt counts the differences no ledger entry covers, and
+pins what the port answered there when the replay handed it the answers: a
+fingerprint at the firmest level every measuring run agreed on (``exact``:
+each pointer with its value; ``values``: the values alone; ``shape``: their
+types and lengths), so a change inside a known gap fails the replay even when
+the count holds. It holds names, counts and fingerprints of the port's
+answers only, never reference text.
 
 ``repin.py debt <corpus>...`` is the only writer. It runs the tests that
 replay the corpora with ``VIBE_PARITY_DEBT_MEASURE`` set, in which a replay's
@@ -45,7 +50,10 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 DIRECTORY = REPOSITORY / "scripts" / "parity" / "debt"
 
 #: The debt schema this module writes and the replays read.
-SCHEMA = 1
+SCHEMA = 2
+
+#: The levels a group may pin, firmest first (``vibe_core::parity::debt::Level``).
+LEVELS = ("exact", "values", "shape")
 
 #: The variable that turns a replay's debt into a measurement.
 MEASURE = "VIBE_PARITY_DEBT_MEASURE"
@@ -53,8 +61,36 @@ MEASURE = "VIBE_PARITY_DEBT_MEASURE"
 #: The least number of measurements a debt is written from.
 MINIMUM_RUNS = 2
 
-#: ``{heading: {scenario: {pointer: count}}}``
-Tallies = dict[str, dict[str, dict[str, int]]]
+#: ``{heading: {scenario: {pointer: group}}}``, a group being a count, or a
+#: count with the level and the fingerprint it pins (a measurement holds the
+#: fingerprints of every level instead).
+Tallies = dict[str, dict[str, dict[str, Any]]]
+
+
+def count_of(group: Any) -> int:
+    """The number of differences a group declares or a run measured."""
+
+    return group["count"] if isinstance(group, dict) else group
+
+
+def sound_group(group: Any) -> bool:
+    """Whether ``group`` is what a debt file declares: a positive count, or
+    ``{count, level, fingerprint}`` with a positive count, a known level and
+    a 16-digit hexadecimal fingerprint."""
+
+    def positive(count: Any) -> bool:
+        return isinstance(count, int) and not isinstance(count, bool) and count > 0
+
+    if not isinstance(group, dict):
+        return positive(group)
+    fingerprint = group.get("fingerprint")
+    return (
+        set(group) == {"count", "level", "fingerprint"}
+        and positive(group["count"])
+        and group["level"] in LEVELS
+        and isinstance(fingerprint, str)
+        and re.fullmatch(r"[0-9a-f]{16}", fingerprint) is not None
+    )
 
 
 class DebtError(RuntimeError):
@@ -120,11 +156,14 @@ def problems(content: Any, corpus: str, measured_against: str) -> list[str]:
             if not isinstance(pointers, dict) or not pointers:
                 found.append(f"`{heading}` {scenario} holds no pointers")
                 continue
-            for pointer, count in pointers.items():
+            for pointer, group in pointers.items():
                 if not pointer.startswith("/") or generalize(pointer) != pointer:
                     found.append(f"`{heading}` {scenario} {pointer} is not a pointer with its indices generalized")
-                if not isinstance(count, int) or isinstance(count, bool) or count <= 0:
-                    found.append(f"`{heading}` {scenario} {pointer} declares no positive count")
+                if not sound_group(group):
+                    found.append(
+                        f"`{heading}` {scenario} {pointer} declares no positive count, or a pin that is not "
+                        "a level and a 16-digit fingerprint"
+                    )
     return found
 
 
@@ -325,6 +364,9 @@ def run_tests(test_files: list[str], records: Path, measure: bool, log: Path) ->
             key: value for key, value in os.environ.items() if key not in {"FORCE_COLOR", "MISTRAL_API_KEY", MEASURE}
         }
         environment["VIBE_HOME"] = str(home)
+        # No session bus, so no keyring answers, as on the CI runner: a pin
+        # records what the port answers there.
+        environment["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent"
         if measure:
             environment[MEASURE] = "1"
         with log.open("a", encoding="utf-8") as output:
@@ -359,13 +401,38 @@ def read_measurements(records: Path) -> dict[str, Tallies]:
     return found
 
 
+def pinned(runs: list[dict[str, Tallies]]) -> dict[str, Tallies]:
+    """The debt the measuring ``runs`` agree on, which hold the same counts:
+    each group pinned at the firmest level whose fingerprint every run
+    measured alike, or its count alone when none is (an answer that moves
+    between runs, or a replay that hands the debt no answers)."""
+
+    agreed: dict[str, Tallies] = {}
+    for corpus, tallies in runs[0].items():
+        for heading, scenarios in tallies.items():
+            for scenario, pointers in scenarios.items():
+                for pointer, group in pointers.items():
+                    measured = [run[corpus][heading][scenario][pointer] for run in runs]
+                    declared: Any = count_of(group)
+                    if all(isinstance(each, dict) for each in measured):
+                        for level in LEVELS:
+                            fingerprints = {each["fingerprints"][level] for each in measured}
+                            if len(fingerprints) == 1:
+                                declared = {"count": declared, "level": level, "fingerprint": fingerprints.pop()}
+                                break
+                    agreed.setdefault(corpus, {}).setdefault(heading, {}).setdefault(scenario, {})[pointer] = declared
+    return agreed
+
+
 def measure(test_files: list[str], records: Path, runs: int, log: Path) -> dict[str, Tallies]:
     """The debt of every corpus the tests of ``test_files`` replay, measured
-    ``runs`` times and refused unless every run measured the same."""
+    ``runs`` times, refused unless every run measured the same counts, and
+    pinned where the runs answered alike (:func:`pinned`)."""
 
     if runs < MINIMUM_RUNS:
         raise DebtError(f"a debt is measured at least {MINIMUM_RUNS} times, so a count that moves between runs is caught")
     first: dict[str, Tallies] | None = None
+    every: list[dict[str, Tallies]] = []
     for run in range(1, runs + 1):
         shutil.rmtree(measurements_directory(records), ignore_errors=True)
         status = run_tests(test_files, records, measure=True, log=log)
@@ -375,9 +442,10 @@ def measure(test_files: list[str], records: Path, runs: int, log: Path) -> dict[
                 f"over; read {log}"
             )
         measured = read_measurements(records)
+        every.append(measured)
         if first is None:
             first = measured
-        elif measured != first:
+        elif counts(measured) != counts(first):
             moved = sorted(
                 f"{corpus} `{heading}` {scenario} {pointer}"
                 for corpus in set(first) | set(measured)
@@ -387,7 +455,22 @@ def measure(test_files: list[str], records: Path, runs: int, log: Path) -> dict[
                 f"run {run} measured another debt than run 1, so the replay counts something the load moves: "
                 + "; ".join(moved[:10])
             )
-    return first or {}
+    return pinned(every) if every else {}
+
+
+def counts(measured: dict[str, Tallies]) -> dict[str, Tallies]:
+    """``measured`` with every group reduced to its count."""
+
+    return {
+        corpus: {
+            heading: {
+                scenario: {pointer: count_of(group) for pointer, group in pointers.items()}
+                for scenario, pointers in scenarios.items()
+            }
+            for heading, scenarios in tallies.items()
+        }
+        for corpus, tallies in measured.items()
+    }
 
 
 def groups_moved(left: Tallies, right: Tallies) -> list[tuple[str, str, str]]:
@@ -398,7 +481,7 @@ def groups_moved(left: Tallies, right: Tallies) -> list[tuple[str, str, str]]:
         for scenario, pointers in scenarios.items()
         for pointer in pointers
     }
-    count = lambda tallies, key: tallies.get(key[0], {}).get(key[1], {}).get(key[2], 0)  # noqa: E731
+    count = lambda tallies, key: count_of(tallies.get(key[0], {}).get(key[1], {}).get(key[2], 0))  # noqa: E731
     return sorted(key for key in keys if count(left, key) != count(right, key))
 
 
@@ -414,8 +497,8 @@ def ratchet(previous: Tallies | None, measured: Tallies, unchanged: bool) -> tup
     grown: list[str] = []
     shrunk: list[str] = []
     for heading, scenario, pointer in groups_moved(previous, measured):
-        before = previous.get(heading, {}).get(scenario, {}).get(pointer, 0)
-        after = measured.get(heading, {}).get(scenario, {}).get(pointer, 0)
+        before = count_of(previous.get(heading, {}).get(scenario, {}).get(pointer, 0))
+        after = count_of(measured.get(heading, {}).get(scenario, {}).get(pointer, 0))
         line = f"`{heading}` {scenario} {pointer}: {before} -> {after}"
         (grown if after > before else shrunk).append(line)
     return grown, shrunk
@@ -455,9 +538,12 @@ def write(entry: dict[str, Any], corpus_sha256: str, measured: Tallies) -> tuple
 def summary(measured: Tallies) -> str:
     groups = sum(len(pointers) for scenarios in measured.values() for pointers in scenarios.values())
     differences = sum(
-        count for scenarios in measured.values() for pointers in scenarios.values() for count in pointers.values()
+        count_of(group) for scenarios in measured.values() for pointers in scenarios.values() for group in pointers.values()
     )
-    return f"{differences} differences in {groups} groups over {len(measured)} replays"
+    pins = sum(
+        isinstance(group, dict) for scenarios in measured.values() for pointers in scenarios.values() for group in pointers.values()
+    )
+    return f"{differences} differences in {groups} groups ({pins} pinned) over {len(measured)} replays"
 
 
 if __name__ == "__main__":

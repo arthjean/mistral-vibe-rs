@@ -1,14 +1,22 @@
 {
   "corpus": "crates/vibe-core/tests/compaction/corpus.json",
   "measuredAgainst": "b068759fa04bb9da2efa4f4a58f7342a11eec6895de8be473341be3a2f6298e5",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "compaction parity:": {
       "summaryExtractions/separators-around-text": {
-        "/summary": 1
+        "/summary": {
+          "count": 1,
+          "fingerprint": "0d95e3fd638c6c77",
+          "level": "exact"
+        }
       },
       "summaryExtractions/separators-only": {
-        "/summary": 1
+        "/summary": {
+          "count": 1,
+          "fingerprint": "7d405fde71456608",
+          "level": "exact"
+        }
       }
     }
   }

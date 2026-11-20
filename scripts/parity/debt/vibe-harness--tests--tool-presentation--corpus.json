@@ -1,594 +1,2514 @@
 {
   "corpus": "crates/vibe-harness/tests/tool-presentation/corpus.json",
   "measuredAgainst": "7fa3b30357703ac503d246f13dbb2f0cbe549efca98972ddd9ec0737739ba97d",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "tool presentation parity:": {
       "call-connector_web_search.open_url": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/timeout": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "f9f0b257f9d1932a",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "d7d7a94cfa5347bf",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "32fe778be990272e",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "ccae20383e9eca6b",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "2c9bd13cb8677435",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "951750dc707cc1ca",
+          "level": "exact"
+        },
+        "/detail/input/timeout": {
+          "count": 1,
+          "fingerprint": "1c64bfcdfd693239",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        }
       },
       "call-connector_web_search.web_search": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "7ba9f6cd7ddb50a9",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1092a47fbd1de680",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "f6421f7463cd6e27",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        }
       },
       "call-edit": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "7ef7c2d64a09c393",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        }
       },
       "call-file_system.edit": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "2946dfc04315c68d",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "dcddec5fa5291884",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "d9563217d454820d",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "dad0e76c5bdca548",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "7ef7c2d64a09c393",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        }
       },
       "call-vibe.cron-cancel": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "call-vibe.cron-clear": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "call-vibe.cron-list": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "call-vibe.cron-schedule": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "call-vibe.cron-schedule_cron": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "callback-agents.list": {
-        "/detail/effect/display/message": 1,
-        "/detail/effect/display/settledMessage": 1,
-        "/detail/effect/display/settledVerb": 1,
-        "/detail/effect/display/statusText": 1,
-        "/detail/effect/display/summary": 1,
-        "/detail/effect/display/verb": 1
+        "/detail/effect/display/message": {
+          "count": 1,
+          "fingerprint": "6019b74163c2fd70",
+          "level": "exact"
+        },
+        "/detail/effect/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "b52f839465a92a39",
+          "level": "exact"
+        },
+        "/detail/effect/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "697866ec2b686a4f",
+          "level": "exact"
+        },
+        "/detail/effect/display/statusText": {
+          "count": 1,
+          "fingerprint": "2a5da27ee33d68aa",
+          "level": "exact"
+        },
+        "/detail/effect/display/summary": {
+          "count": 1,
+          "fingerprint": "fac24a86f273e8fc",
+          "level": "exact"
+        },
+        "/detail/effect/display/verb": {
+          "count": 1,
+          "fingerprint": "f0b7a6846010dfef",
+          "level": "exact"
+        }
       },
       "label-agents.list": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "788f1bd43110a5ff",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "0497d2027a02c17d",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "463a803ca6a7bb4f",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "08b55df52ae615fb",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        }
       },
       "label-agents.list-result": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "788f1bd43110a5ff",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "0497d2027a02c17d",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "463a803ca6a7bb4f",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "08b55df52ae615fb",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "544a3ece909ac7a1",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        }
       },
       "label-agents.list-result-kept": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "788f1bd43110a5ff",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "0497d2027a02c17d",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "463a803ca6a7bb4f",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "08b55df52ae615fb",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        }
       },
       "label-agents.send_message": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "e097151b0113e835",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "0123c3a0a4cbc1cd",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "b46b582d9864392b",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "76c638571ba71157",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        }
       },
       "label-agents.send_message-result": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "e097151b0113e835",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "0123c3a0a4cbc1cd",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "b46b582d9864392b",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "76c638571ba71157",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "5176d44201e18bb2",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        }
       },
       "label-self.wait": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1da8b5b9f0260c24",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "f0e073883ff9c10a",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "77d0873d04d8b5bb",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "9ec6ffa5f73afd99",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        }
       },
       "label-self.wait-result": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1da8b5b9f0260c24",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "f0e073883ff9c10a",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "77d0873d04d8b5bb",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "9ec6ffa5f73afd99",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "e4d64e271b0fde41",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        }
       },
       "path-edit-dotted": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "cb74520470f03f85",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "35baee034000eb87",
+          "level": "exact"
+        }
       },
       "path-edit-inside": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "7ef7c2d64a09c393",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "09f2566edef5d08a",
+          "level": "exact"
+        }
       },
       "path-edit-outside": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "1b3590d2300f0332",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "dccc24ed134d5210",
+          "level": "exact"
+        }
       },
       "path-edit-relative": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "add5742a0d31ab4e",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "6c2b8fe588810245",
+          "level": "exact"
+        }
       },
       "path-edit-sibling-prefix": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "0ad9f8ce5f742c40",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "16b1aaf32331e41a",
+          "level": "exact"
+        }
       },
       "path-edit-the-root": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "cbb3322ff63a62c3",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "4341fd7e9c3e1d71",
+          "level": "exact"
+        }
       },
       "path-grep-dotted": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "dc75cb2bb654501a",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "57c2033f69e81b16",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "1b92f7192920bc1e",
+          "level": "exact"
+        }
       },
       "path-grep-inside": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1ebaebbd339d8769",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "9fcd33bb9f703da0",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "db673bf9c3fc7499",
+          "level": "exact"
+        }
       },
       "path-grep-the-root": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "7243b58d7a0e40a9",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "a9a27b77f17e8d25",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "42f1cbfe6abe6a7e",
+          "level": "exact"
+        }
       },
       "path-read_file-dotted": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/state/display/message": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "e1043af01332cc6c",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "09213acf5b4e0ccc",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "fdedf8ca2c275611",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "35990939e5acf5a9",
+          "level": "exact"
+        }
       },
       "path-read_file-inside": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/state/display/message": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "52de4f9bd8463092",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "8a0fd0b5305a4b1f",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "7eda72bda70ce7fb",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "ba66adfb318333c3",
+          "level": "exact"
+        }
       },
       "path-read_file-second-root": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "38374ab280e4186e",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "5e9a56c14fa4a668",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "317d3814bb823d6f",
+          "level": "exact"
+        }
       },
       "path-read_file-the-root": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/state/display/message": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "aa492d166bb601fe",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "d1fc83504c4209b1",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "1528ec1ebab5f9a7",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "a9f8db752a4e6853",
+          "level": "exact"
+        }
       },
       "path-write_file-dotted": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/state/display/message": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "e1043af01332cc6c",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "09213acf5b4e0ccc",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "35efadb2cdfafa83",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "c3b93cc1f269035d",
+          "level": "exact"
+        }
       },
       "path-write_file-inside": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/state/display/message": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "52de4f9bd8463092",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "8a0fd0b5305a4b1f",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "cbecc7ce46fd546c",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "b799fb67a62a12fe",
+          "level": "exact"
+        }
       },
       "path-write_file-the-root": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/state/display/message": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "aa492d166bb601fe",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "d1fc83504c4209b1",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "5de0c1551df2968f",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "659d901288d26404",
+          "level": "exact"
+        }
       },
       "result-connector_web_search.open_url": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/timeout": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/content": 1,
-        "/state/output/contentType": 1,
-        "/state/output/structured_content": 1,
-        "/state/output/url": 1,
-        "/state/output/wasTruncated": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "f9f0b257f9d1932a",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "d7d7a94cfa5347bf",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "32fe778be990272e",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "ccae20383e9eca6b",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "2c9bd13cb8677435",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "951750dc707cc1ca",
+          "level": "exact"
+        },
+        "/detail/input/timeout": {
+          "count": 1,
+          "fingerprint": "1c64bfcdfd693239",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "e4735f11bb6db4fc",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "10fcf6fcab602146",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/contentType": {
+          "count": 1,
+          "fingerprint": "bc255656de5e923b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "c7980fd0e78d2a81",
+          "level": "exact"
+        },
+        "/state/output/url": {
+          "count": 1,
+          "fingerprint": "8676ed8c53164931",
+          "level": "exact"
+        },
+        "/state/output/wasTruncated": {
+          "count": 1,
+          "fingerprint": "f4899cfe85182032",
+          "level": "exact"
+        }
       },
       "result-connector_web_search.web_search": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/summary": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/output/answer": 1,
-        "/state/output/content": 1,
-        "/state/output/query": 1,
-        "/state/output/sources": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "7ba9f6cd7ddb50a9",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1092a47fbd1de680",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "f6421f7463cd6e27",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "820e893b110a3973",
+          "level": "exact"
+        },
+        "/state/output/answer": {
+          "count": 1,
+          "fingerprint": "48f5b170205111d3",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/query": {
+          "count": 1,
+          "fingerprint": "a895f8381305e06a",
+          "level": "exact"
+        },
+        "/state/output/sources": {
+          "count": 1,
+          "fingerprint": "8e94fb27ce07e0fd",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "66eac5aca754dbb5",
+          "level": "exact"
+        }
       },
       "result-edit": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/file_path": 1,
-        "/detail/input/newString": 1,
-        "/detail/input/new_string": 1,
-        "/detail/input/oldString": 1,
-        "/detail/input/old_string": 1,
-        "/detail/input/replaceAll": 1,
-        "/detail/input/replace_all": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/display/warnings/*": 1,
-        "/state/output/_meta": 1,
-        "/state/output/content": 1,
-        "/state/output/file": 1,
-        "/state/output/newString": 1,
-        "/state/output/occurrences": 1,
-        "/state/output/oldString": 1,
-        "/state/output/previousContent": 1,
-        "/state/output/structured_content": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "1b25c4ff708e60fb",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1195d49401337ea0",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "41cb8c5c3a8ef850",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "92dcff1ea38e326d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/file_path": {
+          "count": 1,
+          "fingerprint": "7ef7c2d64a09c393",
+          "level": "exact"
+        },
+        "/detail/input/newString": {
+          "count": 1,
+          "fingerprint": "31542fa33eaf1d74",
+          "level": "exact"
+        },
+        "/detail/input/new_string": {
+          "count": 1,
+          "fingerprint": "f529c22a4d9b8d71",
+          "level": "exact"
+        },
+        "/detail/input/oldString": {
+          "count": 1,
+          "fingerprint": "1ef950d5095908ca",
+          "level": "exact"
+        },
+        "/detail/input/old_string": {
+          "count": 1,
+          "fingerprint": "c00446e9699ccaf0",
+          "level": "exact"
+        },
+        "/detail/input/replaceAll": {
+          "count": 1,
+          "fingerprint": "a4b5ee71c09fe0ca",
+          "level": "exact"
+        },
+        "/detail/input/replace_all": {
+          "count": 1,
+          "fingerprint": "8468a323b5f805a3",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "8680addda3fc5e63",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/display/warnings/*": {
+          "count": 1,
+          "fingerprint": "7acb421400524939",
+          "level": "exact"
+        },
+        "/state/output/_meta": {
+          "count": 1,
+          "fingerprint": "5bf248dfd8f65108",
+          "level": "exact"
+        },
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/file": {
+          "count": 1,
+          "fingerprint": "1a9e636c6d7d310d",
+          "level": "exact"
+        },
+        "/state/output/newString": {
+          "count": 1,
+          "fingerprint": "90e4db776cd506c6",
+          "level": "exact"
+        },
+        "/state/output/occurrences": {
+          "count": 1,
+          "fingerprint": "1af2b4f9bb2dc181",
+          "level": "exact"
+        },
+        "/state/output/oldString": {
+          "count": 1,
+          "fingerprint": "2e944df5e35f377c",
+          "level": "exact"
+        },
+        "/state/output/previousContent": {
+          "count": 1,
+          "fingerprint": "b9e68b5002cebc3b",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "66e50de01762700c",
+          "level": "exact"
+        }
       },
       "result-process.output": {
-        "/state/output/bytesAvailable": 1,
-        "/state/output/hasMore": 1,
-        "/state/output/processId": 1
+        "/state/output/bytesAvailable": {
+          "count": 1,
+          "fingerprint": "a2b813ec53d28aed",
+          "level": "exact"
+        },
+        "/state/output/hasMore": {
+          "count": 1,
+          "fingerprint": "e5f6aba0425d18fc",
+          "level": "exact"
+        },
+        "/state/output/processId": {
+          "count": 1,
+          "fingerprint": "174d6fd0c2b4fd1e",
+          "level": "exact"
+        }
       },
       "result-process.start": {
-        "/state/output/processId": 1
+        "/state/output/processId": {
+          "count": 1,
+          "fingerprint": "174d6fd0c2b4fd1e",
+          "level": "exact"
+        }
       },
       "result-process.stop": {
-        "/state/output/exitCode": 1,
-        "/state/output/processId": 1
+        "/state/output/exitCode": {
+          "count": 1,
+          "fingerprint": "e8cc3e5015b001ea",
+          "level": "exact"
+        },
+        "/state/output/processId": {
+          "count": 1,
+          "fingerprint": "174d6fd0c2b4fd1e",
+          "level": "exact"
+        }
       },
       "result-process.write": {
-        "/state/output/bytesWritten": 1,
-        "/state/output/processId": 1
+        "/state/output/bytesWritten": {
+          "count": 1,
+          "fingerprint": "fd54827817febb96",
+          "level": "exact"
+        },
+        "/state/output/processId": {
+          "count": 1,
+          "fingerprint": "174d6fd0c2b4fd1e",
+          "level": "exact"
+        }
       },
       "result-read_file-image": {
-        "/state/display/message": 1
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "481421121d7d32ff",
+          "level": "exact"
+        }
       },
       "result-read_file-receipt": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/filePath": 1,
-        "/detail/input/offset": 1,
-        "/detail/input/path": 1,
-        "/detail/kind": 1,
-        "/detail/mcpApp": 1,
-        "/state/display/message": 1,
-        "/state/display/suffix": 1,
-        "/state/display/verb": 1,
-        "/state/output": 1,
-        "/state/outputText": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "818261d36a6ff1e1",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "7ef07df493f438ee",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "33b03c3cb2ca0094",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "0d41a60a49baaafe",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/filePath": {
+          "count": 1,
+          "fingerprint": "4b28a3ad22a60979",
+          "level": "exact"
+        },
+        "/detail/input/offset": {
+          "count": 1,
+          "fingerprint": "9a95cf569b5f27f0",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "2ae621b54c365b56",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "9443b06970194e4c",
+          "level": "exact"
+        },
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "6af8a867b0ee5796",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "07d6c6a2a21334b4",
+          "level": "exact"
+        },
+        "/state/display/suffix": {
+          "count": 1,
+          "fingerprint": "d28280fe9d0dd495",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output": {
+          "count": 1,
+          "fingerprint": "335fcc19e4b13e17",
+          "level": "exact"
+        },
+        "/state/outputText": {
+          "count": 1,
+          "fingerprint": "7fd86fc71d33b4c5",
+          "level": "exact"
+        }
       },
       "result-vibe.cron-cancel": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "result-vibe.cron-clear": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "result-vibe.cron-list-empty": {
-        "/detail/mcpApp": 1
+        "/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "708228b83f4caa9a",
+          "level": "exact"
+        }
       },
       "result-vibe.unified_harness_scratchpad-list": {
-        "/state/output/content": 1,
-        "/state/output/files": 1,
-        "/state/output/path": 1,
-        "/state/output/structured_content": 1
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/files": {
+          "count": 1,
+          "fingerprint": "c43c7fd8257d18d4",
+          "level": "exact"
+        },
+        "/state/output/path": {
+          "count": 1,
+          "fingerprint": "75b7470156fa9447",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "7986419f00a20d0d",
+          "level": "exact"
+        }
       },
       "result-vibe.unified_harness_scratchpad-write": {
-        "/state/output/content": 1,
-        "/state/output/files": 1,
-        "/state/output/path": 1,
-        "/state/output/structured_content": 1
+        "/state/output/content": {
+          "count": 1,
+          "fingerprint": "3f6479237bd40716",
+          "level": "exact"
+        },
+        "/state/output/files": {
+          "count": 1,
+          "fingerprint": "c43c7fd8257d18d4",
+          "level": "exact"
+        },
+        "/state/output/path": {
+          "count": 1,
+          "fingerprint": "75b7470156fa9447",
+          "level": "exact"
+        },
+        "/state/output/structured_content": {
+          "count": 1,
+          "fingerprint": "5b9731dc69c581a8",
+          "level": "exact"
+        }
       },
       "shell-grep-no-match-result": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/command": 1,
-        "/detail/input/maxMatches": 1,
-        "/detail/input/path": 1,
-        "/detail/input/pattern": 1,
-        "/detail/kind": 1,
-        "/detail/toolName": 1,
-        "/state/display/message": 1,
-        "/state/display/success": 1,
-        "/state/display/verb": 1,
-        "/state/output/matchCount": 1,
-        "/state/output/matches": 1,
-        "/state/output/output": 1,
-        "/state/output/parsedMatches": 1,
-        "/state/output/stderr": 1,
-        "/state/output/stdout": 1,
-        "/state/output/truncated": 1,
-        "/state/output/wasTruncated": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "d908907e59aa3286",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "1d09f2ea98156f01",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "590157aa12ba6f2a",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "1283507bf032889d",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/command": {
+          "count": 1,
+          "fingerprint": "cfd663a6a5a50244",
+          "level": "exact"
+        },
+        "/detail/input/maxMatches": {
+          "count": 1,
+          "fingerprint": "f21c1c008a4a8a0c",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "5d9c38b9a3bb6cf8",
+          "level": "exact"
+        },
+        "/detail/input/pattern": {
+          "count": 1,
+          "fingerprint": "dddbe27e5db68431",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "adf61cfe669a6927",
+          "level": "exact"
+        },
+        "/detail/toolName": {
+          "count": 1,
+          "fingerprint": "b8a746a31d67f267",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "a0bf625b91b8485b",
+          "level": "exact"
+        },
+        "/state/display/success": {
+          "count": 1,
+          "fingerprint": "84c7ddb2ef69e10b",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/matchCount": {
+          "count": 1,
+          "fingerprint": "df217c79d16c0e25",
+          "level": "exact"
+        },
+        "/state/output/matches": {
+          "count": 1,
+          "fingerprint": "6b1fef846d8a18db",
+          "level": "exact"
+        },
+        "/state/output/output": {
+          "count": 1,
+          "fingerprint": "6c1c33755956dae1",
+          "level": "exact"
+        },
+        "/state/output/parsedMatches": {
+          "count": 1,
+          "fingerprint": "0adaaf4a870f34f0",
+          "level": "exact"
+        },
+        "/state/output/stderr": {
+          "count": 1,
+          "fingerprint": "d12e2717e3e1325c",
+          "level": "exact"
+        },
+        "/state/output/stdout": {
+          "count": 1,
+          "fingerprint": "00bf935df7d12eee",
+          "level": "exact"
+        },
+        "/state/output/truncated": {
+          "count": 1,
+          "fingerprint": "d91fea026a0f2f33",
+          "level": "exact"
+        },
+        "/state/output/wasTruncated": {
+          "count": 1,
+          "fingerprint": "f4899cfe85182032",
+          "level": "exact"
+        }
       },
       "shell-grep-pattern-flag": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/command": 1,
-        "/detail/input/maxMatches": 1,
-        "/detail/input/path": 1,
-        "/detail/input/pattern": 1,
-        "/detail/kind": 1,
-        "/detail/toolName": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "3f7288385064bea4",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "9e068ec609925a86",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "590157aa12ba6f2a",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "f4f86cc5384751aa",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/command": {
+          "count": 1,
+          "fingerprint": "6bcf90a22471b071",
+          "level": "exact"
+        },
+        "/detail/input/maxMatches": {
+          "count": 1,
+          "fingerprint": "f21c1c008a4a8a0c",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "5d9c38b9a3bb6cf8",
+          "level": "exact"
+        },
+        "/detail/input/pattern": {
+          "count": 1,
+          "fingerprint": "dddbe27e5db68431",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "adf61cfe669a6927",
+          "level": "exact"
+        },
+        "/detail/toolName": {
+          "count": 1,
+          "fingerprint": "b8a746a31d67f267",
+          "level": "exact"
+        }
       },
       "shell-grep-recursive": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/command": 1,
-        "/detail/input/maxMatches": 1,
-        "/detail/input/path": 1,
-        "/detail/input/pattern": 1,
-        "/detail/kind": 1,
-        "/detail/toolName": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "b21832fdc4336a8f",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "71f4cae6971d08b7",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "590157aa12ba6f2a",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "228b96b41ea7c5a2",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/command": {
+          "count": 1,
+          "fingerprint": "cf18fa7c4df1d7f4",
+          "level": "exact"
+        },
+        "/detail/input/maxMatches": {
+          "count": 1,
+          "fingerprint": "f21c1c008a4a8a0c",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "5d9c38b9a3bb6cf8",
+          "level": "exact"
+        },
+        "/detail/input/pattern": {
+          "count": 1,
+          "fingerprint": "dddbe27e5db68431",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "adf61cfe669a6927",
+          "level": "exact"
+        },
+        "/detail/toolName": {
+          "count": 1,
+          "fingerprint": "b8a746a31d67f267",
+          "level": "exact"
+        }
       },
       "shell-grep-recursive-result": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/command": 1,
-        "/detail/input/maxMatches": 1,
-        "/detail/input/path": 1,
-        "/detail/input/pattern": 1,
-        "/detail/kind": 1,
-        "/detail/toolName": 1,
-        "/state/display/message": 1,
-        "/state/display/verb": 1,
-        "/state/output/matchCount": 1,
-        "/state/output/matches": 1,
-        "/state/output/output": 1,
-        "/state/output/parsedMatches": 1,
-        "/state/output/stderr": 1,
-        "/state/output/stdout": 1,
-        "/state/output/truncated": 1,
-        "/state/output/wasTruncated": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "b21832fdc4336a8f",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "71f4cae6971d08b7",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "590157aa12ba6f2a",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "228b96b41ea7c5a2",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/command": {
+          "count": 1,
+          "fingerprint": "cf18fa7c4df1d7f4",
+          "level": "exact"
+        },
+        "/detail/input/maxMatches": {
+          "count": 1,
+          "fingerprint": "f21c1c008a4a8a0c",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "5d9c38b9a3bb6cf8",
+          "level": "exact"
+        },
+        "/detail/input/pattern": {
+          "count": 1,
+          "fingerprint": "dddbe27e5db68431",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "adf61cfe669a6927",
+          "level": "exact"
+        },
+        "/detail/toolName": {
+          "count": 1,
+          "fingerprint": "b8a746a31d67f267",
+          "level": "exact"
+        },
+        "/state/display/message": {
+          "count": 1,
+          "fingerprint": "7a311e2e2667dff7",
+          "level": "exact"
+        },
+        "/state/display/verb": {
+          "count": 1,
+          "fingerprint": "c2a6e15c940d31e1",
+          "level": "exact"
+        },
+        "/state/output/matchCount": {
+          "count": 1,
+          "fingerprint": "df217c79d16c0e25",
+          "level": "exact"
+        },
+        "/state/output/matches": {
+          "count": 1,
+          "fingerprint": "6b1fef846d8a18db",
+          "level": "exact"
+        },
+        "/state/output/output": {
+          "count": 1,
+          "fingerprint": "6c1c33755956dae1",
+          "level": "exact"
+        },
+        "/state/output/parsedMatches": {
+          "count": 1,
+          "fingerprint": "0adaaf4a870f34f0",
+          "level": "exact"
+        },
+        "/state/output/stderr": {
+          "count": 1,
+          "fingerprint": "d12e2717e3e1325c",
+          "level": "exact"
+        },
+        "/state/output/stdout": {
+          "count": 1,
+          "fingerprint": "ad33bbf3bc67737c",
+          "level": "exact"
+        },
+        "/state/output/truncated": {
+          "count": 1,
+          "fingerprint": "d91fea026a0f2f33",
+          "level": "exact"
+        },
+        "/state/output/wasTruncated": {
+          "count": 1,
+          "fingerprint": "f4899cfe85182032",
+          "level": "exact"
+        }
       },
       "shell-grep-rg-directory": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/command": 1,
-        "/detail/input/maxMatches": 1,
-        "/detail/input/path": 1,
-        "/detail/input/pattern": 1,
-        "/detail/kind": 1,
-        "/detail/toolName": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "35815ac68638a240",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "8d7be94b1a1be756",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "590157aa12ba6f2a",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "22666cc35792d52c",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/command": {
+          "count": 1,
+          "fingerprint": "e1f49098583f32ad",
+          "level": "exact"
+        },
+        "/detail/input/maxMatches": {
+          "count": 1,
+          "fingerprint": "f21c1c008a4a8a0c",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "5d9c38b9a3bb6cf8",
+          "level": "exact"
+        },
+        "/detail/input/pattern": {
+          "count": 1,
+          "fingerprint": "dddbe27e5db68431",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "adf61cfe669a6927",
+          "level": "exact"
+        },
+        "/detail/toolName": {
+          "count": 1,
+          "fingerprint": "b8a746a31d67f267",
+          "level": "exact"
+        }
       },
       "shell-grep-rg-file-prefixed": {
-        "/detail/display/message": 1,
-        "/detail/display/settledMessage": 1,
-        "/detail/display/settledVerb": 1,
-        "/detail/display/statusText": 1,
-        "/detail/display/summary": 1,
-        "/detail/display/verb": 1,
-        "/detail/input/command": 1,
-        "/detail/input/maxMatches": 1,
-        "/detail/input/path": 1,
-        "/detail/input/pattern": 1,
-        "/detail/kind": 1,
-        "/detail/toolName": 1
+        "/detail/display/message": {
+          "count": 1,
+          "fingerprint": "49d2e67565ec6cad",
+          "level": "exact"
+        },
+        "/detail/display/settledMessage": {
+          "count": 1,
+          "fingerprint": "23aea9620065042f",
+          "level": "exact"
+        },
+        "/detail/display/settledVerb": {
+          "count": 1,
+          "fingerprint": "2352e3f5d488a633",
+          "level": "exact"
+        },
+        "/detail/display/statusText": {
+          "count": 1,
+          "fingerprint": "590157aa12ba6f2a",
+          "level": "exact"
+        },
+        "/detail/display/summary": {
+          "count": 1,
+          "fingerprint": "e53b8e2351a5c032",
+          "level": "exact"
+        },
+        "/detail/display/verb": {
+          "count": 1,
+          "fingerprint": "59c40f824d10c34c",
+          "level": "exact"
+        },
+        "/detail/input/command": {
+          "count": 1,
+          "fingerprint": "43ca9211322abe13",
+          "level": "exact"
+        },
+        "/detail/input/maxMatches": {
+          "count": 1,
+          "fingerprint": "f21c1c008a4a8a0c",
+          "level": "exact"
+        },
+        "/detail/input/path": {
+          "count": 1,
+          "fingerprint": "5d9c38b9a3bb6cf8",
+          "level": "exact"
+        },
+        "/detail/input/pattern": {
+          "count": 1,
+          "fingerprint": "dddbe27e5db68431",
+          "level": "exact"
+        },
+        "/detail/kind": {
+          "count": 1,
+          "fingerprint": "adf61cfe669a6927",
+          "level": "exact"
+        },
+        "/detail/toolName": {
+          "count": 1,
+          "fingerprint": "b8a746a31d67f267",
+          "level": "exact"
+        }
       }
     }
   }

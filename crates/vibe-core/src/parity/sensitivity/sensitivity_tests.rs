@@ -260,6 +260,46 @@ fn a_mutation_inside_a_debt_group_moves_its_count_and_is_detected() {
 }
 
 #[test]
+fn a_mutation_inside_a_pinned_debt_group_changes_its_fingerprint_and_is_detected() {
+    use crate::parity::debt::{CHECKS_PINS, Declared, Level, Pin, fingerprint};
+
+    let reference = json!({"rows": [1, 2, 3]});
+    let port = json!({"rows": [1, 2, 4]});
+    let mut tally = Tally::detached("crates/x/tests/corpus.json", []);
+    tally.record("s", &reference, &port, vec!["/rows/2".to_owned()]);
+    let measured = [("/rows/2".to_owned(), Some(json!(4)))];
+    let pin = |level| Declared {
+        count: 1,
+        pin: Some(Pin {
+            level,
+            fingerprint: fingerprint(level, &measured),
+        }),
+    };
+    let detected = |level| {
+        let declared = BTreeMap::from([(("s".to_owned(), "/rows/*".to_owned()), pin(level))]);
+        let debt = Debt::pinned("crates/x/tests/corpus.json", "test:", declared);
+        let matrix = tally.sensitivity_matrix(&debt, None);
+        let outcome = |operator: Operator| {
+            matrix.operators[&operator]
+                .iter()
+                .find(|mutation| mutation.pointer == "/rows/2")
+                .map(|mutation| mutation.detected)
+        };
+        (
+            outcome(Operator::ChangeValue),
+            outcome(Operator::ChangeType),
+        )
+    };
+    // A value pin sees another wrong value where the count saw nothing; a
+    // shape pin sees the type change and not a same-typed value.
+    assert_eq!(
+        detected(Level::Values),
+        (Some(CHECKS_PINS), Some(CHECKS_PINS))
+    );
+    assert_eq!(detected(Level::Shape), (Some(false), Some(CHECKS_PINS)));
+}
+
+#[test]
 fn a_recorded_difference_list_the_differ_would_not_find_is_refused() {
     let mut tally = Tally::detached("crates/x/tests/corpus.json", []);
     let refused = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

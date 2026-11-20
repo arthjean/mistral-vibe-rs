@@ -1,179 +1,407 @@
 {
   "corpus": "crates/vibe-core/tests/skills/corpus.json",
   "measuredAgainst": "319b95b53c96468bff5a531dbf73b9bd6134598f2c787501bc4e4da59d379107",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "skills parity:": {
       "builtins/count": {
-        "/count": 1
+        "/count": {
+          "count": 1,
+          "fingerprint": "8d5db1c41c170718",
+          "level": "exact"
+        }
       },
       "builtins/vibe:create-plugin": {
-        "/present": 1
+        "/present": {
+          "count": 1,
+          "fingerprint": "c5c32df8b2aa9add",
+          "level": "exact"
+        }
       },
       "builtins/vibe:skill-creator": {
-        "/present": 1
+        "/present": {
+          "count": 1,
+          "fingerprint": "c5c32df8b2aa9add",
+          "level": "exact"
+        }
       },
       "builtins/vibe:vibe": {
-        "/present": 1
+        "/present": {
+          "count": 1,
+          "fingerprint": "c5c32df8b2aa9add",
+          "level": "exact"
+        }
       },
       "builtins/vibe:worktree": {
-        "/present": 1
+        "/present": {
+          "count": 1,
+          "fingerprint": "c5c32df8b2aa9add",
+          "level": "exact"
+        }
       },
       "discovery/builtin-name-reserved": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "05304622b2141233",
+          "level": "exact"
+        }
       },
       "discovery/clutter-ignored": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "90fcffe1bd35fb16",
+          "level": "exact"
+        }
       },
       "discovery/configured-beats-project-beats-user": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "8dcec629ce9ded53",
+          "level": "exact"
+        }
       },
       "discovery/configured-path": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "f6152952f463683f",
+          "level": "exact"
+        }
       },
       "discovery/configured-path-is-a-file": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "b086628dd28ca923",
+          "level": "exact"
+        }
       },
       "discovery/configured-project-root-stays-global": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "af1120c8d8fa4c20",
+          "level": "exact"
+        }
       },
       "discovery/duplicate-name-within-one-root": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "985e57e592eed4d0",
+          "level": "exact"
+        }
       },
       "discovery/empty-everywhere": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "10119fd77e2542d2",
+          "level": "exact"
+        }
       },
       "discovery/frontmatter-name-wins-over-directory": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "22d6a894183e9fae",
+          "level": "exact"
+        }
       },
       "discovery/legacy-extensions-root-unread": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "d2a68eb0bfa35c85",
+          "level": "exact"
+        }
       },
       "discovery/malformed-skill-becomes-issue": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "361397eaad4a2d08",
+          "level": "exact"
+        }
       },
       "discovery/missing-description-becomes-issue": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "3f075ec488174414",
+          "level": "exact"
+        }
       },
       "discovery/nonexistent-configured-path": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "b086628dd28ca923",
+          "level": "exact"
+        }
       },
       "discovery/project-agents-skills": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "9cf7228aa01b3793",
+          "level": "exact"
+        }
       },
       "discovery/project-beats-user": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "9c21e2ddecf27a3f",
+          "level": "exact"
+        }
       },
       "discovery/project-both-roots": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "1dedb0e01b3be0d0",
+          "level": "exact"
+        }
       },
       "discovery/project-vibe-beats-agents": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "56a416e2c64465a3",
+          "level": "exact"
+        }
       },
       "discovery/project-vibe-skills": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "0191b3b8ba9d564c",
+          "level": "exact"
+        }
       },
       "discovery/relative-configured-path": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "59eea21936f5b891",
+          "level": "exact"
+        }
       },
       "discovery/session-in-home-stays-global": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "ea8374b7f88eb2b2",
+          "level": "exact"
+        }
       },
       "discovery/symlinked-root-walked-once": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "54e368c4a295545d",
+          "level": "exact"
+        }
       },
       "discovery/three-issues-accumulate": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "dd605a8f44b34da0",
+          "level": "exact"
+        }
       },
       "discovery/tilde-configured-path": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "c4a312a50a17a000",
+          "level": "exact"
+        }
       },
       "discovery/two-configured-paths-in-order": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "0634c227b6e6699d",
+          "level": "exact"
+        }
       },
       "discovery/untrusted-project-not-walked": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "f0a50091e176f771",
+          "level": "exact"
+        }
       },
       "discovery/user-agents-skills": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "ec11429dc011c1fc",
+          "level": "exact"
+        }
       },
       "discovery/user-vibe-beats-agents": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "4d199a5b50c8e2a5",
+          "level": "exact"
+        }
       },
       "discovery/user-vibe-skills": {
-        "/catalog": 1
+        "/catalog": {
+          "count": 1,
+          "fingerprint": "f2993c225a72bd97",
+          "level": "exact"
+        }
       },
       "filtering/blank-patterns-ignored": {
-        "/kept": 1
+        "/kept": {
+          "count": 1,
+          "fingerprint": "c186c503767d4310",
+          "level": "exact"
+        }
       },
       "filtering/disabled-only": {
-        "/kept": 1
+        "/kept": {
+          "count": 1,
+          "fingerprint": "8f6a1f790410a3cf",
+          "level": "exact"
+        }
       },
       "filtering/enabled-can-select-a-builtin": {
-        "/kept": 1
+        "/kept": {
+          "count": 1,
+          "fingerprint": "6e059dec2c91738e",
+          "level": "exact"
+        }
       },
       "filtering/invalid-regex-disables-nothing": {
-        "/kept": 1
+        "/kept": {
+          "count": 1,
+          "fingerprint": "c186c503767d4310",
+          "level": "exact"
+        }
       },
       "filtering/no-filters": {
-        "/kept": 1
+        "/kept": {
+          "count": 1,
+          "fingerprint": "c186c503767d4310",
+          "level": "exact"
+        }
       },
       "lifecycle/builtin-name-wins-over-pin": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "018bfa5d42400261",
+          "level": "exact"
+        }
       },
       "lifecycle/custom-alias-loads-recorded-version": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "cbbd69f14a0b0c7a",
+          "level": "exact"
+        }
       },
       "lifecycle/custom-alias-recorded-but-missing-falls-back": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "800aef1d17131947",
+          "level": "exact"
+        }
       },
       "lifecycle/custom-alias-unrecorded-falls-back": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "f56ec2946f5d40a1",
+          "level": "exact"
+        }
       },
       "lifecycle/disabled-pin-hidden-but-installed": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "00614f2aed67b897",
+          "level": "exact"
+        }
       },
       "lifecycle/experiment-off-loads-no-pin": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "f8d096eaa251fa7e",
+          "level": "exact"
+        }
       },
       "lifecycle/frozen-pin-loads": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "ca75240fd94ad735",
+          "level": "exact"
+        }
       },
       "lifecycle/frozen-pin-not-materialized-skipped": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "f8d096eaa251fa7e",
+          "level": "exact"
+        }
       },
       "lifecycle/installed-keeps-shadowed-rows": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "2f1e7ba078da56fe",
+          "level": "exact"
+        }
       },
       "lifecycle/latest-pin-loads-newest-on-disk": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "adc769e710b13ed3",
+          "level": "exact"
+        }
       },
       "lifecycle/latest-pin-nothing-on-disk-skipped": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "f8d096eaa251fa7e",
+          "level": "exact"
+        }
       },
       "lifecycle/local-skill-wins-over-pin": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "ea9cd2ae0abee9b9",
+          "level": "exact"
+        }
       },
       "lifecycle/pin-keeps-disabled-invocation": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "02ec82c7c71997e2",
+          "level": "exact"
+        }
       },
       "lifecycle/project-pin-wins-over-global": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "b2345a0275afb88c",
+          "level": "exact"
+        }
       },
       "lifecycle/same-pin-in-both-scopes": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "ea6f8529cbedf032",
+          "level": "exact"
+        }
       },
       "lifecycle/unsafe-id-skipped": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "ca75240fd94ad735",
+          "level": "exact"
+        }
       },
       "lifecycle/untrusted-project-manifest-unread": {
-        "/session": 1
+        "/session": {
+          "count": 1,
+          "fingerprint": "817b6c9de72168a5",
+          "level": "exact"
+        }
       },
       "loading/invalid-policy-on-reserved-name": {
-        "/published": 1
+        "/published": {
+          "count": 1,
+          "fingerprint": "a23fe7e9e4b36992",
+          "level": "exact"
+        }
       },
       "metadata/compatibility-501-chars": {
-        "/verdict": 1
+        "/verdict": {
+          "count": 1,
+          "fingerprint": "24f8d59b1fcd0930",
+          "level": "exact"
+        }
       }
     }
   }

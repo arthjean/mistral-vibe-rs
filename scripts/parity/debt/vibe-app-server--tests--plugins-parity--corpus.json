@@ -1,45 +1,137 @@
 {
   "corpus": "crates/vibe-app-server/tests/plugins-parity/corpus.json",
   "measuredAgainst": "ed9d418294fce1d377c4a7aa412b1adadd5f4ab6506737e1e4014b8eb108d7af",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "plugins parity:": {
       "default/unified": {
-        "/*/answer/plugins/plugins/*/installedRoot": 1
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 1,
+          "fingerprint": "2b84215199bf4802",
+          "level": "exact"
+        }
       },
       "unified/dropped": {
-        "/*/answer/experimentalHarness": 1,
-        "/*/answer/mcp/privateConnectorsHidden": 1,
-        "/*/answer/plugins/plugins/*/installedRoot": 1
+        "/*/answer/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "39295de5b8059f60",
+          "level": "exact"
+        },
+        "/*/answer/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "e6141917d2b30966",
+          "level": "exact"
+        },
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 1,
+          "fingerprint": "2b84215199bf4802",
+          "level": "exact"
+        }
       },
       "unified/mcp-servers": {
-        "/*/answer/experimentalHarness": 1,
-        "/*/answer/mcp/privateConnectorsHidden": 2,
-        "/*/answer/plugins/plugins/*/installedRoot": 2
+        "/*/answer/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "8c17716b2ec43bb1",
+          "level": "exact"
+        },
+        "/*/answer/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "bc6ba26f95faac83",
+          "level": "exact"
+        },
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 2,
+          "fingerprint": "00a021f735561c32",
+          "level": "exact"
+        }
       },
       "unified/only-builtin": {
-        "/*/answer/experimentalHarness": 1,
-        "/*/answer/mcp/privateConnectorsHidden": 2,
-        "/*/answer/plugins/plugins/*/installedRoot": 2
+        "/*/answer/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "8c17716b2ec43bb1",
+          "level": "exact"
+        },
+        "/*/answer/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "bc6ba26f95faac83",
+          "level": "exact"
+        },
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 2,
+          "fingerprint": "97bffcb19fc269f5",
+          "level": "exact"
+        }
       },
       "unified/reload": {
-        "/*/answer/experimentalHarness": 1,
-        "/*/answer/mcp/privateConnectorsHidden": 1,
-        "/*/answer/plugins/plugins/*/installedRoot": 2,
-        "/*/answer/skills/*": 1,
-        "/*/answer/skills/*/description": 2,
-        "/*/answer/skills/*/name": 5,
-        "/*/answer/skills/*/prompt": 2,
-        "/*/answer/skills/*/scope": 1,
-        "/*/answer/skills/*/userInvocable": 2
+        "/*/answer/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "adf265dc847f8ec1",
+          "level": "exact"
+        },
+        "/*/answer/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "bfd62fb89fbb2213",
+          "level": "exact"
+        },
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 2,
+          "fingerprint": "fadd8fea1acbd596",
+          "level": "exact"
+        },
+        "/*/answer/skills/*": {
+          "count": 1,
+          "fingerprint": "23a4102231ab0e81",
+          "level": "exact"
+        },
+        "/*/answer/skills/*/description": {
+          "count": 2,
+          "fingerprint": "ff91e3c37114f324",
+          "level": "exact"
+        },
+        "/*/answer/skills/*/name": {
+          "count": 5,
+          "fingerprint": "2ace30910efb7a8a",
+          "level": "exact"
+        },
+        "/*/answer/skills/*/prompt": {
+          "count": 2,
+          "fingerprint": "fa7be586745e9cab",
+          "level": "exact"
+        },
+        "/*/answer/skills/*/scope": {
+          "count": 1,
+          "fingerprint": "c76bc51bec82162f",
+          "level": "exact"
+        },
+        "/*/answer/skills/*/userInvocable": {
+          "count": 2,
+          "fingerprint": "d95c1b84725e380a",
+          "level": "exact"
+        }
       },
       "unified/untrusted-project": {
-        "/*/answer/plugins/plugins/*/installedRoot": 1
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 1,
+          "fingerprint": "2b84215199bf4802",
+          "level": "exact"
+        }
       },
       "unified/user-and-project": {
-        "/*/answer/experimentalHarness": 1,
-        "/*/answer/mcp/privateConnectorsHidden": 2,
-        "/*/answer/plugins/plugins/*/installedRoot": 2
+        "/*/answer/experimentalHarness": {
+          "count": 1,
+          "fingerprint": "8c17716b2ec43bb1",
+          "level": "exact"
+        },
+        "/*/answer/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "bc6ba26f95faac83",
+          "level": "exact"
+        },
+        "/*/answer/plugins/plugins/*/installedRoot": {
+          "count": 2,
+          "fingerprint": "56761732fe9054c7",
+          "level": "exact"
+        }
       }
     }
   }

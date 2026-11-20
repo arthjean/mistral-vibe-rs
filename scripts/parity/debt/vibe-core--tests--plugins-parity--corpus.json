@@ -1,16 +1,40 @@
 {
   "corpus": "crates/vibe-core/tests/plugins-parity/corpus.json",
   "measuredAgainst": "194db6bf4f612ef9b3251a4b252926c6adc9bcfc091f85e7dd8112ae2f076ccc",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "plugins resolve parity:": {
       "native-namespaces": {
-        "/issues/*": 1,
-        "/issues/*/*": 2,
-        "/materialized/issues/*": 1,
-        "/materialized/issues/*/*": 2,
-        "/plugins/*": 1,
-        "/skills/*": 1
+        "/issues/*": {
+          "count": 1,
+          "fingerprint": "2a1b6f2074337b38",
+          "level": "exact"
+        },
+        "/issues/*/*": {
+          "count": 2,
+          "fingerprint": "0b54bf39298ac11e",
+          "level": "exact"
+        },
+        "/materialized/issues/*": {
+          "count": 1,
+          "fingerprint": "44d0f533e8b27676",
+          "level": "exact"
+        },
+        "/materialized/issues/*/*": {
+          "count": 2,
+          "fingerprint": "0efc9c194951fc4d",
+          "level": "exact"
+        },
+        "/plugins/*": {
+          "count": 1,
+          "fingerprint": "db3de4171f7e78b6",
+          "level": "exact"
+        },
+        "/skills/*": {
+          "count": 1,
+          "fingerprint": "d6918814ad8173e9",
+          "level": "exact"
+        }
       }
     }
   }

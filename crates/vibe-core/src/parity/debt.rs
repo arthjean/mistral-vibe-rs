@@ -25,6 +25,18 @@
 //! the corpus changed since it was measured, so the debt of an unchanged
 //! corpus can only shrink.
 //!
+//! **The pin.** A count alone cannot see a change inside a gap: a port
+//! that answers one wrong value where it answered another still differs once.
+//! So a group a replay absorbs with the port's values ([`Debt::absorb_value`])
+//! also pins what the port answered there, at the firmest [`Level`] its
+//! measuring runs agreed on: every pointer with its value, the values alone,
+//! or their shapes (a type and a length). A replay whose group holds its count
+//! but answers another fingerprint fails until `repin.py debt` records the
+//! change, which it may while the count does not grow. The debt is measured
+//! on Linux, where the corpora are captured, and only a Linux run checks a
+//! pin: another host compares the counts, since what the port answers inside
+//! a gap can name a path of that host.
+//!
 //! **Measuring.** With [`MEASURE`] set, a replay's debt covers every
 //! difference no entry covers and writes what it covered to
 //! `target/parity/debt/`, which is what `repin.py debt` reads. The replay's
@@ -49,7 +61,11 @@ use super::replay::repository;
 pub const DIRECTORY: &str = "scripts/parity/debt";
 
 /// The debt schema this module reads and `repin.py debt` writes.
-pub const SCHEMA: u64 = 1;
+pub const SCHEMA: u64 = 2;
+
+/// Whether this host checks the pins of a debt: the host the debts are
+/// measured on.
+pub const CHECKS_PINS: bool = cfg!(target_os = "linux");
 
 /// The variable that turns a replay's debt into a measurement.
 pub const MEASURE: &str = "VIBE_PARITY_DEBT_MEASURE";
@@ -92,13 +108,133 @@ pub fn generalize(pointer: &str) -> String {
 /// One scenario and one generalized pointer.
 type Group = (String, String);
 
+/// How firmly a debt group pins what the port answers inside it, firmest
+/// first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    /// Every difference's pointer, indices included, with the port's value.
+    Exact,
+    /// The port's values, wherever in the group they sit.
+    Values,
+    /// The type and the length of each value the port answered.
+    Shape,
+}
+
+impl Level {
+    /// Every level, firmest first, as a measurement records them.
+    pub const ALL: [Self; 3] = [Self::Exact, Self::Values, Self::Shape];
+
+    /// The name a debt file writes.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Exact => "exact",
+            Self::Values => "values",
+            Self::Shape => "shape",
+        }
+    }
+
+    /// The level a debt file names.
+    #[must_use]
+    pub fn named(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|level| level.name() == name)
+    }
+}
+
+/// What a group pins: a fingerprint of the port's answers at one level.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Pin {
+    pub level: Level,
+    pub fingerprint: String,
+}
+
+/// A group as a debt declares it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Declared {
+    pub count: usize,
+    /// [`None`] for a group whose answers moved between measuring runs, or
+    /// that a replay absorbs without the port's values.
+    pub pin: Option<Pin>,
+}
+
+/// What one run absorbed into a group.
+#[derive(Debug, Default)]
+struct Absorbed {
+    count: usize,
+    /// Every difference's pointer and the port's value there (`None` where
+    /// the port has none), while every absorption carried one.
+    answers: Option<Vec<(String, Option<Value>)>>,
+}
+
+/// The canonical text of `value`: keys sorted at every depth, so two equal
+/// values read alike whatever order a capture wrote them in.
+fn canonical(value: &Value) -> String {
+    fn sorted(value: &Value) -> Value {
+        match value {
+            Value::Object(object) => {
+                let ordered: BTreeMap<&String, Value> = object
+                    .iter()
+                    .map(|(key, child)| (key, sorted(child)))
+                    .collect();
+                let mut map = serde_json::Map::new();
+                for (key, child) in ordered {
+                    map.insert(key.clone(), child);
+                }
+                Value::Object(map)
+            }
+            Value::Array(items) => Value::Array(items.iter().map(sorted).collect()),
+            other => other.clone(),
+        }
+    }
+    sorted(value).to_string()
+}
+
+/// The type and the length of a port answer, which [`Level::Shape`] pins.
+fn shape(value: Option<&Value>) -> String {
+    match value {
+        None => "absent".to_owned(),
+        Some(value) if super::replay::is_digest(value) => {
+            format!("prose:{}", value["prose"])
+        }
+        Some(Value::Null) => "null".to_owned(),
+        Some(Value::Bool(_)) => "bool".to_owned(),
+        Some(Value::Number(number)) if number.is_f64() => "float".to_owned(),
+        Some(Value::Number(_)) => "integer".to_owned(),
+        Some(Value::String(text)) => format!("string:{}", text.chars().count()),
+        Some(Value::Array(items)) => format!("array:{}", items.len()),
+        Some(Value::Object(object)) => format!("object:{}", object.len()),
+    }
+}
+
+/// The fingerprint of `answers` at `level`: the first 16 hexadecimal digits of
+/// the SHA-256 of their sorted lines, so the order the differences were found
+/// in does not count.
+#[must_use]
+pub fn fingerprint(level: Level, answers: &[(String, Option<Value>)]) -> String {
+    let value = |answer: &Option<Value>| {
+        answer
+            .as_ref()
+            .map_or_else(|| "<absent>".to_owned(), canonical)
+    };
+    let mut lines: Vec<String> = answers
+        .iter()
+        .map(|(pointer, answer)| match level {
+            Level::Exact => format!("{pointer}\t{}", value(answer)),
+            Level::Values => value(answer),
+            Level::Shape => shape(answer.as_ref()),
+        })
+        .collect();
+    lines.sort();
+    crate::text::sha256_hex(lines.join("\n").as_bytes())[..16].to_owned()
+}
+
 /// The debt one replay heading keeps over one corpus.
 #[derive(Debug)]
 pub struct Debt {
     listed: String,
     heading: String,
-    declared: BTreeMap<Group, usize>,
-    measured: BTreeMap<Group, usize>,
+    declared: BTreeMap<Group, Declared>,
+    measured: BTreeMap<Group, Absorbed>,
     measuring: bool,
 }
 
@@ -127,9 +263,23 @@ impl Debt {
         }
     }
 
-    /// A debt over `declared` groups, for a test of the ratchet.
+    /// A debt over `declared` groups, none of them pinned, for a test of the
+    /// ratchet.
     #[must_use]
     pub fn of(listed: &str, heading: &str, declared: BTreeMap<Group, usize>) -> Self {
+        Self::pinned(
+            listed,
+            heading,
+            declared
+                .into_iter()
+                .map(|(group, count)| (group, Declared { count, pin: None }))
+                .collect(),
+        )
+    }
+
+    /// A debt over `declared` groups, for a test of the ratchet and its pins.
+    #[must_use]
+    pub fn pinned(listed: &str, heading: &str, declared: BTreeMap<Group, Declared>) -> Self {
         Self {
             listed: listed.to_owned(),
             heading: heading.to_owned(),
@@ -149,14 +299,57 @@ impl Debt {
     }
 
     /// Covers the difference at `pointer` in `scenario` when the debt holds
-    /// its group, or when this run measures, and says whether it did.
+    /// its group, or when this run measures, and says whether it did. Its
+    /// group counts it without pinning what the port answered: a replay that
+    /// has the port's value calls [`Debt::absorb_value`].
     pub fn absorb(&mut self, scenario: &str, pointer: &str) -> bool {
+        self.take(scenario, pointer, None)
+    }
+
+    /// [`Debt::absorb`], also recording `port`, what the port answered at
+    /// `pointer` (`None` where it has nothing), which the group's pin
+    /// fingerprints.
+    pub fn absorb_value(&mut self, scenario: &str, pointer: &str, port: Option<&Value>) -> bool {
+        self.take(scenario, pointer, Some(port))
+    }
+
+    fn take(&mut self, scenario: &str, pointer: &str, port: Option<Option<&Value>>) -> bool {
         let group = (scenario.to_owned(), generalize(pointer));
         if !self.measuring && !self.declared.contains_key(&group) {
             return false;
         }
-        *self.measured.entry(group).or_default() += 1;
+        let first = !self.measured.contains_key(&group);
+        let absorbed = self.measured.entry(group).or_default();
+        absorbed.count += 1;
+        match port {
+            Some(port) if first || absorbed.answers.is_some() => absorbed
+                .answers
+                .get_or_insert_with(Vec::new)
+                .push((pointer.to_owned(), port.cloned())),
+            _ => absorbed.answers = None,
+        }
         true
+    }
+
+    /// The fingerprint at the level the group of `scenario` at the
+    /// generalized `pointer` pins, of `answers`, or [`None`] when this host
+    /// checks no pin or the group pins nothing.
+    #[must_use]
+    pub fn pin_of(
+        &self,
+        scenario: &str,
+        pointer: &str,
+        answers: &[(String, Option<Value>)],
+    ) -> Option<String> {
+        if !CHECKS_PINS {
+            return None;
+        }
+        let pin = self
+            .declared
+            .get(&(scenario.to_owned(), pointer.to_owned()))?
+            .pin
+            .as_ref()?;
+        Some(fingerprint(pin.level, answers))
     }
 
     /// Whether the debt holds the group of the difference at `pointer` in
@@ -172,7 +365,7 @@ impl Debt {
     /// How many differences the debt has covered.
     #[must_use]
     pub fn covered(&self) -> usize {
-        self.measured.values().sum()
+        self.measured.values().map(|absorbed| absorbed.count).sum()
     }
 
     /// How many groups the debt declares.
@@ -193,21 +386,34 @@ impl Debt {
         let command = format!("{REPIN} debt {}", self.listed);
         let mut problems = Vec::new();
         for ((scenario, pointer), declared) in &self.declared {
-            let covered = self
-                .measured
-                .get(&(scenario.clone(), pointer.clone()))
-                .copied()
-                .unwrap_or(0);
-            if covered > *declared {
+            let absorbed = self.measured.get(&(scenario.clone(), pointer.clone()));
+            let covered = absorbed.map_or(0, |absorbed| absorbed.count);
+            let expected = declared.count;
+            if covered > expected {
                 problems.push(format!(
                     "{scenario} {pointer} differs {covered} times where the debt measured \
-                     {declared}: the port regressed inside its debt"
+                     {expected}: the port regressed inside its debt"
                 ));
-            } else if covered < *declared {
+            } else if covered < expected {
                 problems.push(format!(
                     "{scenario} {pointer} differs {covered} times where the debt measured \
-                     {declared}: record the progress with `{command}`"
+                     {expected}: record the progress with `{command}`"
                 ));
+            } else if let (true, Some(pin)) = (CHECKS_PINS, &declared.pin) {
+                let answered = absorbed
+                    .and_then(|absorbed| absorbed.answers.as_deref())
+                    .map(|answers| fingerprint(pin.level, answers));
+                if answered.as_deref() != Some(pin.fingerprint.as_str()) {
+                    problems.push(format!(
+                        "{scenario} {pointer} still differs {covered} times, but the port answers \
+                         something else there than when the debt was measured (its {} \
+                         fingerprint is {}, not {}): a change inside a known gap; fix it, or \
+                         record it with `{command}`",
+                        pin.level.name(),
+                        answered.as_deref().unwrap_or("unrecorded"),
+                        pin.fingerprint
+                    ));
+                }
             }
         }
         problems
@@ -231,12 +437,24 @@ impl Debt {
     }
 
     fn write_measurement(&self) {
-        let mut groups: BTreeMap<&str, BTreeMap<&str, usize>> = BTreeMap::new();
-        for ((scenario, pointer), count) in &self.measured {
+        let mut groups: BTreeMap<&str, BTreeMap<&str, Value>> = BTreeMap::new();
+        for ((scenario, pointer), absorbed) in &self.measured {
+            // A group absorbed with every answer records its fingerprint at
+            // every level; `repin.py debt` keeps the firmest its runs agree on.
+            let measured = absorbed.answers.as_deref().map_or_else(
+                || json!(absorbed.count),
+                |answers| {
+                    let fingerprints: serde_json::Map<String, Value> = Level::ALL
+                        .into_iter()
+                        .map(|level| (level.name().to_owned(), json!(fingerprint(level, answers))))
+                        .collect();
+                    json!({"count": absorbed.count, "fingerprints": fingerprints})
+                },
+            );
             groups
                 .entry(scenario.as_str())
                 .or_default()
-                .insert(pointer.as_str(), *count);
+                .insert(pointer.as_str(), measured);
         }
         let name = crate::text::sha256_hex(format!("{}\n{}", self.listed, self.heading).as_bytes());
         let directory = records().join(MEASUREMENTS);
@@ -349,7 +567,7 @@ pub fn assert_notes(listed: &str, notes: &[Note]) {
 
 /// The groups the committed debt of `listed` declares for `heading`, or
 /// under every heading when it is `None`.
-fn declared(listed: &str, heading: Option<&str>) -> BTreeMap<Group, usize> {
+fn declared(listed: &str, heading: Option<&str>) -> BTreeMap<Group, Declared> {
     let manifest = manifest::load();
     let entry = manifest
         .entry(listed)
@@ -549,16 +767,17 @@ pub fn document_problems(document: &Value, listed: &str, measured_against: &str)
                 problems.push(format!("`{heading}` {scenario} holds no pointers"));
                 continue;
             };
-            for (pointer, count) in pointers {
+            for (pointer, group) in pointers {
                 if !pointer.starts_with('/') || generalize(pointer) != *pointer {
                     problems.push(format!(
                         "`{heading}` {scenario} {pointer} is not a pointer with its indices \
                          generalized"
                     ));
                 }
-                if count.as_u64().is_none_or(|count| count == 0) {
+                if declared_group(group).is_none() {
                     problems.push(format!(
-                        "`{heading}` {scenario} {pointer} declares no positive count"
+                        "`{heading}` {scenario} {pointer} declares no positive count, or a pin \
+                         that is not a level and a 16-digit fingerprint"
                     ));
                 }
             }
@@ -567,21 +786,54 @@ pub fn document_problems(document: &Value, listed: &str, measured_against: &str)
     problems
 }
 
+/// A group as a debt file writes it: a positive count, or a positive count
+/// with the level and the fingerprint it pins.
+#[must_use]
+pub fn declared_group(group: &Value) -> Option<Declared> {
+    let positive = |count: &Value| {
+        count
+            .as_u64()
+            .filter(|count| *count > 0)
+            .and_then(|count| usize::try_from(count).ok())
+    };
+    if let Some(count) = positive(group) {
+        return Some(Declared { count, pin: None });
+    }
+    let object = group.as_object()?;
+    if object.len() != 3 {
+        return None;
+    }
+    let count = positive(object.get("count")?)?;
+    let level = Level::named(object.get("level")?.as_str()?)?;
+    let fingerprint = object.get("fingerprint")?.as_str()?;
+    let sound = fingerprint.len() == 16
+        && fingerprint
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    sound.then(|| Declared {
+        count,
+        pin: Some(Pin {
+            level,
+            fingerprint: fingerprint.to_owned(),
+        }),
+    })
+}
+
 /// The groups `document` declares for `heading`.
 #[must_use]
-pub fn groups(document: &Value, heading: &str) -> BTreeMap<Group, usize> {
+pub fn groups(document: &Value, heading: &str) -> BTreeMap<Group, Declared> {
     let mut found = BTreeMap::new();
     for (scenario, pointers) in document["tallies"][heading]
         .as_object()
         .into_iter()
         .flatten()
     {
-        for (pointer, count) in pointers.as_object().into_iter().flatten() {
-            let count = count
-                .as_u64()
-                .and_then(|count| usize::try_from(count).ok())
-                .unwrap_or(0);
-            found.insert((scenario.clone(), pointer.clone()), count);
+        for (pointer, group) in pointers.as_object().into_iter().flatten() {
+            let declared = declared_group(group).unwrap_or(Declared {
+                count: 0,
+                pin: None,
+            });
+            found.insert((scenario.clone(), pointer.clone()), declared);
         }
     }
     found

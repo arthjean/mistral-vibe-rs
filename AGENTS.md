@@ -118,7 +118,12 @@ documentation use the Linux form; read them relative to the local checkout.
   that agree) and the manifest records against the corpus SHA-256. A
   difference outside the debt fails the replay, and so does a debt group that
   moves, so an unchanged corpus's debt only shrinks; a `Note` explains a debt
-  group and counts nothing. An entry over a whole top-level observation lists
+  group and counts nothing. A group a `Tally` fills also pins a fingerprint of
+  what the port answers inside it, at the firmest level the measuring runs
+  agree on (each pointer with its value, the values, or their shapes), and a
+  Linux replay fails on a pin that moves even when the count holds, until
+  `repin.py debt` records the change; that is what lets the sensitivity pass
+  see a mutation inside a known gap. An entry over a whole top-level observation lists
   the sub-pointers it may cover. Each replay, `Tally` or hand-rolled, ends with
   `vibe_core::parity::figures::assert_figures` against its line of the
   "Measured figures" table in `docs/parity.md`; a run appends what it counted

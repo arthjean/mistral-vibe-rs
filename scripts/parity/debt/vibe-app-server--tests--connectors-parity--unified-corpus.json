@@ -1,70 +1,246 @@
 {
   "corpus": "crates/vibe-app-server/tests/connectors-parity/unified-corpus.json",
   "measuredAgainst": "fd88af8b22ba5b369c36e39a98642a589b40c18650191ba068565615bd33ff25",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "unified connectors parity:": {
       "unified/ask-approval": {
-        "/callbacks/*/effect/mcpApp": 1,
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/callbacks/*/effect/mcpApp": {
+          "count": 1,
+          "fingerprint": "1e664ca98e5c315e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "56ba16e1c320431d",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/disabled-tool": {
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/gateway-401": {
-        "/authUrls/*": 1,
-        "/steps/*/turn/*": 3,
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/method": 3,
-        "/steps/*/turn/*/params": 2,
-        "/steps/*/turn/*/patch": 1,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/sessionId": 1,
-        "/steps/*/turn/*/status": 1
+        "/authUrls/*": {
+          "count": 1,
+          "fingerprint": "54276f62d2f32d64",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 3,
+          "fingerprint": "fa9eb823ae7f312c",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "4b03208e39d20731",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 3,
+          "fingerprint": "6e5c640293eaea40",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/params": {
+          "count": 2,
+          "fingerprint": "d1e805e6436da05f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch": {
+          "count": 1,
+          "fingerprint": "23a63670d07d7be0",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "dc6a4322a98c49b1",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 1,
+          "fingerprint": "6d5d4035b4c08f7d",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "6fcd366dae84b4f4",
+          "level": "exact"
+        }
       },
       "unified/gateway-500": {
-        "/requests/*/conversation/*/content": 1,
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/requests/*/conversation/*/content": {
+          "count": 1,
+          "fingerprint": "2beb846d7071f87b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "e61c6f143c525908",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/implicit": {
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "e61c6f143c525908",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/inventory": {
-        "/requests/*/conversation/*/content": 3,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/entry/detail/mcpApp": 2,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/requests/*/conversation/*/content": {
+          "count": 3,
+          "fingerprint": "977cd2d2ba973a46",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 2,
+          "fingerprint": "05ce58b1488b4b46",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "e61c6f143c525908",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/structured": {
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "e61c6f143c525908",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/success": {
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "e61c6f143c525908",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "unified/tool-error": {
-        "/requests/*/conversation/*/content": 1,
-        "/steps/*/turn/*/entry/detail/mcpApp": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/patch/*/value/error/message": 1,
-        "/steps/*/turn/*/patch/*/value/message": 2,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/requests/*/conversation/*/content": {
+          "count": 1,
+          "fingerprint": "4db9c127a511741e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entry/detail/mcpApp": {
+          "count": 1,
+          "fingerprint": "9bb8cdb59d3edfdd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "e61c6f143c525908",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*/value/error/message": {
+          "count": 1,
+          "fingerprint": "bc0f1b98399e91ba",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*/value/message": {
+          "count": 2,
+          "fingerprint": "2ec89609e7a35cd6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       }
     }
   }

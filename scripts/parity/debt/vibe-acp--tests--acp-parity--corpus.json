@@ -1,551 +1,2043 @@
 {
   "corpus": "crates/vibe-acp/tests/acp-parity/corpus.json",
   "measuredAgainst": "4ed28a97d448e5d564e3f4babc49f50887d14777de7b2988081588b086044694",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "acp argv parity:": {
       "argv/10": {
-        "/stdout": 1
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "8c52b421c93fd9ab",
+          "level": "exact"
+        }
       },
       "argv/11": {
-        "/stdout": 1
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "8c52b421c93fd9ab",
+          "level": "exact"
+        }
       },
       "argv/12": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "2351ec09c9c29b5f",
+          "level": "exact"
+        }
       },
       "argv/13": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "61a9cb28a4e61a68",
+          "level": "exact"
+        }
       },
       "argv/14": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "c1157a4ca97e7732",
+          "level": "exact"
+        }
       },
       "argv/15": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "efa2158850f97800",
+          "level": "exact"
+        }
       },
       "argv/16": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "1240e1b5fac4c473",
+          "level": "exact"
+        }
       },
       "argv/17": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "9613c6b991f9475d",
+          "level": "exact"
+        }
       },
       "argv/18": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "aa488f848365d64a",
+          "level": "exact"
+        }
       },
       "argv/19": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "3c32c4129585238d",
+          "level": "exact"
+        }
       },
       "argv/20": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "160dd689ffdf37c9",
+          "level": "exact"
+        }
       },
       "argv/21": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "4097464be0f6c791",
+          "level": "exact"
+        }
       },
       "argv/22": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "d15d547a408e58e6",
+          "level": "exact"
+        }
       },
       "argv/3": {
-        "/stdout": 1
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "8c52b421c93fd9ab",
+          "level": "exact"
+        }
       },
       "argv/4": {
-        "/stdout": 1
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "8c52b421c93fd9ab",
+          "level": "exact"
+        }
       },
       "argv/5": {
-        "/stdout": 1
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "8c52b421c93fd9ab",
+          "level": "exact"
+        }
       },
       "argv/6": {
-        "/stdout": 1
+        "/stdout": {
+          "count": 1,
+          "fingerprint": "8c52b421c93fd9ab",
+          "level": "exact"
+        }
       },
       "argv/9": {
-        "/stderr": 1
+        "/stderr": {
+          "count": 1,
+          "fingerprint": "ccedae12e0cb90aa",
+          "level": "exact"
+        }
       }
     },
     "acp parity:": {
       "auth/status": {
-        "/*/response/result/customDomainLocked": 2
+        "/*/response/result/customDomainLocked": {
+          "count": 2,
+          "fingerprint": "62d75b567023b3c7",
+          "level": "exact"
+        }
       },
       "auth/status-without-key": {
-        "/*/response/result/customDomainLocked": 1
+        "/*/response/result/customDomainLocked": {
+          "count": 1,
+          "fingerprint": "e1900940ddb20782",
+          "level": "exact"
+        }
       },
       "command/compact": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/compact-empty": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/data-retention": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/help": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/lean": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/configOptions/*/options/*": 8,
-        "/*/stream/*/message/params/update/configOptions/*/options/*/name": 2,
-        "/*/stream/*/message/params/update/configOptions/*/options/*/value": 2
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/configOptions/*/options/*": {
+          "count": 8,
+          "fingerprint": "f85b948dcd44968e",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/configOptions/*/options/*/name": {
+          "count": 2,
+          "fingerprint": "d296f6e46654a390",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/configOptions/*/options/*/value": {
+          "count": 2,
+          "fingerprint": "6f2d1959292373cd",
+          "level": "exact"
+        }
       },
       "command/log": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/mcp": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/proxy-setup": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/reload": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/retry": {
-        "/*/detached/*": 3,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/response/result/usage": 1,
-        "/*/stream/*/message/params/update/content/text": 1
+        "/*/detached/*": {
+          "count": 3,
+          "fingerprint": "f271c3d30d44aa95",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "fff0f23d472ec8a2",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "d6d2673ab429716e",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/response/result/usage": {
+          "count": 1,
+          "fingerprint": "13bb53f101056478",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/content/text": {
+          "count": 1,
+          "fingerprint": "c5b8059dbbd17a32",
+          "level": "exact"
+        }
       },
       "command/skill": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/teleport": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "command/unknown-and-case": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "7b9cc7dceb4b23aa",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "fff0f23d472ec8a2",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/connectors": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/response/result/error": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/response/result/error": {
+          "count": 1,
+          "fingerprint": "77b8b5a71adc118a",
+          "level": "exact"
+        }
       },
       "ext/log-level": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/loops": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/review": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/response/error": 5,
-        "/*/response/result": 5,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "4d87e9316a6d91a6",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "32ed06ebf67c3d9a",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 5,
+          "fingerprint": "d0f795b5dd5920e7",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 5,
+          "fingerprint": "b83cfd1ca646309a",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/rewind": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/session-delete": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "924c9534e4e4c158",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/session-title": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "924c9534e4e4c158",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/telemetry": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/trust": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "ext/whoami": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/apiKey": 1,
-        "/*/response/result/budget": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/response/result/planOffer/url": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/apiKey": {
+          "count": 1,
+          "fingerprint": "ad1503a507d48942",
+          "level": "exact"
+        },
+        "/*/response/result/budget": {
+          "count": 1,
+          "fingerprint": "8814b4adb9c0f3f3",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/response/result/planOffer/url": {
+          "count": 1,
+          "fingerprint": "61b03e64a16c9e25",
+          "level": "exact"
+        }
       },
       "initialize/skipped": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "29cf2af05722d399",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "a099fa9f0a33dbd3",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "e71ee6cf9a427884",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "eca05fcf67780385",
+          "level": "exact"
+        }
       },
       "prompt/backend-error": {
-        "/*/detached/*/params/update/size": 2,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 2,
+          "fingerprint": "eccf86cfbc61b5bd",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/backend-unauthorized": {
-        "/*/detached/*/params/update/size": 2,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 2,
+          "fingerprint": "eccf86cfbc61b5bd",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/bash-approved": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/_meta/tool_name": 2
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "504cd5b763511623",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/_meta/tool_name": {
+          "count": 2,
+          "fingerprint": "ff6f15e249b74d80",
+          "level": "exact"
+        }
       },
       "prompt/bash-approved-for-session": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 6,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/_meta/tool_name": 4
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "bc361be1565a8fd7",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 6,
+          "fingerprint": "519a007c94ec42dc",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "3d7be87910736866",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/_meta/tool_name": {
+          "count": 4,
+          "fingerprint": "9b1ed10e360773f4",
+          "level": "exact"
+        }
       },
       "prompt/bash-ask-mode": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "4d87e9316a6d91a6",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "32ed06ebf67c3d9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "663388b9d4474e98",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/bash-dismissed": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/_meta/tool_name": 2
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "504cd5b763511623",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/_meta/tool_name": {
+          "count": 2,
+          "fingerprint": "ff6f15e249b74d80",
+          "level": "exact"
+        }
       },
       "prompt/bash-rejected": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/_meta/tool_name": 2
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "504cd5b763511623",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/_meta/tool_name": {
+          "count": 2,
+          "fingerprint": "ff6f15e249b74d80",
+          "level": "exact"
+        }
       },
       "prompt/busy": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "83b889cd495f4d37",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "9033788804e823b7",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/cancel": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 3,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "b05f8ae34faf0017",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 3,
+          "fingerprint": "fa58318a6e2e4b69",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/content-blocks": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "dc8fa35978447f29",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/edit-file": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/_meta/tool_name": 2,
-        "/*/stream/*/message/params/update/rawInput/changes": 1,
-        "/*/stream/*/message/params/update/rawInput/newString": 1,
-        "/*/stream/*/message/params/update/rawInput/oldString": 1,
-        "/*/stream/*/message/params/update/rawInput/replaceAll": 1,
-        "/*/stream/*/message/params/update/rawOutput/occurrences/*/newStartLine": 1,
-        "/*/stream/*/message/params/update/rawOutput/previousContent": 1,
-        "/*/stream/*/message/params/update/title": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "a55a40d16ccdb2bf",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/_meta/tool_name": {
+          "count": 2,
+          "fingerprint": "eff74161d3c4be58",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/rawInput/changes": {
+          "count": 1,
+          "fingerprint": "8af479956a9e7968",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/rawInput/newString": {
+          "count": 1,
+          "fingerprint": "4a35ba75aa97bb2d",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/rawInput/oldString": {
+          "count": 1,
+          "fingerprint": "ae918360f97088f0",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/rawInput/replaceAll": {
+          "count": 1,
+          "fingerprint": "1aa57face470315a",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/rawOutput/occurrences/*/newStartLine": {
+          "count": 1,
+          "fingerprint": "b4a23173e30cee51",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/rawOutput/previousContent": {
+          "count": 1,
+          "fingerprint": "9fef7036a039a022",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/title": {
+          "count": 1,
+          "fingerprint": "9067344a95d250a3",
+          "level": "exact"
+        }
       },
       "prompt/grep": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "633f86a540d3a147",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/grep-outside-folder": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 6,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "bc361be1565a8fd7",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 6,
+          "fingerprint": "519a007c94ec42dc",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "b3815953da650dea",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/mention": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "f5169fe43f1e9646",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/question-declined": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/question-elicited": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/question-invalid-answer": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/question-without-elicitation": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/read-file": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "d0a2dbbbdb6cb2b2",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/read-file-range": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "311ecc60e7d53c6e",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/read-file-without-fs": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "d0a2dbbbdb6cb2b2",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/read-outside-file": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 6,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "bc361be1565a8fd7",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 6,
+          "fingerprint": "519a007c94ec42dc",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "610145cf004dd7ab",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/rejected-blocks": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/session-title": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/text": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "a7a7938d400555c7",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/todo": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "f141830918774830",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/user-display-content": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 7,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 7,
+          "fingerprint": "c1ebfc0f44b86f0e",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "d6f97780c7d60e38",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "prompt/write-file": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "18e51901d1ecef31",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "aea7e163670149a1",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "5cd3fea377d4b6a2",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "session/close": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "session/fork": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 10,
-        "/*/response/result/configOptions/*/options/*": 16,
-        "/*/response/result/configOptions/*/options/*/name": 4,
-        "/*/response/result/configOptions/*/options/*/value": 4,
-        "/*/stream/*/message/params/update/content/text": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 10,
+          "fingerprint": "f3954d248784aaa6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 16,
+          "fingerprint": "960df2bc51a9ea01",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 4,
+          "fingerprint": "e7530d7fa10e3043",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 4,
+          "fingerprint": "34a5ddc3f68b4ef4",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/content/text": {
+          "count": 1,
+          "fingerprint": "eb6e778616053076",
+          "level": "exact"
+        }
       },
       "session/fork-at-message": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 9,
-        "/*/response/result/configOptions/*/options/*": 12,
-        "/*/response/result/configOptions/*/options/*/name": 3,
-        "/*/response/result/configOptions/*/options/*/value": 3,
-        "/*/stream/*/message/params/update/content/text": 2,
-        "/*/stream/*/message/params/update/title": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 9,
+          "fingerprint": "9a824cd944bbaf75",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 12,
+          "fingerprint": "078d6e0c18454abe",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 3,
+          "fingerprint": "9c05a8e41baa2f44",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 3,
+          "fingerprint": "7d2a57b5ec05f863",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/content/text": {
+          "count": 2,
+          "fingerprint": "fe12485d3ee47e46",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/title": {
+          "count": 1,
+          "fingerprint": "531d8f479db85cdd",
+          "level": "exact"
+        }
       },
       "session/list": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 4,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/response/result/sessions/*/title": 2
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 4,
+          "fingerprint": "797dd2d14f58d425",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "0b49c94a0e43a911",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/response/result/sessions/*/title": {
+          "count": 2,
+          "fingerprint": "187a345b79ffa974",
+          "level": "exact"
+        }
       },
       "session/load": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 8,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 8,
-        "/*/response/result/configOptions/*/options/*/name": 2,
-        "/*/response/result/configOptions/*/options/*/value": 2,
-        "/*/stream/*/message/params/update/title": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 8,
+          "fingerprint": "486e3cf62aad6c9c",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "3d51cbee104feb81",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 8,
+          "fingerprint": "5bd9b5b85b52ae34",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 2,
+          "fingerprint": "95f876d51058e987",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 2,
+          "fingerprint": "1fe2d398320e9fe3",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/title": {
+          "count": 1,
+          "fingerprint": "fb914451f200ad1d",
+          "level": "exact"
+        }
       },
       "session/load-live": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 5,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 8,
-        "/*/response/result/configOptions/*/options/*/name": 2,
-        "/*/response/result/configOptions/*/options/*/value": 2,
-        "/*/stream/*/message/params/update/title": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 5,
+          "fingerprint": "e3a6c346deb714e0",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "3d51cbee104feb81",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 8,
+          "fingerprint": "b21c7fcc725001f5",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 2,
+          "fingerprint": "1e5ede575e26a4ec",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 2,
+          "fingerprint": "82b8f0a0094fe1c2",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/title": {
+          "count": 1,
+          "fingerprint": "10af5916bbd42f70",
+          "level": "exact"
+        }
       },
       "session/new": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "session/new-additional-directories": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "session/new-mcp-unreachable": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1,
-        "/*/stream/*/message/params/update/content/text": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        },
+        "/*/stream/*/message/params/update/content/text": {
+          "count": 1,
+          "fingerprint": "5a71d146c7e7d565",
+          "level": "exact"
+        }
       },
       "session/resume": {
-        "/*/detached/*": 1,
-        "/*/detached/*/params/update/size": 9,
-        "/*/detached/*/params/update/title": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*": {
+          "count": 1,
+          "fingerprint": "801b4c96ae745a9a",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/size": {
+          "count": 9,
+          "fingerprint": "2df80c65f551e7e8",
+          "level": "exact"
+        },
+        "/*/detached/*/params/update/title": {
+          "count": 1,
+          "fingerprint": "3d51cbee104feb81",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       },
       "session/set-config-option": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/error": 2,
-        "/*/response/result": 2,
-        "/*/response/result/configOptions/*/currentValue": 2,
-        "/*/response/result/configOptions/*/options/*": 10,
-        "/*/response/result/configOptions/*/options/*/name": 3,
-        "/*/response/result/configOptions/*/options/*/value": 3
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 2,
+          "fingerprint": "c4c7787fae5d2b4a",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 2,
+          "fingerprint": "ffaf11f1679401f7",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/currentValue": {
+          "count": 2,
+          "fingerprint": "cd920a43312fd817",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 10,
+          "fingerprint": "e71a74d0c5244d77",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 3,
+          "fingerprint": "c3f4ff6e2b9d5a3f",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 3,
+          "fingerprint": "0df65aab77fc2851",
+          "level": "exact"
+        }
       },
       "session/set-mode": {
-        "/*/detached/*/params/update/size": 1,
-        "/*/response/result/configOptions/*/options/*": 4,
-        "/*/response/result/configOptions/*/options/*/name": 1,
-        "/*/response/result/configOptions/*/options/*/value": 1
+        "/*/detached/*/params/update/size": {
+          "count": 1,
+          "fingerprint": "c9a7e5446d8e8ee6",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*": {
+          "count": 4,
+          "fingerprint": "b95a965b105cb4af",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/name": {
+          "count": 1,
+          "fingerprint": "aff472d641304ee8",
+          "level": "exact"
+        },
+        "/*/response/result/configOptions/*/options/*/value": {
+          "count": 1,
+          "fingerprint": "e109b99931cc3869",
+          "level": "exact"
+        }
       }
     }
   }

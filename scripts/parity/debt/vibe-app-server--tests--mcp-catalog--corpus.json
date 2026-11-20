@@ -1,81 +1,301 @@
 {
   "corpus": "crates/vibe-app-server/tests/mcp-catalog/corpus.json",
   "measuredAgainst": "4ae71765a6e9348fbe26ec84ebdf354b545db631ed084b4ee0f915b4f01ec3a4",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "MCP catalog parity:": {
       "session/add-and-remove": {
-        "/*/notifications/*": 1,
-        "/*/notifications/*/mcp": 4,
-        "/*/notifications/*/mcp/connectorError": 3,
-        "/*/notifications/*/mcp/privateConnectorsHidden": 3,
-        "/*/notifications/*/method": 4,
-        "/*/notifications/*/params": 4,
-        "/*/response/error": 1,
-        "/*/response/result": 1,
-        "/*/response/result/runtime/mcp/connectorError": 3,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 3
+        "/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "f45520d25c6cadb8",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp": {
+          "count": 4,
+          "fingerprint": "0cb3d6d7312e07df",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/connectorError": {
+          "count": 3,
+          "fingerprint": "da7aecf385eb7a6a",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/privateConnectorsHidden": {
+          "count": 3,
+          "fingerprint": "635046a2ce9caafb",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 4,
+          "fingerprint": "959525b05d56717b",
+          "level": "exact"
+        },
+        "/*/notifications/*/params": {
+          "count": 4,
+          "fingerprint": "ce7fb605364485b3",
+          "level": "exact"
+        },
+        "/*/response/error": {
+          "count": 1,
+          "fingerprint": "3cd0939313fe69a1",
+          "level": "exact"
+        },
+        "/*/response/result": {
+          "count": 1,
+          "fingerprint": "404f8ef9c3eba266",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 3,
+          "fingerprint": "4756d3a9b849fc10",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 3,
+          "fingerprint": "81b5d302dd62bd45",
+          "level": "exact"
+        }
       },
       "session/auth-required-then-login": {
-        "/*/keyring/mcp-oauth:secure:client_info/application_type": 1,
-        "/*/keyring/mcp-oauth:secure:client_info/issuer": 1,
-        "/*/notifications/*/mcp": 2,
-        "/*/notifications/*/mcp/connectorError": 2,
-        "/*/notifications/*/mcp/privateConnectorsHidden": 2,
-        "/*/notifications/*/mcp/sources/*/tools/*": 2,
-        "/*/notifications/*/method": 2,
-        "/*/notifications/*/params": 2,
-        "/*/response/result/mcp/connectorError": 1,
-        "/*/response/result/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/runtime/mcp/connectorError": 2,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
-        "/*/response/result/runtime/mcp/sources/*/tools/*": 2
+        "/*/keyring/mcp-oauth:secure:client_info/application_type": {
+          "count": 1,
+          "fingerprint": "4336028f26bc6048",
+          "level": "exact"
+        },
+        "/*/keyring/mcp-oauth:secure:client_info/issuer": {
+          "count": 1,
+          "fingerprint": "a4ded4db84e80a20",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp": {
+          "count": 2,
+          "fingerprint": "df28dcfba03f4bcf",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "c59590c831564cea",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "97f3ac34a002ee75",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/sources/*/tools/*": {
+          "count": 2,
+          "fingerprint": "a8f6c609a71f4268",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 2,
+          "fingerprint": "43647d8eba2a753e",
+          "level": "exact"
+        },
+        "/*/notifications/*/params": {
+          "count": 2,
+          "fingerprint": "996851e4bb75a625",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "9f8eeec46db7e653",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "536c6128e0224955",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "d113ee16c07b195e",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "e48444ea1e6b3913",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/sources/*/tools/*": {
+          "count": 2,
+          "fingerprint": "e5966fead1bbfac9",
+          "level": "exact"
+        }
       },
       "session/credentials-without-fingerprint-are-dropped": {
-        "/*/response/result/mcp/connectorError": 1,
-        "/*/response/result/mcp/privateConnectorsHidden": 1
+        "/*/response/result/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "9f8eeec46db7e653",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "536c6128e0224955",
+          "level": "exact"
+        }
       },
       "session/read": {
-        "/*/response/result/mcp/connectorError": 2,
-        "/*/response/result/mcp/privateConnectorsHidden": 2,
-        "/*/response/result/mcp/sources/*/tools/*/description": 4,
-        "/*/response/result/mcp/sources/*/tools/*/name": 4
+        "/*/response/result/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "d3b4c4a3060721ca",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "06762c127e941b95",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/sources/*/tools/*/description": {
+          "count": 4,
+          "fingerprint": "30097a9f7dde728e",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/sources/*/tools/*/name": {
+          "count": 4,
+          "fingerprint": "b0dd212ddfa56d34",
+          "level": "exact"
+        }
       },
       "session/refresh": {
-        "/*/notifications/*/mcp/connectorError": 2,
-        "/*/notifications/*/mcp/privateConnectorsHidden": 2,
-        "/*/response/result/runtime/mcp/connectorError": 2,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 2
+        "/*/notifications/*/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "46d7e88aa5c9ae07",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "d6b2a5c531d0414b",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "d113ee16c07b195e",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "e48444ea1e6b3913",
+          "level": "exact"
+        }
       },
       "session/stored-credentials-connect": {
-        "/*/notifications/*/mcp": 4,
-        "/*/notifications/*/mcp/connectorError": 2,
-        "/*/notifications/*/mcp/privateConnectorsHidden": 2,
-        "/*/notifications/*/mcp/sources/*/tools/*": 2,
-        "/*/notifications/*/method": 4,
-        "/*/notifications/*/params": 4,
-        "/*/response/result/mcp/connectorError": 1,
-        "/*/response/result/mcp/privateConnectorsHidden": 1,
-        "/*/response/result/mcp/sources/*/tools/*/description": 2,
-        "/*/response/result/mcp/sources/*/tools/*/name": 2,
-        "/*/response/result/runtime/mcp/connectorError": 2,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
-        "/*/response/result/runtime/mcp/sources/*/tools/*": 2
+        "/*/notifications/*/mcp": {
+          "count": 4,
+          "fingerprint": "a4304e24e7d30c00",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "f024763000f46da8",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "80b27732ee355773",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/sources/*/tools/*": {
+          "count": 2,
+          "fingerprint": "8e3b080a840ae362",
+          "level": "exact"
+        },
+        "/*/notifications/*/method": {
+          "count": 4,
+          "fingerprint": "98a55aa62c9f2a17",
+          "level": "exact"
+        },
+        "/*/notifications/*/params": {
+          "count": 4,
+          "fingerprint": "20fa10f02cb590da",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/connectorError": {
+          "count": 1,
+          "fingerprint": "9f8eeec46db7e653",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "536c6128e0224955",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/sources/*/tools/*/description": {
+          "count": 2,
+          "fingerprint": "6f7e99a7cfcccfed",
+          "level": "exact"
+        },
+        "/*/response/result/mcp/sources/*/tools/*/name": {
+          "count": 2,
+          "fingerprint": "79ec30a129c97416",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 2,
+          "fingerprint": "7bef7057992d90e5",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "b983f7aa2ba1bf3b",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/sources/*/tools/*": {
+          "count": 2,
+          "fingerprint": "cb47f22f7a8061ec",
+          "level": "exact"
+        }
       },
       "session/toggle": {
-        "/*/notifications/*/mcp/connectorError": 4,
-        "/*/notifications/*/mcp/privateConnectorsHidden": 4,
-        "/*/notifications/*/mcp/sources/*/tools/*": 2,
-        "/*/response/result/runtime/mcp/connectorError": 4,
-        "/*/response/result/runtime/mcp/privateConnectorsHidden": 4,
-        "/*/response/result/runtime/mcp/sources/*/tools/*": 2
+        "/*/notifications/*/mcp/connectorError": {
+          "count": 4,
+          "fingerprint": "3324d686b524e2c6",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/privateConnectorsHidden": {
+          "count": 4,
+          "fingerprint": "711b73f0bf5a5759",
+          "level": "exact"
+        },
+        "/*/notifications/*/mcp/sources/*/tools/*": {
+          "count": 2,
+          "fingerprint": "35d01e6a6348b289",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/connectorError": {
+          "count": 4,
+          "fingerprint": "47b1263eee7a85d1",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 4,
+          "fingerprint": "f280d8a1b738a8f4",
+          "level": "exact"
+        },
+        "/*/response/result/runtime/mcp/sources/*/tools/*": {
+          "count": 2,
+          "fingerprint": "cb47f22f7a8061ec",
+          "level": "exact"
+        }
       },
       "sessionless/add-refusals": {
-        "/*/response/error/data": 3
+        "/*/response/error/data": {
+          "count": 3,
+          "fingerprint": "f8de6a90f9c368d9",
+          "level": "exact"
+        }
       },
       "sessionless/login-publishes-nothing": {
-        "/*/keyring/mcp-oauth:secure:client_info/application_type": 1,
-        "/*/keyring/mcp-oauth:secure:client_info/issuer": 1
+        "/*/keyring/mcp-oauth:secure:client_info/application_type": {
+          "count": 1,
+          "fingerprint": "4336028f26bc6048",
+          "level": "exact"
+        },
+        "/*/keyring/mcp-oauth:secure:client_info/issuer": {
+          "count": 1,
+          "fingerprint": "a4ded4db84e80a20",
+          "level": "exact"
+        }
       }
     }
   }

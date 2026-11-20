@@ -57,7 +57,10 @@ records. It is **accepted** when every difference it holds falls under a ledger
 entry that stands on a row of "Accepted divergences" below, own-words prose
 entries included. Any other difference is either an open gap, ledgered against
 a row with `Class::Gap` or held in the corpus's measured debt under
-`scripts/parity/debt/`, or a failure of the replay. Each replay asserts its
+`scripts/parity/debt/`, or a failure of the replay. A debt group counts its
+differences and, where the measuring runs agreed, pins a fingerprint of what
+the port answers inside the gap, so a Linux replay also fails when a known gap
+changes what it holds (`vibe_core::parity::debt::Level`). Each replay asserts its
 counts against its line of "Measured figures", and `scorecard_tests` derives
 every row's two scores from those lines (`vibe_core::parity::figures`), summed
 over the lines that hold on Linux and rounded down:

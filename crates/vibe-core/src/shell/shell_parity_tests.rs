@@ -47,7 +47,6 @@ use crate::parity::pinned_interpreter;
 use crate::parity::replay::{
     Class, Entry, PatternDivergence, Tally, differences, entries, pinned_reference, repository,
 };
-use crate::parity::sensitivity::{Blind, Operator};
 use crate::platform::parse_policy_path;
 use crate::policy::{PermissionScope, path_grant_pattern_matches};
 use crate::tools::config::{ToolConfigResolver, shell_read_only_commands};
@@ -1371,18 +1370,6 @@ fn windows_grammar_units(grammar: &WindowsGrammar) -> Vec<GrammarUnit> {
     units
 }
 
-/// What the sensitivity pass of the Windows grammar replay cannot see. Its
-/// measured debt covers whole subtrees (`/parts/*/**` of a command), so a
-/// token dropped where nothing yet differs shifts the differences under the
-/// subtree without changing their count.
-const WINDOWS_GRAMMAR_BLIND: &[Blind] = &[Blind {
-    operator: Operator::DropElement,
-    reason: "a token dropped from a command whose `/parts/*/**` subtree the measured debt \
-                 already holds shifts the tokens after it onto pointers the same debt group \
-                 covers, and the group's count stays what it was, so the drop reads as the \
-                 difference it already counted",
-}];
-
 /// The PowerShell grammar splits, tokenizes, names, matches and expands as the
 /// reference does, except where its measured debt records a gap
 /// ([`WINDOWS_GRAMMAR_NOTES`] says why).
@@ -1403,7 +1390,6 @@ fn every_windows_grammar_answer_matches_the_reference() {
     );
     let corpus = corpus_text();
     let mut tally = Tally::new(&corpus, []);
-    tally.blind(WINDOWS_GRAMMAR_BLIND);
     for (scenario, reference, port) in &units {
         tally.record(scenario, reference, port, differences(reference, port));
     }

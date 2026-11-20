@@ -1,375 +1,1523 @@
 {
   "corpus": "crates/vibe-app-server/tests/connectors-parity/corpus.json",
   "measuredAgainst": "b0160feec7e28263d378dfc2184e7beeb49e6ec345ddc9a64496048c4c4f44e3",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "connectors parity:": {
       "cache/corrupt": {
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "cda71d9daa83d145",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>": {
+          "count": 1,
+          "fingerprint": "7a8a41b2fe472043",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "e895b9bac75398e9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "8d5b5afc3f509b11",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "de3882d133462285",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "4298fdd4e0a472da",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        }
       },
       "cache/diagnostics-roundtrip": {
-        "/bootstraps/*": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "300be1ebdd6e0a73",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "afb6a0c657ab38e2",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "3dce99ffedbe9549",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "02e70827463e4f06",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "4298fdd4e0a472da",
+          "level": "exact"
+        }
       },
       "cache/fresh": {
-        "/bootstraps/*": 1,
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 3,
-        "/steps/*/response/result/catalog/connectors/*": 3,
-        "/steps/*/response/result/catalog/connectors/*/alias": 3,
-        "/steps/*/response/result/catalog/connectors/*/displayName": 3,
-        "/steps/*/response/result/catalog/connectors/*/tools/*": 3,
-        "/steps/*/response/result/catalog/connectors/*/tools/*/description": 3,
-        "/steps/*/response/result/catalog/connectors/*/tools/*/name": 3,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 4,
-        "/steps/*/response/result/selectionRevision": 1,
-        "/steps/*/response/result/session/acceptedCatalogRevision": 1,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*": 1,
-        "/steps/*/response/result/session/sources/*/alias": 1,
-        "/steps/*/response/result/session/sources/*/displayName": 1,
-        "/steps/*/response/result/session/sources/*/tools/*": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/name": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "e155e2bc93186ca9",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "ce08ebd55ddabc17",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*": {
+          "count": 1,
+          "fingerprint": "b435dc9a76db3ba1",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name": {
+          "count": 1,
+          "fingerprint": "9c2460115c0cf2af",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": {
+          "count": 1,
+          "fingerprint": "019fb04b0d5f2206",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name": {
+          "count": 1,
+          "fingerprint": "43e789ed954a8635",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*": {
+          "count": 1,
+          "fingerprint": "cef2e658c780a763",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "54b43584122686d7",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name": {
+          "count": 1,
+          "fingerprint": "8e10fb321ccc7d0d",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 3,
+          "fingerprint": "4f24d9ba00f0d67c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 3,
+          "fingerprint": "4fe07507a5b41992",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/alias": {
+          "count": 3,
+          "fingerprint": "e6a04085236690db",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/displayName": {
+          "count": 3,
+          "fingerprint": "565fcdcf7755a0f5",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/tools/*": {
+          "count": 3,
+          "fingerprint": "9bafd69756eea0e8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/tools/*/description": {
+          "count": 3,
+          "fingerprint": "469b0e77bd11846e",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/tools/*/name": {
+          "count": 3,
+          "fingerprint": "2794a349c3934313",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "02e70827463e4f06",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 4,
+          "fingerprint": "de85342d62e4fba0",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 1,
+          "fingerprint": "6bf3b64cc6379ac4",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedCatalogRevision": {
+          "count": 1,
+          "fingerprint": "4739aa6503240cec",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "c76fd3a72c477029",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "889d8120dd7a62e1",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*": {
+          "count": 1,
+          "fingerprint": "e05ecbbdfd05df1a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/alias": {
+          "count": 1,
+          "fingerprint": "86ccb5eacf2da16c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/displayName": {
+          "count": 1,
+          "fingerprint": "f01a93eea6190abd",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*": {
+          "count": 1,
+          "fingerprint": "0452a381c26fab82",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "4e8895b199a3b3fb",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/name": {
+          "count": 1,
+          "fingerprint": "bcc7be2aef417b32",
+          "level": "exact"
+        }
       },
       "cache/legacy-entry": {
-        "/bootstraps/*": 1,
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": 2,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 1,
-        "/steps/*/response/result/catalog/connectors/*/alias": 1,
-        "/steps/*/response/result/catalog/connectors/*/displayName": 1,
-        "/steps/*/response/result/catalog/connectors/*/tools/*": 1,
-        "/steps/*/response/result/catalog/connectors/*/tools/*/description": 1,
-        "/steps/*/response/result/catalog/connectors/*/tools/*/name": 1,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/siblings/*": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "300be1ebdd6e0a73",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "f378ec54fc725115",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": {
+          "count": 2,
+          "fingerprint": "5e0100778203ddcb",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "ef510cc28f184eb2",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 1,
+          "fingerprint": "3b2515362e413a4e",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/alias": {
+          "count": 1,
+          "fingerprint": "7faebaa91bf771b8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/displayName": {
+          "count": 1,
+          "fingerprint": "8267c99f1861f675",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/tools/*": {
+          "count": 1,
+          "fingerprint": "4ad5881875e98eba",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "e52596a94f665693",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*/tools/*/name": {
+          "count": 1,
+          "fingerprint": "6dec225387065950",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "02e70827463e4f06",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "4298fdd4e0a472da",
+          "level": "exact"
+        },
+        "/steps/*/siblings/*": {
+          "count": 1,
+          "fingerprint": "0b298dd19e215ade",
+          "level": "exact"
+        }
       },
       "cache/stale-and-future": {
-        "/bootstraps/*": 1,
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description": 1,
-        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name": 1,
-        "/steps/*/cacheFile/other-stale": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 1,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/selectionRevision": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "e155e2bc93186ca9",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "703e1831a5f04902",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*": {
+          "count": 1,
+          "fingerprint": "852e717ccada46da",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/display_name": {
+          "count": 1,
+          "fingerprint": "0bf42b7e563db850",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/id": {
+          "count": 1,
+          "fingerprint": "d95628e40d08cf68",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/name": {
+          "count": 1,
+          "fingerprint": "ad286eb829379a3b",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*": {
+          "count": 1,
+          "fingerprint": "5e922644c84cedef",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "c8a3d0b30c5c6462",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>/payload/connectors/*/tools/*/name": {
+          "count": 1,
+          "fingerprint": "cd293e2a43a8b2d2",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/other-stale": {
+          "count": 1,
+          "fingerprint": "bf0df19c59726c8e",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "e895b9bac75398e9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 1,
+          "fingerprint": "b180cdd88c36f56a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "de3882d133462285",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "4298fdd4e0a472da",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 1,
+          "fingerprint": "59279f32d19b4c02",
+          "level": "exact"
+        }
       },
       "call/ask-approval": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/disabled-tool": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/gateway-401": {
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/gateway-404": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/gateway-500": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/not-ready": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/structured": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/success": {
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c883ab09005a9185",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "call/tool-error": {
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "3c3c7670779d2403",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "catalog/disabled": {
-        "/steps/*/response/result/privateConnectorsHidden": 2,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/patch": 2,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 1,
-        "/steps/*/turn/*/status": 1
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "ecf1b0cd6fe343d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "6d55f857ace39656",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "001b7e358df91e36",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "e4e837dba8eca89f",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "0abaa2420bc50244",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "25be59c949c6ecd3",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "b3d67e47e49461ba",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch": {
+          "count": 2,
+          "fingerprint": "898ff64232ec6ecc",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "ec91204fdaf5b868",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 1,
+          "fingerprint": "cbe7a55b21cf6656",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "4ec3319ba1d59f10",
+          "level": "exact"
+        }
       },
       "catalog/empty": {
-        "/bootstraps/*": 1,
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 2
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "ee7ea194b69cd714",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "a433ea6de4ed2b7b",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>": {
+          "count": 1,
+          "fingerprint": "0b649c3ca718ff96",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "f77b0356fe432875",
+          "level": "exact"
+        }
       },
       "catalog/http-errors": {
-        "/bootstraps/*": 1,
-        "/steps/*/response/error": 2,
-        "/steps/*/response/error/message": 1,
-        "/steps/*/response/result": 2,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 2,
-        "/steps/*/response/result/selectionRevision": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "772fec33a1da4b74",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 2,
+          "fingerprint": "c499e90e3c55e3c4",
+          "level": "exact"
+        },
+        "/steps/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "490948260f14dc9d",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 2,
+          "fingerprint": "b5f09de94f1ccfe3",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "773dcabd70f81f94",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "7059ac42b1b8e98a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "edf7b638305a0927",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "1afe0dbe8db45e93",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 1,
+          "fingerprint": "7d8624acd525ca55",
+          "level": "exact"
+        }
       },
       "catalog/malformed": {
-        "/bootstraps/*": 1,
-        "/steps/*/response/error/message": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "772fec33a1da4b74",
+          "level": "exact"
+        },
+        "/steps/*/response/error/message": {
+          "count": 1,
+          "fingerprint": "e0e035e297540659",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "e33551e01a6b4301",
+          "level": "exact"
+        }
       },
       "catalog/manage-url": {
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 2,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "e895b9bac75398e9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "8d5b5afc3f509b11",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "de3882d133462285",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "0528d839155819e8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "4045ef48d1318166",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "06ff6da76de92a3f",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "6da222054eb84c4f",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 1,
+          "fingerprint": "163c3374acb49c8a",
+          "level": "exact"
+        }
       },
       "catalog/manage-url-partial": {
-        "/bootstraps/*": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "300be1ebdd6e0a73",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "e895b9bac75398e9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "8d5b5afc3f509b11",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "de3882d133462285",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "4298fdd4e0a472da",
+          "level": "exact"
+        }
       },
       "catalog/no-mistral-key": {
-        "/steps/*/response/result/privateConnectorsHidden": 2,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "ecf1b0cd6fe343d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "4c450e0bab2f9878",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "001b7e358df91e36",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "e4e837dba8eca89f",
+          "level": "exact"
+        }
       },
       "catalog/selections": {
-        "/bootstraps/*": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 2,
-        "/steps/*/response/result/selections/*/state": 2
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "e155e2bc93186ca9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "e895b9bac75398e9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "8d5b5afc3f509b11",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "de3882d133462285",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "0528d839155819e8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selections/*/state": {
+          "count": 2,
+          "fingerprint": "cbbeaf6496d742d0",
+          "level": "exact"
+        }
       },
       "catalog/sessionless-refresh": {
-        "/bootstraps/*": 1,
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>": 1,
-        "/steps/*/response/result/catalog/catalogRevision": 1,
-        "/steps/*/response/result/catalog/connectors/*": 2,
-        "/steps/*/response/result/catalog/disposition": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 2,
-        "/steps/*/response/result/selectionRevision": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "e155e2bc93186ca9",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "cda71d9daa83d145",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>": {
+          "count": 1,
+          "fingerprint": "e01d374e635d48ea",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/catalogRevision": {
+          "count": 1,
+          "fingerprint": "e895b9bac75398e9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/connectors/*": {
+          "count": 2,
+          "fingerprint": "8d5b5afc3f509b11",
+          "level": "exact"
+        },
+        "/steps/*/response/result/catalog/disposition": {
+          "count": 1,
+          "fingerprint": "de3882d133462285",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "0528d839155819e8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 1,
+          "fingerprint": "7e111757fd82233e",
+          "level": "exact"
+        }
       },
       "catalog/shapes": {
-        "/bootstraps/*": 1,
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/selectionRevision": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "e155e2bc93186ca9",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "703e1831a5f04902",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>": {
+          "count": 1,
+          "fingerprint": "82e6aa92f4ab7960",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "041cb88ce89c07a3",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 1,
+          "fingerprint": "81f8fde2a2dc0411",
+          "level": "exact"
+        }
       },
       "lifecycle/refresh-changed-catalog": {
-        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 2,
-        "/steps/*/response/result/routeRevision": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 3,
-        "/steps/*/turn/*/patch/*": 2,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "5316dea1ea208c02",
+          "level": "exact"
+        },
+        "/steps/*/response/result/routeRevision": {
+          "count": 1,
+          "fingerprint": "0d00936e19babf37",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 3,
+          "fingerprint": "23352ac84ad7d15e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 2,
+          "fingerprint": "1333fd2b404e19b1",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "lifecycle/sessionless-methods": {
-        "/bootstraps/*": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "300be1ebdd6e0a73",
+          "level": "exact"
+        }
       },
       "lifecycle/stale-session-catalog": {
-        "/steps/*/notifications/*": 1,
-        "/steps/*/notifications/*/runtime/connectors/connected": 1,
-        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 2,
-        "/steps/*/notifications/*/runtime/mcp/sources/*/status": 1,
-        "/steps/*/notifications/*/runtime/mcp/sources/*/tools/*/enabled": 2,
-        "/steps/*/response/error": 1,
-        "/steps/*/response/result": 1,
-        "/steps/*/response/result/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/routeRevision": 2,
-        "/steps/*/response/result/runtime/connectors/connected": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
-        "/steps/*/response/result/runtime/mcp/sources/*/status": 1,
-        "/steps/*/response/result/runtime/mcp/sources/*/tools/*/enabled": 2,
-        "/steps/*/response/result/selectionRevision": 2,
-        "/steps/*/response/result/selections/*/disabled": 1,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/status": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 3
+        "/steps/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "b14095d7d19c7562",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*/runtime/connectors/connected": {
+          "count": 1,
+          "fingerprint": "8ada7fa0b80e2b41",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "543e7343b71e7ea1",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*/runtime/mcp/sources/*/status": {
+          "count": 1,
+          "fingerprint": "997bf26152cf9154",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*/runtime/mcp/sources/*/tools/*/enabled": {
+          "count": 2,
+          "fingerprint": "2b72a58a39610591",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 1,
+          "fingerprint": "f3c498bad9500acd",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 1,
+          "fingerprint": "5a5b16033aa183da",
+          "level": "exact"
+        },
+        "/steps/*/response/result/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "58737d1c0d6242bf",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ed9d79a5f9828fd7",
+          "level": "exact"
+        },
+        "/steps/*/response/result/routeRevision": {
+          "count": 2,
+          "fingerprint": "d0d6563175d38dd7",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/connectors/connected": {
+          "count": 1,
+          "fingerprint": "d3dff89eb6a86dbd",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "a61db7bb49186cd9",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/sources/*/status": {
+          "count": 1,
+          "fingerprint": "c4fa57b5b595749c",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/sources/*/tools/*/enabled": {
+          "count": 2,
+          "fingerprint": "3ca67b5ebf39fd7a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 2,
+          "fingerprint": "8ed9932e82146dcf",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selections/*/disabled": {
+          "count": 1,
+          "fingerprint": "40ccec312a01d272",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "6ff0ee1dbfe015d4",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "889d8120dd7a62e1",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/status": {
+          "count": 1,
+          "fingerprint": "1c5dca6aaef5266d",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "4e8895b199a3b3fb",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 3,
+          "fingerprint": "c08ba7c0e742816d",
+          "level": "exact"
+        }
       },
       "lifecycle/toggle-during-turn": {
-        "/steps/*/notifications/*": 2,
-        "/steps/*/response/error": 2,
-        "/steps/*/response/result": 2,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/patch/*": 2,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/notifications/*": {
+          "count": 2,
+          "fingerprint": "0f7e6bf3b7de9390",
+          "level": "exact"
+        },
+        "/steps/*/response/error": {
+          "count": 2,
+          "fingerprint": "ac13b5d506f37c5a",
+          "level": "exact"
+        },
+        "/steps/*/response/result": {
+          "count": 2,
+          "fingerprint": "51609b2574be3b1a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "0ee7924d09a50042",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "bb3781d88961925e",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "ccf6453a4cb238be",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 1,
+          "fingerprint": "9f02620fa9b01d49",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "3b966e535aa0ad58",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "4f018cb292eb2dfe",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 2,
+          "fingerprint": "f93871f2a6ec40c9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "c586348ef4ab2562",
+          "level": "exact"
+        }
       },
       "lifecycle/toggle-new-entry": {
-        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 2,
-        "/steps/*/response/result/routeRevision": 2,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 3,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "6801324409818815",
+          "level": "exact"
+        },
+        "/steps/*/response/result/routeRevision": {
+          "count": 2,
+          "fingerprint": "e50337d7c11a2b85",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 3,
+          "fingerprint": "49131d3633c35847",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "dbad043af9c1f495",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "8ba4e83a1b13f0b8",
+          "level": "exact"
+        }
       },
       "lifecycle/toggle-refusals": {
-        "/steps/*/response/result/catalogRevision": 1,
-        "/steps/*/response/result/pendingSelection": 1,
-        "/steps/*/response/result/selectionRevision": 1
+        "/steps/*/response/result/catalogRevision": {
+          "count": 1,
+          "fingerprint": "f59863744baaf24f",
+          "level": "exact"
+        },
+        "/steps/*/response/result/pendingSelection": {
+          "count": 1,
+          "fingerprint": "d37a5c683ae139c3",
+          "level": "exact"
+        },
+        "/steps/*/response/result/selectionRevision": {
+          "count": 1,
+          "fingerprint": "75660f2e2ee9d3d8",
+          "level": "exact"
+        }
       },
       "lifecycle/toggle-session": {
-        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 4,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/routeRevision": 4,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 4,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1,
-        "/steps/*/turn/*/patch/*": 3,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 4,
+          "fingerprint": "e820e47b79bfca97",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "30620b4e2df1615a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/routeRevision": {
+          "count": 4,
+          "fingerprint": "5dd5e3cf504cf99a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 4,
+          "fingerprint": "353ae0fc001e7d10",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "94e4f1f29fb79091",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "2aab48cd9d0fb7b4",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 1,
+          "fingerprint": "2e6d71b101166ce9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 3,
+          "fingerprint": "f0906136e89ee01e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "dfb562679ab75f5a",
+          "level": "exact"
+        }
       },
       "publish/bootstrap-failure": {
-        "/bootstraps/*": 1,
-        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/patch": 2,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 1,
-        "/steps/*/turn/*/status": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "e155e2bc93186ca9",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "75563aa72f4994ee",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "e33551e01a6b4301",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "15760f09d87dfa63",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "0d5fdefd5424ed6a",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "0f479d71cbba1e34",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "bbd56cf7fa781c8b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "7b432b51ec866336",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "b46de9e36b5e4b4c",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch": {
+          "count": 2,
+          "fingerprint": "d341c309cc6d433d",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "a3d25b0ecce416cd",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 1,
+          "fingerprint": "bd029164a311ae62",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "6fbdae3cac6be993",
+          "level": "exact"
+        }
       },
       "publish/bootstrap-recovers": {
-        "/bootstraps/*": 1,
-        "/steps/*/notifications/*": 1,
-        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/routeRevision": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 2,
-        "/steps/*/turn/*": 1,
-        "/steps/*/turn/*/entryId": 2,
-        "/steps/*/turn/*/method": 2,
-        "/steps/*/turn/*/patch": 2,
-        "/steps/*/turn/*/runtime": 1,
-        "/steps/*/turn/*/sessionId": 1,
-        "/steps/*/turn/*/status": 1
+        "/bootstraps/*": {
+          "count": 1,
+          "fingerprint": "633bb50d0639c4d8",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*": {
+          "count": 1,
+          "fingerprint": "3c4ef7a8a4f9958e",
+          "level": "exact"
+        },
+        "/steps/*/notifications/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "284cb582c0247a46",
+          "level": "exact"
+        },
+        "/steps/*/response/result/routeRevision": {
+          "count": 1,
+          "fingerprint": "8f04f6647a719a9f",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 2,
+          "fingerprint": "0246ad3688bc3ca6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*": {
+          "count": 1,
+          "fingerprint": "e8266d851ceeaa54",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/entryId": {
+          "count": 2,
+          "fingerprint": "4213c573e2842a8e",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/method": {
+          "count": 2,
+          "fingerprint": "77d039b2db9b3f4b",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch": {
+          "count": 2,
+          "fingerprint": "4510b4a4737224a6",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime": {
+          "count": 1,
+          "fingerprint": "ced195ab7fd57c37",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/sessionId": {
+          "count": 1,
+          "fingerprint": "28cd6583a2358332",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/status": {
+          "count": 1,
+          "fingerprint": "d32d7de03d71cd8e",
+          "level": "exact"
+        }
       },
       "publish/enabled-tools": {
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ed9d79a5f9828fd7",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "fd6e39867385e0d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "889d8120dd7a62e1",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "8f89ff9443444f05",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "0c2074731283b76a",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       },
       "publish/entry-filters": {
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/acceptedSelectionRevision": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 2,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "e33551e01a6b4301",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "fd6e39867385e0d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/acceptedSelectionRevision": {
+          "count": 1,
+          "fingerprint": "9a2c69fcb39c1388",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "ce9c2e0c676699d2",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "c63f0724340224cd",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 2,
+          "fingerprint": "a438d9a10245a8e8",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "0c2074731283b76a",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       },
       "publish/global-filters": {
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 2,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ed9d79a5f9828fd7",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "fd6e39867385e0d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "889d8120dd7a62e1",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "8f89ff9443444f05",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 2,
+          "fingerprint": "753a369432339e39",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "0c2074731283b76a",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       },
       "publish/no-entries": {
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       },
       "publish/opt-in": {
-        "/steps/*/cacheFile/<cache-key-1>": 1,
-        "/steps/*/cacheFile/<fingerprint>": 1,
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/cacheFile/<cache-key-1>": {
+          "count": 1,
+          "fingerprint": "a433ea6de4ed2b7b",
+          "level": "exact"
+        },
+        "/steps/*/cacheFile/<fingerprint>": {
+          "count": 1,
+          "fingerprint": "027e71fc1445c256",
+          "level": "exact"
+        },
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "ed9d79a5f9828fd7",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "889d8120dd7a62e1",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "4e8895b199a3b3fb",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 1,
+          "fingerprint": "d11ba993f2906acc",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       },
       "publish/shapes": {
-        "/steps/*/response/result/counts/connected": 1,
-        "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag": 1,
-        "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag_text": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag": 1,
-        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag_text": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/counts/connected": {
+          "count": 1,
+          "fingerprint": "a0edc2f1269b25b5",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag": {
+          "count": 1,
+          "fingerprint": "fa0f7a3e525e8311",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Diag_text": {
+          "count": 1,
+          "fingerprint": "dfc847c85ae2d68d",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag": {
+          "count": 1,
+          "fingerprint": "7a0a43d8ed2ae089",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Diag_text": {
+          "count": 1,
+          "fingerprint": "727752d0b6ff765a",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       },
       "publish/wide": {
-        "/steps/*/response/result/privateConnectorsHidden": 1,
-        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": 1,
-        "/steps/*/response/result/session/routeRevision": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/description": 1,
-        "/steps/*/response/result/session/sources/*/tools/*/enabled": 2,
-        "/steps/*/turn/*/patch/*": 1,
-        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": 1,
-        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": 1
+        "/steps/*/response/result/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "e33551e01a6b4301",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "fd6e39867385e0d8",
+          "level": "exact"
+        },
+        "/steps/*/response/result/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "a2156ef71f7745db",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/routeRevision": {
+          "count": 1,
+          "fingerprint": "ce9c2e0c676699d2",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/description": {
+          "count": 1,
+          "fingerprint": "c63f0724340224cd",
+          "level": "exact"
+        },
+        "/steps/*/response/result/session/sources/*/tools/*/enabled": {
+          "count": 2,
+          "fingerprint": "a438d9a10245a8e8",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/patch/*": {
+          "count": 1,
+          "fingerprint": "7de748a5f87c4ca9",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/discoveryErrors/Sheets": {
+          "count": 1,
+          "fingerprint": "0c2074731283b76a",
+          "level": "exact"
+        },
+        "/steps/*/turn/*/runtime/mcp/privateConnectorsHidden": {
+          "count": 1,
+          "fingerprint": "2677c7620ddb927b",
+          "level": "exact"
+        }
       }
     }
   }

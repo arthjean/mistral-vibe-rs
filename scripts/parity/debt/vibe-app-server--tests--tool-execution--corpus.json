@@ -1,17 +1,29 @@
 {
   "corpus": "crates/vibe-app-server/tests/tool-execution/corpus.json",
   "measuredAgainst": "d101c68671cd46e7d426a3529588f641a35047e40f9e3cb06af16b5d54491229",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "tool execution parity:": {
       "todo/read-empty": {
-        "/modelText": 1
+        "/modelText": {
+          "count": 1,
+          "fingerprint": "853dd766e4823445",
+          "level": "exact"
+        }
       },
       "todo/write-empty-list": {
-        "/modelText": 1
+        "/modelText": {
+          "count": 1,
+          "fingerprint": "299f5c3650e55bd3",
+          "level": "exact"
+        }
       },
       "todo/write-two": {
-        "/modelText": 1
+        "/modelText": {
+          "count": 1,
+          "fingerprint": "939cf0586befdcd1",
+          "level": "exact"
+        }
       }
     }
   }

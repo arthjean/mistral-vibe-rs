@@ -1,85 +1,265 @@
 {
   "corpus": "crates/vibe-core/tests/shell-policy/policy.json",
   "measuredAgainst": "e655957ee8bd26d2a368a1e025c525ad8ee156fb418fd49295621d3934a09366",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "tallies": {
     "shell policy parity (resolutions):": {
       "git diff --no-index /etc/passwd /dev/null": {
-        "/requirements/*": 1,
-        "/requirements/*/invocationPattern": 1,
-        "/requirements/*/label": 1,
-        "/requirements/*/sessionPattern": 1
+        "/requirements/*": {
+          "count": 1,
+          "fingerprint": "4b93ba7ba6bd5b49",
+          "level": "exact"
+        },
+        "/requirements/*/invocationPattern": {
+          "count": 1,
+          "fingerprint": "de2ff5daf926cfd5",
+          "level": "exact"
+        },
+        "/requirements/*/label": {
+          "count": 1,
+          "fingerprint": "7a025c7b0b4d77e5",
+          "level": "exact"
+        },
+        "/requirements/*/sessionPattern": {
+          "count": 1,
+          "fingerprint": "8f7c56e5bf221ea5",
+          "level": "exact"
+        }
       }
     },
     "shell policy parity (windows grammar):": {
       "commands/(Get-Item a).Name": {
-        "/parts/*/commandName": 1,
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*/commandName": {
+          "count": 1,
+          "fingerprint": "8ca0d93af834715b",
+          "level": "exact"
+        },
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "3efb7c3f7cfd120d",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "003f8abfa14339c5",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "b9aad53b03a7e5d5",
+          "level": "exact"
+        }
       },
       "commands/@{a=1}; ${x}": {
-        "/parts/*": 1
+        "/parts/*": {
+          "count": 1,
+          "fingerprint": "fb0b126a85394e57",
+          "level": "exact"
+        }
       },
       "commands/Get-Content x *>&1": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 1
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "34de6c6d5a4c77fa",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "89d5a3e1c704c32a",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 1,
+          "fingerprint": "f825e6eaebaf92a8",
+          "level": "exact"
+        }
       },
       "commands/Invoke-Command { Remove-Item x; ls }": {
-        "/parts/*/tokens/*": 5
+        "/parts/*/tokens/*": {
+          "count": 5,
+          "fingerprint": "0fb5c4dbe4fdce99",
+          "level": "exact"
+        }
       },
       "commands/cmd 2>&1 | more": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 1
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "1224c12fcd2738b9",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "61e60b359ef08540",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 1,
+          "fingerprint": "5b84559fd36a778b",
+          "level": "exact"
+        }
       },
       "commands/echo `& not a separator": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 1
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "c0172d656a47d83c",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "b82fe2a9a3ce3352",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 1,
+          "fingerprint": "26a77fe731b84b40",
+          "level": "exact"
+        }
       },
       "commands/echo a 2> 'err log.txt'": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "c33a2c488600dbcd",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "521c1412362a3a36",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "b47d696d73a99952",
+          "level": "exact"
+        }
       },
       "commands/echo a > $null": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "e4f0d49215ab373a",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "783c73565f11c496",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "69c47c483462729e",
+          "level": "exact"
+        }
       },
       "commands/echo a > NUL": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "4602395b58983488",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "597ac92292240ff6",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "24edbf884936aa12",
+          "level": "exact"
+        }
       },
       "commands/echo a >&2": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 1
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "c2fa7db0a9d702e9",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "7d003f3a35f574e2",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 1,
+          "fingerprint": "859f9f73a134afe4",
+          "level": "exact"
+        }
       },
       "commands/echo a >> C:\\logs\\x.txt": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "6841ebd8765c0093",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "a903b84837397183",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "cebf7071953b7d75",
+          "level": "exact"
+        }
       },
       "commands/echo a >`\"q`\" x": {
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "bab6b20d8dc92930",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "efec356af25cc911",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "bed925b323b7df27",
+          "level": "exact"
+        }
       },
       "commands/echo a ^& b": {
-        "/parts/*": 1,
-        "/parts/*/forms/*": 1,
-        "/parts/*/formsWithoutBasename/*": 1,
-        "/parts/*/part": 1,
-        "/parts/*/tokens/*": 2
+        "/parts/*": {
+          "count": 1,
+          "fingerprint": "ed9fb98e8c9d9b5c",
+          "level": "exact"
+        },
+        "/parts/*/forms/*": {
+          "count": 1,
+          "fingerprint": "8974547c1abe6f3b",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 1,
+          "fingerprint": "a62dc8dd8b518012",
+          "level": "exact"
+        },
+        "/parts/*/part": {
+          "count": 1,
+          "fingerprint": "8b5551b87fb32333",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "24c8a1fcdee82052",
+          "level": "exact"
+        }
       },
       "commands/type > out.txt": {
-        "/parts/*/forms/*": 2,
-        "/parts/*/formsWithoutBasename/*": 2,
-        "/parts/*/tokens/*": 2
+        "/parts/*/forms/*": {
+          "count": 2,
+          "fingerprint": "368d15bb3f6ebb37",
+          "level": "exact"
+        },
+        "/parts/*/formsWithoutBasename/*": {
+          "count": 2,
+          "fingerprint": "8542eaec6334669c",
+          "level": "exact"
+        },
+        "/parts/*/tokens/*": {
+          "count": 2,
+          "fingerprint": "f887edb21faf6e0c",
+          "level": "exact"
+        }
       }
     }
   }

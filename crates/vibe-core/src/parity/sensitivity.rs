@@ -27,11 +27,14 @@
 //! ([`super::replay::Tally::conclude`]). A mutation the evaluation answers
 //! exactly as it answered the unmutated scenario is undetected.
 //!
-//! **Masked and unseen.** An undetected mutation that lands on a difference
-//! the unmutated scenario already held (its pointer at, under or above one) is
-//! *masked*: the ledger entry or debt group that counts that difference
-//! counts it once whatever it holds, and is the entry that says why the
-//! oracle cannot see the change. The pass attributes every masked mutation to
+//! **Masked and unseen.** A debt group pins what the port answers inside its
+//! gap ([`super::debt::Level`]), so on Linux a mutation there changes its
+//! fingerprint and is detected like any other. An undetected mutation that
+//! lands on a difference the unmutated scenario already held (its pointer at,
+//! under or above one) is *masked*: the ledger entry that admits that
+//! difference whatever it holds, or the debt group whose answers moved
+//! between its measuring runs and so pin nothing, counts it once, and is the
+//! entry that says why the oracle cannot see the change. The pass attributes every masked mutation to
 //! that entry by label (`maskedBy` in the matrix). Any other undetected
 //! mutation is *unseen*: the differ or the ledger cannot see the change at
 //! all.

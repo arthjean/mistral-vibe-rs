@@ -1103,6 +1103,9 @@ enum Bucket {
 struct Uncovered {
     scenario: String,
     pointer: String,
+    /// What the port answered at the pointer, which the debt group that
+    /// covers it pins.
+    port: Option<Value>,
     /// How a report quotes it, with what each side holds.
     report: String,
 }
@@ -1253,6 +1256,7 @@ impl<'l> Tally<'l> {
                             quote(right)
                         ),
                         scenario: scenario.to_owned(),
+                        port: right.cloned(),
                         pointer,
                     });
                 }
@@ -1265,6 +1269,7 @@ impl<'l> Tally<'l> {
                             quote(right)
                         ),
                         scenario: scenario.to_owned(),
+                        port: right.cloned(),
                         pointer,
                     });
                 }
@@ -1316,7 +1321,11 @@ impl<'l> Tally<'l> {
         debt.retain_compared(|scenario| self.compared.contains(scenario));
         let mut unexplained = Vec::new();
         for difference in std::mem::take(&mut self.uncovered) {
-            if debt.absorb(&difference.scenario, &difference.pointer) {
+            if debt.absorb_value(
+                &difference.scenario,
+                &difference.pointer,
+                difference.port.as_ref(),
+            ) {
                 self.figures.gap_differences += 1;
             } else {
                 unexplained.push(difference.report);
@@ -1394,7 +1403,9 @@ impl<'l> Tally<'l> {
 
     /// How the evaluation of [`Tally::record`] and [`Tally::conclude`]
     /// accounts for `found` in `scenario`: how many differences each entry
-    /// and debt group covers, or [`None`] when one falls outside both.
+    /// and debt group covers, with the fingerprint a pinned debt group
+    /// checks of what the port answered in it, or [`None`] when a difference
+    /// falls outside both.
     fn account(
         &self,
         debt: &super::debt::Debt,
@@ -1402,8 +1413,8 @@ impl<'l> Tally<'l> {
         reference: &Value,
         port: &Value,
         found: &[String],
-    ) -> Option<BTreeMap<Bucket, usize>> {
-        let mut buckets = BTreeMap::new();
+    ) -> Option<BTreeMap<Bucket, (usize, Option<String>)>> {
+        let mut buckets: BTreeMap<Bucket, Vec<(String, Option<Value>)>> = BTreeMap::new();
         for pointer in found {
             let left = reference.pointer(pointer);
             let right = port.pointer(pointer);
@@ -1420,9 +1431,23 @@ impl<'l> Tally<'l> {
                 }
                 _ => return None,
             };
-            *buckets.entry(bucket).or_default() += 1;
+            buckets
+                .entry(bucket)
+                .or_default()
+                .push((pointer.clone(), right.cloned()));
         }
-        Some(buckets)
+        Some(
+            buckets
+                .into_iter()
+                .map(|(bucket, answers)| {
+                    let pin = match &bucket {
+                        Bucket::Debt(group) => debt.pin_of(scenario, group, &answers),
+                        Bucket::Entry(_) => None,
+                    };
+                    (bucket, (answers.len(), pin))
+                })
+                .collect(),
+        )
     }
 
     /// The sensitivity pass ([`super::sensitivity`]): mutates the port's
