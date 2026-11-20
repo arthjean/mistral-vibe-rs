@@ -49,10 +49,10 @@
     {
       "id": "EP-006",
       "title": "Oracle Strength and Hygiene",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 8,
-      "stories_done": 5
+      "stories_done": 8
     }
   ],
   "stories": [
@@ -387,14 +387,14 @@
       "id": "US-023",
       "title": "Sensitivity harness for replay oracles",
       "epic": "EP-006",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-022"
       ],
       "started_at": "2026-11-17",
-      "completed_at": null,
+      "completed_at": "2026-11-20",
       "reviewed_at": "2026-11-20"
     },
     {
@@ -456,12 +456,12 @@
       "id": "US-028",
       "title": "Windows isolation and retries",
       "epic": "EP-006",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [],
       "started_at": "2026-11-17",
-      "completed_at": null,
+      "completed_at": "2026-11-20",
       "reviewed_at": "2026-11-20"
     },
     {
@@ -482,14 +482,14 @@
       "id": "US-031",
       "title": "Third-party layer of the clean-room guard",
       "epic": "EP-006",
-      "status": "IN_REVIEW",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-012"
       ],
       "started_at": "2026-11-08",
-      "completed_at": null,
+      "completed_at": "2026-11-20",
       "reviewed_at": "2026-11-20"
     }
   ]
