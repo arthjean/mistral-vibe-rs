@@ -2567,10 +2567,29 @@ async fn a_managed_session_reports_its_terminal_backend() {
 #[tokio::test]
 async fn a_control_key_interrupts_the_foreground_program() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
-    let session = background_session(&harness, "trap 'echo caught; exit 7' INT; sleep 30").await;
+    let session = background_session(
+        &harness,
+        "trap 'echo caught; exit 7' INT; echo ready; sleep 30",
+    )
+    .await;
     // The trap must be installed before the signal, otherwise the shell's own
-    // default disposition answers it and the case proves nothing.
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // default disposition answers it and the case proves nothing; the shell
+    // prints `ready` once it is, and the poll waits for that line (plus the
+    // terminal's line ending) rather than for a guess at how long it takes.
+    let ready = harness
+        .call(
+            "bash_output",
+            json!({"session_id": session, "wait_seconds": 10, "max_bytes": 7}),
+        )
+        .await
+        .expect("the readiness poll answers");
+    assert!(
+        ready.typed_result["output"]
+            .as_str()
+            .expect("output")
+            .contains("ready"),
+        "{ready:?}"
+    );
     harness
         .call(
             "bash_stdin",
