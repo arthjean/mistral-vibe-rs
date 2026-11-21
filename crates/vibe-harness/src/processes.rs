@@ -37,7 +37,16 @@ const MAX_PAGE: usize = 64_000;
 /// How long the output of an exited process keeps draining.
 const DRAIN_WAIT: Duration = Duration::from_secs(2);
 /// How long a write gives the process to react before it is answered.
-const WRITE_SETTLE: Duration = Duration::from_millis(50);
+///
+/// On Windows a process the input ends (`cat` after `ctrl_d`) takes 20 to
+/// 50 ms to exit through its pseudoconsole, in steps of the 15.6 ms system
+/// timer, where a POSIX terminal takes about one: the window there has to
+/// cover that exit, or the write answers before the end it caused.
+const WRITE_SETTLE: Duration = if cfg!(windows) {
+    Duration::from_millis(200)
+} else {
+    Duration::from_millis(50)
+};
 
 /// What every process's environment holds unless the call says otherwise:
 /// reference `_POSIX_ENV_DEFAULTS`, which Git Bash shares.
