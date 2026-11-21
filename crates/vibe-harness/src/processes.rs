@@ -307,6 +307,7 @@ impl ProcessManager {
                     status,
                     exit_code,
                     stopping: false,
+                    publishing_end: false,
                 }),
                 changed: Condvar::new(),
                 output: Mutex::new(Output::finished()),
@@ -417,6 +418,7 @@ impl ProcessManager {
                 status: Status::Running,
                 exit_code: None,
                 stopping: false,
+                publishing_end: false,
             }),
             changed: Condvar::new(),
             output: Mutex::new(Output::default()),
@@ -492,6 +494,9 @@ impl ProcessManager {
             };
             lifecycle.status = status;
             lifecycle.exit_code = exit_code;
+            // Set with the status, so no call sees the end before it knows
+            // the end is still to be published.
+            lifecycle.publishing_end = true;
             status
         };
         *lock(&process.writer) = None;
@@ -528,11 +533,19 @@ impl ProcessManager {
             "level": level,
             "message": message,
         }));
-        if let Some(ended) = lock(&self.unacknowledged).get_mut(&process.id) {
-            *ended = true;
-            return;
+        let held = match lock(&self.unacknowledged).get_mut(&process.id) {
+            Some(ended) => {
+                *ended = true;
+                true
+            }
+            None => false,
+        };
+        // A held end is published once its start is acknowledged, which the
+        // call waiting on it may itself be holding up, so it is not waited for.
+        if !held {
+            self.announce();
         }
-        self.announce();
+        process.end_published();
     }
 
     /// `process.output`, waiting up to `waitMs` (from the start only) for
@@ -554,6 +567,7 @@ impl ProcessManager {
         if !from_end && wait > 0 {
             process.wait_past(cursor, Duration::from_millis(wait));
         }
+        process.await_end_published();
         let page = match process.page(from_end, cursor, limit) {
             Ok(page) => page,
             Err(details) => {
@@ -633,12 +647,17 @@ impl ProcessManager {
         // enough for a process the input ended (an end of file, an interrupt)
         // to be seen ending before the write is answered.
         process.settle(WRITE_SETTLE);
+        process.await_end_published();
         success(json!({"processId": process.id, "status": "running", "bytesWritten": bytes.len()}))
     }
 
     /// `process.list`.
     #[must_use]
     pub fn list(&self) -> ToolResult {
+        let processes = lock(&self.processes).clone();
+        for process in processes {
+            process.await_end_published();
+        }
         let processes: Vec<Value> = self
             .public()
             .into_iter()
@@ -674,6 +693,7 @@ impl ProcessManager {
     fn stop_process(&self, process_id: &str) -> Result<Value, StopFailure> {
         let process = self.find(process_id).ok_or(StopFailure::Unknown)?;
         process.terminate();
+        process.await_end_published();
         let (status, exit_code) = process.state();
         if status == Status::Running {
             return Err(StopFailure::StillRunning);
@@ -708,6 +728,7 @@ impl ProcessManager {
         if !from_end && wait_ms > 0 {
             process.wait_past(cursor, Duration::from_millis(wait_ms));
         }
+        process.await_end_published();
         let page = process
             .page(from_end, cursor, max_bytes.min(MAX_PAGE))
             .map_err(|_| {

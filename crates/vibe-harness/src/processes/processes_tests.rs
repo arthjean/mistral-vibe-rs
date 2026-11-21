@@ -120,6 +120,121 @@ fn a_stopped_process_reports_stopped_and_refuses_input() {
     assert_eq!(code, "unknown_process");
 }
 
+/// A manager whose listener takes `delay` to publish, as a busy session
+/// does, and the count of publications it has finished.
+#[cfg(unix)]
+fn slow_listener(delay: Duration) -> (Arc<ProcessManager>, Arc<std::sync::atomic::AtomicUsize>) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let manager = ProcessManager::new();
+    let published = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&published);
+    manager.listen(Arc::new(move || {
+        std::thread::sleep(delay);
+        counter.fetch_add(1, Ordering::SeqCst);
+    }));
+    (manager, published)
+}
+
+/// Reference `_stop_process` answers only once the process's end is
+/// published (`_wait_for_terminal_updates`), so the session's snapshot of
+/// the stopped process always precedes the stop's result.
+#[cfg(unix)]
+#[test]
+fn a_stop_answers_after_the_end_it_caused_is_published() {
+    use std::sync::atomic::Ordering;
+    let (manager, published) = slow_listener(Duration::from_millis(200));
+    let workspace = tempfile::tempdir().unwrap();
+    let _ = manager.start(
+        "process-s".to_owned(),
+        &json!({"command": "sleep 30"}),
+        workspace.path(),
+        None,
+        &context(workspace.path(), HostShells::detect(), None),
+    );
+    // The engine acknowledges a start once it has moved past it.
+    manager.acknowledge_start("process-s");
+    assert_eq!(
+        published.load(Ordering::SeqCst),
+        1,
+        "the start is published"
+    );
+    let stopped = structured(manager.stop(&json!({"processId": "process-s"})));
+    assert_eq!(stopped["status"], "stopped");
+    assert_eq!(
+        published.load(Ordering::SeqCst),
+        2,
+        "the stop answered before the end it caused was published"
+    );
+}
+
+/// A write that ends its process (an end of file here) and sees it end
+/// answers after that end is published, as the stop above does.
+#[cfg(unix)]
+#[test]
+fn a_write_that_sees_its_process_end_answers_after_the_end_is_published() {
+    use std::sync::atomic::Ordering;
+    let (manager, published) = slow_listener(Duration::from_millis(200));
+    let workspace = tempfile::tempdir().unwrap();
+    let _ = manager.start(
+        "process-w".to_owned(),
+        &json!({"command": "cat"}),
+        workspace.path(),
+        None,
+        &context(workspace.path(), HostShells::detect(), None),
+    );
+    // The engine acknowledges a start once it has moved past it.
+    manager.acknowledge_start("process-w");
+    let _ = structured(manager.write(&json!({"processId": "process-w", "control": ["ctrl_d"]})));
+    // The write gives the process a short while to react; only an end it
+    // saw is bound to precede its answer.
+    if manager.public()[0]["status"] != "running" {
+        assert_eq!(
+            published.load(Ordering::SeqCst),
+            2,
+            "the write answered before the end it saw was published"
+        );
+    }
+}
+
+/// A process that ends while its start is still held (see
+/// [`ProcessManager::acknowledge_start`]) is not waited for: its end is
+/// published once the start is acknowledged, which the waiting call may
+/// itself be holding up.
+#[cfg(unix)]
+#[test]
+fn an_end_held_behind_its_start_does_not_hold_up_a_call() {
+    use std::sync::atomic::Ordering;
+    let (manager, published) = slow_listener(Duration::ZERO);
+    let workspace = tempfile::tempdir().unwrap();
+    let _ = manager.start(
+        "process-h".to_owned(),
+        &json!({"command": "sleep 30"}),
+        workspace.path(),
+        None,
+        &context(workspace.path(), HostShells::detect(), None),
+    );
+    // The start is left unacknowledged, as within the program round that
+    // made it.
+    let began = Instant::now();
+    let stopped = structured(manager.stop(&json!({"processId": "process-h"})));
+    assert_eq!(stopped["status"], "stopped");
+    assert!(
+        began.elapsed() < Duration::from_secs(4),
+        "the stop waited on a held end"
+    );
+    assert_eq!(
+        published.load(Ordering::SeqCst),
+        1,
+        "a held end is not published"
+    );
+    manager.acknowledge_start("process-h");
+    assert_eq!(
+        published.load(Ordering::SeqCst),
+        2,
+        "the acknowledgement publishes it"
+    );
+}
+
 #[test]
 fn a_configured_shell_that_does_not_exist_fails_the_start_naming_it() {
     let manager = ProcessManager::new();
